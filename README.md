@@ -71,3 +71,5 @@ session can start in it; burrow shows Claude's message if it isn't.
 
 Test hooks: `BURROW_OPEN=<id>` opens that bot as soon as it shows up in the first room;
 `BURROW_SPAWN=<dir>` starts a bot there at launch.
+`BURROW_DEMO=1` fills the rooms with made-up bots (nothing real is touched); `BURROW_SHOT=<file.png>` makes
+burrow save a screenshot of itself every second; `BURROW_ADD_DIR=1` opens the add-a-project dialog.

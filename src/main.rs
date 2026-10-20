@@ -146,6 +146,11 @@ impl eframe::App for App {
                 self.open(&ctx, 0, &id);
             }
         }
+        if std::env::var_os("BURROW_ADD_DIR").is_some() {
+            // SAFETY: only a test hook, read once
+            unsafe { std::env::remove_var("BURROW_ADD_DIR") };
+            self.add_dir = Some("~/".into());
+        }
         let focused = ctx.input(|i| i.viewport().focused.unwrap_or(true));
         for p in &self.places {
             p.watch.fast.store(focused, Ordering::Relaxed);
@@ -338,7 +343,7 @@ impl App {
     fn dialogs(&mut self, ctx: &egui::Context) {
         let mut go = None;
         if let Some(dir) = &mut self.add_dir {
-            let keep = dialog(ctx, "a project", |ui| {
+            let keep = dialog(ctx, "add a project", |ui| {
                 ui.label(RichText::new("its directory on this machine").color(STEEL2));
                 let r = ui.add(egui::TextEdit::singleline(dir).desired_width(320.0));
                 r.request_focus();
@@ -360,7 +365,7 @@ impl App {
         }
         let mut add = None;
         if let Some((name, dest)) = &mut self.add_room {
-            let keep = dialog(ctx, "a machine", |ui| {
+            let keep = dialog(ctx, "add a machine", |ui| {
                 ui.label(RichText::new("ssh destination (as you'd type it after ssh)").color(STEEL2));
                 ui.add(egui::TextEdit::singleline(dest).desired_width(280.0).hint_text("odyssey"));
                 ui.label(RichText::new("name").color(STEEL2));
@@ -403,6 +408,8 @@ fn style(ctx: &egui::Context) {
     v.extreme_bg_color = INK;
     v.window_stroke = egui::Stroke::new(1.0, STEEL0);
     v.selection.bg_fill = TERRACOTTA.gamma_multiply(0.5);
+    v.selection.stroke = egui::Stroke::new(1.0, TERRACOTTA);
+    v.text_cursor.stroke = egui::Stroke::new(2.0, TERRACOTTA);
     v.override_text_color = Some(STEEL3);
     for w in [&mut v.widgets.inactive, &mut v.widgets.hovered, &mut v.widgets.active, &mut v.widgets.open] {
         w.corner_radius = 0.into();

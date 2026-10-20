@@ -428,7 +428,8 @@ impl Room {
                         arms: Arms::Down,
                         legs: if late { Legs::Stand } else { Legs::Sit },
                         step: 0.0,
-                        act: Act::Desk,
+                        // idle ones get up a moment after burrow opens
+                        act: if b.busy { Act::Desk } else { rest(z) },
                         carry: None,
                         lying: false,
                         busy: b.busy,
