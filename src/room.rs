@@ -533,8 +533,9 @@ impl Room {
         {
             let a = lay.add;
             let hot = over(a.left() - 2.0, a.top() - 10.0, a.right() + 2.0, a.bottom() + 1.0);
-            p.b(a.left(), a.top(), a.width(), a.height(), STEEL0);
-            p.r(a.left(), a.top(), a.width(), 1.0, STEEL1);
+            p.b(a.left(), a.top(), a.width(), a.height(), WOOD_D);
+            p.r(a.left(), a.top(), a.width(), 1.0, WOOD);
+            p.r(a.left() + 3.0, a.top() + 3.0, a.width() - 6.0, 7.0, if hot { STEEL1 } else { STEEL0 });
             p.tiny("+", (a.center().x - 1.0).round(), a.top() + 4.0, if hot { STEEL4 } else { STEEL2 });
             if hot {
                 let s = "PROJECT";
@@ -549,18 +550,7 @@ impl Room {
             draw_mat(&mut p, m.x, m.y);
         }
         if let Some(g) = lay.pong {
-            let mut x = g.x - 34.0;
-            while x < g.x + 34.0 {
-                p.r(x, g.y - 18.0, 2.0, 1.0, INK2);
-                p.r(x, g.y + 6.0, 2.0, 1.0, INK2);
-                x += 4.0;
-            }
-            let mut y = g.y - 18.0;
-            while y < g.y + 6.0 {
-                p.r(g.x - 34.0, y, 1.0, 2.0, INK2);
-                p.r(g.x + 33.0, y, 1.0, 2.0, INK2);
-                y += 4.0;
-            }
+            p.e(g.x - 33.0, g.y - 17.0, 66.0, 22.0, FLOOR, hex(0x2a1d3a));
         }
 
         // everything that stands, back to front
@@ -659,7 +649,7 @@ impl Room {
                     p.r(fx - 5.0, fy, 10.0, 1.0, Color32::from_black_alpha(100));
                     // one in a terminal elsewhere: greyed, like pair's people who are away
                     p.sprite(&sprite, x0, y0, f.dir < 0.0, SH as i8, (!b.background).then_some(STEEL0));
-                    if matches!(f.act, Act::Sleep { .. }) {
+                    if matches!(f.act, Act::Sleep { there: true }) {
                         zzz(&mut p, fx + 2.0, y0 + 4.0, f.z);
                     }
                     if matches!(f.act, Act::Plant { .. }) && f.arms == Arms::Can && (t * 6.0) as i32 % 2 == 1 {
@@ -815,14 +805,23 @@ impl Room {
                 self.pong = (0.0, 1 - self.pong.1);
             }
         }
+        // an idle bot's place: beside its project's cabinet, one per project (the first idle one);
+        // the others are off on a break
+        let mut homes: HashMap<String, Pos2> = HashMap::new();
+        for d in &lay.desks {
+            let first = d.seats.iter().find(|(id, _)| self.figs.get(id).is_some_and(|f| !f.busy && matches!(f.act, Act::Stand { .. })));
+            if let Some((id, _)) = first {
+                homes.insert(id.clone(), Pos2::new((d.x0 - 10.0).max(8.0), d.y + 1.0));
+            }
+        }
         for id in &ids {
-            self.think_one(id, lay, now, dt);
+            self.think_one(id, lay, now, dt, homes.get(id).copied());
         }
         // two standing about in the same place: they step apart
         let still: Vec<(String, f32, f32)> = self
             .figs
             .iter()
-            .filter(|(_, f)| f.legs == Legs::Stand && matches!(f.act, Act::Stand { .. } | Act::Loiter { .. }))
+            .filter(|(_, f)| f.legs == Legs::Stand && matches!(f.act, Act::Loiter { .. }))
             .map(|(k, f)| (k.clone(), f.x, f.y))
             .collect();
         for (a, ax, ay) in &still {
@@ -840,7 +839,7 @@ impl Room {
         }
     }
 
-    fn think_one(&mut self, id: &str, lay: &Layout, now: f64, dt: f32) {
+    fn think_one(&mut self, id: &str, lay: &Layout, now: f64, dt: f32, home: Option<Pos2>) {
         let pos: HashMap<String, (f32, f32, bool)> = self.figs.iter().map(|(k, f)| (k.clone(), (f.x, f.y, f.legs == Legs::Sit))).collect();
         let idle_mates: Vec<String> = self
             .figs
@@ -897,10 +896,17 @@ impl Room {
                 }
             }
             Act::Stand { left } => {
-                f.legs = Legs::Stand;
-                f.arms = f.carry.unwrap_or(Arms::Down);
-                *left -= dt;
-                if *left <= 0.0 {
+                // (back to its cabinet first, if that is its place)
+                let there = home.is_none_or(|hm| walk(f, hm, v, dt));
+                if there {
+                    f.legs = Legs::Stand;
+                    f.arms = f.carry.unwrap_or(Arms::Down);
+                    if home.is_some() {
+                        f.dir = 1.0;
+                    }
+                    *left -= dt;
+                }
+                if there && *left <= 0.0 {
                     // a break, chosen by someone with nothing to do (pair's pickBreak)
                     let r = rs[0];
                     let mate = (!idle_mates.is_empty()).then(|| idle_mates[((rs[1] * idle_mates.len() as f32) as usize).min(idle_mates.len() - 1)].clone());
@@ -1058,7 +1064,7 @@ impl Room {
             Act::Window { left } => match lay.window {
                 None => act = rest(rs[0]),
                 Some(wd) => {
-                    if walk(f, Pos2::new(wd.center().x.round(), WALL + 5.0), v, dt) {
+                    if walk(f, Pos2::new(wd.center().x.round(), WALL + 8.0), v, dt) {
                         f.arms = Arms::Down;
                         f.dir = if (t * 0.7 + f.z).sin() > 0.0 { 1.0 } else { -1.0 };
                         *left -= dt;
@@ -1224,8 +1230,10 @@ fn walk(f: &mut Fig, to: Pos2, v: f32, dt: f32) -> bool {
 
 fn draw_desk(p: &mut Paint, d: &Desk, figs: &HashMap<String, Fig>, t: f32) {
     let (x0, y, w, cab) = (d.x0, d.y, d.w, d.cab);
-    let busy = d.seats.iter().any(|(id, _)| figs.get(id).is_some_and(|f| f.busy));
-    let here = d.seats.iter().any(|(id, _)| figs.get(id).is_some_and(|f| matches!(f.act, Act::Desk)));
+    // the screen runs only while a bot sits at it typing; dim while one sits there idle
+    let seated = |f: &Fig| f.legs == Legs::Sit && !f.lying && matches!(f.act, Act::Desk | Act::Sleep { .. });
+    let busy = d.seats.iter().any(|(id, _)| figs.get(id).is_some_and(|f| seated(f) && f.busy));
+    let here = d.seats.iter().any(|(id, _)| figs.get(id).is_some_and(seated));
     // the long desktop, low, where the bots' hands are
     p.b(cab - 1.0 + x0, y - 9.0, w - cab + 1.0, 2.0, WOOD);
     p.r(cab + x0, y - 7.0, w - cab, 1.0, WOOD_D);

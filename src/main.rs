@@ -416,6 +416,7 @@ fn style(ctx: &egui::Context) {
     }
     v.widgets.inactive.weak_bg_fill = INK2;
     v.widgets.inactive.bg_fill = INK2;
+    v.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, INK);
     v.widgets.hovered.weak_bg_fill = STEEL0;
     v.widgets.active.weak_bg_fill = STEEL1;
     v.window_corner_radius = 0.into();
