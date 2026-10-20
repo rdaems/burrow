@@ -142,6 +142,12 @@ impl eframe::App for App {
             let f = self.places[ci].watch.feed.lock().unwrap();
             (f.bots.clone(), f.error.clone(), f.light)
         };
+        for p in &mut self.places {
+            let talks = std::mem::take(&mut p.watch.feed.lock().unwrap().talks);
+            for (from, to) in talks {
+                p.room.talk(&from, &to);
+            }
+        }
         // forget sessions whose bot has gone
         {
             let p = &mut self.places[ci];

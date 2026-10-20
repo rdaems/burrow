@@ -8,6 +8,8 @@ room tells you what it is doing; there are no notifications, badges or counters.
 - **busy**: it sits at its desk and types, and its screen scrolls in its project's colour
 - **idle**: it gets up and walks around its project's rug, now and then sitting back down
 - **idle for 10 minutes**: it falls asleep at its desk
+- **talking**: a bot that sends another one a message walks over to it, across the room if it is in
+  another project, and stands next to it for a moment
 
 Sessions started in the same directory share a rug: one rug per project, one desk per bot, labelled
 with the folder name. The empty desk at the end of a rug (`+`) starts another bot in that project.
@@ -26,6 +28,7 @@ burrow owns nothing. The sessions are Claude Code's own **background sessions**:
 | start a bot               | `cd <dir> && claude --bg [-n name]`                   |
 | open a bot                | `claude attach <id>` in a pty                         |
 | stop a bot                | `claude stop <id>`                                    |
+| who talks to whom         | messages between sessions, from the transcripts written in the last minute (same poll) |
 | drop a file on the session | `scp` to `~/.cache/burrow/drop/<stamp>/`, then its path is typed into the prompt |
 
 Nothing is installed on the machines except Claude Code. Remote machines are reached with your own `ssh`,

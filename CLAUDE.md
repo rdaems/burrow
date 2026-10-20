@@ -34,11 +34,25 @@ Rembert's own replacement for Orca (too bloated). Read README.md first; this fil
 - scp is SFTP mode now: the remote path is literal, don't shell-quote it.
 - `claude attach` in a brand-new, untrusted directory fails until `claude` was run there once by hand.
 
+## Talking (built 2026-10-20)
+
+A bot that messages another walks over to it (`Room::talk`). Verified with real sessions, Claude Code 2.1.304:
+- A delivered message is a `type:"user"` line in the **receiver's** transcript with
+  `"origin":{"kind":"peer","from":"uds:/tmp/cc-socks/<pid>.sock","verifiedPeerPid":<pid>,"msg_id":…,"name":<sender>,…,"body":…}`.
+  `verifiedPeerPid` = the sender's `pid` in `claude agents --json`; falls back to the name.
+- The sender's `tool_use` `SendMessage` has `to` as either a name or a `uds:` address — not used.
+- Messages between sessions in different permission modes are *held* (a `system` "Held peer message" line),
+  never reach Claude, and are ignored. `claude --bg` sessions run in auto mode.
+- The poll greps the last 4 MB of transcripts touched in the last minute: a receiver writes ~280 kB of
+  context right after the message, 256 kB was too little. Messages already there at launch are not shown.
+
+## Gotchas from testing
+
+- `claude stop <name>` does not work, only the id.
+- `screencapture` from the terminal triggers macOS's screen-recording prompt for the terminal app: don't.
+- `claude agents --json` has `"status":"waiting","waitingFor":"permission prompt"` — the future
+  "has a question" state, if he wants it.
+
 ## Next
 
-- **Bots walk to each other when they talk** over Claude's built-in session messaging (SendMessage
-  between sessions on the same machine). Find the events in the session transcripts
-  (`~/.claude/projects/<escaped cwd>/<sessionId>.jsonl`, `tool_use` named `SendMessage` and the
-  received side); verify the real format with two test sessions before building. Talking across projects
-  should be visible as a bot crossing the room.
 - A `.app` bundle for the Mac.

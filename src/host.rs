@@ -167,6 +167,9 @@ pub struct Bot {
     /// a `claude --bg` session; the others run in a terminal somewhere else and can only be watched
     pub background: bool,
     pub started: u64,
+    pub pid: u64,
+    /// the full session id: its transcript is ~/.claude/projects/<escaped cwd>/<session>.jsonl
+    pub session: String,
 }
 
 #[derive(Default)]
@@ -176,6 +179,8 @@ pub struct Feed {
     pub fresh: bool,
     /// Claude Code's theme there starts with "light"
     pub light: bool,
+    /// messages one bot sent another since the UI last looked: (from, to), by bot id
+    pub talks: Vec<(String, String)>,
 }
 
 pub fn parse_agents(json: &str) -> Result<Vec<Bot>, String> {
@@ -196,11 +201,42 @@ pub fn parse_agents(json: &str) -> Result<Vec<Bot>, String> {
                 busy: s(x, "status") == "busy" || s(x, "state") == "working",
                 background: s(x, "kind") == "background",
                 started: x.get("startedAt").and_then(|v| v.as_u64()).unwrap_or(0),
+                pid: x.get("pid").and_then(|v| v.as_u64()).unwrap_or(0),
+                session: sid,
             }
         })
         .collect();
     bots.sort_by_key(|b| b.started);
     Ok(bots)
+}
+
+/// a message between sessions shows up in the receiver's transcript as a user turn with
+/// `"origin":{"kind":"peer","from":"uds:…","verifiedPeerPid":…,"msg_id":"…","name":"<sender>",…}`;
+/// the poll greps the last 4 MB of transcripts written in the last minute (a session can write a few
+/// hundred kB of context right after the message) for that and prints
+/// `<receiver session id> <origin…>` per message (inside a JSON string the quotes would be escaped,
+/// so quoted transcripts don't match)
+const PEERS: &str = r#"find ~/.claude/projects -maxdepth 2 -name '*.jsonl' -mmin -1 2>/dev/null | while IFS= read -r f; do s=${f##*/}; tail -c 4194304 "$f" | grep -o '"origin":{"kind":"peer"[^}]*' | sed "s|^|${s%.jsonl} |"; done"#;
+
+fn field<'a>(s: &'a str, key: &str) -> Option<&'a str> {
+    let i = s.find(&format!("\"{key}\":"))? + key.len() + 3;
+    let rest = s[i..].trim_start_matches('"');
+    rest.split(|c| c == '"' || c == ',' || c == '}').next()
+}
+
+/// (msg_id, from, to) by bot id, for the messages between bots that are there now
+pub fn parse_peers(out: &str, bots: &[Bot]) -> Vec<(String, String, String)> {
+    out.lines()
+        .filter_map(|l| {
+            let (session, origin) = l.split_once(' ')?;
+            let msg = field(origin, "msg_id")?;
+            let to = bots.iter().find(|b| b.session == session)?;
+            let pid = field(origin, "verifiedPeerPid").and_then(|p| p.parse::<u64>().ok());
+            let name = field(origin, "name");
+            let from = bots.iter().find(|b| Some(b.pid) == pid).or_else(|| bots.iter().find(|b| Some(b.name.as_str()) == name))?;
+            (from.id != to.id).then(|| (msg.to_string(), from.id.clone(), to.id.clone()))
+        })
+        .collect()
 }
 
 pub struct Watch {
@@ -218,20 +254,33 @@ pub fn watch(host: Host, ctx: egui::Context) -> Watch {
         poke: Arc::new(AtomicBool::new(false)),
     };
     let (feed, fast, poke) = (w.feed.clone(), w.fast.clone(), w.poke.clone());
+    // messages seen already; what is in the transcripts when burrow starts is old news
+    let mut heard: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut first = true;
     std::thread::spawn(move || loop {
-        let r = host.run("claude agents --json; echo '@@burrow@@'; cat ~/.claude/settings.json 2>/dev/null");
+        let r = host.run(&format!("claude agents --json; echo '@@burrow@@'; cat ~/.claude/settings.json 2>/dev/null; echo '@@burrow@@'; {PEERS}"));
         let r = r.and_then(|o| {
-            let (agents, settings) = o.split_once("@@burrow@@").unwrap_or((&o, ""));
+            let mut parts = o.splitn(3, "@@burrow@@");
+            let (agents, settings, peers) = (parts.next().unwrap_or(""), parts.next().unwrap_or(""), parts.next().unwrap_or(""));
             let light = serde_json::from_str::<serde_json::Value>(settings.trim())
                 .ok()
                 .and_then(|v| v.get("theme").and_then(|t| t.as_str()).map(|t| t.starts_with("light")))
                 .unwrap_or(false);
-            parse_agents(agents).map(|b| (b, light))
+            parse_agents(agents).map(|b| {
+                let talks = parse_peers(peers, &b);
+                (b, light, talks)
+            })
         });
         {
             let mut f = feed.lock().unwrap();
             match r {
-                Ok((b, light)) => {
+                Ok((b, light, talks)) => {
+                    for (msg, from, to) in talks {
+                        if heard.insert(msg) && !first {
+                            f.talks.push((from, to));
+                        }
+                    }
+                    first = false;
                     f.light = light;
                     f.bots = b;
                     f.error = None;
@@ -251,4 +300,29 @@ pub fn watch(host: Host, ctx: egui::Context) -> Watch {
         }
     });
     w
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn bot(id: &str, name: &str, pid: u64, session: &str) -> Bot {
+        Bot { id: id.into(), name: name.into(), cwd: "/x".into(), busy: false, background: true, started: 0, pid, session: session.into() }
+    }
+
+    #[test]
+    fn peers() {
+        // as the poll prints it, from a real transcript (Claude Code 2.1.304)
+        let out = r#"b10ba1ba-6fb5-4f3d-b231-a394dd4add37 "origin":{"kind":"peer","from":"uds:/tmp/cc-socks/27312.sock","verifiedPeerPid":27312,"msg_id":"c363f3ab-b3d0-4dc2-99ab-11fe507efcd8","name":"burrow-msg-test","hopChain":["9707c300dd0b4b521fd65bc1"],"fromMode":"prompting","body":"pong from b — got your \"ping from a\"."
+"#;
+        let a = bot("b10ba1ba", "burrow-msg-a", 27327, "b10ba1ba-6fb5-4f3d-b231-a394dd4add37");
+        let b = bot("627daf32", "burrow-msg-test", 27312, "627daf32-638a-49dd-a3eb-307149ac3198");
+        let t = parse_peers(out, &[a.clone(), b.clone()]);
+        assert_eq!(t, vec![("c363f3ab-b3d0-4dc2-99ab-11fe507efcd8".into(), "627daf32".into(), "b10ba1ba".into())]);
+        // a restarted sender has another pid: fall back to its name
+        let b2 = Bot { pid: 1, ..b };
+        assert_eq!(parse_peers(out, &[a.clone(), b2]).len(), 1);
+        // a sender that isn't there any more: nothing to show
+        assert!(parse_peers(out, &[a]).is_empty());
+    }
 }

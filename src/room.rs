@@ -1,6 +1,8 @@
 // The room: one machine. Every project (the directory a session was started in) is a rug with a desk
 // per bot. Where a bot is says what it is doing — at its desk typing = busy, up and about on its rug
-// = idle, asleep at its desk = idle for a long while. Nothing else signals anything.
+// = idle, asleep at its desk = idle for a long while. A bot that sends another one a message walks
+// over to it (across the room for another project) and stands there talking for a moment.
+// Nothing else signals anything.
 
 use crate::host::Bot;
 use crate::sprite::*;
@@ -11,6 +13,7 @@ const WALL: f32 = 24.0;
 const DESK_W: f32 = 30.0;
 const POD_H: f32 = 70.0;
 const SLEEP_AFTER: f64 = 600.0;
+const TALK: f32 = 4.0; // seconds standing next to the other once there
 const WOOD: Color32 = hex(0x7a4a35);
 const WOOD_D: Color32 = hex(0x4a2e2a);
 const WALLC: Color32 = hex(0x1e1a2c);
@@ -32,6 +35,15 @@ struct Fig {
     seated: bool,
     busy: bool,
     idle_since: f64,
+    visit: Option<Visit>,
+}
+
+/// on its way to another bot, or standing next to it, to say something
+struct Visit {
+    to: String,
+    here: bool,
+    stay: f32,
+    patience: f32, // gives up if it can't get there
 }
 
 struct Pod {
@@ -62,6 +74,23 @@ pub fn project_label(cwd: &str) -> String {
 }
 
 impl Room {
+    /// `from` sent `to` a message
+    pub fn talk(&mut self, from: &str, to: &str) {
+        if !self.figs.contains_key(to) {
+            return;
+        }
+        // already together: talk a bit longer
+        for (a, b) in [(from, to), (to, from)] {
+            if let Some(v) = self.figs.get_mut(a).and_then(|f| f.visit.as_mut()).filter(|v| v.to == b) {
+                v.stay = v.stay.max(TALK);
+                return;
+            }
+        }
+        if let Some(f) = self.figs.get_mut(from) {
+            f.visit = Some(Visit { to: to.to_string(), here: false, stay: TALK, patience: 45.0 });
+        }
+    }
+
     pub fn new() -> Self {
         Room { figs: HashMap::new(), sprites: Sprites::default(), font: Font::new(), seed: 0x9e3779b9 }
     }
@@ -125,11 +154,18 @@ impl Room {
                     let seat = Pos2::new(d.x - 7.0, d.y + 1.0);
                     self.figs.insert(
                         id.clone(),
-                        Fig { x: seat.x, y: seat.y, dir: 1.0, target: None, wait: 0.0, walked: 0.0, seated: true, busy: false, idle_since: now },
+                        Fig { x: seat.x, y: seat.y, dir: 1.0, target: None, wait: 0.0, walked: 0.0, seated: true, busy: false, idle_since: now, visit: None },
                     );
                 }
             }
         }
+        // where everyone is, and who has a visitor standing next to them
+        let at: HashMap<String, (f32, f32, bool)> = self.figs.iter().map(|(id, f)| (id.clone(), (f.x, f.y, f.seated))).collect();
+        let visited: HashMap<String, f32> = self
+            .figs
+            .values()
+            .filter_map(|f| f.visit.as_ref().filter(|v| v.here).map(|v| (v.to.clone(), f.x)))
+            .collect();
         // walk
         for pod in &pods {
             for (id, d) in &pod.desks {
@@ -148,7 +184,47 @@ impl Room {
                     f.target = if b.busy { Some(seat) } else { None };
                 }
                 let asleep = !f.busy && now - f.idle_since > SLEEP_AFTER;
-                if f.busy || asleep {
+                let mut fast = false;
+                if let Some(v) = &mut f.visit {
+                    v.patience -= dt;
+                    match at.get(&v.to) {
+                        Some(&(ox, oy, oseated)) if v.patience > 0.0 => {
+                            // next to the other one: on the side it comes from, left of the chair if seated
+                            let spot = if oseated {
+                                (ox - 10.0, oy + 2.0)
+                            } else if f.x < ox {
+                                (ox - 11.0, oy)
+                            } else {
+                                (ox + 11.0, oy)
+                            };
+                            let near = (spot.0 - f.x).abs() < 1.5 && (spot.1 - f.y).abs() < 1.5;
+                            if v.here || near {
+                                v.here = true;
+                                f.target = None;
+                                f.dir = (ox - f.x).signum();
+                                v.stay -= dt;
+                                // the other one wandered off: follow it
+                                if !near {
+                                    v.here = false;
+                                }
+                            } else {
+                                f.target = Some(spot);
+                                fast = true;
+                            }
+                            if v.stay <= 0.0 {
+                                f.visit = None;
+                                f.wait = 0.5 + r1;
+                            }
+                        }
+                        _ => f.visit = None,
+                    }
+                } else if let Some(&vx) = visited.get(id).filter(|_| !f.busy) {
+                    // someone came over to talk: stand still and face them (a busy one stays at its desk)
+                    if !f.seated {
+                        f.target = None;
+                        f.dir = (vx - f.x).signum();
+                    }
+                } else if f.busy || asleep {
                     if !f.seated && f.target.is_none() {
                         f.target = Some(seat);
                     }
@@ -168,7 +244,7 @@ impl Room {
                     f.seated = false;
                     let (dx, dy) = (tx - f.x, ty - f.y);
                     let dist = (dx * dx + dy * dy).sqrt();
-                    let step = 22.0 * dt;
+                    let step = if fast { 34.0 } else { 22.0 } * dt;
                     if dist <= step {
                         f.x = tx;
                         f.y = ty;
@@ -313,6 +389,18 @@ impl Room {
                     for (dx, dy) in [(0, 0), (1, 0), (2, 0), (1, 1), (0, 2), (1, 2), (2, 2)] {
                         px(&mut m, zx + dx as f32, zy + dy as f32, 1.0, 1.0, STEEL3);
                     }
+                }
+            }
+            if f.visit.as_ref().is_some_and(|v| v.here) {
+                // talking: a little speech bubble, no words
+                let bx = (f.x + f.dir * 3.0).round() - 4.0;
+                let by = y0 - 3.0;
+                px(&mut m, bx - 1.0, by - 1.0, 11.0, 7.0, INK);
+                px(&mut m, bx, by, 9.0, 5.0, STEEL4);
+                px(&mut m, bx + if f.dir < 0.0 { 1.0 } else { 6.0 }, by + 5.0, 2.0, 1.0, STEEL4);
+                let n = ((t * 3.0) as i32 % 4) as usize;
+                for i in 0..n.min(3) {
+                    px(&mut m, bx + 1.0 + i as f32 * 3.0, by + 2.0, 1.0, 1.0, INK);
                 }
             }
             if open == Some(id.as_str()) {
