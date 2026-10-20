@@ -53,9 +53,37 @@ A bot that messages another walks over to it (`Room::talk`); he watched it work.
 - `claude agents --json` has `"status":"waiting","waitingFor":"permission prompt"` — the future
   "has a question" state, if he wants it.
 
+## The room (redesigned 2026-10-20 night, after he called v1 "very ugly")
+
+What he said: it must look like pair's room (port it, don't invent); no egui pills, no grey title bar
+(the room runs behind the traffic lights, like Ghostty); no "+ bot" button; one **unit per working dir**,
+the add-bot button lives at the unit, and later a file explorer / file viewer / diff editor will hang off
+it; separate PCs per bot don't work. He hasn't decided the overall layout (terminal always on one side
+vs floating windows) — don't decide it for him.
+
+What it is now (src/room.rs, a port of pair's app/floor.js):
+- A unit = a cabinet with the project's screen and name at the left end, a low desktop to the right,
+  its bots in chairs facing the screen, an empty chair with + at the end (starts a bot). The screen is
+  the project's shared object (where the file explorer will hang). It scrolls only while a bot sits
+  there busy. An empty wooden cabinet adds a project; projects persist in rooms.json `dirs`.
+- Busy = seated, typing. Idle = beside its cabinet (one per project) or on one of pair's breaks
+  (coffee, printer, cooler chat, pong, plants, window, armchair, whiteboard meeting). Idle 10 min =
+  charging on a mat. A message = walks over, stands behind the receiver's chair; bubbles have dots,
+  never words.
+- Scale: dots per point = round(width/280) in 2..4 so the room is 220–330 dots wide, as dense as pair.
+  Lettering is pair's 3x5 font, upper case. Colour only as accents (no rugs or tinted areas).
+- Desks in aligned columns; rows and the lounge (meeting table, pong, mats) spread with pair's pad.
+
+How to work on it without bothering him (he can't be your eyes):
+- `BURROW_DEMO=1` made-up bots (sleep after 40 s), `BURROW_SHOT=<png>` the window saves itself every
+  second (no screen-recording permission; it stays on top while it runs, a covered window isn't drawn),
+  `BURROW_OPEN=demo0003` opens a pane, `BURROW_ADD_DIR=1` the dialog. Shrink with `sips -Z 1400`.
+- A second model (Fable) reviewed the screenshots three times; its advice was good — ask again for
+  a critique when stuck on looks, but weigh it.
+
 ## Next
 
-- (open) He hasn't asked for more yet. Ideas only if he wants them: the "has a question" state
-  (see above), more rooms in one window.
+- Narrow room: only two columns fit when a desk is wide (three would, with a wide desk spanning two).
+- The "has a question" state (see above), if he wants it.
 
 `.app`: `macos/bundle.sh` (ad-hoc signed; icon from `burrow --icon-dots`).
