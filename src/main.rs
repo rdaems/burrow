@@ -121,6 +121,11 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.finished(&ctx);
+        if let Ok(dir) = std::env::var("BURROW_SPAWN") {
+            // SAFETY: only a test hook, read once before anything else uses the environment this frame
+            unsafe { std::env::remove_var("BURROW_SPAWN") };
+            self.spawn(&ctx, dir, "burrow-spawn-test".into());
+        }
         if let Ok(id) = std::env::var("BURROW_OPEN") {
             if self.places[0].open.is_none() && self.places[0].watch.feed.lock().unwrap().bots.iter().any(|b| b.id == id) {
                 // SAFETY: single-threaded at this point of the frame; only a test hook
@@ -140,7 +145,8 @@ impl eframe::App for App {
         // forget sessions whose bot has gone
         {
             let p = &mut self.places[ci];
-            p.sessions.retain(|id, _| bots.iter().any(|b| &b.id == id));
+            // (a session still attached stays: a bot just started isn't in the feed until the next poll)
+            p.sessions.retain(|id, s| bots.iter().any(|b| &b.id == id) || !s.exited.load(Ordering::Relaxed));
             if p.open.as_ref().is_some_and(|id| !bots.iter().any(|b| &b.id == id) && !p.sessions.contains_key(id)) {
                 p.open = None;
             }
@@ -183,11 +189,9 @@ impl eframe::App for App {
         let note = error.clone().or_else(|| self.places[ci].note.clone());
         let title = self.places[ci].host.name.clone();
         let mut action = None;
-        let mut clicked_floor = false;
         ui.scope_builder(UiBuilder::new().max_rect(room_rect), |ui| {
             let p = &mut self.places[ci];
             action = p.room.ui(ui, &bots, open.as_deref(), &title, note.as_deref());
-            clicked_floor = ui.response().clicked();
         });
         match action {
             Some(room::Action::Open(id)) => {
@@ -270,7 +274,6 @@ impl eframe::App for App {
                 });
             }
         }
-        let _ = clicked_floor;
 
         self.dialogs(&ctx, &bots);
         ctx.request_repaint_after(std::time::Duration::from_millis(33));

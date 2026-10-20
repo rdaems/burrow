@@ -218,7 +218,11 @@ impl Room {
         let cwid = self.font.width(&clock) as f32;
         text(&mut m, &clock, w - cwid - 8.0, 9.0, STEEL1);
         if let Some(n) = note {
-            text(&mut m, n, 8.0, WALL + 12.0, hex(0xff6b5a));
+            // a note goes on the wall, between the room's name and the clock
+            let nx = (self.font.width(title) as f32 + 24.0).min(w - 8.0);
+            let room_for = ((w - cwid - 16.0 - nx) / 4.0).max(0.0) as usize;
+            let short: String = n.chars().take(room_for).collect();
+            text(&mut m, &short, nx, 9.0, hex(0xff6b5a));
         } else if bots.is_empty() {
             text(&mut m, "no bots here yet", 8.0, WALL + 12.0, STEEL1);
         }

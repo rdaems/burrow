@@ -63,4 +63,5 @@ palette, Super Atlas's bitmap font (`src/glyphs.rs`). JetBrains Mono (OFL, `asse
 A new directory has to be trusted by Claude Code once (run `claude` there by hand) before a background
 session can start in it; burrow shows Claude's message if it isn't.
 
-Test hook: `BURROW_OPEN=<id>` opens that bot as soon as it shows up in the first room.
+Test hooks: `BURROW_OPEN=<id>` opens that bot as soon as it shows up in the first room;
+`BURROW_SPAWN=<dir>` starts a bot there at launch.

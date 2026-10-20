@@ -68,7 +68,7 @@ pub fn sq(s: &str) -> String {
 }
 
 // a non-login shell over ssh (and an app started from the Dock) has a bare PATH; claude lives here
-const PATH: &str = "PATH=\"$HOME/.local/bin:$HOME/.claude/local:/opt/homebrew/bin:/usr/local/bin:$PATH\"; export PATH; ";
+const PATH: &str = "PATH=\"$HOME/.local/bin:$HOME/.claude/local:/opt/homebrew/bin:/usr/local/bin:$PATH\"; export PATH; export COLORTERM=truecolor; ";
 
 impl Host {
     fn ssh_opts(&self) -> Vec<String> {
@@ -121,9 +121,9 @@ impl Host {
         let n = if name.trim().is_empty() { String::new() } else { format!(" -n {}", sq(name.trim())) };
         let out = self.run(&format!("cd {} && claude --bg{n} 2>&1", sq(dir)))?;
         // "backgrounded · 7ebbc505 · name (idle — send a prompt to start)"
-        let first = out.lines().next().unwrap_or("");
-        if first.starts_with("backgrounded") {
-            if let Some(id) = first.split('·').nth(1) {
+        // (the first start of the day prints "Starting background service…" before it)
+        if let Some(line) = out.lines().find(|l| l.trim_start().starts_with("backgrounded")) {
+            if let Some(id) = line.split('·').nth(1) {
                 return Ok(id.trim().to_string());
             }
         }
@@ -147,7 +147,7 @@ impl Host {
             .args(self.ssh_opts())
             .arg("-q")
             .arg(local)
-            .arg(format!("{dest}:{}", sq(&remote)))
+            .arg(format!("{dest}:{remote}")) // scp speaks SFTP now: the path is taken literally, no quoting
             .output()
             .map_err(|e| e.to_string())?;
         if out.status.success() {
