@@ -382,6 +382,13 @@ fn style(ctx: &egui::Context) {
 }
 
 fn main() -> eframe::Result {
+    if std::env::args().any(|a| a == "--icon-dots") {
+        // for macos/bundle.sh: the app icon is one of the room's own robots, standing
+        for &(x, y, c) in Sprites::default().get("burrow", TERRACOTTA, Arms::Down, Legs::Stand).iter() {
+            println!("{x} {y} {:02x}{:02x}{:02x}", c.r(), c.g(), c.b());
+        }
+        return Ok(());
+    }
     let opts = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_title("burrow").with_inner_size([1280.0, 800.0]).with_min_inner_size([480.0, 320.0]),
         ..Default::default()

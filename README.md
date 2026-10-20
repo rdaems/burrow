@@ -59,6 +59,9 @@ An entry without `ssh` is the machine burrow runs on.
 cargo run --release
 ```
 
+On a Mac, `macos/bundle.sh` makes `target/release/burrow.app` (icon: one of the room's robots); copy it
+to `/Applications`. Started from the Dock it finds `claude` in `~/.local/bin`, `~/.claude/local` or Homebrew.
+
 Rust only: egui/eframe for the window, alacritty's `alacritty_terminal` for the terminal. The room is
 drawn dot by dot after [pair](https://github.com/rdaems/pair-prompting)'s office: same robots, same
 palette, Super Atlas's bitmap font (`src/glyphs.rs`). JetBrains Mono (OFL, `assets/`) for the terminal.

@@ -55,4 +55,7 @@ A bot that messages another walks over to it (`Room::talk`). Verified with real 
 
 ## Next
 
-- A `.app` bundle for the Mac.
+- (open) He hasn't asked for more yet. Ideas only if he wants them: the "has a question" state
+  (see above), more rooms in one window.
+
+`.app`: `macos/bundle.sh` (ad-hoc signed; icon from `burrow --icon-dots`).
