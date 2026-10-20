@@ -63,8 +63,8 @@ On a Mac, `macos/bundle.sh` makes `target/release/burrow.app` (icon: one of the 
 to `/Applications`. Started from the Dock it finds `claude` in `~/.local/bin`, `~/.claude/local` or Homebrew.
 
 Rust only: egui/eframe for the window, alacritty's `alacritty_terminal` for the terminal. The room is
-drawn dot by dot after [pair](https://github.com/rdaems/pair-prompting)'s office: same robots, same
-palette, Super Atlas's bitmap font (`src/glyphs.rs`). JetBrains Mono (OFL, `assets/`) for the terminal.
+drawn dot by dot after [pair](https://github.com/rdaems/pair-prompting)'s office (`app/floor.js`): same
+robots, palette, furniture and lettering. JetBrains Mono (OFL, `assets/`) for the terminal.
 
 A new directory has to be trusted by Claude Code once (run `claude` there by hand) before a background
 session can start in it; burrow shows Claude's message if it isn't.

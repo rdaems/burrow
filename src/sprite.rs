@@ -1,5 +1,5 @@
 // The bots and the lettering, after pair's office (app/pixel.js, app/floor.js): a robot's head from its
-// session id, a body in its project's colour, and Super Atlas's bitmap font. Everything is drawn in
+// session id, a body in its project's colour, and pair's 3x5 lettering. Everything is drawn in
 // "dots" (one logical pixel of the room), which the room scales to screen pixels.
 
 use egui::Color32;
@@ -19,6 +19,16 @@ pub const STEEL4: Color32 = hex(0xf4f6fb);
 pub const BLUE0: Color32 = hex(0x1a2448);
 pub const NIGHT: Color32 = hex(0x0d0a16);
 pub const TERRACOTTA: Color32 = hex(0xd97757);
+pub const WHITE: Color32 = hex(0xffffff);
+pub const GOLD0: Color32 = hex(0xb86a1e);
+pub const GOLD2: Color32 = hex(0xffe27a);
+pub const RED1: Color32 = hex(0xe8402a);
+pub const BLUE2: Color32 = hex(0x4a76b8);
+pub const BLUE3: Color32 = hex(0x8fc0e8);
+pub const GREEN0: Color32 = hex(0x2d8a3a);
+pub const GREEN1: Color32 = hex(0x5fcf4a);
+pub const PURPLE0: Color32 = hex(0x5a3f94);
+pub const PURPLE1: Color32 = hex(0x9a74d6);
 
 // a project's colour: the clothes and robot lights of pair's palette
 pub const PROJECT: [Color32; 8] = [
@@ -74,6 +84,12 @@ pub enum Arms {
     Swing2,
     Type1,
     Type2,
+    Wave,
+    Reach,
+    Mug,
+    Paper,
+    Book,
+    Can,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -227,7 +243,48 @@ fn robot(seed: &str, light: Color32, arms: Arms, legs: Legs) -> Sprite {
         rect(set, 14, hy - 1, 3, 2, c1);
         rect(set, 17, hy - 1, 2, 2, skin);
     };
+    let back = |set: &mut dyn FnMut(i32, i32, Color32)| arm(set, 4, 17, 20, 4, 21);
+    // a hand held out in front, `w` long, at height `hy`
+    let out_ = |set: &mut dyn FnMut(i32, i32, Color32), hy: i32, w: i32| {
+        rect(set, 14, hy - 1, w, 2, c1);
+        rect(set, 14 + w, hy - 1, 2, 2, skin);
+    };
     match arms {
+        Arms::Wave => {
+            back(&mut set);
+            arm(&mut set, 14, 11, 16, 15, 10);
+        }
+        Arms::Reach => {
+            back(&mut set);
+            rect(&mut set, 14, 14, 2, 4, c1);
+            rect(&mut set, 16, 13, 2, 2, c1);
+            rect(&mut set, 18, 12, 2, 2, skin);
+        }
+        Arms::Mug => {
+            back(&mut set);
+            out_(&mut set, 19, 2);
+            rect(&mut set, 17, 16, 3, 3, light);
+            rect(&mut set, 19, 17, 1, 1, INK);
+        }
+        Arms::Paper => {
+            back(&mut set);
+            out_(&mut set, 19, 2);
+            rect(&mut set, 16, 15, 4, 5, STEEL4);
+            rect(&mut set, 17, 16, 2, 1, STEEL2);
+            rect(&mut set, 17, 18, 2, 1, STEEL2);
+        }
+        Arms::Book => {
+            back(&mut set);
+            out_(&mut set, 19, 2);
+            rect(&mut set, 16, 16, 3, 4, RED1);
+            rect(&mut set, 16, 16, 1, 4, hex(0x8e1f2a));
+        }
+        Arms::Can => {
+            back(&mut set);
+            out_(&mut set, 19, 2);
+            rect(&mut set, 16, 17, 4, 3, GREEN0);
+            rect(&mut set, 20, 17, 1, 1, GREEN0);
+        }
         Arms::Swing1 => {
             arm(&mut set, 4, 17, 19, 5, 20);
             arm(&mut set, 14, 17, 19, 13, 20);
@@ -289,47 +346,77 @@ fn robot(seed: &str, light: Color32, arms: Arms, legs: Legs) -> Sprite {
     s
 }
 
-// ---- lettering -------------------------------------------------------------------------------
+// ---- pair's small lettering: 3x5 glyphs, upper case, like a Pico-8 (floor.js's speech-bubble font)
 
-pub struct Font {
-    glyphs: HashMap<char, (i32, Vec<(i32, i32)>)>,
+/// bit n = row n/3, column n%3
+const TINY: &[(char, u16)] = &[
+    ('A', 0b101101111101010),
+    ('B', 0b011101011101011),
+    ('C', 0b110001001001110),
+    ('D', 0b011101101101011),
+    ('E', 0b111001011001111),
+    ('F', 0b001001011001111),
+    ('G', 0b110101101001110),
+    ('H', 0b101101111101101),
+    ('I', 0b111010010010111),
+    ('J', 0b010101100100100),
+    ('K', 0b101101011101101),
+    ('L', 0b111001001001001),
+    ('M', 0b101101111111101),
+    ('N', 0b101101101101011),
+    ('O', 0b010101101101010),
+    ('P', 0b001001011101011),
+    ('Q', 0b110011101101010),
+    ('R', 0b101101011101011),
+    ('S', 0b011100010001110),
+    ('T', 0b010010010010111),
+    ('U', 0b110101101101101),
+    ('V', 0b010101101101101),
+    ('W', 0b101111111101101),
+    ('X', 0b101101010101101),
+    ('Y', 0b010010010101101),
+    ('Z', 0b111001010100111),
+    ('0', 0b111101101101111),
+    ('1', 0b111010010011010),
+    ('2', 0b111001010100011),
+    ('3', 0b011100010100011),
+    ('4', 0b100100111101101),
+    ('5', 0b011100011001111),
+    ('6', 0b111101111001110),
+    ('7', 0b010010010100111),
+    ('8', 0b111101111101111),
+    ('9', 0b011100111101111),
+    ('.', 0b010000000000000),
+    (',', 0b001010000000000),
+    ('!', 0b010000010010010),
+    ('?', 0b010000010100011),
+    ('\'', 0b000000000010010),
+    ('-', 0b000000111000000),
+    (':', 0b000010000010000),
+    ('(', 0b100010010010100),
+    (')', 0b001010010010001),
+    ('/', 0b001001010100100),
+    ('+', 0b000010111010000),
+    ('=', 0b000111000111000),
+    ('%', 0b101001010100101),
+    ('*', 0b000000101010101),
+    ('#', 0b101111101111101),
+    ('"', 0b000000000101101),
+    ('&', 0b110101010101010),
+];
+
+/// the dots of a line in the small font, top-left at (x, y); four dots a letter
+pub fn tiny(s: &str, x: i32, y: i32, out: &mut Vec<(i32, i32)>) {
+    for (i, ch) in s.chars().flat_map(|c| c.to_uppercase()).enumerate() {
+        let Some(&(_, bits)) = TINY.iter().find(|(c, _)| *c == ch) else { continue };
+        for n in 0..15 {
+            if bits & (1 << n) != 0 {
+                out.push((x + i as i32 * 4 + n % 3, y + n / 3));
+            }
+        }
+    }
 }
 
-impl Font {
-    pub fn new() -> Self {
-        let mut glyphs = HashMap::new();
-        for (ch, spec) in crate::glyphs::GLYPHS {
-            let rows: Vec<&str> = spec.split('|').collect();
-            let w = rows[0].chars().count() as i32;
-            let mut dots = Vec::new();
-            for (y, row) in rows.iter().enumerate() {
-                for (x, c) in row.chars().enumerate() {
-                    if c == '#' {
-                        dots.push((x as i32, y as i32));
-                    }
-                }
-            }
-            glyphs.insert(*ch, (w, dots));
-        }
-        Font { glyphs }
-    }
-
-    fn glyph(&self, ch: char) -> &(i32, Vec<(i32, i32)>) {
-        self.glyphs.get(&ch).or_else(|| self.glyphs.get(&'?')).unwrap()
-    }
-
-    pub fn width(&self, s: &str) -> i32 {
-        let w: i32 = s.chars().map(|c| self.glyph(c).0 + 1).sum();
-        (w - 1).max(0)
-    }
-
-    // the dots of a line of text, top-left at (x, y)
-    pub fn dots(&self, s: &str, x: i32, y: i32, out: &mut Vec<(i32, i32)>) {
-        let mut cx = x;
-        for ch in s.chars() {
-            let (w, d) = self.glyph(ch);
-            out.extend(d.iter().map(|(dx, dy)| (cx + dx, y + dy)));
-            cx += w + 1;
-        }
-    }
+pub fn tiny_width(s: &str) -> i32 {
+    (s.chars().count() as i32 * 4 - 1).max(0)
 }

@@ -9,12 +9,15 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug, Default)]
 pub struct Host {
     pub name: String,
     /// an ssh destination (anything `ssh` accepts, ~/.ssh/config applies); none = this machine
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ssh: Option<String>,
+    /// the working directories shown as projects, also while no bot works there
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dirs: Vec<String>,
 }
 
 pub fn home() -> PathBuf {
@@ -31,7 +34,14 @@ fn cache_dir() -> PathBuf {
     d
 }
 
+/// BURROW_DEMO=1: made-up rooms with made-up bots, for working on the room without real sessions
+const DEMO: &str = "@demo";
+
 pub fn load_hosts() -> Vec<Host> {
+    if std::env::var_os("BURROW_DEMO").is_some() {
+        let dirs = vec![format!("{}/projects/romuald", home().display())];
+        return ["mac", "odyssey"].map(|n| Host { name: n.into(), ssh: Some(DEMO.into()), dirs: dirs.clone() }).to_vec();
+    }
     if let Ok(s) = std::fs::read_to_string(config_path()) {
         if let Ok(v) = serde_json::from_str::<Vec<Host>>(&s) {
             if !v.is_empty() {
@@ -47,10 +57,13 @@ pub fn load_hosts() -> Vec<Host> {
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| "here".into());
-    vec![Host { name, ssh: None }]
+    vec![Host { name, ..Default::default() }]
 }
 
 pub fn save_hosts(hosts: &[Host]) {
+    if std::env::var_os("BURROW_DEMO").is_some() {
+        return;
+    }
     let p = config_path();
     let _ = std::fs::create_dir_all(p.parent().unwrap());
     let _ = std::fs::write(p, serde_json::to_string_pretty(hosts).unwrap());
@@ -88,6 +101,10 @@ impl Host {
     /// program + args that run `script` in a shell there; `tty` for an interactive one
     pub fn argv(&self, script: &str, tty: bool) -> (String, Vec<String>) {
         let script = format!("{PATH}{script}");
+        if self.ssh.as_deref() == Some(DEMO) {
+            // a made-up bot's session: a shell that says so
+            return ("/bin/sh".into(), vec!["-c".into(), "printf 'a demo bot: no session behind it\\n'; exec cat".into()]);
+        }
         match &self.ssh {
             None => ("/bin/sh".into(), vec!["-c".into(), script]),
             Some(dest) => {
@@ -128,6 +145,15 @@ impl Host {
             }
         }
         Err(out.trim().to_string())
+    }
+
+    /// the absolute path of a directory there (and whether it is one)
+    pub fn resolve(&self, dir: &str) -> Result<String, String> {
+        if self.ssh.as_deref() == Some(DEMO) {
+            return Ok(dir.replacen('~', &home().display().to_string(), 1));
+        }
+        let out = self.run(&format!("cd {} && pwd -P", sq(dir.trim())))?;
+        Ok(out.trim().to_string())
     }
 
     pub fn stop(&self, id: &str) -> Result<String, String> {
@@ -254,6 +280,10 @@ pub fn watch(host: Host, ctx: egui::Context) -> Watch {
         poke: Arc::new(AtomicBool::new(false)),
     };
     let (feed, fast, poke) = (w.feed.clone(), w.fast.clone(), w.poke.clone());
+    if host.ssh.as_deref() == Some(DEMO) {
+        std::thread::spawn(move || demo(feed, ctx));
+        return w;
+    }
     // messages seen already; what is in the transcripts when burrow starts is old news
     let mut heard: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut first = true;
@@ -300,6 +330,56 @@ pub fn watch(host: Host, ctx: egui::Context) -> Watch {
         }
     });
     w
+}
+
+fn demo(feed: Arc<Mutex<Feed>>, ctx: egui::Context) {
+    let h = home().display().to_string();
+    let bots = [
+        ("burrow", "burrow"), ("burrow", "talk-ui"), ("burrow", "icons"), ("hexant", "hexant"),
+        ("hexant", "ants-2"), ("website", "website"), ("", "home"), ("football", "football"),
+    ];
+    let mut bots: Vec<Bot> = bots
+        .iter()
+        .enumerate()
+        .map(|(i, (dir, name))| Bot {
+            id: format!("demo{i:04}"),
+            name: name.to_string(),
+            cwd: if dir.is_empty() { h.clone() } else { format!("{h}/projects/{dir}") },
+            busy: i % 3 == 0,
+            background: i != 6,
+            started: i as u64,
+            pid: 1000 + i as u64,
+            session: format!("demo{i:04}"),
+        })
+        .collect();
+    let mut seed = 0x2545f491u32;
+    let mut rnd = move || {
+        seed ^= seed << 13;
+        seed ^= seed >> 17;
+        seed ^= seed << 5;
+        seed
+    };
+    loop {
+        {
+            let mut f = feed.lock().unwrap();
+            for b in bots.iter_mut() {
+                if rnd() % 12 == 0 {
+                    b.busy = !b.busy;
+                }
+            }
+            if rnd() % 3 == 0 {
+                let (a, b) = (rnd() as usize % bots.len(), rnd() as usize % bots.len());
+                if a != b {
+                    f.talks.push((bots[a].id.clone(), bots[b].id.clone()));
+                }
+            }
+            f.bots = bots.clone();
+            f.error = None;
+            f.fresh = true;
+        }
+        ctx.request_repaint();
+        std::thread::sleep(Duration::from_secs(3));
+    }
 }
 
 #[cfg(test)]
