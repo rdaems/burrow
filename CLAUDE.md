@@ -36,7 +36,7 @@ Rembert's own replacement for Orca (too bloated). Read README.md first; this fil
 
 ## Talking (built 2026-10-20)
 
-A bot that messages another walks over to it (`Room::talk`). Verified with real sessions, Claude Code 2.1.304:
+A bot that messages another walks over to it (`Room::talk`); he watched it work. Verified with real sessions, Claude Code 2.1.304:
 - A delivered message is a `type:"user"` line in the **receiver's** transcript with
   `"origin":{"kind":"peer","from":"uds:/tmp/cc-socks/<pid>.sock","verifiedPeerPid":<pid>,"msg_id":…,"name":<sender>,…,"body":…}`.
   `verifiedPeerPid` = the sender's `pid` in `claude agents --json`; falls back to the name.
