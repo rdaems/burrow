@@ -367,7 +367,7 @@ fn demo(feed: Arc<Mutex<Feed>>, ctx: egui::Context) {
                     b.busy = !b.busy;
                 }
             }
-            if rnd() % 3 == 0 {
+            if rnd() % 8 == 0 {
                 let (a, b) = (rnd() as usize % bots.len(), rnd() as usize % bots.len());
                 if a != b {
                     f.talks.push((bots[a].id.clone(), bots[b].id.clone()));

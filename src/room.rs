@@ -19,10 +19,9 @@ use egui::{Color32, Mesh, Pos2, Rect, Vec2};
 use std::collections::HashMap;
 
 pub const WALL: f32 = 30.0;
-const SLEEP_AFTER: f64 = 600.0;
 const TALK: f32 = 4.0; // seconds standing next to the other once there
 const SEAT: f32 = 18.0; // between two chairs at a desk
-const DESK_H: f32 = 34.0; // a project's desk, its screen included
+const ADD_W: f32 = 30.0; // the empty cabinet that adds a project
 const WOOD: Color32 = hex(0x7a4a35);
 const WOOD_D: Color32 = hex(0x4a2e2a);
 const WALLC: Color32 = hex(0x1e1a2c);
@@ -112,6 +111,15 @@ impl Layout {
         let s = [(-23.0, 0.0, 1.0), (23.0, 0.0, -1.0), (-8.0, -5.0, 1.0), (8.0, -5.0, -1.0)];
         s.get(i).map(|(dx, dy, d)| (Pos2::new(m.x + dx, m.y + dy), *d))
     }
+    /// a place to stand about: not in a desk, a mat or the ping-pong table
+    fn free(&self, x: f32, y: f32) -> bool {
+        let inside = |x0: f32, y0: f32, x1: f32, y1: f32| x >= x0 && x <= x1 && y >= y0 && y <= y1;
+        !self.desks.iter().any(|d| inside(d.x0 - 8.0, d.y - 30.0, d.x0 + d.w + 10.0, d.y + 6.0))
+            && !inside(self.add.left() - 8.0, self.add.top() - 14.0, self.add.right() + 8.0, self.add.bottom() + 6.0)
+            && !self.mats.iter().any(|m| inside(m.x - 14.0, m.y - 26.0, m.x + 14.0, m.y + 4.0))
+            && !self.pong.is_some_and(|g| inside(g.x - 36.0, g.y - 20.0, g.x + 36.0, g.y + 8.0))
+            && !self.meet.is_some_and(|m| inside(m.x - 28.0, m.y - 14.0, m.x + 28.0, m.y + 4.0))
+    }
     fn seat(&self, id: &str) -> Option<Pos2> {
         self.desks.iter().find_map(|d| d.seats.iter().find(|(i, _)| i == id).map(|(_, x)| Pos2::new(*x, d.y)))
     }
@@ -128,6 +136,7 @@ pub struct Room {
     pong: (f32, usize), // the ball: how far across, from which side
     t: f32,
     born: f64,
+    sleep_after: f64, // idle this long: off to a mat
 }
 
 pub fn project_color(cwd: &str) -> Color32 {
@@ -197,6 +206,8 @@ impl Room {
             pong: (0.0, 0),
             t: 0.0,
             born: -1.0,
+            // (the made-up bots fall asleep sooner, to see it)
+            sleep_after: if std::env::var_os("BURROW_DEMO").is_some() { 40.0 } else { 600.0 },
         }
     }
 
@@ -243,68 +254,114 @@ impl Room {
         let floor_y = h - 6.0;
         let window = (w >= 200.0).then(|| Rect::from_min_max(Pos2::new(w - 46.0, 6.0), Pos2::new(w - 28.0, 21.0)));
         // the whiteboard in the middle of the wall, or as far right as the names make it, if it fits
-        let bx = (w / 2.0 - 18.0).max(wall_left + 6.0).round();
+        let bx = (w / 2.0 - 14.0).max(wall_left + 6.0).round();
         let right = window.map(|r| r.left()).unwrap_or(w - 18.0) - 6.0;
-        let board = (bx + 36.0 <= right).then(|| Rect::from_min_max(Pos2::new(bx, 6.0), Pos2::new(bx + 36.0, 21.0)));
-        let meet = (h >= 230.0 && board.is_some()).then(|| Pos2::new((w / 2.0).round(), WALL + 30.0));
+        let board = (bx + 30.0 <= right).then(|| Rect::from_min_max(Pos2::new(bx, 8.0), Pos2::new(bx + 28.0, 20.0)));
 
-        // the desks, a row at a time, centred
-        let top = if meet.is_some() { WALL + 44.0 } else { WALL + 8.0 };
-        let sizes: Vec<(String, usize, f32, f32)> = order
+        // the desks in columns, each as wide as its widest desk, cabinets lined up: as many columns as fit
+        let sizes: Vec<(String, f32, f32)> = order
             .iter()
             .map(|cwd| {
                 let n = bots.iter().filter(|b| b.cwd == *cwd).count();
                 let cab = (tiny_width(&project_label(cwd)) as f32 + 6.0).max(22.0);
-                (cwd.to_string(), n, cab + 4.0 + (n + 1) as f32 * SEAT, cab)
+                (cwd.to_string(), cab + 4.0 + (n + 1) as f32 * SEAT, cab)
             })
             .collect();
-        let mut rows: Vec<Vec<usize>> = vec![vec![]];
-        let mut used = 0.0;
-        for (i, s) in sizes.iter().enumerate() {
-            let need = s.2 + 14.0;
-            if used + need > w - 12.0 && !rows.last().unwrap().is_empty() {
-                rows.push(vec![]);
-                used = 0.0;
-            }
-            rows.last_mut().unwrap().push(i);
-            used += need;
+        let mut widths: Vec<f32> = sizes.iter().map(|s| s.1).chain(std::iter::once(ADD_W)).collect();
+        let gap_x = 14.0;
+        let columns = |ws: &[f32], c: usize| -> Vec<f32> { (0..c).map(|j| ws.iter().skip(j).step_by(c).fold(0.0, |a: f32, b| a.max(*b))).collect() };
+        let total = |cw: &[f32]| cw.iter().sum::<f32>() + gap_x * (cw.len() as f32 - 1.0);
+        let mut c = (1..=widths.len()).rev().find(|&c| total(&columns(&widths, c)) <= w - 16.0).unwrap_or(1);
+        // the empty cabinet doesn't get a row of its own: then it stands by the wall, in the bottom row
+        let add_below = widths.len() > 1 && (widths.len() - 1) % c == 0 && w >= 110.0;
+        if add_below {
+            widths.pop();
+            c = (1..=widths.len()).rev().find(|&c| total(&columns(&widths, c)) <= w - 16.0).unwrap_or(1);
         }
-        let add_w = 30.0;
+        let cw = columns(&widths, c);
+        let left = ((w - total(&cw)) / 2.0).max(6.0).round();
+        let col_x: Vec<f32> = cw.iter().scan(left, |x, cwj| {
+            let here = *x;
+            *x += cwj + gap_x;
+            Some(here)
+        }).collect();
+        let rows = widths.len().div_ceil(c);
+
+        // top to bottom, as in pair: the meeting table under the whiteboard, the rows of desks, the
+        // ping-pong table and the mats, spread evenly over what the wall and the bottom row leave;
+        // what doesn't fit is left out (the mats last, the meeting table first)
+        const ROW: f32 = 46.0;
+        let wide = w >= 200.0;
+        let avail = floor_y - 28.0 - (WALL + 4.0);
+        let mut used = rows as f32 * ROW;
+        let mats_h = 30.0;
+        let pong_h = 34.0;
+        let fits_mats = used + mats_h <= avail;
+        if fits_mats {
+            used += mats_h;
+        }
+        let fits_pong = if wide { fits_mats } else { used + pong_h <= avail };
+        if fits_pong && !wide {
+            used += pong_h;
+        }
+        let fits_meet = board.is_some() && used + 40.0 <= avail;
+        if fits_meet {
+            used += 40.0;
+        }
+        let parts = rows + fits_mats as usize + (fits_pong && !wide) as usize + fits_meet as usize;
+        let pad = ((avail - used) / (parts + 1) as f32).max(0.0);
+        let mut y0 = WALL + 4.0 + pad;
+        let mut meet = None;
+        if fits_meet {
+            meet = Some(Pos2::new(board.unwrap().center().x.round(), (y0 + 30.0).round()));
+            y0 += 40.0 + pad;
+        }
         let mut desks = Vec::new();
         let mut add = Rect::NOTHING;
-        // the rows spread over what the lounge and the bottom row leave, as in pair
-        let lounge = if w >= 200.0 { 40.0 } else { 74.0 };
-        let avail = floor_y - 28.0 - top - lounge;
-        let gap_y = (avail / rows.len() as f32).clamp(DESK_H + 14.0, DESK_H + 30.0).round();
-        for (r, row) in rows.iter().enumerate() {
-            let last = r + 1 == rows.len();
-            let total: f32 = row.iter().map(|&i| sizes[i].2 + 14.0).sum::<f32>() + if last { add_w + 14.0 } else { 0.0 };
-            let mut x = ((w - total) / 2.0).max(6.0).round() + 7.0;
-            let y = top + r as f32 * gap_y + DESK_H;
-            for &i in row {
-                let (cwd, _, dw, cab) = &sizes[i];
-                let mine: Vec<&Bot> = bots.iter().filter(|b| &b.cwd == cwd).collect();
-                let seat = |j: usize| x + cab + 4.0 + SEAT / 2.0 + j as f32 * SEAT;
-                desks.push(Desk {
-                    cwd: cwd.clone(),
-                    x0: x,
-                    w: *dw,
-                    cab: *cab,
-                    y,
-                    color: project_color(cwd),
-                    seats: mine.iter().enumerate().map(|(j, b)| (b.id.clone(), seat(j))).collect(),
-                    plus: seat(mine.len()),
-                });
-                x += dw + 14.0;
+        for (i, wi) in widths.iter().enumerate() {
+            let (r, j) = (i / c, i % c);
+            let x = col_x[j];
+            let y = (y0 + r as f32 * (ROW + pad) + 38.0).round();
+            if i == sizes.len() {
+                add = Rect::from_min_max(Pos2::new(x, y - 13.0), Pos2::new(x + wi, y));
+                continue;
             }
-            if last {
-                add = Rect::from_min_max(Pos2::new(x, y - 26.0), Pos2::new(x + add_w, y));
-                if x + add_w > w - 4.0 {
-                    add = Rect::from_min_max(Pos2::new(((w - add_w) / 2.0).round(), y + gap_y - 26.0), Pos2::new(((w + add_w) / 2.0).round(), y + gap_y));
-                }
+            let (cwd, dw, cab) = &sizes[i];
+            let mine: Vec<&Bot> = bots.iter().filter(|b| &b.cwd == cwd).collect();
+            let seat = |k: usize| x + cab + 4.0 + SEAT / 2.0 + k as f32 * SEAT;
+            desks.push(Desk {
+                cwd: cwd.clone(),
+                x0: x,
+                w: *dw,
+                cab: *cab,
+                y,
+                color: project_color(cwd),
+                seats: mine.iter().enumerate().map(|(k, b)| (b.id.clone(), seat(k))).collect(),
+                plus: seat(mine.len()),
+            });
+        }
+        y0 += rows as f32 * (ROW + pad);
+        if add_below {
+            let x = ((48.0 + (w / 2.0 - 6.0)) / 2.0 - ADD_W / 2.0).round();
+            add = Rect::from_min_max(Pos2::new(x, floor_y - 13.0), Pos2::new(x + ADD_W, floor_y));
+        }
+        let n = asleep.max(1).min(((w - 12.0) / 28.0).max(1.0) as usize);
+        let mut pong = None;
+        let mut mats = Vec::new();
+        let mat_row = |cx: f32, y: f32, n: usize| (0..n).map(|i| Pos2::new((cx + (i as f32 - (n - 1) as f32 / 2.0) * 28.0).round(), y.round())).collect::<Vec<_>>();
+        if wide && fits_mats {
+            // side by side: the table on the left, the mats on the right
+            pong = Some(Pos2::new((w * 0.3).round(), (y0 + 26.0).round()));
+            mats = mat_row(w * 0.68, y0 + 28.0, n.min(((w * 0.45) / 28.0) as usize).max(1));
+        } else {
+            if fits_pong {
+                pong = Some(Pos2::new((w / 2.0).round(), (y0 + 26.0).round()));
+                y0 += pong_h + pad;
+            }
+            if fits_mats {
+                mats = mat_row(w / 2.0, y0 + 28.0, n);
             }
         }
-        let below = add.bottom().max(desks.iter().map(|d| d.y).fold(0.0, f32::max)) + 8.0;
 
         // along the bottom, as in pair: the coffee corner, the cooler, the printer, an armchair, a plant
         let cooler = (w >= 76.0).then(|| Pos2::new(36.0, floor_y - 1.0));
@@ -312,30 +369,8 @@ impl Room {
         let printer = (w >= 110.0).then(|| Pos2::new((w / 2.0 + 4.0).round(), floor_y));
         let chair = (w >= 140.0).then(|| Pos2::new((w - 34.0).round(), floor_y));
         let mut plants = vec![Pos2::new(w - 8.0, floor_y)];
-        if h >= 300.0 {
-            plants.push(Pos2::new(6.0, (h * 0.55).round()));
-        }
-        // between the desks and the bottom row, as far as there is room: ping-pong and the mats
-        let room_left = floor_y - 30.0 - below;
-        let wide = w >= 200.0;
-        let mut pong = None;
-        let mats;
-        let n = (asleep + 1).max(2).min(((w - 12.0) / 28.0).max(1.0) as usize);
-        let mat_row = |y: f32| (0..n).map(|i| Pos2::new((w / 2.0 + (i as f32 - (n - 1) as f32 / 2.0) * 28.0).round(), y.round())).collect::<Vec<_>>();
-        if wide && room_left >= 34.0 {
-            // side by side: the table on the left, the mats on the right
-            let y = below + (room_left - 24.0) / 2.0 + 24.0;
-            pong = Some(Pos2::new((w * 0.3).round(), y.round()));
-            let m = n.min(((w * 0.45) / 28.0) as usize).max(1);
-            mats = (0..m).map(|i| Pos2::new((w * 0.68 + (i as f32 - (m - 1) as f32 / 2.0) * 28.0).round(), y.round())).collect();
-        } else if room_left >= 70.0 {
-            pong = Some(Pos2::new((w / 2.0).round(), (below + 30.0).round()));
-            mats = mat_row(below + 64.0);
-        } else if room_left >= 30.0 {
-            mats = mat_row(below + 28.0);
-        } else {
-            // no room: the mats go to the floor's right edge, up the wall
-            mats = (0..n).map(|i| Pos2::new(w - 16.0, (WALL + 30.0 + i as f32 * 26.0).min(floor_y - 30.0))).collect();
+        if h >= 300.0 && left >= 24.0 {
+            plants.push(Pos2::new(8.0, (h * 0.55).round()));
         }
         Layout {
             desks,
@@ -467,7 +502,7 @@ impl Room {
             let short: String = n.chars().take(room_for).collect();
             p.tiny(&short, nx, 16.0, hex(0xff6b5a));
         } else if let Some(b) = lay.board {
-            p.e(b.left(), b.top(), b.width(), b.height(), STEEL4, STEEL1);
+            p.e(b.left(), b.top(), b.width(), b.height(), STEEL3, STEEL1);
             p.r(b.left() + 2.0, b.bottom(), b.width() - 4.0, 1.0, STEEL1);
             let c = shade(self.board_by, 0.75);
             for &(kind, x, y, sw, sh) in &self.board {
@@ -493,19 +528,16 @@ impl Room {
         }
 
         // flat on the floor: the mats, the ping-pong rug
-        // a new project: an empty cabinet at the end, nothing on it yet
+        // a new project: an empty cabinet at the end, a + where the name goes
         {
             let a = lay.add;
-            let hot = over(a.left() - 2.0, a.top() - 8.0, a.right() + 2.0, a.bottom() + 1.0);
-            let (fill, ink) = if hot { (STEEL0, STEEL4) } else { (INK2, STEEL1) };
-            p.b(a.left(), a.bottom() - 16.0, a.width(), 15.0, fill);
-            p.r(a.left(), a.bottom() - 16.0, a.width(), 1.0, if hot { STEEL1 } else { STEEL0 });
-            p.r(a.left() + 1.0, a.bottom() - 1.0, 2.0, 1.0, INK);
-            p.r(a.right() - 3.0, a.bottom() - 1.0, 2.0, 1.0, INK);
-            p.tiny("+", (a.center().x - 1.0).round(), a.bottom() - 11.0, ink);
+            let hot = over(a.left() - 2.0, a.top() - 10.0, a.right() + 2.0, a.bottom() + 1.0);
+            p.b(a.left(), a.top(), a.width(), a.height(), STEEL0);
+            p.r(a.left(), a.top(), a.width(), 1.0, STEEL1);
+            p.tiny("+", (a.center().x - 1.0).round(), a.top() + 4.0, if hot { STEEL4 } else { STEEL2 });
             if hot {
                 let s = "PROJECT";
-                p.tiny(s, (a.center().x - tiny_width(s) as f32 / 2.0).round(), a.bottom() - 24.0, STEEL3);
+                p.tiny(s, (a.center().x - tiny_width(s) as f32 / 2.0).round(), a.top() - 8.0, STEEL3);
                 pointing = true;
                 if resp.clicked() {
                     clicked = Some(Action::AddDir);
@@ -516,12 +548,17 @@ impl Room {
             draw_mat(&mut p, m.x, m.y);
         }
         if let Some(g) = lay.pong {
-            p.e(g.x - 34.0, g.y - 18.0, 68.0, 24.0, hex(0x2a1d3a), hex(0x3a2a4f));
-            let mut x = g.x - 30.0;
-            while x < g.x + 32.0 {
-                p.r(x, g.y - 15.0, 2.0, 1.0, hex(0x3a2a4f));
-                p.r(x + 3.0, g.y + 2.0, 2.0, 1.0, hex(0x3a2a4f));
-                x += 6.0;
+            let mut x = g.x - 34.0;
+            while x < g.x + 34.0 {
+                p.r(x, g.y - 18.0, 2.0, 1.0, INK2);
+                p.r(x, g.y + 6.0, 2.0, 1.0, INK2);
+                x += 4.0;
+            }
+            let mut y = g.y - 18.0;
+            while y < g.y + 6.0 {
+                p.r(g.x - 34.0, y, 1.0, 2.0, INK2);
+                p.r(g.x + 33.0, y, 1.0, 2.0, INK2);
+                y += 4.0;
             }
         }
 
@@ -531,6 +568,7 @@ impl Room {
             Chair(f32, f32, Color32, bool),
             Desk(&'a Desk),
             Table(Pos2),
+            Stool(Pos2),
             Coffee,
             Cooler(Pos2),
             Printer(Pos2),
@@ -556,6 +594,11 @@ impl Room {
         }
         if let Some(m) = lay.meet {
             items.push((m.y - 1.0, Item::Table(m)));
+            for i in 0..2 {
+                if let Some((s, _)) = lay.meet_seat(i) {
+                    items.push((s.y - 0.5, Item::Stool(s)));
+                }
+            }
         }
         items.push((lay.floor_y, Item::Coffee));
         if let Some(c) = lay.cooler {
@@ -613,7 +656,8 @@ impl Room {
                     let sprite = self.sprites.get(id, color, f.arms, f.legs);
                     let (x0, y0) = (fx - 11.0, fy - 27.0);
                     p.r(fx - 5.0, fy, 10.0, 1.0, Color32::from_black_alpha(100));
-                    p.sprite(&sprite, x0, y0, f.dir < 0.0, SH as i8, (!b.background).then(|| shade(color, 0.16)));
+                    // one in a terminal elsewhere: greyed, like pair's people who are away
+                    p.sprite(&sprite, x0, y0, f.dir < 0.0, SH as i8, (!b.background).then_some(STEEL0));
                     if matches!(f.act, Act::Sleep { .. }) {
                         zzz(&mut p, fx + 2.0, y0 + 4.0, f.z);
                     }
@@ -665,6 +709,11 @@ impl Room {
                     }
                 }
                 Item::Table(m) => draw_table(&mut p, *m),
+                Item::Stool(st) => {
+                    p.b(st.x - 4.0, st.y - 7.0, 8.0, 2.0, WOOD_D);
+                    p.r(st.x - 3.0, st.y - 4.0, 1.0, 4.0, WOOD_D);
+                    p.r(st.x + 2.0, st.y - 4.0, 1.0, 4.0, WOOD_D);
+                }
                 Item::Coffee => draw_coffee(&mut p, 3.0, lay.floor_y, brewing, t),
                 Item::Cooler(c) => draw_cooler(&mut p, c.x, c.y),
                 Item::Printer(pr) => draw_printer(&mut p, pr.x, pr.y, printing),
@@ -768,6 +817,26 @@ impl Room {
         for id in &ids {
             self.think_one(id, lay, now, dt);
         }
+        // two standing about in the same place: they step apart
+        let still: Vec<(String, f32, f32)> = self
+            .figs
+            .iter()
+            .filter(|(_, f)| f.legs == Legs::Stand && matches!(f.act, Act::Stand { .. } | Act::Loiter { .. }))
+            .map(|(k, f)| (k.clone(), f.x, f.y))
+            .collect();
+        for (a, ax, ay) in &still {
+            for (b, bx, by) in &still {
+                if a < b && (ax - bx).abs() < 12.0 && (ay - by).abs() < 4.0 {
+                    let d = if ax <= bx { -1.0 } else { 1.0 };
+                    if let Some(f) = self.figs.get_mut(a) {
+                        f.x += d * 8.0 * dt;
+                    }
+                    if let Some(f) = self.figs.get_mut(b) {
+                        f.x -= d * 8.0 * dt;
+                    }
+                }
+            }
+        }
     }
 
     fn think_one(&mut self, id: &str, lay: &Layout, now: f64, dt: f32) {
@@ -780,10 +849,25 @@ impl Room {
             .collect();
         let rs: [f32; 6] = std::array::from_fn(|_| self.rnd());
         let taken_chair = self.figs.values().any(|f| matches!(f.act, Act::Chair { .. }));
+        // one at a time at the coffee machine, the printer, the window, a plant
+        let taken = |m: fn(&Act) -> bool| self.figs.iter().any(|(k, f)| k != id && m(&f.act));
+        let (coffee_taken, print_taken, window_taken) =
+            (taken(|a| matches!(a, Act::Coffee { .. })), taken(|a| matches!(a, Act::Print { .. })), taken(|a| matches!(a, Act::Window { .. })));
+        let plants_taken: Vec<usize> = self.figs.iter().filter(|(k, _)| k.as_str() != id).filter_map(|(_, f)| if let Act::Plant { i, .. } = f.act { Some(i) } else { None }).collect();
+        // somewhere free to stand about
+        let mut spot = None;
+        for _ in 0..8 {
+            let (a, b) = (self.rnd(), self.rnd());
+            let (x, y) = (lay.floor.left() + a * lay.floor.width(), lay.floor.top() + b * lay.floor.height());
+            if lay.free(x, y) {
+                spot = Some((x, y));
+                break;
+            }
+        }
         let pong_busy = self.figs.values().any(|f| matches!(f.act, Act::Pong { .. }));
         let mats_taken: Vec<(f32, f32)> = self.figs.iter().filter(|(k, f)| k.as_str() != id && matches!(f.act, Act::Sleep { there: true }) && f.lying).map(|(_, f)| (f.x, f.y)).collect();
         let meeting = self.meeting.clone();
-        let (t, last_meeting, ball) = (self.t, self.last_meeting, self.pong);
+        let (t, last_meeting, ball, self_sleep) = (self.t, self.last_meeting, self.pong, self.sleep_after);
         let seat = lay.seat(id);
         let mut partner: Option<(String, Act)> = None;
         let mut start_meeting: Option<Vec<String>> = None;
@@ -791,7 +875,7 @@ impl Room {
 
         let Some(f) = self.figs.get_mut(id) else { return };
         let v = 22.0;
-        let sleepy = !f.busy && now - f.idle_since > SLEEP_AFTER;
+        let sleepy = !f.busy && now - f.idle_since > self_sleep;
         if sleepy && !matches!(f.act, Act::Sleep { .. } | Act::Visit { msg: true, .. }) {
             end(f);
             f.act = Act::Sleep { there: false };
@@ -823,9 +907,9 @@ impl Room {
                     act = if lay.meet.is_some() && idle_mates.len() >= 2 && meeting.is_none() && t - last_meeting > 60.0 && r < 0.08 {
                         start_meeting = Some(idle_mates.iter().take(4).cloned().collect());
                         Act::Present { wait: 0.0 }
-                    } else if r < 0.22 {
+                    } else if r < 0.22 && !coffee_taken {
                         Act::Coffee { stage: 0, wait: 0.0 }
-                    } else if r < 0.32 && lay.printer.is_some() {
+                    } else if r < 0.32 && lay.printer.is_some() && !print_taken {
                         Act::Print { stage: 0, wait: 0.0 }
                     } else if r < 0.46 && mate.is_some() && lay.cooler.is_some() {
                         let left = 10.0 + rs[2] * 12.0;
@@ -839,15 +923,17 @@ impl Room {
                         Act::Pong { side: 0, left, with: m, there: false }
                     } else if r < 0.62 && mate.is_some() {
                         Act::Visit { to: mate.unwrap(), left: 6.0 + rs[2] * 6.0, wave: 0.8, msg: false }
-                    } else if r < 0.70 {
-                        Act::Plant { i: ((rs[2] * lay.plants.len() as f32) as usize).min(lay.plants.len() - 1), wait: 0.0 }
-                    } else if r < 0.78 && lay.window.is_some() {
+                    } else if r < 0.70 && plants_taken.len() < lay.plants.len() {
+                        let free: Vec<usize> = (0..lay.plants.len()).filter(|i| !plants_taken.contains(i)).collect();
+                        Act::Plant { i: free[((rs[2] * free.len() as f32) as usize).min(free.len() - 1)], wait: 0.0 }
+                    } else if r < 0.78 && lay.window.is_some() && !window_taken {
                         Act::Window { left: 4.0 + rs[2] * 5.0 }
                     } else if r < 0.86 && lay.chair.is_some() && !taken_chair {
                         Act::Chair { left: 15.0 + rs[2] * 20.0 }
+                    } else if let Some((x, y)) = spot {
+                        Act::Loiter { x, y, left: 3.0 + rs[5] * 5.0 }
                     } else {
-                        let fl = lay.floor;
-                        Act::Loiter { x: fl.left() + rs[3] * fl.width(), y: fl.top() + rs[4] * fl.height(), left: 3.0 + rs[5] * 5.0 }
+                        rest(rs[5])
                     };
                 }
             }
@@ -895,11 +981,12 @@ impl Room {
                 }
             },
             Act::Cooler { side, left, with } => match (lay.cooler_spot(*side), pos.get(with.as_str())) {
-                (Some(s), Some(_)) => {
+                (Some(s), Some(&(ox, oy, _))) => {
                     if walk(f, s, v, dt) {
                         f.dir = if *side == 0 { 1.0 } else { -1.0 };
                         f.arms = Arms::Down;
-                        if rs[0] < dt * 0.4 {
+                        let both = (ox - f.x).abs() < 24.0 && (oy - f.y).abs() < 4.0;
+                        if both && rs[0] < dt * 0.4 {
                             f.chat = 1.2;
                         }
                         *left -= dt;
@@ -928,11 +1015,13 @@ impl Room {
             Act::Visit { to, left, wave, msg } => match pos.get(to.as_str()) {
                 Some(&(ox, oy, oseated)) => {
                     // next to the other one, on the side it comes from; beside the chair if seated
+                    // a seated one faces its screen (left): stand behind its chair; else beside it, on the
+                    // side it comes from, as in pair
                     let side = if f.x < ox { -1.0 } else { 1.0 };
-                    let spot = if oseated { Pos2::new(ox + side * 12.0, oy + 5.0) } else { Pos2::new(ox + side * 13.0, oy + 1.0) };
+                    let spot = if oseated { Pos2::new(ox + 20.0, oy + 1.0) } else { Pos2::new(ox + side * 14.0, oy + 1.0) };
                     let speed = if *msg { 34.0 } else { v + 6.0 };
                     if walk(f, spot, speed, dt) {
-                        f.dir = -side;
+                        f.dir = if spot.x > ox { -1.0 } else { 1.0 };
                         if *wave > 0.0 {
                             *wave -= dt;
                             f.arms = Arms::Wave;
@@ -1172,13 +1261,13 @@ fn draw_table(p: &mut Paint, m: Pos2) {
 }
 
 fn draw_mat(p: &mut Paint, x: f32, y: f32) {
-    p.b(x - 12.0, y - 24.0, 24.0, 23.0, hex(0x26324f));
+    p.b(x - 12.0, y - 24.0, 24.0, 23.0, hex(0x1c2538));
     let mut yy = y - 21.0;
     while yy < y - 2.0 {
-        p.r(x - 12.0, yy, 24.0, 1.0, hex(0x2f3e62));
+        p.r(x - 12.0, yy, 24.0, 1.0, hex(0x222d45));
         yy += 3.0;
     }
-    p.b(x - 8.0, y - 23.0, 16.0, 6.0, STEEL3);
+    p.b(x - 8.0, y - 23.0, 16.0, 6.0, STEEL2);
 }
 
 fn zzz(p: &mut Paint, x: f32, y: f32, z: f32) {
