@@ -7,6 +7,7 @@
 <script src="/pixel.js"></script>
 <script src="/room.js"></script>
 <script src="/chessboard.js"></script>
+<script src="/pong.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css">
@@ -27,6 +28,7 @@
   <section id="pane" class="empty">
     <div id="term"></div>
     <div id="chess" class="side" hidden></div>
+    <div id="pong" class="pong" hidden></div>
   </section>
 </main>
 
@@ -61,6 +63,7 @@ const room = startRoom($("#room"), {
   state: () => state,
   cur: () => cur,
   open: () => open && open.room === cur ? open.id : null,
+  pong: () => (pongRoom === cur ? pongUI.playing() : null),
   hl: () => paneHover && open && open.room === cur ? open.id : null,
   hover: (id) => $("#pane").classList.toggle("hl", !!open && open.room === cur && open.id === id),
   act,
@@ -75,6 +78,7 @@ async function act(a) {
   else if (a.kind === "addDir") ask($("#dirDialog"));
   else if (a.kind === "open") openBot(cur, a.id);
   else if (a.kind === "chess") openChess();
+  else if (a.kind === "pong") openPong();
   else if (a.kind === "forget") await api("/api/forget", { room: cur, dir: a.dir });
   else if (a.kind === "layout") await api("/api/layout", { room: cur, layout: a.layout });
   else if (a.kind === "stop") stopBot(cur, a.id);
@@ -96,6 +100,9 @@ es.addEventListener("state", (e) => {
   if (cur >= state.rooms.length) cur = 0;
   if (open) showWho();
   if (playing !== null) showChess();
+  // a bot that gets work, or a question for you, leaves the ping-pong table
+  const pp = pongRoom !== null && pongUI.playing();
+  if (pp && !(state.rooms[pongRoom].bots || []).some((b) => b.id === pp.id && !b.busy && !b.waiting)) pongUI.left();
   room.draw();
 });
 es.addEventListener("talk", (e) => { const t = JSON.parse(e.data); room.talk(t.room, t.from, t.to); });
@@ -150,7 +157,7 @@ function showWho() {
 }
 function openBot(ri, id) {
   if (open && open.room === ri && open.id === id) { term.focus(); return; }
-  closeBot(); closeChess();
+  closeBot(); closeChess(); closePong();
   open = { room: ri, id };
   $("#pane").classList.remove("empty"); document.body.classList.remove("empty");
   if (!termOpened) { term.open($("#term")); termOpened = true; }
@@ -181,7 +188,7 @@ async function stopBot(ri, id) {
   if (r.error) note(r.error);
 }
 function stopping(on) { $("#stop").textContent = on ? "really stop?" : "stop"; $("#stop").classList.toggle("warn", on); }
-$("#close").onclick = () => { closeBot(); closeChess(); };
+$("#close").onclick = () => { closeBot(); closeChess(); closePong(); };
 $("#reconnect").onclick = () => { term.reset(); connect(); term.focus(); };
 $("#stop").onclick = async () => {
   if (!$("#stop").classList.contains("warn")) { stopping(true); setTimeout(() => stopping(false), 3000); return; }
@@ -205,7 +212,7 @@ const chessUI = chessPanel($("#chess"), {
   small: (p) => `<img class="sm" src="${botFace(p)}" alt="">`,
 });
 function openChess() {
-  closeBot();
+  closeBot(); closePong();
   playing = cur;
   $("#pane").classList.remove("empty"); document.body.classList.remove("empty");
   $("#pane").classList.add("chessing"); document.body.classList.add("chessing"); $("#chess").hidden = false;
@@ -227,6 +234,32 @@ function closeChess() {
   $("#who").textContent = ""; $("#as").textContent = "";
 }
 
+// ---- the ping-pong table: pair's game in the pane, against one of the room's idle bots
+let pongRoom = null;
+const idleBots = (ri) => ((state && state.rooms[ri].bots) || []).filter((b) => b.background && !b.busy && !b.waiting)
+  .map((b) => ({ id: b.id, name: b.name, kind: "agent", present: true, color: projectColor(b.cwd) }));
+const pongUI = pongTable($("#pong"), {
+  me: () => "you", people: () => idleBots(pongRoom ?? cur),
+  small: (p) => `<img class="sm" src="${pixelAvatar(p.id, "agent", p.color)}" alt="">`,
+  post: async () => ({}), api: () => "",
+});
+function openPong() {
+  closeBot(); closeChess();
+  pongRoom = cur;
+  $("#pane").classList.remove("empty"); $("#pane").classList.add("chessing"); document.body.classList.add("chessing"); document.body.classList.remove("empty");
+  $("#who").textContent = "ping-pong"; $("#as").textContent = "on " + state.rooms[cur].name;
+  pongUI.open();
+}
+function closePong() {
+  if (pongRoom === null) return;
+  pongRoom = null;
+  if (!$("#pong").hidden) pongUI.close();
+  $("#pane").classList.add("empty"); $("#pane").classList.remove("chessing"); document.body.classList.remove("chessing"); document.body.classList.add("empty");
+  $("#who").textContent = ""; $("#as").textContent = "";
+}
+// its own ✕ (or Esc) closes the card: then the pane is empty again
+new MutationObserver(() => { if ($("#pong").hidden && pongRoom !== null) closePong(); }).observe($("#pong"), { attributes: true, attributeFilter: ["hidden"] });
+
 // drop a file on the session: its path gets typed in, as in a terminal (copied over first for a remote machine)
 const pane = $("#pane");
 pane.addEventListener("dragover", (e) => { e.preventDefault(); pane.classList.add("drop"); });
@@ -244,7 +277,7 @@ pane.addEventListener("drop", async (e) => {
   e.preventDefault(); pane.classList.remove("drop");
   if (open) for (const file of e.dataTransfer.files) await hand(file);
 });
-addEventListener("keydown", (e) => { if (e.key === "Escape" && document.activeElement === document.body) { closeBot(); closeChess(); } });
+addEventListener("keydown", (e) => { if (e.key === "Escape" && document.activeElement === document.body) { closeBot(); closeChess(); closePong(); } });
 </script>
 </body>
 </html>

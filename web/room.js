@@ -315,6 +315,12 @@ function startRoom(cv, app) {
       if (f.id === vs && game.sans.length !== w.plies) { if (w.plies !== undefined && (game.sans.length % 2 === 1) === (game.white.id === vs)) f.moved = 0.9; }
     }
     w.plies = game ? game.sans.length : undefined;
+    // the bot you play ping-pong with stands at the table, at the far end
+    const pp = app.pong(), pv = pp && pp.id;
+    for (const f of folk.values()) {
+      if (f.id === pv && !(f.act.kind === "pong" && f.act.you) && !f.work) { end(f); f.act = { kind: "pong", side: 1, you: true, left: 1e9, there: false }; }
+      if (f.act.kind === "pong" && (f.act.you ? f.id !== pv : !!pv)) end(f);
+    }
     for (const b of bots) {
       const f = folk.get(b.id), work = b.busy || b.waiting;
       f.chat = Math.max(0, f.chat - dt);
@@ -332,7 +338,7 @@ function startRoom(cv, app) {
     }
     const playing = (kind) => [...folk.values()].filter((f) => f.act.kind === kind && f.act.there && f.act.with).length === 2;
     // the ball goes back and forth while two are at the table
-    if (playing("pong") && (w.pong.t += dt / 0.8) >= 1) { w.pong.t = 0; w.pong.from = 1 - w.pong.from; }
+    if ((playing("pong") || (app.pong() && app.pong().ball)) && (w.pong.t += dt / 0.8) >= 1) { w.pong.t = 0; w.pong.from = 1 - w.pong.from; }
     // a chess move every few seconds while two sit at the board
     if (playing("chess") && (w.chess.t += dt) > 3.5) { w.chess.t = 0; chessMove(w.chess); }
     // an idle bot's place: at the end of its project's desk, by the empty chair, one per project
@@ -422,7 +428,7 @@ function startRoom(cv, app) {
         break;
       }
       case "pong": {
-        if (!partner()) { f.act = rest(); break; }
+        if (!act.you && !partner()) { f.act = rest(); break; }
         act.there = walk(f, L.pongSpot(act.side), v, dt);
         if (act.there) {
           f.dir = act.side ? -1 : 1;
@@ -543,7 +549,7 @@ function startRoom(cv, app) {
       mate.carry = null; mate.act = { kind: "cooler", side: 1, left, with: f.id };
       return { kind: "cooler", side: 0, left, with: mate.id };
     }
-    if (r < 0.5 && mate && !taken("pong")) {
+    if (r < 0.5 && mate && !taken("pong") && !app.pong()) {
       const left = rnd(15, 35);
       mate.carry = null; mate.act = { kind: "pong", side: 1, left, with: f.id, there: false };
       return { kind: "pong", side: 0, left, with: mate.id, there: false };
@@ -680,6 +686,7 @@ function startRoom(cv, app) {
     items.push([L.chair.y - 0.5, () => drawArmchair(ctx, L.chair)]);
     for (const pl of L.plants) items.push([pl.y, () => drawPlant(ctx, pl)]);
     items.push([L.pong.y - 0.5, () => drawPong(ctx, L.pong, w)]);
+    if (hot(L.pong.x - 16, L.pong.y - 17, L.pong.x + 16, L.pong.y, { kind: "pong" })) tip = { text: "ping-pong: play an idle bot", x: L.pong.x, y: L.pong.y - 18 };
     // the limits, in the coffee pot (this five-hour session) and the cooler's bottle (this week)
     const c0 = L.coffeeAt;
     if (over(c0.x, c0.y - 22, c0.x + 20, c0.y + 1)) tip = { text: say(usage.session, "session"), x: c0.x + 10, y: c0.y - 24 };
@@ -929,7 +936,8 @@ function startRoom(cv, app) {
     rect(ctx, g.x - 1, g.y - 16, 2, 5, INK); rect(ctx, g.x, g.y - 15, 1, 4, C.steel3);
     box(ctx, g.x - 12, g.y - 6, 2, 6, C.steel1); box(ctx, g.x + 10, g.y - 6, 2, 6, C.steel1);
     // the ball, once both players are at the table
-    if ([...w.folk.values()].filter((f) => f.act.kind === "pong" && f.act.there).length === 2) {
+    const pp = app.pong();
+    if ([...w.folk.values()].filter((f) => f.act.kind === "pong" && f.act.there).length === 2 || (pp && pp.ball)) {
       const { t, from } = w.pong, a = from ? 1 : -1, x = g.x + a * 18 * (1 - 2 * t), k = t < 0.5 ? t * 2 : (t - 0.5) * 2;
       const y = g.y - 12 - Math.round(Math.sin(k * Math.PI) * (t < 0.5 ? 6 : 8)) - 6 * (1 - Math.min(1, t * 4));
       rect(ctx, Math.round(x) - 1, Math.round(y) - 1, 3, 3, INK); rect(ctx, Math.round(x), Math.round(y), 1, 1, C.white);
