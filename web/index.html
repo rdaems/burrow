@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>burrow</title>
+<script src="/pixel.js"></script>
+<script src="/room.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css">
+<link rel="stylesheet" href="/burrow.css">
+</head>
+<body>
+<main id="app">
+  <div id="roomwrap"><canvas id="room"></canvas></div>
+  <section id="pane" hidden>
+    <header>
+      <span id="who"></span>
+      <span class="sp"></span>
+      <button id="reconnect" class="flat" hidden>reconnect</button>
+      <button id="stop" class="flat">stop</button>
+      <button id="close" class="flat" title="close (the session keeps running)">✕</button>
+    </header>
+    <div id="term"></div>
+  </section>
+</main>
+
+<dialog id="dirDialog">
+  <form method="dialog">
+    <h2>add a project</h2>
+    <p>A working directory on <b class="machine"></b>. Its bots will sit at one desk.</p>
+    <input class="field" name="dir" placeholder="~/projects/something" autocomplete="off" spellcheck="false">
+    <div class="err"></div>
+  </form>
+</dialog>
+<dialog id="roomDialog">
+  <form method="dialog">
+    <h2>add a machine</h2>
+    <p>Reached over ssh, as <code>ssh</code> would (your ~/.ssh/config applies). Nothing gets installed there.</p>
+    <input class="field" name="ssh" placeholder="odyssey" autocomplete="off" spellcheck="false">
+    <input class="field" name="name" placeholder="its name on the wall (optional)" autocomplete="off" spellcheck="false">
+    <div class="err"></div>
+  </form>
+</dialog>
+
+<script>
+// burrow's page: the room (room.js) fills the window; clicking a bot opens its session beside it
+// (`claude attach`, in xterm.js, through server.py). Closing it only detaches.
+let state = null, cur = 0, open = null;
+const $ = (s) => document.querySelector(s);
+const api = async (path, body) => (await fetch(path, { method: "POST", body: JSON.stringify(body || {}) })).json();
+try { cur = +localStorage.getItem("burrow.room") || 0; } catch {}
+
+const room = startRoom($("#room"), {
+  state: () => state,
+  cur: () => cur,
+  open: () => open && open.room === cur ? open.id : null,
+  inset: () => 0,
+  act,
+});
+
+async function act(a) {
+  if (a.kind === "room") { cur = a.i; try { localStorage.setItem("burrow.room", cur); } catch {} room.draw(); }
+  else if (a.kind === "addRoom") ask($("#roomDialog"));
+  else if (a.kind === "addDir") ask($("#dirDialog"));
+  else if (a.kind === "open") openBot(cur, a.id);
+  else if (a.kind === "forget") await api("/api/forget", { room: cur, dir: a.dir });
+  else if (a.kind === "spawn") {
+    const r = await api("/api/spawn", { room: cur, dir: a.dir });
+    if (r.error) note(r.error); else openBot(cur, r.id);
+  }
+}
+function note(msg) {                       // trouble goes on the wall, like a failed poll
+  const r = state && state.rooms[cur];
+  if (r) { r.error = msg; room.draw(); }
+}
+
+// ---- the feed
+const es = new EventSource("/events");
+es.addEventListener("state", (e) => {
+  state = JSON.parse(e.data);
+  if (cur >= state.rooms.length) cur = 0;
+  if (open) showWho();
+  room.draw();
+});
+es.addEventListener("talk", (e) => { const t = JSON.parse(e.data); room.talk(t.room, t.from, t.to); });
+const focus = () => api("/api/focus", { on: document.hasFocus() && !document.hidden });
+addEventListener("focus", focus); addEventListener("blur", focus); document.addEventListener("visibilitychange", focus);
+
+// ---- dialogs: Enter adds, Esc closes
+function ask(d) {
+  d.querySelector(".err").textContent = "";
+  const m = d.querySelector(".machine");
+  if (m && state) m.textContent = state.rooms[cur].name;
+  d.querySelectorAll("input").forEach((i) => (i.value = ""));
+  d.showModal();
+  d.querySelector("input").focus();
+}
+for (const d of [$("#dirDialog"), $("#roomDialog")]) {
+  d.addEventListener("click", (e) => { if (e.target === d) d.close(); });
+  d.querySelector("form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.target)), err = d.querySelector(".err");
+    err.textContent = "…";
+    const r = d.id === "dirDialog" ? await api("/api/dir", { room: cur, dir: f.dir }) : await api("/api/room", f);
+    if (r.error) { err.textContent = r.error; return; }
+    if (r.room !== undefined) cur = r.room;
+    d.close();
+  });
+}
+
+// ---- a session: the real claude TUI, attached over a websocket
+const DARK = { background: "#140f1e", foreground: "#e6e1ef", cursor: "#e6e1ef", selectionBackground: "#d9775766",
+  black: "#2a2140", red: "#e8402a", green: "#5fcf4a", yellow: "#f2a531", blue: "#4a76b8", magenta: "#9a74d6", cyan: "#2fa087", white: "#c2c9d9",
+  brightBlack: "#5d6280", brightRed: "#ff6b5a", brightGreen: "#8ee07a", brightYellow: "#ffe27a", brightBlue: "#8fc0e8", brightMagenta: "#c4a8f0", brightCyan: "#7fdcb0", brightWhite: "#f4f6fb" };
+const LIGHT = { background: "#fbf8f1", foreground: "#140f1e", cursor: "#140f1e", selectionBackground: "#d9775755",
+  black: "#140f1e", red: "#b8321f", green: "#2d8a3a", yellow: "#a8650f", blue: "#2c4580", magenta: "#5a3f94", cyan: "#1b6660", white: "#8b93ad",
+  brightBlack: "#5d6280", brightRed: "#e8402a", brightGreen: "#3f9e2f", brightYellow: "#b86a1e", brightBlue: "#4a76b8", brightMagenta: "#9a74d6", brightCyan: "#2fa087", brightWhite: "#3b3a55" };
+const term = new Terminal({ fontFamily: '"Burrow Mono", "JetBrains Mono", Menlo, monospace', fontSize: 13, lineHeight: 1.15,
+  cursorBlink: true, allowProposedApi: true, theme: DARK, scrollback: 5000, macOptionIsMeta: true });
+const fit = new FitAddon.FitAddon();
+term.loadAddon(fit);
+let termOpened = false, ws = null;
+const enc = new TextEncoder();
+term.onData((d) => ws && ws.readyState === 1 && ws.send(enc.encode(d)));
+term.onBinary((d) => ws && ws.readyState === 1 && ws.send(Uint8Array.from(d, (c) => c.charCodeAt(0))));
+term.onResize(({ cols, rows }) => ws && ws.readyState === 1 && ws.send(JSON.stringify({ size: [cols, rows] })));
+
+function bot() { return open && state && (state.rooms[open.room].bots || []).find((b) => b.id === open.id); }
+function showWho() {
+  const b = bot();
+  $("#who").textContent = (b ? b.name : open.id) + (state && state.rooms.length > 1 ? " · " + state.rooms[open.room].name : "");
+  term.options.theme = state && state.rooms[open.room].light ? LIGHT : DARK;
+}
+function openBot(ri, id) {
+  if (open && open.room === ri && open.id === id) { term.focus(); return; }
+  closeBot();
+  open = { room: ri, id };
+  $("#pane").hidden = false;
+  $("#app").classList.add("split");
+  if (!termOpened) { term.open($("#term")); termOpened = true; }
+  term.reset();
+  showWho();
+  stopping(false);
+  requestAnimationFrame(() => { fit.fit(); connect(); term.focus(); });
+}
+function connect() {
+  $("#reconnect").hidden = true;
+  const s = new WebSocket(`ws://${location.host}/term?room=${open.room}&id=${encodeURIComponent(open.id)}`);
+  s.binaryType = "arraybuffer";
+  s.onopen = () => s.send(JSON.stringify({ size: [term.cols, term.rows] }));
+  s.onmessage = (e) => term.write(new Uint8Array(e.data));
+  s.onclose = () => { if (ws === s) { ws = null; $("#reconnect").hidden = false; } };
+  ws = s;
+}
+function closeBot() {
+  if (ws) { const s = ws; ws = null; s.close(); }
+  open = null;
+  $("#pane").hidden = true;
+  $("#app").classList.remove("split");
+}
+function stopping(on) { $("#stop").textContent = on ? "really stop?" : "stop"; $("#stop").classList.toggle("warn", on); }
+$("#close").onclick = closeBot;
+$("#reconnect").onclick = () => { term.reset(); connect(); term.focus(); };
+$("#stop").onclick = async () => {
+  if (!$("#stop").classList.contains("warn")) { stopping(true); setTimeout(() => stopping(false), 3000); return; }
+  const o = open;
+  closeBot();
+  const r = await api("/api/stop", { room: o.room, id: o.id });
+  if (r.error) note(r.error);
+};
+new ResizeObserver(() => { if (open) fit.fit(); }).observe($("#term"));
+
+// drop a file on the session: its path gets typed in, as in a terminal (copied over first for a remote machine)
+const pane = $("#pane");
+pane.addEventListener("dragover", (e) => { e.preventDefault(); pane.classList.add("drop"); });
+pane.addEventListener("dragleave", () => pane.classList.remove("drop"));
+pane.addEventListener("drop", async (e) => {
+  e.preventDefault(); pane.classList.remove("drop");
+  for (const file of e.dataTransfer.files) {
+    const r = await (await fetch(`/api/upload?room=${open.room}&name=${encodeURIComponent(file.name)}`, { method: "POST", body: file })).json();
+    if (r.error) note(r.error);
+    else if (ws) ws.send(enc.encode((/[\s'"\\]/.test(r.path) ? "'" + r.path.replace(/'/g, "'\\''") + "'" : r.path) + " "));
+  }
+  term.focus();
+});
+addEventListener("keydown", (e) => { if (e.key === "Escape" && document.activeElement === document.body && open) closeBot(); });
+</script>
+</body>
+</html>

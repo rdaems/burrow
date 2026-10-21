@@ -1,0 +1,42 @@
+/* burrow: pair's colours (Super Atlas's palette), Claude Code's terminal font */
+@font-face { font-family: "Burrow Mono"; src: url(/mono.woff2) format("woff2"); font-weight: 400; font-display: block; }
+@font-face { font-family: "Burrow Mono"; src: url(/mono-bold.woff2) format("woff2"); font-weight: 700; font-display: block; }
+:root {
+  --night:#0b0812; --ink:#140f1e; --ink2:#2a2140; --wall:#1e1a2c; --floor:#130f1b; --box:#1a1626; --line:#3b3a55;
+  --text:#e8e5ef; --dim:#8b93ad; --faint:#5d6280; --me:#d97757;
+  --mono: "Burrow Mono", "JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing:border-box; }
+html, body { height:100%; margin:0; overflow:hidden; background:var(--floor); color:var(--text); font:13px/1.5 var(--mono); }
+button, input { font:inherit; color:inherit; }
+::selection { background:var(--me); color:var(--ink); }
+
+#app { display:flex; height:100%; }
+#roomwrap { flex:1; min-width:0; overflow:hidden; background:var(--floor); }
+#room { display:block; image-rendering:pixelated; }
+/* a session open: the room narrows to the left, the session takes the rest */
+#app.split #roomwrap { flex:0 0 clamp(300px, 36%, 560px); }
+#pane { flex:1; min-width:0; display:flex; flex-direction:column; background:var(--ink); border-left:2px solid var(--ink2); }
+#pane[hidden] { display:none; }
+#pane.drop { outline:2px solid var(--me); outline-offset:-2px; }
+#pane header { height:30px; flex:none; display:flex; align-items:center; gap:2px; padding:0 6px 0 12px; background:var(--wall); border-bottom:2px solid var(--ink2); }
+#who { color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sp { flex:1; }
+.flat { cursor:pointer; background:none; border:0; border-radius:4px; padding:2px 8px; color:var(--dim); }
+.flat:hover { color:var(--text); background:var(--ink2); }
+.flat.warn { color:var(--me); }
+#term { flex:1; min-height:0; padding:8px 0 0 10px; }
+#term .xterm-viewport { background:transparent !important; }
+#term .xterm-viewport::-webkit-scrollbar { width:8px; }
+#term .xterm-viewport::-webkit-scrollbar-thumb { background:var(--ink2); }
+
+dialog { background:var(--box); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:14px 16px; width:min(420px, calc(100vw - 32px)); }
+dialog::backdrop { background:rgba(11,8,18,.6); }
+dialog h2 { margin:0 0 6px; font-size:13px; color:var(--me); font-weight:700; }
+dialog p { margin:0 0 10px; color:var(--dim); }
+dialog b { color:var(--text); font-weight:400; }
+dialog code { color:var(--text); }
+.field { display:block; width:100%; margin-top:8px; padding:7px 10px; border:1px solid var(--line); border-radius:6px; background:var(--ink); outline:none; }
+.field:focus { border-color:var(--me); }
+.err { color:var(--me); min-height:18px; margin-top:8px; white-space:pre-wrap; }

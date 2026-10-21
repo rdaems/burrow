@@ -1,0 +1,43 @@
+// node web/look.mjs URL W H steps.json: drive headless Chrome over CDP (no packages) to look at the page.
+// steps: [{wait:ms} | {shot:"file.png"} | {js:"expr"} | {click:[x,y]} | {move:[x,y]} | {key:"text"}]
+import { spawn } from "node:child_process";
+import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+
+const [url, w = "1280", h = "800", stepsFile] = process.argv.slice(2);
+const steps = JSON.parse(readFileSync(stepsFile, "utf8"));
+const dir = mkdtempSync(tmpdir() + "/cdp");
+const port = 9300 + Math.floor(Math.random() * 500);
+const chrome = spawn("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  ["--headless=new", "--disable-gpu", "--hide-scrollbars", `--user-data-dir=${dir}`, `--remote-debugging-port=${port}`,
+   `--window-size=${w},${h}`, "--force-device-scale-factor=2", "about:blank"], { stdio: "ignore" });
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+let target;
+for (let i = 0; i < 50 && !target; i++) {
+  await sleep(200);
+  try { target = (await (await fetch(`http://127.0.0.1:${port}/json`)).json()).find((t) => t.type === "page"); } catch {}
+}
+const ws = new WebSocket(target.webSocketDebuggerUrl);
+await new Promise((r) => (ws.onopen = r));
+let id = 0; const pending = new Map();
+ws.onmessage = (e) => {
+  const m = JSON.parse(e.data);
+  if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); }
+  if (m.method === "Runtime.consoleAPICalled") console.log("console:", m.params.args.map((a) => a.value ?? a.description).join(" "));
+  if (m.method === "Runtime.exceptionThrown") console.log("exception:", m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text);
+};
+const send = (method, params = {}) => new Promise((r) => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
+await send("Runtime.enable");
+await send("Emulation.setDeviceMetricsOverride", { width: +w, height: +h, deviceScaleFactor: 2, mobile: false });
+await send("Page.navigate", { url });
+const mouse = async (type, [x, y]) => send("Input.dispatchMouseEvent", { type, x, y, button: "left", clickCount: 1, pointerType: "mouse" });
+for (const s of steps) {
+  if (s.wait) await sleep(s.wait);
+  if (s.js) { const r = await send("Runtime.evaluate", { expression: s.js, returnByValue: true, awaitPromise: true }); console.log("js:", JSON.stringify(r.result?.result?.value ?? r.result?.exceptionDetails?.exception?.description)); }
+  if (s.move) await mouse("mouseMoved", s.move);
+  if (s.click) { await mouse("mouseMoved", s.click); await mouse("mousePressed", s.click); await mouse("mouseReleased", s.click); }
+  if (s.key) await send("Input.insertText", { text: s.key });
+  if (s.shot) { const r = await send("Page.captureScreenshot", { format: "png" }); writeFileSync(s.shot, Buffer.from(r.result.data, "base64")); console.log("shot:", s.shot); }
+}
+ws.close(); chrome.kill(); await sleep(300); rmSync(dir, { recursive: true, force: true });
+process.exit(0);

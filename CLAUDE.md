@@ -81,6 +81,15 @@ How to work on it without bothering him (he can't be your eyes):
 - A second model (Fable) reviewed the screenshots three times; its advice was good — ask again for
   a critique when stuck on looks, but weigh it.
 
+## The browser version (web/, started 2026-10-21)
+
+He asked for an HTML/CSS/JS version, "focus completely on the browser now", decide later whether to port
+back to Rust. `python3 web/server.py` (stdlib only: polls, ptys, a hand-written websocket, SSE) serves
+http://localhost:7777; `BURROW_DEMO=1 BURROW_PORT=7778` for made-up bots. `web/pixel.js` and the fonts are
+pair's, copied as they are; `web/room.js` is floor.js plus the burrow parts of src/room.rs; xterm.js from
+jsdelivr. Look at it with `node web/look.mjs URL 1280 800 steps.json` (headless Chrome over CDP: waits,
+clicks, typed text, JS, screenshots). Chrome's own `--screenshot` doesn't run requestAnimationFrame: useless.
+
 ## Next
 
 - Narrow room: only two columns fit when a desk is wide (three would, with a wide desk spanning two).
