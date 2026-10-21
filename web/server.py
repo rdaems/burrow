@@ -502,12 +502,13 @@ class Handler(BaseHTTPRequestHandler):
                 return {"error": "demo bots can't be started"}
             name = (b.get("name") or "").strip()
             out = run(room, f"cd {sq(b['dir'])} && claude --bg{' -n ' + sq(name) if name else ''} 2>&1")
-            # "backgrounded · 7ebbc505 · name (idle — send a prompt to start)", maybe after "Starting background service…"
-            line = next((l for l in out.splitlines() if l.strip().startswith("backgrounded")), None)
-            if not line or len(line.split("·")) < 2:
+            # "backgrounded · 7ebbc505 · name (idle — …)" or, unnamed, "backgrounded · 7ebbc505 (idle — …)",
+            # maybe after "Starting background service…"
+            m = re.search(r"^\s*backgrounded · (\S+?)(?=[\s·]|$)", out, re.M)
+            if not m:
                 raise RuntimeError(out.strip())
             poke.set()
-            return {"id": line.split("·")[1].strip()}
+            return {"id": m.group(1)}
         if path == "/api/stop":
             if room.get("ssh") == "@demo":
                 return {}

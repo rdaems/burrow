@@ -30,7 +30,8 @@ Rembert's own replacement for Orca (too bloated). Read README.md first; this fil
 
 - A just-started bot isn't in the feed until the next poll: keep a session while its attach is alive,
   or the pane closes one frame after spawning.
-- `claude --bg` may print "Starting background service…" before the `backgrounded · <id> · …` line.
+- `claude --bg` may print "Starting background service…" before the `backgrounded · <id> · …` line; an
+  unnamed one prints `backgrounded · <id> (idle — …)` with no second `·` (2.1.306): take the first word.
 - scp is SFTP mode now: the remote path is literal, don't shell-quote it.
 - `claude attach` in a brand-new, untrusted directory fails until `claude` was run there once by hand.
 

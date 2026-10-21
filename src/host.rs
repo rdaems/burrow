@@ -137,11 +137,11 @@ impl Host {
     pub fn spawn(&self, dir: &str, name: &str) -> Result<String, String> {
         let n = if name.trim().is_empty() { String::new() } else { format!(" -n {}", sq(name.trim())) };
         let out = self.run(&format!("cd {} && claude --bg{n} 2>&1", sq(dir)))?;
-        // "backgrounded · 7ebbc505 · name (idle — send a prompt to start)"
+        // "backgrounded · 7ebbc505 · name (idle — …)", or unnamed "backgrounded · 7ebbc505 (idle — …)"
         // (the first start of the day prints "Starting background service…" before it)
         if let Some(line) = out.lines().find(|l| l.trim_start().starts_with("backgrounded")) {
-            if let Some(id) = line.split('·').nth(1) {
-                return Ok(id.trim().to_string());
+            if let Some(id) = line.split('·').nth(1).and_then(|s| s.split_whitespace().next()) {
+                return Ok(id.to_string());
             }
         }
         Err(out.trim().to_string())
