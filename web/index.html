@@ -156,7 +156,7 @@ function connect() {
   $("#reconnect").hidden = true;
   const s = new WebSocket(`ws://${location.host}/term?room=${open.room}&id=${encodeURIComponent(open.id)}`);
   s.binaryType = "arraybuffer";
-  s.onopen = () => { s.send(JSON.stringify({ size: [term.cols, term.rows] })); for (const t of typed.splice(0)) s.send(enc.encode(t)); };
+  s.onopen = () => { s.send(JSON.stringify({ size: [term.cols, term.rows] })); setTimeout(() => { for (const t of typed.splice(0)) if (ws === s) s.send(enc.encode(t)); }, 1000); };
   s.onmessage = (e) => term.write(new Uint8Array(e.data));
   s.onclose = () => { if (ws === s) { ws = null; $("#reconnect").hidden = false; } };
   ws = s;
