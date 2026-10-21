@@ -1,33 +1,42 @@
-/* burrow: pair's colours (Super Atlas's palette), Claude Code's terminal font */
+/* burrow: pair's page (rdaems/pair-prompting, app/room.css): its colours (Super Atlas's palette), its
+   pixel wordmark, Claude Code's terminal font, the starfield where nothing is open */
+@font-face { font-family: "Burrow Pixel"; src: url(/pixel.woff2) format("woff2"); font-display: block; }
 @font-face { font-family: "Burrow Mono"; src: url(/mono.woff2) format("woff2"); font-weight: 400; font-display: block; }
 @font-face { font-family: "Burrow Mono"; src: url(/mono-bold.woff2) format("woff2"); font-weight: 700; font-display: block; }
 :root {
-  --night:#0b0812; --ink:#140f1e; --ink2:#2a2140; --wall:#1e1a2c; --floor:#130f1b; --box:#1a1626; --line:#3b3a55;
-  --text:#e8e5ef; --dim:#8b93ad; --faint:#5d6280; --me:#d97757;
+  --night:#0b0812; --ink:#140f1e; --ink2:#2a2140; --box:#1a1626; --line:#3b3a55;
+  --text:#e8e5ef; --dim:#8b93ad; --faint:#5d6280; --me:#d97757; --gold:#ffe27a;
   --mono: "Burrow Mono", "JetBrains Mono", ui-monospace, Menlo, monospace;
   color-scheme: dark;
 }
 * { box-sizing:border-box; }
-html, body { height:100%; margin:0; overflow:hidden; background:var(--floor); color:var(--text); font:13px/1.5 var(--mono); }
+html, body { height:100%; margin:0; overflow:hidden; }
+body { display:flex; flex-direction:column; background:var(--night) var(--stars); color:var(--text); font:14px/1.55 var(--mono); }
 button, input { font:inherit; color:inherit; }
-::selection { background:var(--me); color:var(--ink); }
+::selection { background:var(--gold); color:var(--ink); }
+.btn { cursor:pointer; background:var(--box); border:1px solid var(--line); border-radius:6px; padding:4px 11px; white-space:nowrap; }
+.btn:hover { border-color:var(--me); color:#fff; }
+.btn.warn { border-color:var(--me); color:var(--me); }
 
-#app { display:flex; height:100%; }
-/* the room keeps its size (room.js sets the width: whole pixels per dot); the session takes the rest */
-#roomwrap { flex:none; overflow:hidden; background:var(--night); }
-#room { display:block; image-rendering:pixelated; touch-action:none; }
-#pane { flex:1; min-width:0; display:flex; flex-direction:column; background:var(--ink); border-left:2px solid var(--ink2); position:relative; }
-#pane.hl { border-left-color:var(--me); }
-#pane.empty #term, #pane.empty header > button { visibility:hidden; }
+/* the header, as pair's: the wordmark, what is open, its buttons */
+header { flex:none; background:var(--ink); border-bottom:1px solid var(--line); padding:10px 16px; }
+.top { display:flex; align-items:center; gap:10px; min-height:30px; }
+.top .t { flex:1; min-width:0; display:flex; align-items:baseline; gap:12px; }
+.mark { font:16px/16px "Burrow Pixel", monospace; color:var(--gold); text-shadow:2px 2px 0 #b86a1e; letter-spacing:1px; }
+.top h1 { margin:0; font-size:14px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#as { color:var(--dim); white-space:nowrap; }
+body.empty .top .btn { display:none; }
 
+/* the room keeps its width (room.js: two pixels a dot); what is open takes the rest */
+#app { flex:1; min-height:0; display:flex; }
+#roomwrap { flex:none; height:100%; overflow:hidden; }
+#room { display:block; image-rendering:pixelated; image-rendering:crisp-edges; touch-action:none; }
+#pane { flex:1; min-width:0; display:flex; flex-direction:column; background:var(--ink); position:relative; box-shadow:inset 2px 0 0 transparent; }
+#pane.hl { box-shadow:inset 2px 0 0 var(--me); }
+#pane.empty { background:transparent; }
+#pane.empty #term { visibility:hidden; }
 #pane.drop { outline:2px solid var(--me); outline-offset:-2px; }
-#pane header { height:30px; flex:none; display:flex; align-items:center; gap:2px; padding:0 6px 0 12px; background:var(--wall); border-bottom:2px solid var(--ink2); }
-#who { color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.sp { flex:1; }
-.flat { cursor:pointer; background:none; border:0; border-radius:4px; padding:2px 8px; color:var(--dim); }
-.flat:hover { color:var(--text); background:var(--ink2); }
-.flat.warn { color:var(--me); }
-#term { flex:1; min-height:0; padding:8px 0 0 10px; }
+#term { flex:1; min-height:0; padding:10px 0 0 14px; }
 #term .xterm-viewport { background:transparent !important; }
 #term .xterm-viewport::-webkit-scrollbar { width:8px; }
 #term .xterm-viewport::-webkit-scrollbar-thumb { background:var(--ink2); }

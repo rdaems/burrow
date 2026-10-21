@@ -28,7 +28,7 @@ function startRoom(cv, app) {
   const NIGHT = "#0d0a16", TERRACOTTA = "#d97757", RED = "#ff6b5a", OPEN = "#8a4a3a", GLASS = "#1a1f2e";
   const WOOD = "#7a4a35", WOOD_D = "#4a2e2a", WALLC = "#1e1a2c", FLOOR = "#130f1b", PLANK = "#19141f";
   const PROJECT = ["#4a76b8", "#e8402a", "#2fa087", "#f2a531", "#9a74d6", "#5fcf4a", "#f06b72", "#8fc0e8"];
-  const WALL = 30, TALK = 4, SEAT = 18, ADD_W = 30, ROW = 46;
+  const WALL = 26, TALK = 4, SEAT = 18, ADD_W = 30, ROW = 46;
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const shade = (hex, k) => "#" + [1, 3, 5].map((i) => Math.min(255, Math.round(parseInt(hex.slice(i, i + 2), 16) * k)).toString(16).padStart(2, "0")).join("");
   const mix = (a, b, k) => "#" + [1, 3, 5].map((i) => { const x = parseInt(a.slice(i, i + 2), 16), y = parseInt(b.slice(i, i + 2), 16); return Math.round(x + (y - x) * k).toString(16).padStart(2, "0"); }).join("");
@@ -162,14 +162,18 @@ function startRoom(cv, app) {
   // ---- the room: always the same size; its furniture stands where it was put (dragged by hand,
   // kept per machine in rooms.json), or where it stands by default. A project's unit that has no
   // place yet gets the first free one, and keeps it.
-  const W = 256, H = 256, FLOORY = H - 6;
-  let K = 3;
-  const DEF = {
-    meet: [162, 58], pong: [62, 62], chess: [72, 228], mats: [176, 226], coffee: [3, FLOORY], cooler: [46, FLOORY - 1],
-    printer: [120, FLOORY], armchair: [222, FLOORY], plant0: [W - 8, FLOORY], plant1: [W - 12, 64],
-    board: [148, 8], window: [W - 46, 6],
-  };
-  const SLOTS = [[10, 104], [134, 104], [10, 150], [134, 150], [10, 196], [134, 196]];
+  // as dense as pair's office: two CSS pixels a dot, a room as wide as pair's margin; as tall as the
+  // window lets it be (what stands at the bottom stays at the bottom)
+  const W = 256, K = 2;
+  let H = 400, FLOORY = H - 6, DEF = {};
+  function defaults() {
+    DEF = {
+      meet: [W / 2, WALL + 34], pong: [60, 62], chess: [70, FLOORY - 32], mats: [176, FLOORY - 30],
+      coffee: [3, FLOORY], cooler: [36, FLOORY - 1], printer: [W / 2 + 4, FLOORY], armchair: [W - 34, FLOORY],
+      plant0: [W - 8, FLOORY], plant1: [W - 12, 64], board: [W / 2 - 16, 5], window: [W - 38, 5],
+    };
+  }
+  const SLOTS = [104, 150, 196, 242, 288, 334].flatMap((y) => [[10, y], [134, y]]);
   const ON_WALL = new Set(["board", "window"]);
   // what each piece covers, from where it stands
   function foot(key, [x, y], u) {
@@ -178,14 +182,14 @@ function startRoom(cv, app) {
       case "add": return [x - 2, y - 14, x + ADD_W + 2, y + 2];
       case "meet": return [x - 28, y - 14, x + 28, y + 4];
       case "pong": return [x - 36, y - 20, x + 36, y + 8];
-      case "chess": return [x - 24, y - 20, x + 24, y + 4];
+      case "chess": return [x - 19, y - 17, x + 19, y + 2];
       case "mats": return [x - 42, y - 26, x + 42, y + 3];
       case "coffee": return [x, y - 22, x + 20, y + 1];
       case "cooler": return [x - 4, y - 22, x + 4, y + 1];
       case "printer": return [x - 7, y - 14, x + 7, y + 1];
       case "armchair": return [x - 10, y - 23, x + 18, y + 1];
-      case "board": return [x, y, x + 28, y + 12];
-      case "window": return [x, y, x + 18, y + 15];
+      case "board": return [x, y, x + 32, y + 14];
+      case "window": return [x, y, x + 18, y + 14];
       default: return [x - 5, y - 16, x + 5, y + 1];     // a plant
     }
   }
@@ -206,7 +210,11 @@ function startRoom(cv, app) {
       const n = bots.filter((b) => b.cwd === cwd).length, cab = Math.max(tinyW(projectLabel(cwd)) + 6, 22);
       return { key: "u:" + cwd, cwd, cab, w: cab + 4 + (n + 1) * SEAT };
     });
-    const where = (key, u) => (moving && moving.key === key ? moving.at : saved[key]) || (DEF[key] && !u ? DEF[key] : null);
+    const where = (key, u) => {
+      if (moving && moving.key === key) return moving.at;
+      if (saved[key]) return clampAt(key, saved[key], u);       // the window may be shorter than when it was put there
+      return DEF[key] && !u ? DEF[key] : null;
+    };
     const taken = [];
     for (const k of Object.keys(DEF)) { const at = where(k); if (!ON_WALL.has(k)) taken.push(foot(k, at)); }
     for (const u of units) { u.at = where(u.key, u); if (u.at) taken.push(foot(u.key, u.at, u)); }
@@ -237,12 +245,12 @@ function startRoom(cv, app) {
     const matsAt = xy("mats");
     const L = {
       desks, add: { x0: addAt[0], y0: addAt[1] - 13, x1: addAt[0] + ADD_W, y1: addAt[1] },
-      floorY: FLOORY, board: { x0: bx, y0: by, x1: bx + 28, y1: by + 12 }, window: { x0: wx, y0: wy, x1: wx + 18, y1: wy + 15 },
+      floorY: FLOORY, board: { x0: bx, y0: by, x1: bx + 32, y1: by + 14 }, window: { x0: wx, y0: wy, x1: wx + 18, y1: wy + 14 },
       meet: xy("meet"), pong: xy("pong"), chess: xy("chess"), mats: [-28, 0, 28].map((d) => ({ x: matsAt.x + d, y: matsAt.y })),
       cooler: xy("cooler"), plants: [xy("plant0"), xy("plant1")], printer: xy("printer"), chair: xy("armchair"),
       coffeeAt: xy("coffee"), floor: { x0: 14, y0: WALL + 8, x1: W - 14, y1: FLOORY - 4 }, placed,
     };
-    L.coffee = { x: L.coffeeAt.x + 27, y: L.coffeeAt.y };
+    L.coffee = { x: L.coffeeAt.x + 27, y: L.coffeeAt.y - 10 };
     // what can be picked up and moved, front to back
     L.pieces = [
       ...desks.map((d) => ({ key: d.key, at: d.at, u: d.u, r: foot(d.key, d.at, d.u) })),
@@ -251,7 +259,7 @@ function startRoom(cv, app) {
     ].sort((a, b) => b.r[3] - a.r[3]);
     L.coolerSpot = (side) => ({ x: L.cooler.x + (side ? 10 : -8), y: L.cooler.y + 1 });
     L.pongSpot = (side) => ({ x: L.pong.x + (side ? 22 : -22), y: L.pong.y + 1 });
-    L.chessSeat = (side) => ({ x: L.chess.x + (side ? 15 : -15), y: L.chess.y });
+    L.chessSeat = (side) => ({ x: L.chess.x + (side ? 13 : -13), y: L.chess.y });
     L.meetSeat = (i) => { const s = [[-23, 0, 1], [23, 0, -1], [-8, -5, 1], [8, -5, -1]][i]; return s && { x: L.meet.x + s[0], y: L.meet.y + s[1], dir: s[2] }; };
     L.seat = (id) => { for (const d of desks) for (const [i, x] of d.seats) if (i === id) return { x, y: d.y }; return null; };
     L.free = (x, y) => !L.pieces.some((p) => !ON_WALL.has(p.key) && x >= p.r[0] - 6 && x <= p.r[2] + 6 && y >= p.r[1] && y <= p.r[3] + 4);
@@ -262,13 +270,12 @@ function startRoom(cv, app) {
   const worlds = new Map();
   function world(i) {
     if (!worlds.has(i)) worlds.set(i, { folk: new Map(), meeting: null, lastMeeting: -60, board: [], pong: { t: 0, from: 0 },
-      chess: { pieces: newBoard(), t: 0, turn: 0 }, T: 0, born: performance.now() });
+      chess: { board: newBoard(), t: 0, turn: 0 }, T: 0, born: performance.now() });
     return worlds.get(i);
   }
-  // the chess board, seen from above at a slant: 8 files by 4 ranks, light pieces in front, dark at the back
-  function newBoard() {
-    return [...Array(12)].map((_, i) => ({ x: i % 6 + 1, r: i < 6 ? 0 : 3, side: i < 6 ? 0 : 1, tall: i % 6 === 2 || i % 6 === 3 }));
-  }
+  // the chess board as pair keeps it: 64 squares from a1, upper case white, "." empty
+  const START = "RNBQKBNRPPPPPPPP" + ".".repeat(32) + "pppppppprnbqkbnr";
+  const newBoard = () => START;
   const rest = (r = Math.random()) => ({ kind: "stand", left: 2 + r * 5 });   // a pause, before the next break
   function end(f) { f.lying = false; f.carry = null; f.act = rest(0.06); }
   function walk(f, to, v, dt) {
@@ -335,21 +342,24 @@ function startRoom(cv, app) {
     }
   }
   function chessMove(g) {
-    // a piece of whoever's turn it is steps to a free square or takes one, towards the other side
-    const ahead = g.turn ? -1 : 1, moves = [];
-    for (const p of g.pieces.filter((q) => q.side === g.turn)) for (const [dx, dr] of [[0, ahead], [-1, ahead], [1, ahead], [-1, 0], [1, 0], [0, -ahead]]) {
-      const x = p.x + dx, r = p.r + dr, hit = g.pieces.find((q) => q.x === x && q.r === r);
-      if (x >= 0 && x < 8 && r >= 0 && r < 4 && (!hit || hit.side !== p.side)) moves.push({ p, x, r, hit, w: (hit ? 4 : 1) + (dr === ahead ? 1 : 0) });
-    }
+    // two bots between themselves: whoever's turn it is moves a piece forward to a free square or
+    // takes one diagonally ahead (it is a game for them, not chess); you play the real thing
+    const b = [...g.board], white = g.turn === 0, ahead = white ? 8 : -8, moves = [];
+    const mine = (p) => p !== "." && (p === p.toUpperCase()) === white;
+    b.forEach((p, s) => {
+      if (!mine(p)) return;
+      const f = s % 8;
+      if (b[s + ahead] === ".") moves.push([s, s + ahead, 1]);
+      for (const d of [-1, 1]) { const t = s + ahead + d; if (f + d >= 0 && f + d < 8 && b[t] && b[t] !== "." && !mine(b[t])) moves.push([s, t, 4]); }
+    });
     if (moves.length) {
-      let k = Math.random() * moves.reduce((a, m) => a + m.w, 0), m = moves[0];
-      for (const c of moves) if ((k -= c.w) < 0) { m = c; break; }
-      if (m.hit) g.pieces.splice(g.pieces.indexOf(m.hit), 1);
-      m.p.x = m.x; m.p.r = m.r;
+      let k = Math.random() * moves.reduce((a, m) => a + m[2], 0), m = moves[0];
+      for (const c of moves) if ((k -= c[2]) < 0) { m = c; break; }
+      b[m[1]] = b[m[0]]; b[m[0]] = ".";
     }
+    g.board = moves.length && b.filter((p) => p !== ".").length > 12 ? b.join("") : newBoard();
     g.turn = 1 - g.turn;
     g.last = performance.now();
-    if (g.pieces.filter((p) => p.side === 0).length < 3 || g.pieces.filter((p) => p.side === 1).length < 3) g.pieces = newBoard();
   }
 
   function thinkOne(w, f, L, now, dt, home, sleepAfter, usage) {
@@ -489,7 +499,7 @@ function startRoom(cv, app) {
       }
       case "door":
         // put by the door to be stopped: it waits there a moment for a click on it
-        if (walk(f, { x: 11, y: WALL + 3 }, v, dt)) {
+        if (walk(f, { x: 10, y: WALL + 3 }, v, dt)) {
           f.dir = -1; f.arms = "down";
           if ((act.left -= dt) <= 0) f.act = f.work ? { kind: "desk" } : rest();
         }
@@ -566,6 +576,7 @@ function startRoom(cv, app) {
     for (let y = WALL + 4, k = 0; y < H; y += 6, k++) { ctx.fillRect(0, y, W, 1); for (let x = (k % 2) * 13; x < W; x += 26) ctx.fillRect(x, y - 5, 1, 5); }
     rect(ctx, 0, 0, W, WALL, WALLC);
     rect(ctx, 0, WALL - 2, W, 2, INK2);
+    rect(ctx, W - 1, 0, 1, H, INK2);
     if (!room) return;
     const w = world(ri), bots = room.bots || [], usage = room.usage || {};
 
@@ -589,7 +600,7 @@ function startRoom(cv, app) {
     const late = performance.now() - w.born > 3000;
     for (const b of bots) {
       if (!w.folk.has(b.id)) {
-        const at = late ? { x: 11, y: WALL + 3 } : L.seat(b.id) || { x: W / 2, y: H / 2 };
+        const at = late ? { x: 10, y: WALL + 3 } : L.seat(b.id) || { x: W / 2, y: H / 2 };
         const work = b.busy || b.waiting;
         w.folk.set(b.id, { id: b.id, x: at.x, y: at.y, dir: -1, arms: "down", legs: late ? "stand" : "sit", step: 0, sat: !late,
           act: work ? { kind: "desk" } : rest(), carry: null, lying: false, busy: b.busy, waiting: b.waiting, work,
@@ -600,11 +611,11 @@ function startRoom(cv, app) {
     const door = performance.now() - (w.doorAt || 0) < 900;
     if (tickDt > 0) {
       w.T += tickDt; think(w, bots, L, tickDt, s.demo ? 40 : 600, usage);
-      for (const f of w.folk.values()) if (f.leaving && walk(f, { x: 11, y: WALL + 1 }, 30, tickDt)) { w.folk.delete(f.id); w.doorAt = performance.now(); }
+      for (const f of w.folk.values()) if (f.leaving && walk(f, { x: 10, y: WALL + 1 }, 30, tickDt)) { w.folk.delete(f.id); w.doorAt = performance.now(); }
       tickDt = 0;
     }
     const T = w.T;
-    drawDoor(ctx, 5, door || [...w.folk.values()].some((f) => f.act.kind === "door" || (f.leaving && f.y < WALL + 12))); drawClock(ctx, W - 10, 13);
+    drawDoor(ctx, 4, door || [...w.folk.values()].some((f) => f.act.kind === "door" || (f.leaving && f.y < WALL + 12))); drawClock(ctx, W - 9, 10);
     if (room.error) {                        // trouble goes on the wall, in red, instead of the whiteboard
       const nx = Math.max(tx + 11, 24), n = Math.max(0, Math.floor((W - 24 - nx) / 4));
       const msg = room.error.replace(/\s+/g, " ");
@@ -633,6 +644,7 @@ function startRoom(cv, app) {
       if (h) tip = { text: "project", x: a.x0 + aw / 2, y: a.y0 - 2 };
     }
     for (const m of L.mats) drawMat(ctx, m);
+    drawRug(ctx, L.pong);
 
     // everything that stands, back to front
     const items = [];
@@ -644,7 +656,7 @@ function startRoom(cv, app) {
     }
     items.push([L.meet.y - 1, () => drawTable(ctx, L.meet)]);
     for (const i of [0, 1]) { const st = L.meetSeat(i); items.push([st.y - 0.5, () => drawStool(ctx, st)]); }
-    items.push([L.chess.y - 1, () => drawChess(ctx, L.chess, w)]);
+    items.push([L.chess.y + 0.5, () => drawChess(ctx, L.chess, room.chess && !room.chess.result ? room.chess.board : w.chess.board)]);
     for (const i of [0, 1]) { const st = L.chessSeat(i); items.push([st.y - 0.5, () => drawStool(ctx, st)]); }
     const brewing = [...w.folk.values()].some((f) => f.act.kind === "coffee" && f.act.stage === 1);
     items.push([L.coffeeAt.y, () => drawCoffee(ctx, L.coffeeAt, brewing, T, usage.session)]);
@@ -674,7 +686,7 @@ function startRoom(cv, app) {
       for (let i = 0; i < 3; i++) if ((Math.floor(f.chat * 4) + i) % 3) rect(ctx, bx + 2 + i * 2, by + 2, 1, 1, INK);
     }
     // by the door to be stopped: a click on the sign over it stops it
-    for (const f of w.folk.values()) if (f.act.kind === "door" && f.b && Math.hypot(f.x - 11, f.y - WALL - 3) < 2) {
+    for (const f of w.folk.values()) if (f.act.kind === "door" && f.b && Math.hypot(f.x - 10, f.y - WALL - 3) < 2) {
       const text = "stop " + f.b.name + "?", tw = tinyW(text), lx = 4, ly = WALL + 7;
       const h = hot(lx - 2, ly - 2, lx + tw + 2, ly + 7, { kind: "stop", id: f.id });
       box(ctx, lx - 2, ly - 2, tw + 4, 9, h ? TERRACOTTA : INK2);
@@ -783,7 +795,7 @@ function startRoom(cv, app) {
     if (plus) tiny(ctx, "+", x, y - 16, h ? d.color : C.steel1);
   }
   function drawBoard(ctx, b, w) {
-    box(ctx, b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0, C.steel3, C.steel1);
+    box(ctx, b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0, C.steel4, C.steel1);
     rect(ctx, b.x0 + 2, b.y1, b.x1 - b.x0 - 4, 1, C.steel1);
     ctx.fillStyle = shade(C.blue2, 0.75);
     for (const s of w.board) {
@@ -793,12 +805,12 @@ function startRoom(cv, app) {
       else ctx.fillRect(x, y, 1, 1);
     }
   }
-  function drawDoor(ctx, x, ajar) {
-    const y0 = 12, h = WALL - 14;
-    box(ctx, x, y0, 12, h, ajar ? NIGHT : WOOD);
-    if (ajar) { rect(ctx, x, y0, 4, h, WOOD); rect(ctx, x + 1, y0 + 2, 2, h - 4, WOOD_D); return; }
-    rect(ctx, x + 2, y0 + 2, 8, 5, WOOD_D); rect(ctx, x + 2, y0 + 9, 8, h - 11, WOOD_D);
-    rect(ctx, x + 9, y0 + 8, 1, 1, C.gold2);
+  function drawDoor(ctx, x, ajar) {         // pair's door; ajar while someone goes in or out
+    const y0 = 6, h = WALL - y0 - 2;
+    if (ajar) { box(ctx, x, y0, 12, h, INK); rect(ctx, x, y0, 3, h, WOOD); return; }
+    box(ctx, x, y0, 12, h, WOOD);
+    rect(ctx, x + 2, y0 + 2, 8, 6, WOOD_D); rect(ctx, x + 2, y0 + 10, 8, 6, WOOD_D);
+    rect(ctx, x + 9, y0 + 9, 1, 1, C.gold2);
   }
   function drawClock(ctx, x, y) {
     const t = new Date();
@@ -816,10 +828,15 @@ function startRoom(cv, app) {
     else { rect(ctx, w.x0 + 4, w.y0 + 3, 1, 1, C.steel4); rect(ctx, w.x1 - 5, w.y0 + 8, 1, 1, C.steel4); rect(ctx, w.x1 - 6, w.y0 + 2, 2, 2, C.gold2); }
     rect(ctx, Math.round(w.x0 + ww / 2), w.y0, 1, wh, C.steel2); rect(ctx, w.x0, Math.round(w.y0 + wh / 2), ww, 1, C.steel2);
   }
+  function drawRug(ctx, g) {                // pair's ping-pong rug
+    box(ctx, g.x - 34, g.y - 18, 68, 24, "#2a1d3a", "#3a2a4f");
+    ctx.fillStyle = "#3a2a4f";
+    for (let x = g.x - 30; x < g.x + 32; x += 6) { ctx.fillRect(x, g.y - 15, 2, 1); ctx.fillRect(x + 3, g.y + 2, 2, 1); }
+  }
   function drawMat(ctx, m) {
-    box(ctx, m.x - 12, m.y - 24, 24, 23, "#1c2538");
-    ctx.fillStyle = "#222d45"; for (let y = m.y - 21; y < m.y - 2; y += 3) ctx.fillRect(m.x - 12, y, 24, 1);
-    box(ctx, m.x - 8, m.y - 23, 16, 6, C.steel2);
+    box(ctx, m.x - 12, m.y - 24, 24, 23, "#26324f");
+    ctx.fillStyle = "#2f3e62"; for (let y = m.y - 21; y < m.y - 2; y += 3) ctx.fillRect(m.x - 12, y, 24, 1);
+    box(ctx, m.x - 8, m.y - 23, 16, 6, C.steel3);
   }
   function drawTable(ctx, m) {
     box(ctx, m.x - 16, m.y - 11, 32, 4, WOOD);
@@ -828,18 +845,18 @@ function startRoom(cv, app) {
     rect(ctx, m.x - 6, m.y - 10, 3, 2, C.steel4); rect(ctx, m.x + 4, m.y - 10, 3, 2, C.steel4);
   }
   // a small table with the board on it, seen from above at a slant; the pieces stand on their squares
-  function drawChess(ctx, c, w) {
-    const x0 = c.x - 8, y0 = c.y - 17;               // the board: 8 x 4 squares of 2 x 2 dots
-    box(ctx, c.x - 10, y0 - 1, 20, 10, WOOD);
-    rect(ctx, c.x - 10, y0 + 8, 20, 1, WOOD_D);
-    box(ctx, c.x - 1, y0 + 10, 2, 6, WOOD_D);
-    rect(ctx, c.x - 4, c.y - 1, 8, 1, WOOD_D);
-    for (let r = 0; r < 4; r++) for (let i = 0; i < 8; i++) rect(ctx, x0 + i * 2, y0 + 6 - r * 2, 2, 2, (i + r) % 2 ? "#b9a27e" : "#6b4a33");
-    // back rank first, so the front pieces stand in front
-    for (const p of [...w.chess.pieces].sort((a, b) => b.r - a.r)) {
-      const x = x0 + p.x * 2 + 1, top = y0 + 7 - p.r * 2 - (p.tall ? 3 : 2);
-      rect(ctx, x - 1, top + (p.tall ? 3 : 2), 2, 1, "rgba(0,0,0,0.35)");
-      rect(ctx, x, top, 1, p.tall ? 3 : 2, p.side ? INK : C.white);
+  function drawChess(ctx, c, board) {       // pair's: a small table with the board on it, the position as it stands
+    const b = board || START;
+    box(ctx, c.x - 2, c.y - 9, 4, 9, WOOD_D);
+    box(ctx, c.x - 6, c.y - 1, 12, 1, WOOD_D);
+    box(ctx, c.x - 9, c.y - 12, 18, 3, WOOD);
+    // the board seen from the side: eight files, the back half and the front half
+    for (let f = 0; f < 8; f++) for (let r = 0; r < 2; r++) rect(ctx, c.x - 8 + f * 2, c.y - 13 + r, 2, 1, (f + r) % 2 ? "#a08670" : "#d9c49a");
+    for (let f = 0; f < 8; f++) {           // a piece on a file stands up from the board, white in front
+      const col = [...Array(8)].map((_, r) => b[r * 8 + f]);
+      const wh = col.some((p) => p !== "." && p === p.toUpperCase()), bl = col.some((p) => p !== "." && p === p.toLowerCase());
+      if (bl) rect(ctx, c.x - 8 + f * 2, c.y - 15, 1, 2, C.ink2);
+      if (wh) rect(ctx, c.x - 7 + f * 2, c.y - 14, 1, 2, C.steel4);
     }
   }
   function drawStool(ctx, st) {
@@ -962,7 +979,7 @@ function startRoom(cv, app) {
   // ---- size and run, twelve frames a second like a 16-bit game. The room is always W x H dots;
   // only how big a dot is follows the window: whole pixels, as big as fits
   function size() {
-    K = Math.max(1, Math.min(Math.floor(innerHeight / H), Math.floor((innerWidth * 0.62) / W)));
+    H = Math.max(200, Math.floor(cv.parentElement.clientHeight / K)); FLOORY = H - 6; defaults();
     if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
     cv.style.width = W * K + "px"; cv.style.height = H * K + "px";
     cv.parentElement.style.width = W * K + "px";
@@ -977,7 +994,7 @@ function startRoom(cv, app) {
     tickDt = Math.min(acc, 0.25); acc = 0;
     draw();
   }
-  addEventListener("resize", size);
+  new ResizeObserver(size).observe(cv.parentElement);
   size();
   requestAnimationFrame(frame);
   window.__room = { worlds, size: () => ({ W, H, K }), layout: () => lastL };   // for poking at it from the console

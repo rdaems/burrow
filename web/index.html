@@ -11,17 +11,19 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css">
 <link rel="stylesheet" href="/burrow.css">
 </head>
-<body>
+<body class="empty">
+<header>
+  <div class="top">
+    <span class="mark">BURROW</span>
+    <div class="t"><h1 id="who"></h1><span id="as"></span></div>
+    <button id="reconnect" class="btn" hidden>reconnect</button>
+    <button id="stop" class="btn">stop</button>
+    <button id="close" class="btn" title="close (the session keeps running)">✕</button>
+  </div>
+</header>
 <main id="app">
   <div id="roomwrap"><canvas id="room"></canvas></div>
   <section id="pane" class="empty">
-    <header>
-      <span id="who"></span>
-      <span class="sp"></span>
-      <button id="reconnect" class="flat" hidden>reconnect</button>
-      <button id="stop" class="flat">stop</button>
-      <button id="close" class="flat" title="close (the session keeps running)">✕</button>
-    </header>
     <div id="term"></div>
   </section>
 </main>
@@ -138,14 +140,15 @@ term.onResize(({ cols, rows }) => ws && ws.readyState === 1 && ws.send(JSON.stri
 function bot() { return open && state && (state.rooms[open.room].bots || []).find((b) => b.id === open.id); }
 function showWho() {
   const b = bot();
-  $("#who").textContent = (b ? b.name : open.id) + (state && state.rooms.length > 1 ? " · " + state.rooms[open.room].name : "");
+  $("#who").textContent = b ? b.name : open.id;
+  $("#as").textContent = state ? "on " + state.rooms[open.room].name : "";
   term.options.theme = state && state.rooms[open.room].light ? LIGHT : DARK;
 }
 function openBot(ri, id) {
   if (open && open.room === ri && open.id === id) { term.focus(); return; }
   closeBot();
   open = { room: ri, id };
-  $("#pane").classList.remove("empty");
+  $("#pane").classList.remove("empty"); document.body.classList.remove("empty");
   if (!termOpened) { term.open($("#term")); termOpened = true; }
   term.reset();
   showWho();
@@ -164,8 +167,8 @@ function connect() {
 function closeBot() {
   if (ws) { const s = ws; ws = null; s.close(); }
   open = null;
-  $("#who").textContent = "";
-  $("#pane").classList.add("empty"); $("#pane").classList.remove("hl");
+  $("#who").textContent = ""; $("#as").textContent = "";
+  $("#pane").classList.add("empty"); $("#pane").classList.remove("hl"); document.body.classList.add("empty");
   room.draw();
 }
 async function stopBot(ri, id) {
