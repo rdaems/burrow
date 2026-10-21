@@ -616,6 +616,12 @@ function startRoom(cv, app) {
     // a project's bots while the pointer is on its screen
     const hl = new Set();
     if (app.hl()) hl.add(app.hl());
+    // a bot and its seat at its project's desk are one thing: where the bot is only says what it
+    // does. The pointer on either lights up both (and its session), and a click on either opens it
+    if (hoverId) hl.add(hoverId);
+    let seatHover = null;
+    if (!moving && !held) for (const d of L.desks) for (const [id, x] of d.seats) if (over(x - 3, d.y - 16, x + 9, d.y + 1)) seatHover = { id, x, y: d.y };
+    if (seatHover) hl.add(seatHover.id);
 
     // flat on the floor: the empty cabinet that adds a project, the mats, the ping-pong rug
     {
@@ -659,6 +665,7 @@ function startRoom(cv, app) {
     // a bot being carried, over everything
     for (const f of w.folk.values()) if (f.held) drawFigure(ctx, f, f.b, T, hl);
     if (held) hovered = null;
+    if (!hovered && seatHover && !held) { const f = w.folk.get(seatHover.id); if (f && f.b) hovered = { b: f.b, x: seatHover.x + 3, y: seatHover.y - 16, seat: true }; }
 
     // talk, over everything: dots in a bubble, never the words
     for (const f of w.folk.values()) if (f.chat > 0 && !still) {
@@ -769,8 +776,8 @@ function startRoom(cv, app) {
     const h = plus && hot(x - 8, y - 22, x + 9, y + 1, { kind: "spawn", dir: d.cwd });
     if (h) tip = { text: "new bot", x, y: y - 18 };
     const dim = plus && !h, col = dim ? INK2 : lit ? C.steel1 : C.steel0;
-    box(ctx, x + 6, y - 15, 2, 9, col);
-    box(ctx, x - 2, y - 7, 9, 2, col);
+    box(ctx, x + 6, y - 15, 2, 9, col, lit ? TERRACOTTA : INK);
+    box(ctx, x - 2, y - 7, 9, 2, col, lit ? TERRACOTTA : INK);
     rect(ctx, x + 2, y - 4, 1, 3, dim ? C.steel0 : C.steel1);
     rect(ctx, x - 1, y - 1, 7, 1, dim ? C.steel0 : C.steel1);
     if (plus) tiny(ctx, "+", x, y - 16, h ? d.color : C.steel1);
@@ -910,7 +917,7 @@ function startRoom(cv, app) {
     if (e.button !== 0) return;
     pointer = dots(e); draw();
     const h = [...hots].reverse().find((h) => over(h.x0, h.y0, h.x1, h.y1));
-    press = { x: pointer.x, y: pointer.y, action: h && h.action, bot: hovered && hovered.b.id, piece: pieceAt(pointer) };
+    press = { x: pointer.x, y: pointer.y, action: h && h.action, bot: hovered && !hovered.seat && hovered.b.id, piece: pieceAt(pointer) };
     cv.setPointerCapture(e.pointerId);
   });
   cv.addEventListener("pointermove", (e) => {
