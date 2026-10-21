@@ -114,6 +114,24 @@ embedded in this representation, in a maximally coherent and consistent way." So
 - chess and ping-pong are for two idle bots; one idle bot alone may sit at the chess board waiting for an
   opponent, and the next idle one likely joins.
 
+### Back to pair (2026-10-21, later)
+
+He: "look at pair.daems.me, this was the basis for the UI, we've drifted, make it more like that, the
+pixels are bigger here". So: two CSS pixels a dot as pair's floor (`W = gap / 2`), a room 256 dots wide
+(pair's margin) and as tall as the window (dragged positions are clamped in; the bottom row stays at the
+bottom); pair's wall (26), door, board, rug, mats, side-view chess table; pair's header (pixel wordmark
+`pixel.woff2`, `.btn`s) and its starfield where nothing is open.
+
+"There should be a bot idling to allow playing with them" meant *you* play the bots, as people do at
+pair's tables: the chess table opens pair's board (`chessboard.js`, rules in `chess.py`, both copied) in
+the pane against an idle bot of that room, which plays from server.py (two plies of material, not
+Claude); the ping-pong table opens pair's `pong.js` with the bot as its ball machine. The bot sits or
+stands at the room's table while you play; a bot that gets work leaves the game (you win). Bots still play
+each other on their own breaks.
+
+A bot and its seat are one thing for the UI: hovering either lights up both (and its session); a click
+on either opens it; only dragging differs (the seat drags the desk).
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a
