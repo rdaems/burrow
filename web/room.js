@@ -750,7 +750,8 @@ function startRoom(cv, app) {
     const onScreen = over(sx - 1, y - 32, sx + 21, y - 15);
     if (onScreen) { for (const [id] of d.seats) hl.add(id); tip = { text: d.cwd.replace(/^\/(Users|home)\/[^/]+/, "~"), x: sx + 10, y: y - 33 }; }
     box(ctx, sx, y - 31, 20, 15, C.steel0, onScreen ? C.steel3 : INK);
-    rect(ctx, sx + 1, y - 30, 18, 13, here ? C.blue0 : NIGHT);
+    rect(ctx, sx + 1, y - 30, 18, 13, here ? C.blue0 : "#161b28");
+    if (!here) { rect(ctx, sx + 14, y - 29, 3, 1, C.steel0); rect(ctx, sx + 16, y - 28, 1, 2, C.steel0); }   // off: a glint
     if (here) {
       ctx.fillStyle = busy ? d.color : shade(d.color, 0.45);
       const s = busy ? Math.floor(T * 5) : 0;
