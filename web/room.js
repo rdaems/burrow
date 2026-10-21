@@ -25,7 +25,7 @@
 
 function startRoom(cv, app) {
   const C = pixelAvatar.C, INK = C.ink, INK2 = C.ink2;
-  const NIGHT = "#0d0a16", TERRACOTTA = "#d97757", RED = "#ff6b5a";
+  const NIGHT = "#0d0a16", TERRACOTTA = "#d97757", RED = "#ff6b5a", OPEN = "#8a4a3a", GLASS = "#1a1f2e";
   const WOOD = "#7a4a35", WOOD_D = "#4a2e2a", WALLC = "#1e1a2c", FLOOR = "#130f1b", PLANK = "#19141f";
   const PROJECT = ["#4a76b8", "#e8402a", "#2fa087", "#f2a531", "#9a74d6", "#5fcf4a", "#f06b72", "#8fc0e8"];
   const WALL = 30, TALK = 4, SEAT = 18, ADD_W = 30, ROW = 46;
@@ -144,16 +144,18 @@ function startRoom(cv, app) {
   }
 
   // halo for a highlighted bot: one dot around its outline
-  const halos = new WeakMap();
-  function halo(im) {
-    if (halos.has(im)) return halos.get(im);
+  const halos = new Map();
+  function halo(im, col) {
+    if (!halos.has(col)) halos.set(col, new WeakMap());
+    const hm = halos.get(col);
+    if (hm.has(im)) return hm.get(im);
     const d = im.getContext("2d").getImageData(0, 0, SW, SH).data, c = document.createElement("canvas");
     c.width = SW; c.height = SH;
     const x = c.getContext("2d"), on = (i, j) => i >= 0 && j >= 0 && i < SW && j < SH && d[(j * SW + i) * 4 + 3] > 0;
-    x.fillStyle = C.steel4;
+    x.fillStyle = col;
     for (let j = 0; j < SH; j++) for (let i = 0; i < SW; i++)
       if (!on(i, j) && (on(i - 1, j) || on(i + 1, j) || on(i, j - 1) || on(i, j + 1))) x.fillRect(i, j, 1, 1);
-    halos.set(im, c);
+    hm.set(im, c);
     return c;
   }
 
@@ -552,7 +554,7 @@ function startRoom(cv, app) {
   const hot = (x0, y0, x1, y1, action) => { hots.push({ x0, y0, x1, y1, action }); return over(x0, y0, x1, y1) && !moving && !held; };
   const box = (ctx, x, y, w, h, fill, edge = INK) => { ctx.fillStyle = edge; ctx.fillRect(x - 1, y - 1, w + 2, h + 2); ctx.fillStyle = fill; ctx.fillRect(x, y, w, h); };
   const rect = (ctx, x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
-  const say = (u, what) => u ? `${what} ${u.used}% used${u.resets ? ", resets " + u.resets : ""}` : `${what}: not known yet`;
+  const say = (u, what) => u ? `${Math.max(0, 100 - u.used)}% of the ${what} left${u.resets ? ", new at " + u.resets.replace(/^.* at /, "") : ""}` : `the ${what}'s limit: not known yet`;
 
   function draw() {
     const ctx = cv.getContext("2d");
@@ -572,7 +574,6 @@ function startRoom(cv, app) {
     s.rooms.forEach((r, i) => {
       const tw = tinyW(r.name), h = i !== ri && hot(tx - 2, 0, tx + tw + 2, 12, { kind: "room", i });
       tiny(ctx, r.name, tx, 4, i === ri ? C.steel4 : h ? C.steel3 : C.steel1);
-      if (i === ri) rect(ctx, tx, 11, tw, 1, TERRACOTTA);
       tx += tw + 7;
     });
     tiny(ctx, "+", tx, 4, hot(tx - 2, 0, tx + 5, 12, { kind: "addRoom" }) ? TERRACOTTA : C.steel1);
@@ -626,7 +627,6 @@ function startRoom(cv, app) {
       if (h) tip = { text: "project", x: a.x0 + aw / 2, y: a.y0 - 2 };
     }
     for (const m of L.mats) drawMat(ctx, m);
-    box(ctx, L.pong.x - 33, L.pong.y - 17, 66, 22, FLOOR, "#2a1d3a");
 
     // everything that stands, back to front
     const items = [];
@@ -695,25 +695,26 @@ function startRoom(cv, app) {
     const x = Math.round(f.x), y = Math.round(f.y), x0 = x - 11, y0 = y - 27;
     if (!f.held) rect(ctx, x - 5, y, 10, 1, "rgba(0,0,0,0.4)");
     const im = body(b.id, projectColor(b.cwd), f.held ? "up" : f.arms, f.held ? "walk1" : f.legs, !b.background);
+    // its outline: terracotta while the pointer is on it or on its session, faint while its session is open
     const lit = hl.has(f.id) || (hovered && hovered.b.id === f.id) || (!hovered && over(x0 + 4, y0, x0 + 18, y + 1));
+    const ring = f.leaving ? null : lit ? TERRACOTTA : app.open() === f.id ? OPEN : null;
     if (im) {
       ctx.save();
       if (f.dir < 0) { ctx.translate(x0 + SW, 0); ctx.scale(-1, 1); }
       const dx = f.dir < 0 ? 0 : x0;
-      if (lit && !f.leaving) ctx.drawImage(halo(im), dx, y0);
+      if (ring) ctx.drawImage(halo(im, ring), dx, y0);
       ctx.drawImage(im, dx, y0);
       ctx.restore();
     }
     if (f.act.kind === "sleep" && f.act.there) zzz(ctx, f, x + 2, y0 + 4);
     if (f.act.kind === "plant" && f.act.water && Math.floor(T * 6) % 2) { rect(ctx, x + 10 * f.dir, y0 + 21, 1, 1, C.blue3); rect(ctx, x + 11 * f.dir, y0 + 24, 1, 1, C.blue3); }
-    if (app.open() === f.id) for (const [i, wd] of [5, 3, 1].entries()) rect(ctx, x - Math.floor(wd / 2), y0 - 6 + i, wd, 1, TERRACOTTA);
     if (!f.leaving && !f.held && over(x0 + 4, y0, x0 + 18, y + 1)) hovered = { b, x, y: y0 };
   }
   function drawSleeper(ctx, f, b, T, hl) {  // seen from above: the head on the pillow, a blanket, a plug
     if (!b) return;
     const x = Math.round(f.x), y = Math.round(f.y), im = body(b.id, projectColor(b.cwd), "down", "stand", !b.background);
-    const lit = hl.has(f.id) || over(x - 11, y - 28, x + 11, y);
-    if (im) { if (lit) ctx.drawImage(halo(im), 0, 0, SW, 16, x - 11, y - 28, SW, 16); ctx.drawImage(im, 0, 0, SW, 16, x - 11, y - 28, SW, 16); }
+    const ring = hl.has(f.id) || over(x - 11, y - 28, x + 11, y) ? TERRACOTTA : app.open() === f.id ? OPEN : null;
+    if (im) { if (ring) ctx.drawImage(halo(im, ring), 0, 0, SW, 16, x - 11, y - 28, SW, 16); ctx.drawImage(im, 0, 0, SW, 16, x - 11, y - 28, SW, 16); }
     box(ctx, x - 11, y - 13, 22, 11, C.steel1);
     rect(ctx, x - 11, y - 13, 22, 2, C.steel2);
     rect(ctx, x - 11, y - 4, 22, 2, C.steel0);
@@ -828,9 +829,9 @@ function startRoom(cv, app) {
     for (let r = 0; r < 4; r++) for (let i = 0; i < 8; i++) rect(ctx, x0 + i * 2, y0 + 6 - r * 2, 2, 2, (i + r) % 2 ? "#b9a27e" : "#6b4a33");
     // back rank first, so the front pieces stand in front
     for (const p of [...w.chess.pieces].sort((a, b) => b.r - a.r)) {
-      const x = x0 + p.x * 2, top = y0 + 6 - p.r * 2 - (p.tall ? 3 : 2);
-      rect(ctx, x, top, 2, (p.tall ? 3 : 2) + 1, p.side ? INK : C.steel4);
-      if (p.side) rect(ctx, x, top, 2, 1, C.steel1);
+      const x = x0 + p.x * 2 + 1, top = y0 + 7 - p.r * 2 - (p.tall ? 3 : 2);
+      rect(ctx, x - 1, top + (p.tall ? 3 : 2), 2, 1, "rgba(0,0,0,0.35)");
+      rect(ctx, x, top, 1, p.tall ? 3 : 2, p.side ? INK : C.white);
     }
   }
   function drawStool(ctx, st) {
@@ -846,21 +847,19 @@ function startRoom(cv, app) {
     rect(ctx, x0 + 8, y - 17, 1, 1, C.red1);
     rect(ctx, x0 + 4, y - 14, 4, 1, C.steel3);
     if (brewing) { rect(ctx, x0 + 5, y - 13 + (Math.floor(T * 8) % 2), 1, 1, WOOD); rect(ctx, x0 + 6, y - 22 - (Math.floor(T * 4) % 2), 1, 1, C.steel3); }
-    box(ctx, x0 + 12, y - 19, 6, 8, "#2a3346");                      // the pot
-    rect(ctx, x0 + 18, y - 17, 1, 4, INK); rect(ctx, x0 + 19, y - 17, 1, 4, C.steel2);
-    const left = u ? Math.max(0, Math.min(8, Math.round(8 * (1 - u.used / 100)))) : 0;
-    if (left) rect(ctx, x0 + 12, y - 11 - left, 6, left, "#5a3a22");
-    if (left) rect(ctx, x0 + 12, y - 11 - left, 6, 1, WOOD);
-    rect(ctx, x0 + 12, y - 19, 1, 8, "rgba(244,246,251,0.18)");
+    // the pot: glass with a light rim, the coffee in it with a lighter top, one dot = an eighth
+    box(ctx, x0 + 12, y - 20, 6, 9, GLASS, C.steel2);
+    rect(ctx, x0 + 19, y - 18, 1, 4, C.steel2);
+    const left = u ? Math.max(0, Math.min(9, Math.round(9 * (1 - u.used / 100)))) : 0;
+    if (left) { rect(ctx, x0 + 12, y - 11 - left, 6, left, "#8a5030"); rect(ctx, x0 + 12, y - 11 - left, 6, 1, "#d08a4a"); }
   }
   // the water cooler; its bottle is the week's limit
   function drawCooler(ctx, c, u) {
     box(ctx, c.x - 3, c.y - 10, 6, 10, C.steel3);
     rect(ctx, c.x - 1, c.y - 7, 2, 1, C.steel1);
-    box(ctx, c.x - 3, c.y - 21, 6, 10, "#28324a");
+    box(ctx, c.x - 3, c.y - 21, 6, 10, GLASS, C.steel2);
     const left = u ? Math.max(0, Math.min(10, Math.round(10 * (1 - u.used / 100)))) : 0;
     if (left) { rect(ctx, c.x - 3, c.y - 11 - left, 6, left, C.blue2); rect(ctx, c.x - 3, c.y - 11 - left, 6, 1, C.blue3); }
-    rect(ctx, c.x - 3, c.y - 21, 1, 10, "rgba(244,246,251,0.2)");
   }
   function drawPrinter(ctx, pr, wait) {
     box(ctx, pr.x - 5, pr.y - 6, 10, 6, C.steel1);

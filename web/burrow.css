@@ -19,8 +19,7 @@ button, input { font:inherit; color:inherit; }
 #pane { flex:1; min-width:0; display:flex; flex-direction:column; background:var(--ink); border-left:2px solid var(--ink2); position:relative; }
 #pane.hl { border-left-color:var(--me); }
 #pane.empty #term, #pane.empty header > button { visibility:hidden; }
-#blank { display:none; position:absolute; inset:30px 0 0; align-items:center; justify-content:center; color:var(--ink2); pointer-events:none; }
-#pane.empty #blank { display:flex; }
+
 #pane.drop { outline:2px solid var(--me); outline-offset:-2px; }
 #pane header { height:30px; flex:none; display:flex; align-items:center; gap:2px; padding:0 6px 0 12px; background:var(--wall); border-bottom:2px solid var(--ink2); }
 #who { color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
