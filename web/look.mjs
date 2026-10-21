@@ -1,5 +1,5 @@
 // node web/look.mjs URL W H steps.json: drive headless Chrome over CDP (no packages) to look at the page.
-// steps: [{wait:ms} | {shot:"file.png"} | {js:"expr"} | {click:[x,y]} | {move:[x,y]} | {key:"text"}]
+// steps: [{wait:ms} | {shot:"file.png"} | {js:"expr"} | {click:[x,y]} | {move:[x,y]} | {drag:[[x,y],…]} | {key:"text"}]
 import { spawn } from "node:child_process";
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -30,12 +30,17 @@ const send = (method, params = {}) => new Promise((r) => { const i = ++id; pendi
 await send("Runtime.enable");
 await send("Emulation.setDeviceMetricsOverride", { width: +w, height: +h, deviceScaleFactor: 2, mobile: false });
 await send("Page.navigate", { url });
-const mouse = async (type, [x, y]) => send("Input.dispatchMouseEvent", { type, x, y, button: "left", clickCount: 1, pointerType: "mouse" });
+const mouse = async (type, [x, y], buttons = 0) => send("Input.dispatchMouseEvent", { type, x, y, button: "left", buttons, clickCount: 1, pointerType: "mouse" });
 for (const s of steps) {
   if (s.wait) await sleep(s.wait);
   if (s.js) { const r = await send("Runtime.evaluate", { expression: s.js, returnByValue: true, awaitPromise: true }); console.log("js:", JSON.stringify(r.result?.result?.value ?? r.result?.exceptionDetails?.exception?.description)); }
   if (s.move) await mouse("mouseMoved", s.move);
   if (s.click) { await mouse("mouseMoved", s.click); await mouse("mousePressed", s.click); await mouse("mouseReleased", s.click); }
+  if (s.drag) {                              // press at the first point, move through the others, let go at the last
+    await mouse("mouseMoved", s.drag[0]); await mouse("mousePressed", s.drag[0], 1);
+    for (const p of s.drag.slice(1)) { await mouse("mouseMoved", p, 1); await sleep(60); }
+    await mouse("mouseReleased", s.drag.at(-1));
+  }
   if (s.key) await send("Input.insertText", { text: s.key });
   if (s.shot) { const r = await send("Page.captureScreenshot", { format: "png" }); writeFileSync(s.shot, Buffer.from(r.result.data, "base64")); console.log("shot:", s.shot); }
 }

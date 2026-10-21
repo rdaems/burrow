@@ -13,12 +13,14 @@ button, input { font:inherit; color:inherit; }
 ::selection { background:var(--me); color:var(--ink); }
 
 #app { display:flex; height:100%; }
-#roomwrap { flex:1; min-width:0; overflow:hidden; background:var(--floor); }
-#room { display:block; image-rendering:pixelated; }
-/* a session open: the room narrows to the left, the session takes the rest */
-#app.split #roomwrap { flex:0 0 clamp(300px, 36%, 560px); }
-#pane { flex:1; min-width:0; display:flex; flex-direction:column; background:var(--ink); border-left:2px solid var(--ink2); }
-#pane[hidden] { display:none; }
+/* the room keeps its size (room.js sets the width: whole pixels per dot); the session takes the rest */
+#roomwrap { flex:none; overflow:hidden; background:var(--night); }
+#room { display:block; image-rendering:pixelated; touch-action:none; }
+#pane { flex:1; min-width:0; display:flex; flex-direction:column; background:var(--ink); border-left:2px solid var(--ink2); position:relative; }
+#pane.hl { border-left-color:var(--me); }
+#pane.empty #term, #pane.empty header > button { visibility:hidden; }
+#blank { display:none; position:absolute; inset:30px 0 0; align-items:center; justify-content:center; color:var(--ink2); pointer-events:none; }
+#pane.empty #blank { display:flex; }
 #pane.drop { outline:2px solid var(--me); outline-offset:-2px; }
 #pane header { height:30px; flex:none; display:flex; align-items:center; gap:2px; padding:0 6px 0 12px; background:var(--wall); border-bottom:2px solid var(--ink2); }
 #who { color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }

@@ -14,7 +14,7 @@
 <body>
 <main id="app">
   <div id="roomwrap"><canvas id="room"></canvas></div>
-  <section id="pane" hidden>
+  <section id="pane" class="empty">
     <header>
       <span id="who"></span>
       <span class="sp"></span>
@@ -23,6 +23,7 @@
       <button id="close" class="flat" title="close (the session keeps running)">✕</button>
     </header>
     <div id="term"></div>
+    <div id="blank">click a bot</div>
   </section>
 </main>
 
@@ -45,8 +46,9 @@
 </dialog>
 
 <script>
-// burrow's page: the room (room.js) fills the window; clicking a bot opens its session beside it
-// (`claude attach`, in xterm.js, through server.py). Closing it only detaches.
+// burrow's page: the room (room.js) on the left, always the same; the session of the bot you clicked
+// on the right (`claude attach`, in xterm.js, through server.py), an empty screen when none is open.
+// Closing it only detaches. The pointer on either side lights up the other: the bot and its session.
 let state = null, cur = 0, open = null;
 const $ = (s) => document.querySelector(s);
 const api = async (path, body) => (await fetch(path, { method: "POST", body: JSON.stringify(body || {}) })).json();
@@ -56,9 +58,13 @@ const room = startRoom($("#room"), {
   state: () => state,
   cur: () => cur,
   open: () => open && open.room === cur ? open.id : null,
-  inset: () => 0,
+  hl: () => paneHover && open && open.room === cur ? open.id : null,
+  hover: (id) => $("#pane").classList.toggle("hl", !!open && open.room === cur && open.id === id),
   act,
 });
+let paneHover = false;
+$("#pane").addEventListener("pointerenter", () => { paneHover = true; room.draw(); });
+$("#pane").addEventListener("pointerleave", () => { paneHover = false; room.draw(); });
 
 async function act(a) {
   if (a.kind === "room") { cur = a.i; try { localStorage.setItem("burrow.room", cur); } catch {} room.draw(); }
@@ -66,6 +72,9 @@ async function act(a) {
   else if (a.kind === "addDir") ask($("#dirDialog"));
   else if (a.kind === "open") openBot(cur, a.id);
   else if (a.kind === "forget") await api("/api/forget", { room: cur, dir: a.dir });
+  else if (a.kind === "layout") await api("/api/layout", { room: cur, layout: a.layout });
+  else if (a.kind === "stop") stopBot(cur, a.id);
+  else if (a.kind === "drop") { openBot(cur, a.id); for (const f of a.files) await hand(f); }
   else if (a.kind === "spawn") {
     const r = await api("/api/spawn", { room: cur, dir: a.dir });
     if (r.error) note(r.error); else openBot(cur, r.id);
@@ -137,8 +146,7 @@ function openBot(ri, id) {
   if (open && open.room === ri && open.id === id) { term.focus(); return; }
   closeBot();
   open = { room: ri, id };
-  $("#pane").hidden = false;
-  $("#app").classList.add("split");
+  $("#pane").classList.remove("empty");
   if (!termOpened) { term.open($("#term")); termOpened = true; }
   term.reset();
   showWho();
@@ -149,7 +157,7 @@ function connect() {
   $("#reconnect").hidden = true;
   const s = new WebSocket(`ws://${location.host}/term?room=${open.room}&id=${encodeURIComponent(open.id)}`);
   s.binaryType = "arraybuffer";
-  s.onopen = () => s.send(JSON.stringify({ size: [term.cols, term.rows] }));
+  s.onopen = () => { s.send(JSON.stringify({ size: [term.cols, term.rows] })); for (const t of typed.splice(0)) s.send(enc.encode(t)); };
   s.onmessage = (e) => term.write(new Uint8Array(e.data));
   s.onclose = () => { if (ws === s) { ws = null; $("#reconnect").hidden = false; } };
   ws = s;
@@ -157,18 +165,21 @@ function connect() {
 function closeBot() {
   if (ws) { const s = ws; ws = null; s.close(); }
   open = null;
-  $("#pane").hidden = true;
-  $("#app").classList.remove("split");
+  $("#who").textContent = "";
+  $("#pane").classList.add("empty"); $("#pane").classList.remove("hl");
+  room.draw();
+}
+async function stopBot(ri, id) {
+  if (open && open.room === ri && open.id === id) closeBot();
+  const r = await api("/api/stop", { room: ri, id });
+  if (r.error) note(r.error);
 }
 function stopping(on) { $("#stop").textContent = on ? "really stop?" : "stop"; $("#stop").classList.toggle("warn", on); }
 $("#close").onclick = closeBot;
 $("#reconnect").onclick = () => { term.reset(); connect(); term.focus(); };
 $("#stop").onclick = async () => {
   if (!$("#stop").classList.contains("warn")) { stopping(true); setTimeout(() => stopping(false), 3000); return; }
-  const o = open;
-  closeBot();
-  const r = await api("/api/stop", { room: o.room, id: o.id });
-  if (r.error) note(r.error);
+  stopBot(open.room, open.id);
 };
 new ResizeObserver(() => { if (open) fit.fit(); }).observe($("#term"));
 
@@ -176,14 +187,18 @@ new ResizeObserver(() => { if (open) fit.fit(); }).observe($("#term"));
 const pane = $("#pane");
 pane.addEventListener("dragover", (e) => { e.preventDefault(); pane.classList.add("drop"); });
 pane.addEventListener("dragleave", () => pane.classList.remove("drop"));
+const typed = [];                          // for a session still connecting
+async function hand(file) {
+  const o = open;
+  const r = await (await fetch(`/api/upload?room=${o.room}&name=${encodeURIComponent(file.name)}`, { method: "POST", body: file })).json();
+  if (r.error) return note(r.error);
+  const t = (/[\s'"\\]/.test(r.path) ? "'" + r.path.replace(/'/g, "'\\''") + "'" : r.path) + " ";
+  if (ws && ws.readyState === 1 && open === o) ws.send(enc.encode(t)); else if (open === o) typed.push(t);
+  term.focus();
+}
 pane.addEventListener("drop", async (e) => {
   e.preventDefault(); pane.classList.remove("drop");
-  for (const file of e.dataTransfer.files) {
-    const r = await (await fetch(`/api/upload?room=${open.room}&name=${encodeURIComponent(file.name)}`, { method: "POST", body: file })).json();
-    if (r.error) note(r.error);
-    else if (ws) ws.send(enc.encode((/[\s'"\\]/.test(r.path) ? "'" + r.path.replace(/'/g, "'\\''") + "'" : r.path) + " "));
-  }
-  term.focus();
+  if (open) for (const file of e.dataTransfer.files) await hand(file);
 });
 addEventListener("keydown", (e) => { if (e.key === "Escape" && document.activeElement === document.body && open) closeBot(); });
 </script>

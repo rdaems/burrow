@@ -57,7 +57,7 @@ def save_rooms(rooms):
     if DEMO:
         return
     os.makedirs(os.path.dirname(CONFIG), exist_ok=True)
-    keep = [{k: r[k] for k in ("name", "ssh", "dirs") if r.get(k)} for r in rooms]
+    keep = [{k: r[k] for k in ("name", "ssh", "dirs", "layout") if r.get(k)} for r in rooms]
     with open(CONFIG, "w") as f:
         json.dump(keep, f, indent=2)
 
@@ -96,11 +96,22 @@ def parse_agents(out):
         bots.append({
             "id": bid, "name": x.get("name") or bid, "cwd": x.get("cwd") or "",
             "busy": x.get("status") == "busy" or x.get("state") == "working",
+            "waiting": x.get("status") == "waiting",
             "background": x.get("kind") == "background",
             "started": x.get("startedAt") or 0, "pid": x.get("pid") or 0, "session": sid,
         })
     bots.sort(key=lambda b: b["started"])
     return bots
+
+
+def parse_usage(out):
+    """`/usage`: "Current session: 3% used · resets Oct 21 at 3:20pm (…)" → {session: {used, resets}, week: …}"""
+    u = {}
+    for line in out.splitlines():
+        m = re.match(r"\s*Current (session|week \(all models\)): (\d+)% used(?: · resets (.*?))?\s*(?:\(.*\))?$", line)
+        if m:
+            u["session" if m.group(1) == "session" else "week"] = {"used": int(m.group(2)), "resets": m.group(3) or ""}
+    return u
 
 
 def field(s, key):
@@ -134,11 +145,13 @@ class Hub:
         self.clients = []           # one queue per open page
         self.focused = True
         self.pokes = []
+        self.usage = {}             # room → its account's limits, from Claude Code's own /usage
 
     def state(self):
         with self.lock:
-            return {"rooms": [{"name": r["name"], "ssh": r.get("ssh") or "", "dirs": r.get("dirs", []), **f}
-                              for r, f in zip(self.rooms, self.feeds)], "demo": DEMO}
+            return {"rooms": [{"name": r["name"], "ssh": r.get("ssh") or "", "dirs": r.get("dirs", []),
+                               "layout": r.get("layout", {}), "usage": self.usage.get(i), **f}
+                              for i, (r, f) in enumerate(zip(self.rooms, self.feeds))], "demo": DEMO}
 
     def push(self, kind, data):
         msg = f"event: {kind}\ndata: {json.dumps(data)}\n\n".encode()
@@ -149,6 +162,20 @@ class Hub:
         poke = threading.Event()
         self.pokes.append(poke)
         threading.Thread(target=(self.demo if DEMO else self.watch), args=(i, poke), daemon=True).start()
+        if not DEMO:
+            threading.Thread(target=self.limits, args=(i,), daemon=True).start()
+
+    def limits(self, i):
+        """the account's usage limits, every five minutes (they move slowly; it costs a second of CPU)"""
+        while True:
+            try:
+                u = parse_usage(run(self.rooms[i], "cd && claude -p /usage --no-session-persistence 2>&1", timeout=60))
+                if u:
+                    self.usage[i] = u
+                    self.push("state", self.state())
+            except Exception:
+                pass
+            time.sleep(300)
 
     def watch(self, i, poke):
         heard, first = set(), True
@@ -189,13 +216,15 @@ class Hub:
                 ("hexant", "ants-2"), ("website", "website"), ("", "home"), ("football", "football")]
         if i == 1:
             bots = [("odyssey", "train"), ("odyssey", "eval"), ("", "home")]
-        bots = [{"id": f"demo{i}{k:03}", "name": n, "cwd": f"{HOME}/projects/{d}" if d else HOME, "busy": k % 3 == 0,
+        self.usage[i] = {"session": {"used": 64, "resets": "3:20pm"}, "week": {"used": 23, "resets": "Oct 24 at 9am"}}
+        bots = [{"id": f"demo{i}{k:03}", "name": n, "cwd": f"{HOME}/projects/{d}" if d else HOME, "busy": k % 3 == 0, "waiting": False,
                  "background": not (i == 0 and k == 6), "started": k, "pid": 1000 + k, "session": f"demo{k}"}
                 for k, (d, n) in enumerate(bots)]
         while True:
             for b in bots:
                 if random.random() < 1 / 12:
                     b["busy"] = not b["busy"]
+                    b["waiting"] = not b["busy"] and random.random() < 0.1
             if random.random() < 1 / 8:
                 a, b = random.sample(bots, 2)
                 self.push("talk", {"room": i, "from": a["id"], "to": b["id"]})
@@ -457,6 +486,11 @@ class Handler(BaseHTTPRequestHandler):
                 save_rooms(hub.rooms)
             poke.set()
             return {"dir": d}
+        if path == "/api/layout":            # where its furniture stands, moved by hand: {key: [x, y]}
+            room["layout"] = {k: [int(v[0]), int(v[1])] for k, v in (b.get("layout") or {}).items()}
+            save_rooms(hub.rooms)
+            hub.push("state", hub.state())
+            return {}
         if path == "/api/forget":
             d = b.get("dir")
             room["dirs"] = [x for x in room.get("dirs", []) if x != d]
