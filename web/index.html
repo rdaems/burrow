@@ -6,6 +6,7 @@
 <title>burrow</title>
 <script src="/pixel.js"></script>
 <script src="/room.js"></script>
+<script src="/chessboard.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css">
@@ -25,6 +26,7 @@
   <div id="roomwrap"><canvas id="room"></canvas></div>
   <section id="pane" class="empty">
     <div id="term"></div>
+    <div id="chess" class="side" hidden></div>
   </section>
 </main>
 
@@ -72,6 +74,7 @@ async function act(a) {
   else if (a.kind === "addRoom") ask($("#roomDialog"));
   else if (a.kind === "addDir") ask($("#dirDialog"));
   else if (a.kind === "open") openBot(cur, a.id);
+  else if (a.kind === "chess") openChess();
   else if (a.kind === "forget") await api("/api/forget", { room: cur, dir: a.dir });
   else if (a.kind === "layout") await api("/api/layout", { room: cur, layout: a.layout });
   else if (a.kind === "stop") stopBot(cur, a.id);
@@ -92,6 +95,7 @@ es.addEventListener("state", (e) => {
   state = JSON.parse(e.data);
   if (cur >= state.rooms.length) cur = 0;
   if (open) showWho();
+  if (playing !== null) showChess();
   room.draw();
 });
 es.addEventListener("talk", (e) => { const t = JSON.parse(e.data); room.talk(t.room, t.from, t.to); });
@@ -146,7 +150,7 @@ function showWho() {
 }
 function openBot(ri, id) {
   if (open && open.room === ri && open.id === id) { term.focus(); return; }
-  closeBot();
+  closeBot(); closeChess();
   open = { room: ri, id };
   $("#pane").classList.remove("empty"); document.body.classList.remove("empty");
   if (!termOpened) { term.open($("#term")); termOpened = true; }
@@ -177,13 +181,51 @@ async function stopBot(ri, id) {
   if (r.error) note(r.error);
 }
 function stopping(on) { $("#stop").textContent = on ? "really stop?" : "stop"; $("#stop").classList.toggle("warn", on); }
-$("#close").onclick = closeBot;
+$("#close").onclick = () => { closeBot(); closeChess(); };
 $("#reconnect").onclick = () => { term.reset(); connect(); term.focus(); };
 $("#stop").onclick = async () => {
   if (!$("#stop").classList.contains("warn")) { stopping(true); setTimeout(() => stopping(false), 3000); return; }
   stopBot(open.room, open.id);
 };
 new ResizeObserver(() => { if (open) fit.fit(); }).observe($("#term"));
+
+// ---- the chess table: pair's board in the pane, against one of the room's idle bots
+let playing = null;                        // the room whose chess table is open
+const projectColor = (cwd) => room.color(cwd);
+const botFace = (p) => {
+  const b = state && (state.rooms[playing ?? cur].bots || []).find((x) => x.id === p.id);
+  return pixelAvatar(p.id, "agent", b ? projectColor(b.cwd) : "#8b93ad");
+};
+const chessUI = chessPanel($("#chess"), {
+  post: async (body) => { const r = await api("/api/chess", { room: playing, ...body }); return { ok: !r.error, json: async () => r }; },
+  me: () => "you",
+  people: () => ((state && state.rooms[playing].bots) || []).filter((b) => b.background && !b.busy && !b.waiting)
+    .map((b) => ({ id: b.id, name: b.name, kind: "agent", present: true, color: projectColor(b.cwd) })),
+  face: (p) => p.id === "you" ? "" : `<span class="pic"><img src="${botFace(p)}" alt=""></span>`,
+  small: (p) => `<img class="sm" src="${botFace(p)}" alt="">`,
+});
+function openChess() {
+  closeBot();
+  playing = cur;
+  $("#pane").classList.remove("empty"); document.body.classList.remove("empty");
+  $("#pane").classList.add("chessing"); document.body.classList.add("chessing"); $("#chess").hidden = false;
+  showChess();
+}
+function showChess() {
+  const v = state.rooms[playing].chess;
+  const it = v && (v.white.id === "you" ? v.black : v.white);
+  if (it) { it.color = projectColor(((state.rooms[playing].bots || []).find((b) => b.id === it.id) || {}).cwd || ""); }
+  if (v) v.white.color = v.white.color || "#d97757", v.black.color = v.black.color || "#d97757";
+  $("#who").textContent = it ? "chess with " + it.name : "chess";
+  $("#as").textContent = "on " + state.rooms[playing].name;
+  chessUI.update(v);
+}
+function closeChess() {
+  if (playing === null) return;
+  playing = null; $("#chess").hidden = true; $("#pane").classList.remove("chessing"); document.body.classList.remove("chessing");
+  $("#pane").classList.add("empty"); document.body.classList.add("empty");
+  $("#who").textContent = ""; $("#as").textContent = "";
+}
 
 // drop a file on the session: its path gets typed in, as in a terminal (copied over first for a remote machine)
 const pane = $("#pane");
@@ -202,7 +244,7 @@ pane.addEventListener("drop", async (e) => {
   e.preventDefault(); pane.classList.remove("drop");
   if (open) for (const file of e.dataTransfer.files) await hand(file);
 });
-addEventListener("keydown", (e) => { if (e.key === "Escape" && document.activeElement === document.body && open) closeBot(); });
+addEventListener("keydown", (e) => { if (e.key === "Escape" && document.activeElement === document.body) { closeBot(); closeChess(); } });
 </script>
 </body>
 </html>

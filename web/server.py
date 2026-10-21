@@ -12,6 +12,8 @@ import termios, threading, time, random
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
+import chess                                   # pair's rules of chess (rdaems/pair-prompting, MIT)
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 HOME = os.path.expanduser("~")
 CONFIG = os.path.join(HOME, ".config/burrow/rooms.json")
@@ -146,11 +148,12 @@ class Hub:
         self.focused = True
         self.pokes = []
         self.usage = {}             # room → its account's limits, from Claude Code's own /usage
+        self.games = {}             # room → the chess game you play there against one of its idle bots
 
     def state(self):
         with self.lock:
             return {"rooms": [{"name": r["name"], "ssh": r.get("ssh") or "", "dirs": r.get("dirs", []),
-                               "layout": r.get("layout", {}), "usage": self.usage.get(i), **f}
+                               "layout": r.get("layout", {}), "usage": self.usage.get(i), "chess": self.chess_view(i), **f}
                               for i, (r, f) in enumerate(zip(self.rooms, self.feeds))], "demo": DEMO}
 
     def push(self, kind, data):
@@ -196,6 +199,7 @@ class Hub:
                         save_rooms(self.rooms)
                 with self.lock:
                     self.feeds[i] = {"bots": bots, "light": light, "error": None}
+                self.chess_check(i)
                 for msg, a, b in talks:
                     if msg not in heard:
                         heard.add(msg)
@@ -230,9 +234,112 @@ class Hub:
                 self.push("talk", {"room": i, "from": a["id"], "to": b["id"]})
             with self.lock:
                 self.feeds[i] = {"bots": [dict(b) for b in bots], "light": False, "error": None}
+            self.chess_check(i)
             self.push("state", self.state())
             poke.wait(3)
             poke.clear()
+
+    # ---- chess against a bot: pair's table (chess.py has the rules), your opponent one of the room's
+    # idle bots. It plays from here, not through Claude: two plies of material and a little chance.
+    # A bot that gets work, or a question for you, gets up and leaves the game: you win.
+
+    def chess_view(self, i):
+        g = self.games.get(i)
+        if not g:
+            return None
+        game = g["game"]
+        to_move = (g["white"] if game.pos.white else g["black"])["id"]
+        v = {"id": g["id"], "white": g["white"], "black": g["black"], "board": "".join(p or "." for p in game.pos.board),
+             "sans": game.sans, "last": game.moves[-1] if game.moves else None, "check": game.pos.in_check(),
+             "toMove": to_move, "result": g.get("result"), "why": g.get("why"), "draw": None, "free": bool(g.get("result"))}
+        if not g.get("result") and to_move == "you":
+            v["legal"] = [chess.uci(m) for m in game.legal]
+        return v
+
+    def idle_bot(self, i, bid):
+        return next((b for b in self.feeds[i].get("bots", []) if b["id"] == bid and b["background"]
+                     and not b["busy"] and not b.get("waiting")), None)
+
+    def chess_check(self, i):
+        g = self.games.get(i)
+        if g and not g.get("result") and not self.idle_bot(i, g["bot"]):
+            self.chess_end(i, "1-0" if g["white"]["id"] == "you" else "0-1", "left")
+
+    def chess_end(self, i, result, why):
+        g = self.games[i]
+        g["result"], g["why"] = result, why
+
+    def chess(self, i, b):
+        g = self.games.get(i)
+        if b.get("challenge"):
+            bot = self.idle_bot(i, b["challenge"])
+            if not bot:
+                raise RuntimeError("that bot is busy: only an idle one can play")
+            you, it = {"id": "you", "name": "you", "kind": "human"}, {"id": bot["id"], "name": bot["name"], "kind": "agent"}
+            white, black = (you, it) if random.random() < 0.5 else (it, you)
+            self.games[i] = g = {"id": (g["id"] + 1) if g else 1, "white": white, "black": black, "bot": bot["id"], "game": chess.Game()}
+            if white is it:
+                self.chess_later(i, g)
+        elif not g or g.get("result"):
+            raise RuntimeError("there is no game going on")
+        elif b.get("resign"):
+            self.chess_end(i, "0-1" if g["white"]["id"] == "you" else "1-0", "resignation")
+        elif b.get("draw"):
+            # it takes a draw when it is behind on material
+            it = g["white"] if g["white"]["id"] != "you" else g["black"]
+            if material(g["game"].pos, it is g["white"]) >= 0:
+                raise RuntimeError(f"{it['name']} plays on")
+            self.chess_end(i, "1/2-1/2", "agreement")
+        elif b.get("move"):
+            game = g["game"]
+            if (g["white"] if game.pos.white else g["black"])["id"] != "you":
+                raise RuntimeError("not your move")
+            m = game.find(b["move"])
+            if not m:
+                raise RuntimeError("not a legal move")
+            game.push(m)
+            over = game.over()
+            if over:
+                self.chess_end(i, *over)
+            else:
+                self.chess_later(i, g)
+        self.push("state", self.state())
+        return {}
+
+    def chess_later(self, i, g):
+        def play():
+            if self.games.get(i) is not g or g.get("result"):
+                return
+            game = g["game"]
+            game.push(bot_move(game))
+            over = game.over()
+            if over:
+                self.chess_end(i, *over)
+            self.push("state", self.state())
+        threading.Timer(random.uniform(1.2, 3.5), play).start()
+
+
+VALUE = {"p": 1, "n": 3, "b": 3, "r": 5, "q": 9, "k": 0}
+
+
+def material(pos, white):
+    return sum(VALUE[p.lower()] * (1 if p.isupper() == white else -1) for p in pos.board if p)
+
+
+def bot_move(game):
+    """a bot's move: the one that leaves it best off in material after your best reply; mate if it sees one"""
+    me, best, pick = game.pos.white, None, game.legal[0]
+    for m in game.legal:
+        p = game.pos.play(m)
+        replies = p.legal()
+        if not replies:
+            s = 1000 if p.in_check() else -0.5
+        else:
+            s = min(material(p.play(r), me) for r in replies) + (0.3 if p.in_check() else 0)
+        s += random.random() * 0.6
+        if best is None or s > best:
+            best, pick = s, m
+    return pick
 
 
 hub = Hub()
@@ -473,6 +580,8 @@ class Handler(BaseHTTPRequestHandler):
             save_rooms(hub.rooms)
             hub.start(len(hub.rooms) - 1)
             return {"room": len(hub.rooms) - 1}
+        if path == "/api/chess":
+            return hub.chess(int(b.get("room", 0)), b)
         room = hub.rooms[int(b.get("room", 0))]
         poke = hub.pokes[int(b.get("room", 0))]
         if path == "/api/dir":               # a project: a working directory there

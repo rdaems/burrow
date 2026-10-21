@@ -1,5 +1,5 @@
 // node web/look.mjs URL W H steps.json: drive headless Chrome over CDP (no packages) to look at the page.
-// steps: [{wait:ms} | {shot:"file.png"} | {js:"expr"} | {click:[x,y]} | {move:[x,y]} | {moveTo:"js giving [x,y]"} | {drag:[[x,y],…]} | {key:"text"}]
+// steps: [{wait:ms} | {shot:"file.png"} | {js:"expr"} | {click:[x,y]} | {move:[x,y]} | {moveTo|clickTo:"js giving [x,y]"} | {drag:[[x,y],…]} | {key:"text"}]
 import { spawn } from "node:child_process";
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -35,9 +35,10 @@ for (const s of steps) {
   if (s.wait) await sleep(s.wait);
   if (s.js) { const r = await send("Runtime.evaluate", { expression: s.js, returnByValue: true, awaitPromise: true }); console.log("js:", JSON.stringify(r.result?.result?.value ?? r.result?.exceptionDetails?.exception?.description)); }
   if (s.move) await mouse("mouseMoved", s.move);
-  if (s.moveTo) {                            // a JS expression giving [x, y] in CSS pixels: for things that move
-    const r = await send("Runtime.evaluate", { expression: s.moveTo, returnByValue: true });
-    await mouse("mouseMoved", r.result.result.value);
+  if (s.moveTo || s.clickTo) {               // a JS expression giving [x, y] in CSS pixels: for things that move
+    const r = await send("Runtime.evaluate", { expression: s.moveTo || s.clickTo, returnByValue: true }), at = r.result.result.value;
+    await mouse("mouseMoved", at);
+    if (s.clickTo) { await mouse("mousePressed", at, 1); await mouse("mouseReleased", at); }
   }
   if (s.click) { await mouse("mouseMoved", s.click); await mouse("mousePressed", s.click); await mouse("mouseReleased", s.click); }
   if (s.drag) {                              // press at the first point, move through the others, let go at the last
