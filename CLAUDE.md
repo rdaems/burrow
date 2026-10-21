@@ -90,9 +90,33 @@ pair's, copied as they are; `web/room.js` is floor.js plus the burrow parts of s
 jsdelivr. Look at it with `node web/look.mjs URL 1280 800 steps.json` (headless Chrome over CDP: waits,
 clicks, typed text, JS, screenshots). Chrome's own `--screenshot` doesn't run requestAnimationFrame: useless.
 
+### What he asked for next (2026-10-21) and how it's done
+
+He decided the layout: the terminal is fixed on the right, always there (an empty screen when no session
+is open); the room keeps the same size whatever happens. It must stay consistent with dragging furniture
+by hand, so the room is **not** laid out for the window: it is a fixed 256x256 dots, scaled by whole
+pixels to fit (`size()` in room.js). Furniture stands where it was dragged, kept per machine in
+rooms.json `layout` (`{key: [x, y]}`; units are `u:<cwd>`); a new unit gets the first free place and keeps it.
+
+His principle, in his words: "It's ultimately a frontend for the functionalities of Claude Code! Any action
+you take is maximally embedded in this room representation, and any state of the Claude Code system is also
+embedded in this representation, in a maximally coherent and consistent way." So far:
+- usage limits (Claude Code's own `claude -p /usage --no-session-persistence`, every 5 min, ~2 s, no
+  transcript left behind): the coffee pot = what's left of the five-hour session, the cooler's bottle =
+  the week. An empty pot gives no coffee. Hover either for the numbers.
+- waiting for a permission answer (`status: "waiting"` in `claude agents --json`): seated, hand up, the
+  screen's cursor blinking; never falls asleep.
+- stop: carry the bot to the door, click the "stop …?" sign. A stopped bot walks out through the door.
+- a file dropped on a bot opens its session and types the path (uploaded first for ssh machines).
+- hovering a bot lights up its session pane's edge; hovering the pane (or a project's screen) puts a halo
+  on the bot(s).
+- chess and ping-pong are for two idle bots; one idle bot alone may sit at the chess board waiting for an
+  opponent, and the next idle one likely joins.
+
 ## Next
 
-- Narrow room: only two columns fit when a desk is wide (three would, with a wide desk spanning two).
-- The "has a question" state (see above), if he wants it.
+- More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a
+  session's context filling up, its model, its permission mode (all would need a coherent place first).
+- A room that fills up: more than six projects overflow the default slots into any free spot.
 
 `.app`: `macos/bundle.sh` (ad-hoc signed; icon from `burrow --icon-dots`).
