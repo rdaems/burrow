@@ -195,13 +195,16 @@ function startRoom(cv, app) {
   }
   const meets = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
   // keep a piece in the room: on the floor, or along the wall for what hangs there
-  function clampAt(key, at, u) {
+  // (on a grid of `step` dots: a half while it is being dragged, so it follows the pointer pixel by pixel)
+  function clampAt(key, at, u, step = 1) {
+    const q = (v) => Math.round(v / step) * step;
     const r = foot(key, at, u), [x, y] = at;
-    if (ON_WALL.has(key)) return [Math.round(Math.max(24 - (r[0] - x), Math.min(W - 18 - (r[2] - x), x))), y];
-    return [Math.round(Math.max(2 - (r[0] - x), Math.min(W - 2 - (r[2] - x), x))),
-            Math.round(Math.max(WALL + 2 - (r[1] - y), Math.min(H - 1 - (r[3] - y), y)))];
+    if (ON_WALL.has(key)) return [q(Math.max(24 - (r[0] - x), Math.min(W - 18 - (r[2] - x), x))), y];
+    return [q(Math.max(2 - (r[0] - x), Math.min(W - 2 - (r[2] - x), x))),
+            q(Math.max(WALL + 2 - (r[1] - y), Math.min(H - 1 - (r[3] - y), y)))];
   }
 
+  const dropped = new Map();
   function layout(room, bots, moving) {
     const saved = room.layout || {}, placed = {};
     const order = [...(room.dirs || [])];
@@ -212,6 +215,8 @@ function startRoom(cv, app) {
     });
     const where = (key, u) => {
       if (moving && moving.key === key) return moving.at;
+      const just = dropped.get(key);          // just put down: stays there while the server hears of it
+      if (just && performance.now() - just.t < 5000) return just.at;
       if (saved[key]) return clampAt(key, saved[key], u);       // the window may be shorter than when it was put there
       return DEF[key] && !u ? DEF[key] : null;
     };
@@ -583,6 +588,7 @@ function startRoom(cv, app) {
 
   function draw() {
     const ctx = cv.getContext("2d");
+    ctx.setTransform(2, 0, 0, 2, 0, 0);      // drawn in dots; the canvas has two pixels a dot, for dragging
     ctx.imageSmoothingEnabled = false;
     const s = app.state(), ri = app.cur(), room = s && s.rooms[ri];
     hots = []; tip = null;
@@ -961,14 +967,14 @@ function startRoom(cv, app) {
   });
   cv.addEventListener("pointermove", (e) => {
     pointer = dots(e);
-    if (press && !moving && !held && Math.hypot(pointer.x - press.x, pointer.y - press.y) > 2) {
+    if (press && !moving && !held && Math.hypot(pointer.x - press.x, pointer.y - press.y) > 1) {
       const f = press.bot && world(app.cur()).folk.get(press.bot);
       if (f && f.b && f.b.background && !f.lying) { held = f; f.held = true; f.sat = false; f.lying = false; }
       else if (press.piece && !(press.bot && !f)) moving = { key: press.piece.key, from: press.piece.at, u: press.piece.u, at: press.piece.at };
     }
     if (moving) {
-      const at = [moving.from[0] + Math.round(pointer.x - press.x), moving.from[1] + (ON_WALL.has(moving.key) ? 0 : Math.round(pointer.y - press.y))];
-      moving.at = clampAt(moving.key, at, moving.u);
+      const at = [moving.from[0] + pointer.x - press.x, moving.from[1] + (ON_WALL.has(moving.key) ? 0 : pointer.y - press.y)];
+      moving.at = clampAt(moving.key, at, moving.u, 0.5);
     }
     if (held) { held.x = pointer.x; held.y = pointer.y + 24; held.dir = -1; }
     draw();
@@ -976,7 +982,9 @@ function startRoom(cv, app) {
   cv.addEventListener("pointerup", () => {
     if (moving) {
       const room = app.state().rooms[app.cur()];
-      room.layout = { ...(room.layout || {}), [moving.key]: moving.at };
+      const at = clampAt(moving.key, moving.at, moving.u);       // put down on the grid of dots
+      dropped.set(moving.key, { at, t: performance.now() });
+      room.layout = { ...(room.layout || {}), [moving.key]: at };
       app.act({ kind: "layout", layout: room.layout });
       moving = null;
     } else if (held) {
@@ -1002,7 +1010,7 @@ function startRoom(cv, app) {
   // only how big a dot is follows the window: whole pixels, as big as fits
   function size() {
     H = Math.max(200, Math.floor(cv.parentElement.clientHeight / K)); FLOORY = H - 6; defaults();
-    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+    if (cv.width !== W * 2 || cv.height !== H * 2) { cv.width = W * 2; cv.height = H * 2; }
     cv.style.width = W * K + "px"; cv.style.height = H * K + "px";
     cv.parentElement.style.width = W * K + "px";
     draw();
