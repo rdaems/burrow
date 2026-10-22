@@ -164,7 +164,7 @@ but it has no CLI or JSON (only the `ListAgents` tool inside a connected session
 `remoteControlAtStartup` everywhere and attaching still needs ssh; Desktop's saved environments (machine +
 folders) sit in its private `ccd-session-presets.json`. He chose, and it is built:
 - **Machines** = this one (id `""`) + `sshConfigs` in `~/.claude/settings.json` (documented; Desktop's SSH
-  connections; `sshPort`, `sshIdentityFile` used). The local poll rereads it each round. The wall's + writes an
+  connections; `sshPort`, `sshIdentityFile` used). The local poll rereads it each round. The empty door frame writes an
   entry: `json.dumps(indent=2) + "\n"` round-trips his settings.json byte for byte; written in place.
 - **One room.** A desk is a unit: `<dir>` here, `<machine id>:<dir>` elsewhere. Kept desks and the layout in
   `~/.config/burrow/room.json` (taken once from rooms.json: its local layout, its dirs minus worktrees; the Rust
@@ -179,8 +179,13 @@ folders) sit in its private `ccd-session-presets.json`. He chose, and it is buil
   (its own copy of the files, the repo's git). Each screen shows only its own checkout's bots; hovering a
   laptop lights its bots, a lit bot lights its laptop. (Laptops at the seats were hidden behind the bots;
   an annex desk per worktree made desks too long for the 256-dot room.)
-- **The wall** letters only the other machines (the room is this one, its desks unprefixed; elsewhere
-  `odyssey:train`, as scp writes it). Hover a name: its bots light up; red = out of reach, why on hover.
+- **Doors** (his: "each door is a device, the first one is local"): one per machine in the wall, then an empty
+  door frame with + that adds one (one field, the ssh host). Bots come in and leave by their machine's door; carry
+  one to its door to stop it. Hover a door: its name, its bots light up. Out of reach = boarded up, why on hover.
+- **Desk names** (he: "the desks become very big, that's kind of stupid"; `arthroid:ct-annotation-reviewer` made a
+  cabinet half the room): as a 16-bit game would, text stays out of the world. Another machine's door and desks
+  are painted its colour (a palette swap, `PAINT` in room.js, in sshConfigs order; this machine is wood), so no
+  machine prefix; the project's name is cut to 8 letters (`NAME`); the whole path is on the screen's hover.
 - **Limits** are per account: one coffee pot and bottle, from this machine's `claude -p /usage`. That run is
   in `claude agents` for about half a second (interactive, cwd ~): it runs with `exec` and its pid is left out,
   or a grey bot popped up at the home desk now and then.

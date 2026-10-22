@@ -12,16 +12,18 @@
 //   idle 10 minutes     charging on a mat
 //   sends a message     walks over to whoever it wrote to and stands there talking for a moment
 //   waits for you       at its desk with its hand up (a permission prompt), its screen's cursor blinking
-//   stopped             walks out through the door (and a new one comes in through it)
+//   stopped             walks out through its machine's door (and a new one comes in through it)
 // Free, two idle bots play ping-pong or chess; one alone at the chess board waits for an opponent.
 // The account's limits are in the room too: the coffee pot holds what's left of the five-hour
 // session, the cooler's bottle what's left of the week (Claude Code's own /usage).
 // Nothing else signals anything; what they say is never shown, only that they talk.
-// The other machines are lettered on the wall (the room itself is this one); one out of reach in red.
+// Each machine is a door in the wall, this one's first. Another machine's door and desks are painted
+// its own colour (a palette swap, as 16-bit games told kinds of a thing apart), so no desk needs its
+// machine in its name; a machine out of reach has its door boarded up.
 //
 // What you do happens in the room as well: click a bot to open its session, the + chair for a new
-// bot, the empty cabinet for a project, the + on the wall for a machine; drag furniture where you want
-// it; carry a bot to the door to stop it; drop a file on a bot to hand it over.
+// bot, the empty cabinet for a project, the empty door frame for a machine; drag furniture where you
+// want it; carry a bot to its door to stop it; drop a file on a bot to hand it over.
 //
 // startRoom(canvas, app) with app = { state(), open(), pong(), hl(), hover(id), act(action) };
 // returns { talk(from, to), size(), draw(), color(unit) }. The room is always W x H dots.
@@ -29,11 +31,18 @@
 function startRoom(cv, app) {
   const C = pixelAvatar.C, INK = C.ink, INK2 = C.ink2;
   const TERRACOTTA = "#d97757", RED = "#ff6b5a", OPEN = "#8a4a3a";
-  const SP = sprites.PAL, WOOD = { hi: SP.h, top: SP.w, d: SP.d, k: SP.k }, SHADOW = SP.s;
+  const SP = sprites.PAL, WOOD = { hi: SP.h, top: SP.w, d: SP.d, k: SP.k, plate: "#2e1f28" }, SHADOW = SP.s;
+  // the paint of another machine's door and desks, in the order of Claude Code's sshConfigs
+  const PAINT = [
+    { hi: "#8fd0c4", top: "#5fa89c", d: "#3f7d74", k: "#1f3f42", plate: "#142a2c" },
+    { hi: "#f4f1ea", top: "#d8d2c6", d: "#a59d90", k: "#4a4250", plate: "#2a2530" },
+    { hi: "#a3c0e4", top: "#7397c4", d: "#4f6e9a", k: "#263652", plate: "#182236" },
+    { hi: "#e8a493", top: "#c97766", d: "#964c40", k: "#4f2430", plate: "#2e151c" },
+  ];
   const WALLC = "#28374b", WALLTOP = "#151e28", BASEBOARD = "#1b2433";
   const PLANK = "#734728", SEAM = "#6a4224";
   const PROJECT = ["#4a76b8", "#e8402a", "#2fa087", "#f2a531", "#9a74d6", "#5fcf4a", "#f06b72", "#8fc0e8"];
-  const WALL = 26, TALK = 4, SEAT = 18, ADD_W = 30, ROW = 46, LAP = 13;
+  const WALL = 26, TALK = 4, SEAT = 18, ADD_W = 30, ROW = 46, LAP = 13, DOOR = 20, NAME = 8;
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const shade = (hex, k) => "#" + [1, 3, 5].map((i) => Math.min(255, Math.round(parseInt(hex.slice(i, i + 2), 16) * k)).toString(16).padStart(2, "0")).join("");
   const mix = (a, b, k) => "#" + [1, 3, 5].map((i) => { const x = parseInt(a.slice(i, i + 2), 16), y = parseInt(b.slice(i, i + 2), 16); return Math.round(x + (y - x) * k).toString(16).padStart(2, "0"); }).join("");
@@ -46,9 +55,15 @@ function startRoom(cv, app) {
     if (cwd === "~" || cwd === "/root" || (n.length === 3 && (n[1] === "Users" || n[1] === "home"))) return "home";
     return n[n.length - 1] || cwd;
   }
-  // on another machine, "machine:project", as scp writes it
   const machineName = (id) => { const m = id && app.state().machines.find((x) => x.id === id); return m ? m.name : ""; };
-  const deskLabel = (d) => (d.m ? machineName(d.m) + ":" : "") + projectLabel(d.dir);
+  // a desk's name: its project's, cut to eight letters like a name in a 16-bit game (its machine is
+  // its paint, the whole path is on its screen under the pointer)
+  const deskLabel = (d) => [...projectLabel(d.dir)].slice(0, NAME).join("").replace(/(.)[-_. ]+$/, "$1");
+  // a machine's door: the first is this one's; its bots come in and go out at its middle
+  const doorOf = (mid) => Math.max(0, app.state().machines.findIndex((m) => m.id === (mid || "")));
+  const doorX = (mid) => 10 + doorOf(mid) * DOOR;
+  const paintOf = (mid) => { const i = doorOf(mid); return i ? PAINT[(i - 1) % PAINT.length] : WOOD; };
+  const wallFrom = () => 24 + app.state().machines.length * DOOR;    // what hangs on the wall: past the doors
 
   // ---- pair's lettering: 3x5 glyphs, upper case, like a Pico-8
   const F = {};
@@ -225,7 +240,7 @@ function startRoom(cv, app) {
   function clampAt(key, at, u, step = 1) {
     const q = (v) => Math.round(v / step) * step;
     const r = foot(key, at, u), [x, y] = at;
-    if (ON_WALL.has(key)) return [q(Math.max(24 - (r[0] - x), Math.min(W - 18 - (r[2] - x), x))), y];
+    if (ON_WALL.has(key)) return [q(Math.max(wallFrom() - (r[0] - x), Math.min(W - 18 - (r[2] - x), x))), y];
     return [q(Math.max(2 - (r[0] - x), Math.min(W - 2 - (r[2] - x), x))),
             q(Math.max(WALL + 2 - (r[1] - y), Math.min(H - 1 - (r[3] - y), y)))];
   }
@@ -302,7 +317,7 @@ function startRoom(cv, app) {
   // ---- everyone: what each bot is doing
   let everyone = null;
   function world() {
-    if (!everyone) everyone = { folk: new Map(), meeting: null, lastMeeting: -60, board: [], pong: { t: 0, from: 0 },
+    if (!everyone) everyone = { folk: new Map(), meeting: null, lastMeeting: -60, board: [], pong: { t: 0, from: 0 }, doorAt: {},
       chess: { board: newBoard(), t: 0, turn: 0 }, T: 0, born: performance.now() };
     return everyone;
   }
@@ -546,8 +561,8 @@ function startRoom(cv, app) {
         break;
       }
       case "door":
-        // put by the door to be stopped: it waits there a moment for a click on it
-        if (walk(f, { x: 10, y: WALL + 3 }, v, dt)) {
+        // put by its door to be stopped: it waits there a moment for a click on it
+        if (walk(f, { x: doorX(f.b && f.b.m), y: WALL + 3 }, v, dt)) {
           f.dir = -1; f.arms = "down";
           if ((act.left -= dt) <= 0) f.act = f.work ? { kind: "desk" } : rest();
         }
@@ -632,14 +647,14 @@ function startRoom(cv, app) {
     if (Object.keys(L.placed).length) app.act({ kind: "layout", layout: { ...(s.layout || {}), ...L.placed } });
     s.layout = { ...(s.layout || {}), ...L.placed };
 
-    // keep a figure per bot; one that turns up later comes in through the door, one that is
-    // stopped walks out of it
+    // keep a figure per bot; one that turns up later comes in through its machine's door, one that
+    // is stopped walks out of it
     const ids = new Set(bots.map((b) => b.id));
     for (const f of w.folk.values()) if (!ids.has(f.id) && !f.leaving) { f.leaving = true; f.held = false; f.lying = false; f.sat = false; f.legs = "stand"; }
     const late = performance.now() - w.born > 3000;
     for (const b of bots) {
       if (!w.folk.has(b.id)) {
-        const at = late ? { x: 10, y: WALL + 3 } : L.seat(b.id) || { x: W / 2, y: H / 2 };
+        const at = late ? { x: doorX(b.m), y: WALL + 3 } : L.seat(b.id) || { x: W / 2, y: H / 2 };
         const work = b.busy || b.waiting;
         w.folk.set(b.id, { id: b.id, x: at.x, y: at.y, dir: -1, arms: "down", legs: late ? "stand" : "sit", step: 0, sat: !late,
           act: work ? { kind: "desk" } : rest(), carry: null, lying: false, busy: b.busy, waiting: b.waiting, work,
@@ -647,32 +662,39 @@ function startRoom(cv, app) {
       }
       w.folk.get(b.id).b = b;
     }
-    const door = performance.now() - (w.doorAt || 0) < 900;
     if (tickDt > 0) {
       w.T += tickDt; think(w, bots, L, tickDt, s.demo ? 40 : 600, usage, s.chess);
-      for (const f of w.folk.values()) if (f.leaving && walk(f, { x: 10, y: WALL + 1 }, 30, tickDt)) { w.folk.delete(f.id); w.doorAt = performance.now(); }
+      for (const f of w.folk.values()) {
+        const m = (f.b && f.b.m) || "";
+        if (f.leaving && walk(f, { x: doorX(m), y: WALL + 1 }, 30, tickDt)) { w.folk.delete(f.id); w.doorAt[m] = performance.now(); }
+      }
       tickDt = 0;
     }
     const T = w.T;
-    drawDoor(ctx, 4, door || [...w.folk.values()].some((f) => f.act.kind === "door" || (f.leaving && f.y < WALL + 12))); drawClock(ctx, W - 9, 10);
+    drawClock(ctx, W - 9, 10);
     // who is highlighted: the one under the pointer, the one whose session the pointer is over,
-    // a project's bots while the pointer is on its screen, a machine's while it is on its name
+    // a project's bots while the pointer is on its screen, a machine's while it is on its door
     const hl = new Set();
     if (app.hl()) hl.add(app.hl());
 
-    // the other machines, lettered on the wall; one out of reach in red, why under the pointer
-    let tx = 22;
-    for (const m of s.machines) if (m.id) {
-      const tw = tinyW(m.name), h = over(tx - 2, 0, tx + tw + 2, 12);
-      if (h) { for (const b of bots) if (b.m === m.id) hl.add(b.id); if (m.error) tip = { text: clip(m.error, W - 8), x: tx + tw / 2, y: 20 }; }
-      tiny(ctx, m.name, tx, 4, m.error ? RED : h ? C.steel4 : C.steel2);
-      tx += tw + 7;
+    // the doors, one a machine; its name and its bots lit under the pointer. A door is ajar while
+    // someone goes in or out; boarded up while its machine is out of reach (why, under the pointer).
+    // After them an empty door frame, for another machine
+    s.machines.forEach((m, i) => {
+      const x0 = 2 + i * DOOR, h = over(x0, WALL - 20, x0 + 16, WALL);
+      const ajar = performance.now() - (w.doorAt[m.id] || 0) < 900 ||
+        [...w.folk.values()].some((f) => f.b && (f.b.m || "") === m.id && (f.act.kind === "door" || (f.leaving && f.y < WALL + 12)));
+      drawDoor(ctx, x0, paintOf(m.id), ajar && !m.error, !!m.error, h);
+      if (h) { for (const b of bots) if ((b.m || "") === m.id) hl.add(b.id); tip = { text: clip(m.error ? m.name + ": " + m.error : m.name, W - 8), x: x0 + 8, y: 20 }; }
+    });
+    {
+      const x0 = 2 + s.machines.length * DOOR, h = hot(x0, WALL - 20, x0 + 16, WALL, { kind: "addMachine" });
+      drawFrame(ctx, x0, h);
+      if (h) tip = { text: "machine", x: x0 + 8, y: 20 };
     }
-    tiny(ctx, "+", tx, 4, hot(tx - 2, 0, tx + 5, 12, { kind: "addMachine" }) ? TERRACOTTA : C.steel1);
-    if (over(tx - 2, 0, tx + 5, 12)) tip = { text: "machine", x: tx + 1, y: 20 };
     // trouble here goes on the wall, in red, instead of the whiteboard
     const here = s.machines.find((m) => !m.id), trouble = s.note || (here && here.error);
-    if (trouble) { const nx = Math.max(tx + 11, 24); tiny(ctx, clip(trouble, W - 24 - nx), nx, 18, RED); }
+    if (trouble) { const nx = wallFrom(); tiny(ctx, clip(trouble, W - 24 - nx), nx, 18, RED); }
     else drawBoard(ctx, L.board, w);
     drawWindow(ctx, L.window);
     // a bot and its seat at its project's desk are one thing: where the bot is only says what it
@@ -738,9 +760,9 @@ function startRoom(cv, app) {
       rect(ctx, bx - 1, by - 1, 11, 7, INK); rect(ctx, bx, by, 9, 5, C.steel4); rect(ctx, bx, by + 5, 1, 1, C.steel4);
       for (let i = 0; i < 3; i++) if ((Math.floor(f.chat * 4) + i) % 3) rect(ctx, bx + 2 + i * 2, by + 2, 1, 1, INK);
     }
-    // by the door to be stopped: a click on the sign over it stops it
-    for (const f of w.folk.values()) if (f.act.kind === "door" && f.b && Math.hypot(f.x - 10, f.y - WALL - 3) < 2) {
-      const text = "stop " + f.b.name + "?", tw = tinyW(text), lx = 4, ly = WALL + 7;
+    // by its door to be stopped: a click on the sign over it stops it
+    for (const f of w.folk.values()) if (f.act.kind === "door" && f.b && Math.hypot(f.x - doorX(f.b.m), f.y - WALL - 3) < 2) {
+      const text = "stop " + f.b.name + "?", tw = tinyW(text), lx = Math.round(Math.min(W - tw - 2, doorX(f.b.m) - 6)), ly = WALL + 7;
       const h = hot(lx - 2, ly - 2, lx + tw + 2, ly + 7, { kind: "stop", id: f.id });
       box(ctx, lx - 2, ly - 2, tw + 4, 9, h ? TERRACOTTA : INK2);
       tiny(ctx, text, lx, ly, h ? INK : C.steel4);
@@ -820,7 +842,7 @@ function startRoom(cv, app) {
 
   // a unit: the cabinet with the project's name and screen, the long desktop where its bots sit
   function drawDesk(ctx, d, w, T, hl) {
-    const { x0, y, w: dw, cab } = d;
+    const { x0, y, w: dw, cab } = d, p = paintOf(d.m);
     // a screen runs only while a bot sits at it typing; dim while one sits there idle; a blinking
     // cursor while one waits for you. The big one is the project's own directory, a laptop a worktree's
     const seated = (f) => f && f.legs === "sit" && !f.lying && (f.act.kind === "desk" || f.act.kind === "sleep");
@@ -835,16 +857,16 @@ function startRoom(cv, app) {
       if (waits && !busy && Math.floor(T * 2) % 2) rect(ctx, g.x + 2, g.y + gh - 2, 2, 1, C.steel4);
     }
     // the desktop, lower than the cabinet: a leg between each two chairs, a keyboard at each seat
-    slab(ctx, x0 + cab - 2, y - 12, dw - cab + 2, 5, 4, WOOD);
+    slab(ctx, x0 + cab - 2, y - 12, dw - cab + 2, 5, 4, p);
     for (const x of [x0 + cab + 1, ...d.seats.map(([, x]) => x + 11), x0 + dw - 4]) {
-      rect(ctx, x, y - 4, 2, 4, WOOD.k); rect(ctx, x, y - 4, 1, 3, WOOD.d); rect(ctx, x, y, 2, 1, SHADOW);
+      rect(ctx, x, y - 4, 2, 4, p.k); rect(ctx, x, y - 4, 1, 3, p.d); rect(ctx, x, y, 2, 1, SHADOW);
     }
     for (const x of [...d.seats.map(([, x]) => x), d.plus]) { rect(ctx, x - 9, y - 11, 7, 2, SP.F); rect(ctx, x - 8, y - 11, 5, 1, SP.B); }
     // the cabinet, the project's name on a plate if you keep the desk, else on a note taped on
     // (a click on it keeps the desk)
-    slab(ctx, x0, y - 15, cab, 4, 11, WOOD);
+    slab(ctx, x0, y - 15, cab, 4, 11, p);
     const lx = Math.round(x0 + (cab - tinyW(d.label)) / 2);
-    if (d.kept) { plate(ctx, x0 + 2, y - 9, cab - 4); tiny(ctx, d.label, lx, y - 8, C.steel3); }
+    if (d.kept) { plate(ctx, x0 + 2, y - 9, cab - 4, false, p); tiny(ctx, d.label, lx, y - 8, C.steel3); }
     else {
       const h = hot(x0 + 2, y - 10, x0 + cab - 2, y - 2, { kind: "keep", unit: d.unit });
       paper(ctx, x0 + 2, y - 9, cab - 4, h);
@@ -878,9 +900,9 @@ function startRoom(cv, app) {
     }
   }
   // a name plate on a cabinet's front: seven dots high, for one line of lettering
-  function plate(ctx, x, y, w, lit) {
-    rect(ctx, x, y, w, 7, WOOD.k);
-    rect(ctx, x + 1, y + 1, w - 2, 5, lit ? C.steel1 : "#2e1f28");
+  function plate(ctx, x, y, w, lit, p = WOOD) {
+    rect(ctx, x, y, w, 7, p.k);
+    rect(ctx, x + 1, y + 1, w - 2, 5, lit ? C.steel1 : p.plate);
   }
   // a note taped on instead, for a desk that is only there while bots work at it
   function paper(ctx, x, y, w, lit) {
@@ -910,8 +932,19 @@ function startRoom(cv, app) {
       else ctx.fillRect(x, y, 1, 1);
     }
   }
-  function drawDoor(ctx, x, ajar) {         // ajar while someone goes in or out
-    put(ctx, ajar ? "doorOpen" : "door", x - 2, WALL - 20);
+  function drawDoor(ctx, x, p, ajar, boarded, lit) {
+    if (lit) rect(ctx, x - 1, WALL - 21, 18, 21, C.steel3);
+    put(ctx, sprites.swap(ajar ? "doorOpen" : "door", { h: p.hi, w: p.top, d: p.d, k: p.k }), x, WALL - 20);
+    if (boarded) for (const y of [WALL - 16, WALL - 9]) {       // two planks nailed across it
+      rect(ctx, x - 1, y, 18, 3, WOOD.k); rect(ctx, x, y + 1, 16, 1, WOOD.top); rect(ctx, x, y, 16, 1, WOOD.hi);
+      rect(ctx, x + 1, y + 1, 1, 1, C.steel1); rect(ctx, x + 14, y + 1, 1, 1, C.steel1);
+    }
+  }
+  function drawFrame(ctx, x, lit) {         // where another door could go: its outline, a + in it
+    ctx.fillStyle = lit ? TERRACOTTA : "#3d4d66";
+    for (let i = 0; i < 16; i += 2) ctx.fillRect(x + i, WALL - 20, 1, 1);
+    for (let j = 0; j < 18; j += 2) { ctx.fillRect(x, WALL - 20 + j, 1, 1); ctx.fillRect(x + 15, WALL - 20 + j, 1, 1); }
+    tiny(ctx, "+", x + 6, WALL - 14, lit ? TERRACOTTA : C.steel1);
   }
   function drawClock(ctx, x, y) {           // Pixel Agents' clock, telling this computer's time
     put(ctx, "clock", x - 6, y - 5);
@@ -1021,7 +1054,7 @@ function startRoom(cv, app) {
     }
   }
 
-  // ---- the pointer, in dots: a click acts, a drag moves furniture (or carries a bot: to the
+  // ---- the pointer, in dots: a click acts, a drag moves furniture (or carries a bot: to its
   // door, to stop it)
   const dots = (e) => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) / K, y: (e.clientY - r.top) / K }; };
   function pieceAt(p) {
@@ -1060,8 +1093,8 @@ function startRoom(cv, app) {
       moving = null;
     } else if (held) {
       const f = held; held = null; f.held = false;
-      // dropped at the door: it waits there to be stopped; anywhere else it goes back to what it did
-      if (pointer && pointer.x < 26 && pointer.y < WALL + 14) f.act = { kind: "door", left: 6 };
+      // dropped at its door: it waits there to be stopped; anywhere else it goes back to what it did
+      if (pointer && f.b && Math.abs(pointer.x - doorX(f.b.m)) < 11 && pointer.y < WALL + 14) f.act = { kind: "door", left: 6 };
       else f.act = f.work ? { kind: "desk" } : rest();
       f.legs = "stand";
     } else if (press && press.action) app.act(press.action);

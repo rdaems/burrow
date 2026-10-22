@@ -39,8 +39,9 @@ window.sprites = (() => {
     "..sssssssss..",
   ];
 
-  const ART = {
-    door: art([
+  // a door, and the same door open; another machine's is painted its own colour (swap())
+  const DOOR = {
+    door: [
       "kkkkkkkkkkkkkkkk",
       "kddddddddddddddk",
       "kdkkkkkkkkkkkkdk",
@@ -56,13 +57,18 @@ window.sprites = (() => {
       "kdkhwdhhhhhwwkdk",
       "kdkhwwwwwwwwwkdk",
       "kdkddddddddddkdk",
-    ]),
-    doorOpen: art([
+    ],
+    doorOpen: [
       "kkkkkkkkkkkkkkkk",
       "kddddddddddddddk",
       "kdkkkkkkkkkkkkdk",
       ...rep("kdkhdxxxxxxxxkdk", 17),
-    ]),
+    ],
+  };
+
+  const ART = {
+    door: art(DOOR.door),
+    doorOpen: art(DOOR.doorOpen),
     // the glass is left open: the sky is painted behind it
     window: art([
       ".FFFFFFFFFFFFFFFFFFF.",
@@ -248,5 +254,12 @@ window.sprites = (() => {
     };
     im.src = "/sprites/" + n + ".png";
   }
-  return { get: (n) => ART[n] || PNG[n] || null, PAL };
+  // a door in another paint (a palette swap, {h, w, d, k} as the wood)
+  const swaps = new Map();
+  function swap(name, pal) {
+    const key = name + JSON.stringify(pal);
+    if (!swaps.has(key)) swaps.set(key, art(DOOR[name], pal));
+    return swaps.get(key);
+  }
+  return { get: (n) => ART[n] || PNG[n] || null, swap, PAL };
 })();
