@@ -1,5 +1,5 @@
-// The room: one machine, as pair's office (rdaems/pair-prompting, app/floor.js): its furniture, its
-// breaks, its mats, its robots (pixel.js). Every project (a working directory) is one unit: a cabinet
+// The room: one machine, as pair's office (rdaems/pair-prompting, app/floor.js): its breaks, its mats,
+// its robots (pixel.js), furnished as pixel art (sprites.js). Every project (a working directory) is one unit: a cabinet
 // with the project's screen and name at its left end, a long desktop to the right where its bots sit
 // facing the screen, and an empty chair at the end (+) that starts another bot there.
 // Where a bot is says what it is doing:
@@ -25,8 +25,10 @@
 
 function startRoom(cv, app) {
   const C = pixelAvatar.C, INK = C.ink, INK2 = C.ink2;
-  const NIGHT = "#0d0a16", TERRACOTTA = "#d97757", RED = "#ff6b5a", OPEN = "#8a4a3a", GLASS = "#1a1f2e";
-  const WOOD = "#7a4a35", WOOD_D = "#4a2e2a", WALLC = "#1e1a2c", FLOOR = "#130f1b", PLANK = "#19141f";
+  const TERRACOTTA = "#d97757", RED = "#ff6b5a", OPEN = "#8a4a3a";
+  const SP = sprites.PAL, WOOD = { hi: SP.h, top: SP.w, d: SP.d, k: SP.k }, SHADOW = SP.s;
+  const WALLC = "#28374b", WALLTOP = "#151e28", BASEBOARD = "#1b2433";
+  const PLANK = "#734728", SEAM = "#6a4224";
   const PROJECT = ["#4a76b8", "#e8402a", "#2fa087", "#f2a531", "#9a74d6", "#5fcf4a", "#f06b72", "#8fc0e8"];
   const WALL = 26, TALK = 4, SEAT = 18, ADD_W = 30, ROW = 46;
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -143,20 +145,38 @@ function startRoom(cv, app) {
     return c;
   }
 
-  // halo for a highlighted bot: one dot around its outline
+  // halo for a highlighted bot (or chair, or screen): one dot around its outline (not its shadow)
   const halos = new Map();
   function halo(im, col) {
     if (!halos.has(col)) halos.set(col, new WeakMap());
     const hm = halos.get(col);
     if (hm.has(im)) return hm.get(im);
-    const d = im.getContext("2d").getImageData(0, 0, SW, SH).data, c = document.createElement("canvas");
-    c.width = SW; c.height = SH;
-    const x = c.getContext("2d"), on = (i, j) => i >= 0 && j >= 0 && i < SW && j < SH && d[(j * SW + i) * 4 + 3] > 0;
+    const w = im.width, h = im.height, d = im.getContext("2d").getImageData(0, 0, w, h).data, c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    const x = c.getContext("2d"), on = (i, j) => i >= 0 && j >= 0 && i < w && j < h && d[(j * w + i) * 4 + 3] > 128;
     x.fillStyle = col;
-    for (let j = 0; j < SH; j++) for (let i = 0; i < SW; i++)
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++)
       if (!on(i, j) && (on(i - 1, j) || on(i + 1, j) || on(i, j - 1) || on(i, j + 1))) x.fillRect(i, j, 1, 1);
     hm.set(im, c);
     return c;
+  }
+  // a sprite (sprites.js) with its top left at x, y; flipped, it faces the other way in the same place
+  function put(ctx, name, x, y, flip) {
+    const im = typeof name === "string" ? sprites.get(name) : name;
+    if (!im) return null;
+    if (flip) { ctx.save(); ctx.translate(x + im.width, y); ctx.scale(-1, 1); ctx.drawImage(im, 0, 0); ctx.restore(); }
+    else ctx.drawImage(im, x, y);
+    return im;
+  }
+  // a block seen from above at a slant, as Pixel Agents draws its furniture: a top `top` dots deep
+  // and a front `front` dots high, outlined, its back and front edges lit, a shadow under it
+  function slab(ctx, x, y, w, top, front, p) {
+    rect(ctx, x, y, w, top + front, p.k);
+    rect(ctx, x + 1, y, w - 2, 1, p.d);
+    rect(ctx, x + 1, y + 1, w - 2, top - 1, p.top);
+    rect(ctx, x + 1, y + top - 1, w - 2, 1, p.hi);
+    rect(ctx, x + 1, y + top + 1, w - 2, front - 2, p.d);
+    rect(ctx, x + 1, y + top + front, w - 2, 1, SHADOW);
   }
 
   // ---- the room: always the same size; its furniture stands where it was put (dragged by hand,
@@ -169,28 +189,28 @@ function startRoom(cv, app) {
   function defaults() {
     DEF = {
       meet: [W / 2, WALL + 34], pong: [60, 62], chess: [70, FLOORY - 32], mats: [176, FLOORY - 30],
-      coffee: [3, FLOORY], cooler: [36, FLOORY - 1], printer: [W / 2 + 4, FLOORY], armchair: [W - 34, FLOORY],
-      plant0: [W - 8, FLOORY], plant1: [W - 12, 64], board: [W / 2 - 16, 5], window: [W - 38, 5],
+      coffee: [3, FLOORY], cooler: [36, FLOORY - 1], printer: [W / 2 + 4, FLOORY], armchair: [W - 38, FLOORY],
+      plant0: [W - 11, FLOORY], plant1: [W - 12, 64], board: [W / 2 - 14, 5], window: [W - 40, 4],
     };
   }
   const SLOTS = [104, 150, 196, 242, 288, 334].flatMap((y) => [[10, y], [134, y]]);
   const ON_WALL = new Set(["board", "window"]);
   // what each piece covers, from where it stands
   function foot(key, [x, y], u) {
-    if (u) return [x - 2, y - 32, x + u.w + 2, y + 2];
+    if (u) return [x - 2, y - 35, x + u.w + 2, y + 2];
     switch (key) {
-      case "add": return [x - 2, y - 14, x + ADD_W + 2, y + 2];
-      case "meet": return [x - 28, y - 14, x + 28, y + 4];
-      case "pong": return [x - 36, y - 20, x + 36, y + 8];
-      case "chess": return [x - 19, y - 17, x + 19, y + 2];
+      case "add": return [x - 2, y - 16, x + ADD_W + 2, y + 2];
+      case "meet": return [x - 28, y - 20, x + 28, y + 4];
+      case "pong": return [x - 38, y - 23, x + 38, y + 8];
+      case "chess": return [x - 19, y - 18, x + 19, y + 2];
       case "mats": return [x - 42, y - 26, x + 42, y + 3];
       case "coffee": return [x, y - 22, x + 20, y + 1];
-      case "cooler": return [x - 4, y - 22, x + 4, y + 1];
-      case "printer": return [x - 7, y - 14, x + 7, y + 1];
-      case "armchair": return [x - 10, y - 23, x + 18, y + 1];
-      case "board": return [x, y, x + 32, y + 14];
-      case "window": return [x, y, x + 18, y + 14];
-      default: return [x - 5, y - 16, x + 5, y + 1];     // a plant
+      case "cooler": return [x - 5, y - 26, x + 5, y + 1];
+      case "printer": return [x - 7, y - 15, x + 7, y + 1];
+      case "armchair": return [x - 6, y - 23, x + 18, y + 1];
+      case "board": return [x, y, x + 28, y + 16];
+      case "window": return [x, y, x + 21, y + 18];
+      default: return [x - 8, y - 31, x + 8, y + 1];     // a plant
     }
   }
   const meets = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
@@ -249,8 +269,8 @@ function startRoom(cv, app) {
     const xy = (k) => { const [x, y] = P(k); return { x, y }; };
     const matsAt = xy("mats");
     const L = {
-      desks, add: { x0: addAt[0], y0: addAt[1] - 13, x1: addAt[0] + ADD_W, y1: addAt[1] },
-      floorY: FLOORY, board: { x0: bx, y0: by, x1: bx + 32, y1: by + 14 }, window: { x0: wx, y0: wy, x1: wx + 18, y1: wy + 14 },
+      desks, add: { x0: addAt[0], y0: addAt[1] - 15, x1: addAt[0] + ADD_W, y1: addAt[1] },
+      floorY: FLOORY, board: { x0: bx, y0: by, x1: bx + 28, y1: by + 16 }, window: { x0: wx, y0: wy, x1: wx + 21, y1: wy + 18 },
       meet: xy("meet"), pong: xy("pong"), chess: xy("chess"), mats: [-28, 0, 28].map((d) => ({ x: matsAt.x + d, y: matsAt.y })),
       cooler: xy("cooler"), plants: [xy("plant0"), xy("plant1")], printer: xy("printer"), chair: xy("armchair"),
       coffeeAt: xy("coffee"), floor: { x0: 14, y0: WALL + 8, x1: W - 14, y1: FLOORY - 4 }, placed,
@@ -477,7 +497,7 @@ function startRoom(cv, app) {
       case "plant": {
         const pl = L.plants[act.i] || L.plants[0], side = pl.x > (L.floor.x0 + L.floor.x1) / 2 ? -1 : 1;
         f.carry = "can";
-        if (walk(f, { x: pl.x + side * 12, y: pl.y + 1 }, v, dt)) {
+        if (walk(f, { x: pl.x + side * 14, y: pl.y + 1 }, v, dt)) {
           f.dir = -side; f.arms = "can"; act.water = true;
           if ((act.wait += dt) > 3) { f.carry = null; f.act = rest(); }
         }
@@ -496,7 +516,7 @@ function startRoom(cv, app) {
         if (!w.meeting || w.meeting.host !== f.id) { f.act = rest(); break; }
         if (walk(f, { x: L.board.x0 - 6, y: WALL + 3 }, v, dt)) {
           f.dir = 1; f.arms = Math.floor(w.T * 2) % 3 ? "reach" : "down";
-          if ((act.wait += dt) > 0.6 && w.board.length < 40) { act.wait = 0; stroke(w, L); }
+          if ((act.wait += dt) > 0.6 && w.board.length < 40) { act.wait = 0; stroke(w); }
           if (Math.random() < dt * 0.3) f.chat = 1;
         }
         break;
@@ -571,11 +591,13 @@ function startRoom(cv, app) {
     }
     return rest();
   }
-  function stroke(w, L) {                    // the host draws on the whiteboard: boxes, arrows, dots
-    const b = L.board, bw = b.x1 - b.x0 - 4, bh = b.y1 - b.y0 - 4;
-    const x = Math.floor(rnd(0, bw - 6)), y = Math.floor(rnd(1, bh - 2)), k = Math.random();
-    w.board.push(k < 0.35 ? { t: "box", x, y, w: Math.floor(rnd(3, 7)), h: Math.floor(rnd(2, 4)) }
-      : k < 0.7 ? { t: "line", x, y, w: Math.floor(rnd(3, 10)) } : { t: "dot", x, y });
+  // the whiteboard's white: 22 x 9 dots inside Pixel Agents' frame
+  const INK_AREA = { x: 3, y: 4, w: 22, h: 9 };
+  function stroke(w) {                       // the host draws on the whiteboard: boxes, arrows, dots
+    const k = Math.random(), sw = k < 0.35 ? Math.floor(rnd(3, 7)) : k < 0.7 ? Math.floor(rnd(3, 10)) : 1;
+    const sh = k < 0.35 ? Math.floor(rnd(2, 4)) : 1;
+    const x = Math.floor(rnd(1, INK_AREA.w - sw)), y = Math.floor(rnd(1, INK_AREA.h - sh - 1));
+    w.board.push(k < 0.35 ? { t: "box", x, y, w: sw, h: sh } : k < 0.7 ? { t: "line", x, y, w: sw } : { t: "dot", x, y });
   }
 
   // ---- drawing, and what is under the pointer: hot spots are collected while drawing
@@ -592,11 +614,7 @@ function startRoom(cv, app) {
     ctx.imageSmoothingEnabled = false;
     const s = app.state(), ri = app.cur(), room = s && s.rooms[ri];
     hots = []; tip = null;
-    rect(ctx, 0, 0, W, H, FLOOR);
-    ctx.fillStyle = PLANK;
-    for (let y = WALL + 4, k = 0; y < H; y += 6, k++) { ctx.fillRect(0, y, W, 1); for (let x = (k % 2) * 13; x < W; x += 26) ctx.fillRect(x, y - 5, 1, 5); }
-    rect(ctx, 0, 0, W, WALL, WALLC);
-    rect(ctx, 0, WALL - 2, W, 2, INK2);
+    ctx.drawImage(floor(), 0, 0);
     rect(ctx, W - 1, 0, 1, H, INK2);
     if (!room) return;
     const w = world(ri), bots = room.bots || [], usage = room.usage || {};
@@ -658,13 +676,12 @@ function startRoom(cv, app) {
     // flat on the floor: the empty cabinet that adds a project, the mats, the ping-pong rug
     {
       const a = L.add, h = hot(a.x0 - 2, a.y0 - 10, a.x1 + 2, a.y1 + 1, { kind: "addDir" }), aw = a.x1 - a.x0;
-      box(ctx, a.x0, a.y0, aw, 13, WOOD_D);
-      rect(ctx, a.x0, a.y0, aw, 1, WOOD);
-      rect(ctx, a.x0 + 3, a.y0 + 3, aw - 6, 7, h ? C.steel1 : C.steel0);
-      tiny(ctx, "+", Math.round(a.x0 + aw / 2 - 1), a.y0 + 4, h ? C.steel4 : C.steel2);
+      slab(ctx, a.x0, a.y0, aw, 4, 11, WOOD);
+      plate(ctx, a.x0 + 3, a.y0 + 6, aw - 6, h);
+      tiny(ctx, "+", Math.round(a.x0 + aw / 2 - 1), a.y0 + 7, h ? C.steel4 : C.steel2);
       if (h) tip = { text: "project", x: a.x0 + aw / 2, y: a.y0 - 2 };
     }
-    for (const m of L.mats) drawMat(ctx, m);
+    L.mats.forEach((m, i) => drawMat(ctx, m, [...w.folk.values()].some((f) => f.act.kind === "sleep" && f.act.there && f.act.mat === i), w.T));
     drawRug(ctx, L.pong);
 
     // everything that stands, back to front
@@ -690,7 +707,7 @@ function startRoom(cv, app) {
     const job = [...w.folk.values()].find((f) => f.act.kind === "print" && f.act.stage === 1);
     items.push([L.printer.y, () => drawPrinter(ctx, L.printer, job && job.act.wait)]);
     items.push([L.chair.y - 0.5, () => drawArmchair(ctx, L.chair)]);
-    for (const pl of L.plants) items.push([pl.y, () => drawPlant(ctx, pl)]);
+    L.plants.forEach((pl, i) => items.push([pl.y, () => drawPlant(ctx, pl, i)]));
     items.push([L.pong.y - 0.5, () => drawPong(ctx, L.pong, w)]);
     if (hot(L.pong.x - 16, L.pong.y - 17, L.pong.x + 16, L.pong.y, { kind: "pong" })) tip = { text: "ping-pong: play an idle bot", x: L.pong.x, y: L.pong.y - 18 };
     // the limits, in the coffee pot (this five-hour session) and the cooler's bottle (this week)
@@ -736,6 +753,25 @@ function startRoom(cv, app) {
     cv.style.cursor = moving || held ? "grabbing" : onHot ? "pointer" : pieceAt(pointer) ? "grab" : "default";
   }
 
+  // the wall and the wooden floor, drawn once for the room's height: Pixel Agents' planks, three
+  // dots wide, their joints staggered, a shadow where the floor meets the wall
+  let floorC = null;
+  function floor() {
+    if (floorC && floorC.height === H) return floorC;
+    floorC = document.createElement("canvas"); floorC.width = W; floorC.height = H;
+    const ctx = floorC.getContext("2d");
+    rect(ctx, 0, WALL, W, H - WALL, PLANK);
+    for (let y = WALL + 3, row = 0; y < H; y += 4, row++) {
+      rect(ctx, 0, y, W, 1, SEAM);
+      for (let x = -(fnv("r" + row) % 48); x < W; x += 40 + (fnv(row + ":" + x) % 4) * 8) rect(ctx, x, y + 1, 1, 3, SEAM);
+    }
+    rect(ctx, 0, 0, W, WALL, WALLC);
+    rect(ctx, 0, 0, W, 3, WALLTOP);
+    rect(ctx, 0, WALL - 2, W, 2, BASEBOARD);
+    rect(ctx, 0, WALL, W, 1, "rgba(0,0,0,0.3)"); rect(ctx, 0, WALL + 1, W, 1, "rgba(0,0,0,0.12)");
+    return floorC;
+  }
+
   function drawFigure(ctx, f, b, T, hl) {
     if (!b) return;
     const x = Math.round(f.x), y = Math.round(f.y), x0 = x - 11, y0 = y - 27;
@@ -761,11 +797,9 @@ function startRoom(cv, app) {
     const x = Math.round(f.x), y = Math.round(f.y), im = body(b.id, projectColor(b.cwd), "down", "stand", !b.background);
     const ring = hl.has(f.id) || over(x - 11, y - 28, x + 11, y) ? TERRACOTTA : app.open() === f.id ? OPEN : null;
     if (im) { if (ring) ctx.drawImage(halo(im, ring), 0, 0, SW, 16, x - 11, y - 28, SW, 16); ctx.drawImage(im, 0, 0, SW, 16, x - 11, y - 28, SW, 16); }
-    box(ctx, x - 11, y - 13, 22, 11, C.steel1);
-    rect(ctx, x - 11, y - 13, 22, 2, C.steel2);
-    rect(ctx, x - 11, y - 4, 22, 2, C.steel0);
-    rect(ctx, x - 2, y - 9, 3, 1, C.gold2); rect(ctx, x - 1, y - 10, 1, 3, C.gold2);
-    if (Math.floor(T * 2) % 2) rect(ctx, x + 6, y - 9, 2, 2, C.green1);
+    box(ctx, x - 10, y - 13, 20, 9, C.steel2, MAT.k);
+    rect(ctx, x - 10, y - 13, 20, 2, C.steel3);
+    rect(ctx, x - 10, y - 6, 20, 2, C.steel1);
     zzz(ctx, f, x + 6, y - 24);
     if (over(x - 11, y - 28, x + 11, y)) hovered = { b, x, y: y - 28 };
   }
@@ -783,164 +817,167 @@ function startRoom(cv, app) {
     const seated = (f) => f && f.legs === "sit" && !f.lying && (f.act.kind === "desk" || f.act.kind === "sleep");
     const at = d.seats.map(([id]) => w.folk.get(id)).filter(seated);
     const busy = at.some((f) => f.busy), waits = at.some((f) => f.waiting), here = at.length > 0;
-    box(ctx, x0 + cab - 1, y - 9, dw - cab + 1, 2, WOOD);
-    rect(ctx, x0 + cab, y - 7, dw - cab, 1, WOOD_D);
-    box(ctx, x0 + dw - 3, y - 6, 2, 6, WOOD_D);
-    box(ctx, x0, y - 13, cab, 13, WOOD_D);
-    rect(ctx, x0, y - 13, cab, 1, WOOD);
+    // the desktop, lower than the cabinet: a leg between each two chairs, a keyboard at each seat
+    slab(ctx, x0 + cab - 2, y - 12, dw - cab + 2, 5, 4, WOOD);
+    for (const x of [x0 + cab + 1, ...d.seats.map(([, x]) => x + 11), x0 + dw - 4]) {
+      rect(ctx, x, y - 4, 2, 4, WOOD.k); rect(ctx, x, y - 4, 1, 3, WOOD.d); rect(ctx, x, y, 2, 1, SHADOW);
+    }
+    for (const x of [...d.seats.map(([, x]) => x), d.plus]) { rect(ctx, x - 9, y - 11, 7, 2, SP.F); rect(ctx, x - 8, y - 11, 5, 1, SP.B); }
+    // the cabinet, the project's name on a plate
+    slab(ctx, x0, y - 15, cab, 4, 11, WOOD);
     const label = projectLabel(d.cwd);
-    tiny(ctx, label, Math.round(x0 + (cab - tinyW(label)) / 2), y - 9, C.steel3);
-    const sx = Math.round(x0 + cab / 2 - 10);
-    rect(ctx, sx + 9, y - 16, 2, 3, C.steel1); rect(ctx, sx + 6, y - 14, 8, 1, C.steel1);
-    // the pointer on the screen lights up the project's bots
-    const onScreen = over(sx - 1, y - 32, sx + 21, y - 15);
-    if (onScreen) { for (const [id] of d.seats) hl.add(id); tip = { text: d.cwd.replace(/^\/(Users|home)\/[^/]+/, "~"), x: sx + 10, y: y - 33 }; }
-    box(ctx, sx, y - 31, 20, 15, C.steel0, onScreen ? C.steel3 : INK);
-    rect(ctx, sx + 1, y - 30, 18, 13, here ? C.blue0 : "#161b28");
-    if (!here) { rect(ctx, sx + 14, y - 29, 3, 1, C.steel0); rect(ctx, sx + 16, y - 28, 1, 2, C.steel0); }   // off: a glint
+    plate(ctx, x0 + 2, y - 9, cab - 4);
+    tiny(ctx, label, Math.round(x0 + (cab - tinyW(label)) / 2), y - 8, C.steel3);
+    // its screen, standing on it; the pointer on the screen lights up the project's bots
+    const sx = Math.round(x0 + cab / 2 - 11), sy = y - 32, g = { x: sx + 2, y: sy + 2 };
+    const onScreen = over(sx, sy, sx + 22, sy + 18);
+    if (onScreen) { for (const [id] of d.seats) hl.add(id); tip = { text: d.cwd.replace(/^\/(Users|home)\/[^/]+/, "~"), x: sx + 11, y: sy - 1 }; }
+    rect(ctx, g.x, g.y, 18, 11, here ? C.blue0 : "#10141f");
+    if (!here) { rect(ctx, g.x + 15, g.y + 1, 1, 1, "#232c40"); rect(ctx, g.x + 14, g.y + 2, 1, 1, "#232c40"); }   // off: a glint
     if (here) {
       ctx.fillStyle = busy ? d.color : shade(d.color, 0.45);
       const s = busy ? Math.floor(T * 5) : 0;
-      for (let r = 0; r < 6; r++) ctx.fillRect(sx + 2 + ((r * 3) % 4), y - 29 + r * 2, 3 + ((r * 7 + s + d.cwd.length) * 5) % 12, 1);
-      if (waits && !busy && Math.floor(T * 2) % 2) rect(ctx, sx + 3, y - 19, 2, 1, C.steel4);
+      for (let r = 0; r < 5; r++) ctx.fillRect(g.x + 1 + ((r * 3) % 4), g.y + 1 + r * 2, 3 + ((r * 7 + s + d.cwd.length) * 5) % 11, 1);
+      if (waits && !busy && Math.floor(T * 2) % 2) rect(ctx, g.x + 2, g.y + 9, 2, 1, C.steel4);
     }
-    // a project with no bots can be forgotten: an x on its cabinet
-    if (!d.seats.length && over(x0, y - 32, x0 + cab, y)) {
-      const h = hot(x0 + cab - 6, y - 32, x0 + cab + 2, y - 25, { kind: "forget", dir: d.cwd });
-      tiny(ctx, "X", x0 + cab - 4, y - 31, h ? TERRACOTTA : C.steel2);
+    const mon = sprites.get("monitor");
+    if (onScreen) put(ctx, halo(mon, C.steel3), sx, sy);
+    put(ctx, mon, sx, sy);
+    // a project with no bots can be forgotten: an x by its screen
+    if (!d.seats.length && over(x0, sy - 2, Math.max(x0 + cab, sx + 28), y)) {
+      const h = hot(sx + 21, sy - 2, sx + 27, sy + 6, { kind: "forget", dir: d.cwd });
+      tiny(ctx, "X", sx + 23, sy, h ? TERRACOTTA : C.steel2);
     }
   }
-  // pair's chair, turned round: its sitter faces left, to the screen; the empty one at the end starts a bot
+  // a name plate on a cabinet's front: seven dots high, for one line of lettering
+  function plate(ctx, x, y, w, lit) {
+    rect(ctx, x, y, w, 7, WOOD.k);
+    rect(ctx, x + 1, y + 1, w - 2, 5, lit ? C.steel1 : "#2e1f28");
+  }
+  // an office chair at a project's desk, its sitter facing the screen; the empty one at the end
+  // starts a bot
   function drawChair(ctx, x, y, d, plus, lit) {
     const h = plus && hot(x - 8, y - 22, x + 9, y + 1, { kind: "spawn", dir: d.cwd });
-    if (h) tip = { text: "new bot", x, y: y - 18 };
-    const dim = plus && !h, col = dim ? INK2 : lit ? C.steel1 : C.steel0;
-    box(ctx, x + 6, y - 15, 2, 9, col, lit ? TERRACOTTA : INK);
-    box(ctx, x - 2, y - 7, 9, 2, col, lit ? TERRACOTTA : INK);
-    rect(ctx, x + 2, y - 4, 1, 3, dim ? C.steel0 : C.steel1);
-    rect(ctx, x - 1, y - 1, 7, 1, dim ? C.steel0 : C.steel1);
-    if (plus) tiny(ctx, "+", x, y - 16, h ? d.color : C.steel1);
+    if (h) tip = { text: "new bot", x, y: y - 22 };
+    const im = sprites.get(plus ? "chairFree" : "chair");
+    if (lit || h) put(ctx, halo(im, h ? d.color : TERRACOTTA), x - 4, y - 16);
+    put(ctx, im, x - 4, y - 16);
+    if (plus) tiny(ctx, "+", x + 5, y - 21, h ? d.color : C.steel3);
   }
-  function drawBoard(ctx, b, w) {
-    box(ctx, b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0, C.steel4, C.steel1);
-    rect(ctx, b.x0 + 2, b.y1, b.x1 - b.x0 - 4, 1, C.steel1);
+  function drawBoard(ctx, b, w) {           // Pixel Agents' whiteboard, wiped, and what the host draws on it
+    put(ctx, "WHITEBOARD", b.x0 - 2, b.y0 - 8);
+    const ix = b.x0 + INK_AREA.x, iy = b.y0 + INK_AREA.y;
+    rect(ctx, ix, iy, INK_AREA.w, INK_AREA.h, "#efebe8");
     ctx.fillStyle = shade(C.blue2, 0.75);
     for (const s of w.board) {
-      const x = b.x0 + 2 + s.x, y = b.y0 + 2 + s.y;
+      const x = ix + s.x, y = iy + s.y;
       if (s.t === "box") { ctx.fillRect(x, y, s.w, 1); ctx.fillRect(x, y + s.h, s.w, 1); ctx.fillRect(x, y, 1, s.h); ctx.fillRect(x + s.w - 1, y, 1, s.h + 1); }
       else if (s.t === "line") { ctx.fillRect(x, y, s.w, 1); ctx.fillRect(x + s.w - 2, y - 1, 1, 1); ctx.fillRect(x + s.w - 2, y + 1, 1, 1); }
       else ctx.fillRect(x, y, 1, 1);
     }
   }
-  function drawDoor(ctx, x, ajar) {         // pair's door; ajar while someone goes in or out
-    const y0 = 6, h = WALL - y0 - 2;
-    if (ajar) { box(ctx, x, y0, 12, h, INK); rect(ctx, x, y0, 3, h, WOOD); return; }
-    box(ctx, x, y0, 12, h, WOOD);
-    rect(ctx, x + 2, y0 + 2, 8, 6, WOOD_D); rect(ctx, x + 2, y0 + 10, 8, 6, WOOD_D);
-    rect(ctx, x + 9, y0 + 9, 1, 1, C.gold2);
+  function drawDoor(ctx, x, ajar) {         // ajar while someone goes in or out
+    put(ctx, ajar ? "doorOpen" : "door", x - 2, WALL - 20);
   }
-  function drawClock(ctx, x, y) {
+  function drawClock(ctx, x, y) {           // Pixel Agents' clock, telling this computer's time
+    put(ctx, "clock", x - 6, y - 5);
     const t = new Date();
-    rect(ctx, x - 4, y - 3, 9, 7, INK); rect(ctx, x - 3, y - 4, 7, 9, INK);
-    rect(ctx, x - 3, y - 2, 7, 5, C.steel4); rect(ctx, x - 2, y - 3, 5, 7, C.steel4);
-    const hand = (ang, len) => { for (let i = 1; i <= len; i++) ctx.fillRect(Math.round(x + Math.sin(ang) * i), Math.round(y - Math.cos(ang) * i), 1, 1); };
-    rect(ctx, x, y, 1, 1, INK);
-    hand(((t.getHours() % 12) + t.getMinutes() / 60) / 12 * 2 * Math.PI, 2);
-    ctx.fillStyle = C.red1; hand(t.getMinutes() / 60 * 2 * Math.PI, 3);
+    const hand = (ang, len) => { for (let i = 1; i <= len; i++) ctx.fillRect(Math.round(x - 1 + Math.sin(ang) * i), Math.round(y - Math.cos(ang) * i * 0.75), 1, 1); };
+    ctx.fillStyle = SP.G; hand(((t.getHours() % 12) + t.getMinutes() / 60) / 12 * 2 * Math.PI, 2);
+    ctx.fillStyle = SP.r; hand(t.getMinutes() / 60 * 2 * Math.PI, 3);
+    rect(ctx, x - 1, y, 1, 1, SP.F);
   }
   function drawWindow(ctx, w) {              // day or night outside, by this computer's clock
-    const hour = new Date().getHours(), day = hour >= 7 && hour < 20, ww = w.x1 - w.x0, wh = w.y1 - w.y0;
-    box(ctx, w.x0, w.y0, ww, wh, day ? C.blue2 : C.blue0, C.steel2);
-    if (day) { rect(ctx, w.x0, w.y1 - 5, ww, 5, C.blue3); rect(ctx, w.x0 + 3, w.y0 + 3, 5, 1, C.steel4); rect(ctx, w.x0 + 2, w.y0 + 4, 7, 1, C.steel4); }
-    else { rect(ctx, w.x0 + 4, w.y0 + 3, 1, 1, C.steel4); rect(ctx, w.x1 - 5, w.y0 + 8, 1, 1, C.steel4); rect(ctx, w.x1 - 6, w.y0 + 2, 2, 2, C.gold2); }
-    rect(ctx, Math.round(w.x0 + ww / 2), w.y0, 1, wh, C.steel2); rect(ctx, w.x0, Math.round(w.y0 + wh / 2), ww, 1, C.steel2);
+    const hour = new Date().getHours(), day = hour >= 7 && hour < 20, gx = w.x0 + 3, gy = w.y0 + 2;
+    rect(ctx, gx, gy, 15, 11, day ? "#7fb2e0" : C.blue0);
+    if (day) {
+      rect(ctx, gx, gy + 8, 15, 3, "#b7d9f2");
+      rect(ctx, gx + 2, gy + 2, 3, 1, C.steel4); rect(ctx, gx + 1, gy + 3, 6, 1, C.steel4); rect(ctx, gx + 10, gy + 5, 4, 1, C.steel4);
+    } else {
+      rect(ctx, gx + 2, gy + 2, 1, 1, C.steel3); rect(ctx, gx + 5, gy + 8, 1, 1, C.steel2); rect(ctx, gx + 9, gy + 6, 1, 1, C.steel3);
+      rect(ctx, gx + 11, gy + 1, 3, 3, C.gold2); rect(ctx, gx + 12, gy + 1, 2, 2, C.blue0);
+    }
+    put(ctx, "window", w.x0, w.y0);
+    ctx.fillStyle = "rgba(255,255,255,0.3)";            // the glass catches the light
+    for (const px of [gx + 1, gx + 9]) { ctx.fillRect(px + 3, gy + 1, 1, 1); ctx.fillRect(px + 2, gy + 2, 1, 1); ctx.fillRect(px + 1, gy + 3, 1, 1); }
   }
-  function drawRug(ctx, g) {                // pair's ping-pong rug
-    box(ctx, g.x - 34, g.y - 18, 68, 24, "#2a1d3a", "#3a2a4f");
-    ctx.fillStyle = "#3a2a4f";
-    for (let x = g.x - 30; x < g.x + 32; x += 6) { ctx.fillRect(x, g.y - 15, 2, 1); ctx.fillRect(x + 3, g.y + 2, 2, 1); }
+  function drawRug(ctx, g) {                // pair's rug under the ping-pong table, quiet, fringed at its ends
+    const x = g.x - 36, y = g.y - 22, w = 72, h = 28;
+    rect(ctx, x, y, w, h, "#2a2133");
+    rect(ctx, x + 1, y + 1, w - 2, h - 2, "#3a2d45");
+    rect(ctx, x + 3, y + 3, w - 6, h - 6, "#4a3a57");
+    rect(ctx, x + 4, y + 4, w - 8, h - 8, "#3a2d45");
+    ctx.fillStyle = "#8a7a68";
+    for (let j = y + 1; j < y + h - 1; j += 2) { ctx.fillRect(x - 1, j, 1, 1); ctx.fillRect(x + w, j, 1, 1); }
   }
-  function drawMat(ctx, m) {
-    box(ctx, m.x - 12, m.y - 24, 24, 23, "#26324f");
-    ctx.fillStyle = "#2f3e62"; for (let y = m.y - 21; y < m.y - 2; y += 3) ctx.fillRect(m.x - 12, y, 24, 1);
-    box(ctx, m.x - 8, m.y - 23, 16, 6, C.steel3);
+  const MAT = { hi: "#4d5866", top: "#394449", d: "#2b3238", k: SP.F };
+  // a mat to charge on: a pillow at its head, the charger beside it, its light on while a bot charges
+  function drawMat(ctx, m, charging, T) {
+    slab(ctx, m.x - 11, m.y - 23, 22, 20, 2, MAT);
+    for (let y = m.y - 15; y < m.y - 5; y += 4) rect(ctx, m.x - 10, y, 20, 1, MAT.d);
+    rect(ctx, m.x - 7, m.y - 22, 14, 5, MAT.k); rect(ctx, m.x - 6, m.y - 22, 12, 3, C.steel3); rect(ctx, m.x - 6, m.y - 19, 12, 1, C.steel2);
+    box(ctx, m.x + 8, m.y - 28, 5, 8, SP.G, SP.F);
+    ctx.fillStyle = C.gold1;                  // a bolt on it
+    for (const [dx, dy] of [[3, 0], [2, 1], [1, 2], [2, 2], [3, 2], [2, 3], [1, 4]]) ctx.fillRect(m.x + 8 + dx, m.y - 27 + dy, 1, 1);
+    rect(ctx, m.x + 10, m.y - 21, 1, 1, charging && Math.floor(T * 2) % 2 ? SP.g : SP.E);
   }
-  function drawTable(ctx, m) {
-    box(ctx, m.x - 16, m.y - 11, 32, 4, WOOD);
-    rect(ctx, m.x - 16, m.y - 8, 32, 1, WOOD_D);
-    box(ctx, m.x - 13, m.y - 6, 2, 6, WOOD_D); box(ctx, m.x + 11, m.y - 6, 2, 6, WOOD_D);
-    rect(ctx, m.x - 6, m.y - 10, 3, 2, C.steel4); rect(ctx, m.x + 4, m.y - 10, 3, 2, C.steel4);
+  function drawTable(ctx, m) {              // Pixel Agents' table, papers and a mug on it
+    put(ctx, "SMALL_TABLE_FRONT", m.x - 16, m.y - 30);
+    rect(ctx, m.x - 11, m.y - 16, 7, 5, SP.C); rect(ctx, m.x - 11, m.y - 16, 6, 4, SP.A);
+    rect(ctx, m.x - 10, m.y - 15, 4, 1, SP.C); rect(ctx, m.x - 10, m.y - 13, 3, 1, SP.C);
+    put(ctx, "COFFEE", m.x - 4, m.y - 16);
   }
-  // a small table with the board on it, seen from above at a slant; the pieces stand on their squares
-  function drawChess(ctx, c, board) {       // pair's: a small table with the board on it, the position as it stands
-    const b = board || START;
-    box(ctx, c.x - 2, c.y - 9, 4, 9, WOOD_D);
-    box(ctx, c.x - 6, c.y - 1, 12, 1, WOOD_D);
-    box(ctx, c.x - 9, c.y - 12, 18, 3, WOOD);
-    // the board seen from the side: eight files, the back half and the front half
-    for (let f = 0; f < 8; f++) for (let r = 0; r < 2; r++) rect(ctx, c.x - 8 + f * 2, c.y - 13 + r, 2, 1, (f + r) % 2 ? "#a08670" : "#d9c49a");
-    for (let f = 0; f < 8; f++) {           // a piece on a file stands up from the board, white in front
-      const col = [...Array(8)].map((_, r) => b[r * 8 + f]);
-      const wh = col.some((p) => p !== "." && p === p.toUpperCase()), bl = col.some((p) => p !== "." && p === p.toLowerCase());
-      if (bl) rect(ctx, c.x - 8 + f * 2, c.y - 15, 1, 2, C.ink2);
-      if (wh) rect(ctx, c.x - 7 + f * 2, c.y - 14, 1, 2, C.steel4);
+  function drawChess(ctx, c, board) {       // a small table, the game on it as it stands: white plays from the left
+    const b = board || START, x0 = c.x - 10, y0 = c.y - 17;
+    put(ctx, "chess", x0, y0);
+    for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) rect(ctx, x0 + 2 + r * 2, y0 + 9 - f, 2, 1, (r + f) % 2 ? "#e8d2a0" : "#a8784c");
+    for (let f = 7; f >= 0; f--) for (let r = 0; r < 8; r++) {      // the pieces stand up from their squares, back to front
+      const p = b[r * 8 + f];
+      if (!p || p === ".") continue;
+      const white = p === p.toUpperCase(), tall = "KQkq".includes(p) ? 3 : "Pp".includes(p) ? 1 : 2;
+      const px = x0 + 2 + r * 2 + (white ? 0 : 1), py = y0 + 9 - f;
+      rect(ctx, px, py - tall + 1, 1, tall, white ? SP.A : SP.x);
     }
   }
-  function drawStool(ctx, st) {
-    box(ctx, st.x - 4, st.y - 7, 8, 2, WOOD_D);
-    rect(ctx, st.x - 3, st.y - 4, 1, 4, WOOD_D); rect(ctx, st.x + 2, st.y - 4, 1, 4, WOOD_D);
+  function drawStool(ctx, st) {             // Pixel Agents' bench
+    put(ctx, "WOODEN_BENCH", st.x - 8, st.y - 15);
   }
-  // the coffee machine; its pot is the five-hour session's limit: full when nothing is used yet
+  // the coffee corner; its pot is the five-hour session's limit: full when nothing is used yet
   function drawCoffee(ctx, at, brewing, T, u) {
     const x0 = at.x, y = at.y;
-    box(ctx, x0, y - 10, 20, 10, C.steel1);
-    rect(ctx, x0 + 2, y - 7, 7, 6, C.steel0); rect(ctx, x0 + 11, y - 7, 7, 6, C.steel0);
-    box(ctx, x0 + 2, y - 19, 8, 8, INK2);
-    rect(ctx, x0 + 8, y - 17, 1, 1, C.red1);
-    rect(ctx, x0 + 4, y - 14, 4, 1, C.steel3);
-    if (brewing) { rect(ctx, x0 + 5, y - 13 + (Math.floor(T * 8) % 2), 1, 1, WOOD); rect(ctx, x0 + 6, y - 22 - (Math.floor(T * 4) % 2), 1, 1, C.steel3); }
-    // the pot: glass with a light rim, the coffee in it with a lighter top, one dot = an eighth
-    box(ctx, x0 + 12, y - 20, 6, 9, GLASS, C.steel2);
-    rect(ctx, x0 + 19, y - 18, 1, 4, C.steel2);
-    const left = u ? Math.max(0, Math.min(9, Math.round(9 * (1 - u.used / 100)))) : 0;
-    if (left) { rect(ctx, x0 + 12, y - 11 - left, 6, left, "#8a5030"); rect(ctx, x0 + 12, y - 11 - left, 6, 1, "#d08a4a"); }
+    put(ctx, "counter", x0, y - 12);
+    put(ctx, "brewer", x0 + 1, y - 20);
+    if (brewing) { rect(ctx, x0 + 5, y - 15 + (Math.floor(T * 8) % 2), 1, 1, "#8a5030"); rect(ctx, x0 + 4, y - 22 - (Math.floor(T * 4) % 2), 1, 1, C.steel3); }
+    // the pot: glass, the coffee in it with a lighter top, one dot = a seventh
+    const px = x0 + 11, py = y - 20;
+    rect(ctx, px + 1, py + 3, 5, 7, "#b9c6d2");
+    const left = u ? Math.max(0, Math.min(7, Math.round(7 * (1 - u.used / 100)))) : 0;
+    if (left) { rect(ctx, px + 1, py + 10 - left, 5, left, "#6b3a22"); rect(ctx, px + 1, py + 10 - left, 5, 1, "#b0703c"); }
+    put(ctx, "pot", px, py);
   }
   // the water cooler; its bottle is the week's limit
   function drawCooler(ctx, c, u) {
-    box(ctx, c.x - 3, c.y - 10, 6, 10, C.steel3);
-    rect(ctx, c.x - 1, c.y - 7, 2, 1, C.steel1);
-    box(ctx, c.x - 3, c.y - 21, 6, 10, GLASS, C.steel2);
-    const left = u ? Math.max(0, Math.min(10, Math.round(10 * (1 - u.used / 100)))) : 0;
-    if (left) { rect(ctx, c.x - 3, c.y - 11 - left, 6, left, C.blue2); rect(ctx, c.x - 3, c.y - 11 - left, 6, 1, C.blue3); }
+    put(ctx, "cooler", c.x - 5, c.y - 14);
+    const bx = c.x - 4, by = c.y - 25;
+    rect(ctx, bx + 2, by + 2, 4, 1, "#cfe0ec"); rect(ctx, bx + 1, by + 3, 6, 8, "#cfe0ec");
+    const left = u ? Math.max(0, Math.min(8, Math.round(8 * (1 - u.used / 100)))) : 0;
+    if (left) { rect(ctx, bx + 1, by + 11 - left, 6, left, C.blue2); rect(ctx, bx + 1, by + 11 - left, 6, 1, C.blue3); }
+    put(ctx, "bottle", bx, by);
   }
-  function drawPrinter(ctx, pr, wait) {
-    box(ctx, pr.x - 5, pr.y - 6, 10, 6, C.steel1);
-    box(ctx, pr.x - 6, pr.y - 12, 12, 5, C.steel3);
-    rect(ctx, pr.x - 4, pr.y - 10, 8, 1, INK2);
-    rect(ctx, pr.x + 4, pr.y - 9, 1, 1, C.green1);
-    if (wait !== undefined) { const k = Math.min(4, Math.floor(wait * 2)); rect(ctx, pr.x - 3, pr.y - 13 - k, 6, k + 1, C.steel4); }
+  function drawPrinter(ctx, pr, wait) {     // on its stand; a page comes out of the front
+    put(ctx, "stand", pr.x - 7, pr.y - 6);
+    put(ctx, "printer", pr.x - 7, pr.y - 14);
+    if (wait !== undefined) { const k = Math.min(4, Math.floor(wait * 2)); box(ctx, pr.x - 4, pr.y - 8, 8, k + 1, C.steel4, SP.D); }
   }
-  function drawArmchair(ctx, c) {
-    box(ctx, c.x - 8, c.y - 9, 14, 6, C.purple0);
-    box(ctx, c.x + 4, c.y - 18, 4, 15, C.purple0);
-    box(ctx, c.x - 9, c.y - 11, 3, 7, C.purple1);
-    rect(ctx, c.x - 7, c.y - 3, 2, 3, INK); rect(ctx, c.x + 4, c.y - 3, 2, 3, INK);
-    rect(ctx, c.x + 13, c.y - 18, 1, 18, C.steel1);     // a lamp beside it
-    box(ctx, c.x + 10, c.y - 22, 7, 4, C.gold2);
+  function drawArmchair(ctx, c) {            // Pixel Agents' armchair, turned to face left, a lamp beside it
+    put(ctx, "CUSHIONED_CHAIR_SIDE", c.x - 8, c.y - 15, true);
+    put(ctx, "lamp", c.x + 9, c.y - 22);
   }
-  function drawPlant(ctx, pl) {
-    box(ctx, pl.x - 3, pl.y - 5, 6, 5, C.gold0);
-    const leaves = [[-4, -9, C.green0], [2, -11, C.green1], [-1, -14, C.green1], [3, -7, C.green0], [-3, -12, C.green1]];
-    ctx.fillStyle = INK;
-    for (const [dx, dy] of leaves) ctx.fillRect(pl.x + dx - 1, pl.y + dy - 1, 4, 5);
-    for (const [dx, dy, c] of leaves) { ctx.fillStyle = c; ctx.fillRect(pl.x + dx, pl.y + dy, 2, 3); }
+  function drawPlant(ctx, pl, i) {          // Pixel Agents' plants
+    put(ctx, i ? "PLANT_2" : "PLANT", pl.x - 8, pl.y - 30);
   }
   function drawPong(ctx, g, w) {
-    box(ctx, g.x - 14, g.y - 12, 28, 5, C.scrub1);
-    rect(ctx, g.x - 14, g.y - 10, 28, 1, C.steel4);
-    rect(ctx, g.x - 14, g.y - 7, 28, 1, "#10363f");
-    rect(ctx, g.x - 1, g.y - 16, 2, 5, INK); rect(ctx, g.x, g.y - 15, 1, 4, C.steel3);
-    box(ctx, g.x - 12, g.y - 6, 2, 6, C.steel1); box(ctx, g.x + 10, g.y - 6, 2, 6, C.steel1);
+    put(ctx, "pong", g.x - 16, g.y - 19);
     // the ball, once both players are at the table
     const pp = app.pong();
     if ([...w.folk.values()].filter((f) => f.act.kind === "pong" && f.act.there).length === 2 || (pp && pp.ball)) {

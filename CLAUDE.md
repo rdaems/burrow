@@ -132,6 +132,28 @@ each other on their own breaks.
 A bot and its seat are one thing for the UI: hovering either lights up both (and its session); a click
 on either opens it; only dragging differs (the seat drags the desk).
 
+### The furniture as pixel art (2026-10-22)
+
+He: "improve the assets a bit, or get them online. see for ex. gather town (though i want to keep the 16
+style), or the vs code pets plugin". Looked at: LimeZu's Modern Office (the Gather look on a 16 grid, but
+its licence forbids redistributing it, and this repo is public), Kenney (CC0, too plain), vscode-pets
+(animals under mixed licences; a pet would stand for nothing), and Pixel Agents
+(pixel-agents-hq/pixel-agents, MIT): Claude Code agents in a 16x16 pixel office, the same idea as burrow.
+
+So the room is furnished in Pixel Agents' manner: seen from above at a slant, its wood lit along the front
+edge and outlined in plum (#532e3d), metal and plastic outlined #3f3740, a row of 20% black shadow on the
+floor; Pixel Agents' planks (#734728) and a navy wall (#28374b). Its own sprites (plants, whiteboard,
+armchair, meeting table, stools, mug) are in `web/sprites/` as they are, with its licence; the rest is drawn
+in `web/sprites.js` as letter grids in the same palette (`slab()` in room.js for the blocks of any width:
+desks, cabinets, mats). What shows state is still painted in by room.js: screens, coffee pot, water bottle,
+chess position, clock hands, the sky. The robots and the lettering stay pair's. This replaces pair's wall,
+door, board, mats and side-view chess table, and its dark floor; pair's rug stays, muted.
+
+Fable reviewed it once. Taken: a quieter floor, mats that read as charging (its bolt had been a plus: a
+medical cross), desks on legs, a 1-dot monitor bezel without a fake LED, a pale free chair under its +.
+Not taken: turning the chess board so white is at the bottom (the players sit left and right of it), and
+dropping the rug.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

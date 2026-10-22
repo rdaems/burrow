@@ -66,6 +66,11 @@ Rust only: egui/eframe for the window, alacritty's `alacritty_terminal` for the 
 drawn dot by dot after [pair](https://github.com/rdaems/pair-prompting)'s office (`app/floor.js`): same
 robots, palette, furniture and lettering. JetBrains Mono (OFL, `assets/`) for the terminal.
 
+The browser version (`python3 web/server.py`) keeps pair's robots and lettering but furnishes the room as
+pixel art on a 16-dot grid, seen from above at a slant, after [Pixel Agents](https://github.com/pixel-agents-hq/pixel-agents):
+its plants, whiteboard, armchair, meeting table, stools and mug are Pixel Agents' own sprites (MIT,
+`web/sprites/`), the rest is drawn in `web/sprites.js` in the same manner.
+
 A new directory has to be trusted by Claude Code once (run `claude` there by hand) before a background
 session can start in it; burrow shows Claude's message if it isn't.
 
