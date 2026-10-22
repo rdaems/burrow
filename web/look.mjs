@@ -1,5 +1,5 @@
 // node web/look.mjs URL W H steps.json: drive headless Chrome over CDP (no packages) to look at the page.
-// steps: [{wait:ms} | {shot:"file.png"} | {js:"expr"} | {click:[x,y]} | {move:[x,y]} | {moveTo|clickTo:"js giving [x,y]"} | {drag:[[x,y],…]} | {key:"text"}]
+// steps: [{wait:ms} | {shot:"file.png"} | {js:"expr"} | {click:[x,y]} | {move:[x,y]} | {moveTo|clickTo:"js giving [x,y]"} | {drag:[[x,y],…]} | {key:"text"} | {press:"Enter", shift:true}]
 import { spawn } from "node:child_process";
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -47,6 +47,13 @@ for (const s of steps) {
     await mouse("mouseReleased", s.drag.at(-1));
   }
   if (s.key) await send("Input.insertText", { text: s.key });
+  if (s.press) {                             // one key with modifiers (shift, alt, ctrl, meta): named keys or a letter
+    const modifiers = (s.alt ? 1 : 0) | (s.ctrl ? 2 : 0) | (s.meta ? 4 : 0) | (s.shift ? 8 : 0);
+    const [vk, text] = { Enter: [13, "\r"], Tab: [9, "\t"], Escape: [27, ""], Backspace: [8, ""] }[s.press] || [s.press.toUpperCase().charCodeAt(0), s.press];
+    const ev = { key: s.press, code: s.press.length > 1 ? s.press : "Key" + s.press.toUpperCase(), windowsVirtualKeyCode: vk, modifiers };
+    await send("Input.dispatchKeyEvent", { type: text ? "keyDown" : "rawKeyDown", text, ...ev });
+    await send("Input.dispatchKeyEvent", { type: "keyUp", ...ev });
+  }
   if (s.shot) { const r = await send("Page.captureScreenshot", { format: "png" }); writeFileSync(s.shot, Buffer.from(r.result.data, "base64")); console.log("shot:", s.shot); }
 }
 ws.close(); chrome.kill(); await sleep(300); rmSync(dir, { recursive: true, force: true });

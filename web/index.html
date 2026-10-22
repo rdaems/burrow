@@ -146,6 +146,13 @@ term.loadAddon(fit);
 let termOpened = false, ws = null;
 const enc = new TextEncoder();
 term.onData((d) => ws && ws.readyState === 1 && ws.send(enc.encode(d)));
+// shift+enter is a new line, as in the Rust pane: ESC CR, which claude reads as meta+enter (xterm.js sends a bare CR)
+term.attachCustomKeyEventHandler((e) => {
+  if (e.key !== "Enter" || !e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return true;
+  e.preventDefault();
+  if (e.type === "keydown") term.input("\x1b\r");
+  return false;
+});
 term.onBinary((d) => ws && ws.readyState === 1 && ws.send(Uint8Array.from(d, (c) => c.charCodeAt(0))));
 term.onResize(({ cols, rows }) => ws && ws.readyState === 1 && ws.send(JSON.stringify({ size: [cols, rows] })));
 
