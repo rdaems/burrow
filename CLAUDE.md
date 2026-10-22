@@ -96,8 +96,8 @@ clicks, typed text, JS, screenshots). Chrome's own `--screenshot` doesn't run re
 He decided the layout: the terminal is fixed on the right, always there (an empty screen when no session
 is open); the room keeps the same size whatever happens. It must stay consistent with dragging furniture
 by hand, so the room is **not** laid out for the window: it is a fixed 256x256 dots, scaled by whole
-pixels to fit (`size()` in room.js). Furniture stands where it was dragged, kept per machine in
-rooms.json `layout` (`{key: [x, y]}`; units are `u:<cwd>`); a new unit gets the first free place and keeps it.
+pixels to fit (`size()` in room.js). Furniture stands where it was dragged, kept in room.json `layout`
+(`{key: [x, y]}`; desks are `u:<unit>`, see One room); a new desk gets the first free place and keeps it.
 
 His principle, in his words: "It's ultimately a frontend for the functionalities of Claude Code! Any action
 you take is maximally embedded in this room representation, and any state of the Claude Code system is also
@@ -153,6 +153,38 @@ Fable reviewed it once. Taken: a quieter floor, mats that read as charging (its 
 medical cross), desks on legs, a 1-dot monitor bezel without a fake LED, a pale free chair under its +.
 Not taken: turning the chess board so white is at the bottom (the players sit left and right of it), and
 dropping the rug.
+
+## One room, Claude Code's machines (2026-10-22, evening)
+
+He: "I don't want separate rooms after all"; the state is "the claude agents, locally + remote sessions";
+desks "even without agents, persistent if the user wants it"; "can we see this tool as essentially a
+frontend wrapper on claude code?" (yes: burrow keeps only what Claude Code has no notion of). Looked at
+first: `claude agents --json` lists one machine only; Remote Control is Claude's only list across machines,
+but it has no CLI or JSON (only the `ListAgents` tool inside a connected session), needs
+`remoteControlAtStartup` everywhere and attaching still needs ssh; Desktop's saved environments (machine +
+folders) sit in its private `ccd-session-presets.json`. He chose, and it is built:
+- **Machines** = this one (id `""`) + `sshConfigs` in `~/.claude/settings.json` (documented; Desktop's SSH
+  connections; `sshPort`, `sshIdentityFile` used). The local poll rereads it each round. The wall's + writes an
+  entry: `json.dumps(indent=2) + "\n"` round-trips his settings.json byte for byte; written in place.
+- **One room.** A desk is a unit: `<dir>` here, `<machine id>:<dir>` elsewhere. Kept desks and the layout in
+  `~/.config/burrow/room.json` (taken once from rooms.json: its local layout, its dirs minus worktrees; the Rust
+  app still uses rooms.json). Every bot carries `m`, `unit`, `tree`; ids are assumed unique across machines.
+- **Kept or passing**: a desk nobody keeps is there only while bots work at it, its name on a taped paper
+  note; a click on the note keeps it (the old dark plate); the x by its screen lets it go. Before, every
+  `--bg` cwd got pinned forever (that is how a worktree had a desk).
+- **Worktrees**, "at the repo desk, but the repo desk is somehow connected, make it make sense": a session in a
+  linked worktree (`git rev-parse --show-toplevel` ≠ the parent of `--git-common-dir`, asked once per new cwd
+  per machine; `/.claude/worktrees/` in the path as fallback) sits at its repo's desk, after the main
+  checkout's bots. The worktree is a laptop on the repo's cabinet beside the big screen, a cable between them
+  (its own copy of the files, the repo's git). Each screen shows only its own checkout's bots; hovering a
+  laptop lights its bots, a lit bot lights its laptop. (Laptops at the seats were hidden behind the bots;
+  an annex desk per worktree made desks too long for the 256-dot room.)
+- **The wall** letters only the other machines (the room is this one, its desks unprefixed; elsewhere
+  `odyssey:train`, as scp writes it). Hover a name: its bots light up; red = out of reach, why on hover.
+- **Limits** are per account: one coffee pot and bottle, from this machine's `claude -p /usage`. That run is
+  in `claude agents` for about half a second (interactive, cwd ~): it runs with `exec` and its pid is left out,
+  or a grey bot popped up at the home desk now and then.
+- Chess and ping-pong: any idle bot, one game for the room.
 
 ## Next
 

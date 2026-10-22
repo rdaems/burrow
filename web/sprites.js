@@ -103,6 +103,16 @@ window.sprites = (() => {
       ".....FBBBBBBBBBBF.....",
       ".....FFFFFFFFFFFF.....",
     ]),
+    // a worktree's laptop, standing on its project's cabinet; its screen (8 x 5 from 2,2) is painted in
+    laptop: art([
+      ".FFFFFFFFFF.",
+      "FBBBBBBBBBCF",
+      ...rep("FB........CF", 5),
+      "FCCCCCCCCCDF",
+      "FFFFFFFFFFFF",
+      "FBBBBBBBBBBF",
+      ".FFFFFFFFFF.",
+    ]),
     chair: art(CHAIR),
     chairFree: art(CHAIR, { F: "#757b7c", E: "#e1e3e9", G: "#b5bfc7", D: "#b5bfc7" }),
     counter: art([

@@ -36,15 +36,17 @@
 <dialog id="dirDialog">
   <form method="dialog">
     <h2>add a project</h2>
-    <p>A working directory on <b class="machine"></b>. Its bots will sit at one desk.</p>
+    <p>A working directory<span class="on"> on <b class="machine"></b></span>. Its bots will sit at one desk, and it stays when they're gone.</p>
+    <select class="field" name="m"></select>
     <input class="field" name="dir" placeholder="~/projects/something" autocomplete="off" spellcheck="false">
     <div class="err"></div>
   </form>
 </dialog>
-<dialog id="roomDialog">
+<dialog id="machineDialog">
   <form method="dialog">
     <h2>add a machine</h2>
-    <p>Reached over ssh, as <code>ssh</code> would (your ~/.ssh/config applies). Nothing gets installed there.</p>
+    <p>Reached over ssh, as <code>ssh</code> would (your ~/.ssh/config applies). It goes into Claude Code's own list,
+      <code>sshConfigs</code> in ~/.claude/settings.json, which the Desktop app has too. Nothing gets installed there.</p>
     <input class="field" name="ssh" placeholder="odyssey" autocomplete="off" spellcheck="false">
     <input class="field" name="name" placeholder="its name on the wall (optional)" autocomplete="off" spellcheck="false">
     <div class="err"></div>
@@ -52,21 +54,22 @@
 </dialog>
 
 <script>
-// burrow's page: the room (room.js) on the left, always the same; the session of the bot you clicked
-// on the right (`claude attach`, in xterm.js, through server.py), an empty screen when none is open.
-// Closing it only detaches. The pointer on either side lights up the other: the bot and its session.
-let state = null, cur = 0, open = null;
+// burrow's page: the room (room.js) on the left, always the same, every machine's bots in it; the
+// session of the bot you clicked on the right (`claude attach`, in xterm.js, through server.py), an
+// empty screen when none is open. Closing it only detaches. The pointer on either side lights up the
+// other: the bot and its session.
+let state = null, open = null;             // open: {m, id}, a bot (its machine, its id)
 const $ = (s) => document.querySelector(s);
 const api = async (path, body) => (await fetch(path, { method: "POST", body: JSON.stringify(body || {}) })).json();
-try { cur = +localStorage.getItem("burrow.room") || 0; } catch {}
+const machine = (id) => state && state.machines.find((m) => m.id === id);
+const byId = (id) => state && state.bots.find((b) => b.id === id);
 
 const room = startRoom($("#room"), {
   state: () => state,
-  cur: () => cur,
-  open: () => open && open.room === cur ? open.id : null,
-  pong: () => (pongRoom === cur ? pongUI.playing() : null),
-  hl: () => paneHover && open && open.room === cur ? open.id : null,
-  hover: (id) => $("#pane").classList.toggle("hl", !!open && open.room === cur && open.id === id),
+  open: () => open && open.id,
+  pong: () => (pongOn ? pongUI.playing() : null),
+  hl: () => paneHover && open ? open.id : null,
+  hover: (id) => $("#pane").classList.toggle("hl", !!open && open.id === id),
   act,
 });
 let paneHover = false;
@@ -74,60 +77,63 @@ $("#pane").addEventListener("pointerenter", () => { paneHover = true; room.draw(
 $("#pane").addEventListener("pointerleave", () => { paneHover = false; room.draw(); });
 
 async function act(a) {
-  if (a.kind === "room") { cur = a.i; try { localStorage.setItem("burrow.room", cur); } catch {} room.draw(); }
-  else if (a.kind === "addRoom") ask($("#roomDialog"));
+  const b = a.id && byId(a.id);
+  if (a.kind === "addMachine") ask($("#machineDialog"));
   else if (a.kind === "addDir") ask($("#dirDialog"));
-  else if (a.kind === "open") openBot(cur, a.id);
+  else if (a.kind === "open" && b) openBot(b.m, b.id);
   else if (a.kind === "chess") openChess();
   else if (a.kind === "pong") openPong();
-  else if (a.kind === "forget") await api("/api/forget", { room: cur, dir: a.dir });
-  else if (a.kind === "layout") await api("/api/layout", { room: cur, layout: a.layout });
-  else if (a.kind === "stop") stopBot(cur, a.id);
-  else if (a.kind === "drop") { openBot(cur, a.id); for (const f of a.files) await hand(f); }
+  else if (a.kind === "keep" || a.kind === "forget") await api("/api/" + a.kind, { unit: a.unit });
+  else if (a.kind === "layout") await api("/api/layout", { layout: a.layout });
+  else if (a.kind === "stop" && b) stopBot(b.m, b.id);
+  else if (a.kind === "drop" && b) { openBot(b.m, b.id); for (const f of a.files) await hand(f); }
   else if (a.kind === "spawn") {
-    const r = await api("/api/spawn", { room: cur, dir: a.dir });
-    if (r.error) note(r.error); else openBot(cur, r.id);
+    const r = await api("/api/spawn", { m: a.m, dir: a.dir });
+    if (r.error) note(r.error); else openBot(a.m, r.id);
   }
 }
-function note(msg) {                       // trouble goes on the wall, like a failed poll
-  const r = state && state.rooms[cur];
-  if (r) { r.error = msg; room.draw(); }
+function note(msg) {                       // trouble goes on the wall, in red
+  if (state) { state.note = msg; room.draw(); }
 }
 
 // ---- the feed
 const es = new EventSource("/events");
 es.addEventListener("state", (e) => {
   state = JSON.parse(e.data);
-  if (cur >= state.rooms.length) cur = 0;
   if (open) showWho();
-  if (playing !== null) showChess();
+  if (playing) showChess();
   // a bot that gets work, or a question for you, leaves the ping-pong table
-  const pp = pongRoom !== null && pongUI.playing();
-  if (pp && !(state.rooms[pongRoom].bots || []).some((b) => b.id === pp.id && !b.busy && !b.waiting)) pongUI.left();
+  const pp = pongOn && pongUI.playing();
+  if (pp && !state.bots.some((b) => b.id === pp.id && !b.busy && !b.waiting)) pongUI.left();
   room.draw();
 });
-es.addEventListener("talk", (e) => { const t = JSON.parse(e.data); room.talk(t.room, t.from, t.to); });
+es.addEventListener("talk", (e) => { const t = JSON.parse(e.data); room.talk(t.from, t.to); });
 const focus = () => api("/api/focus", { on: document.hasFocus() && !document.hidden });
 addEventListener("focus", focus); addEventListener("blur", focus); document.addEventListener("visibilitychange", focus);
 
 // ---- dialogs: Enter adds, Esc closes
 function ask(d) {
   d.querySelector(".err").textContent = "";
-  const m = d.querySelector(".machine");
-  if (m && state) m.textContent = state.rooms[cur].name;
+  const sel = d.querySelector("select");
+  if (sel && state) {                      // which machine: a choice only when there is one
+    const ms = state.machines;
+    sel.innerHTML = ms.map((m) => `<option value="${m.id}">${m.name}</option>`).join("");
+    sel.hidden = ms.length < 2;
+    d.querySelector(".on").hidden = ms.length > 1;
+    d.querySelector(".machine").textContent = ms[0] ? ms[0].name : "";
+  }
   d.querySelectorAll("input").forEach((i) => (i.value = ""));
   d.showModal();
   d.querySelector("input").focus();
 }
-for (const d of [$("#dirDialog"), $("#roomDialog")]) {
+for (const d of [$("#dirDialog"), $("#machineDialog")]) {
   d.addEventListener("click", (e) => { if (e.target === d) d.close(); });
   d.querySelector("form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.target)), err = d.querySelector(".err");
     err.textContent = "…";
-    const r = d.id === "dirDialog" ? await api("/api/dir", { room: cur, dir: f.dir }) : await api("/api/room", f);
+    const r = d.id === "dirDialog" ? await api("/api/dir", { m: f.m || "", dir: f.dir }) : await api("/api/machine", f);
     if (r.error) { err.textContent = r.error; return; }
-    if (r.room !== undefined) cur = r.room;
     d.close();
   });
 }
@@ -156,17 +162,16 @@ term.attachCustomKeyEventHandler((e) => {
 term.onBinary((d) => ws && ws.readyState === 1 && ws.send(Uint8Array.from(d, (c) => c.charCodeAt(0))));
 term.onResize(({ cols, rows }) => ws && ws.readyState === 1 && ws.send(JSON.stringify({ size: [cols, rows] })));
 
-function bot() { return open && state && (state.rooms[open.room].bots || []).find((b) => b.id === open.id); }
 function showWho() {
-  const b = bot();
+  const b = byId(open.id), m = machine(open.m);
   $("#who").textContent = b ? b.name : open.id;
-  $("#as").textContent = state ? "on " + state.rooms[open.room].name : "";
-  term.options.theme = state && state.rooms[open.room].light ? LIGHT : DARK;
+  $("#as").textContent = m ? "on " + m.name : "";
+  term.options.theme = m && m.light ? LIGHT : DARK;
 }
-function openBot(ri, id) {
-  if (open && open.room === ri && open.id === id) { term.focus(); return; }
+function openBot(mid, id) {
+  if (open && open.m === mid && open.id === id) { term.focus(); return; }
   closeBot(); closeChess(); closePong();
-  open = { room: ri, id };
+  open = { m: mid, id };
   $("#pane").classList.remove("empty"); document.body.classList.remove("empty");
   if (!termOpened) { term.open($("#term")); termOpened = true; }
   term.reset();
@@ -176,7 +181,7 @@ function openBot(ri, id) {
 }
 function connect() {
   $("#reconnect").hidden = true;
-  const s = new WebSocket(`ws://${location.host}/term?room=${open.room}&id=${encodeURIComponent(open.id)}`);
+  const s = new WebSocket(`ws://${location.host}/term?m=${encodeURIComponent(open.m)}&id=${encodeURIComponent(open.id)}`);
   s.binaryType = "arraybuffer";
   s.onopen = () => { s.send(JSON.stringify({ size: [term.cols, term.rows] })); setTimeout(() => { for (const t of typed.splice(0)) if (ws === s) s.send(enc.encode(t)); }, 1000); };
   s.onmessage = (e) => term.write(new Uint8Array(e.data));
@@ -190,9 +195,9 @@ function closeBot() {
   $("#pane").classList.add("empty"); $("#pane").classList.remove("hl"); document.body.classList.add("empty");
   room.draw();
 }
-async function stopBot(ri, id) {
-  if (open && open.room === ri && open.id === id) closeBot();
-  const r = await api("/api/stop", { room: ri, id });
+async function stopBot(mid, id) {
+  if (open && open.m === mid && open.id === id) closeBot();
+  const r = await api("/api/stop", { m: mid, id });
   if (r.error) note(r.error);
 }
 function stopping(on) { $("#stop").textContent = on ? "really stop?" : "stop"; $("#stop").classList.toggle("warn", on); }
@@ -200,73 +205,72 @@ $("#close").onclick = () => { closeBot(); closeChess(); closePong(); };
 $("#reconnect").onclick = () => { term.reset(); connect(); term.focus(); };
 $("#stop").onclick = async () => {
   if (!$("#stop").classList.contains("warn")) { stopping(true); setTimeout(() => stopping(false), 3000); return; }
-  stopBot(open.room, open.id);
+  stopBot(open.m, open.id);
 };
 new ResizeObserver(() => { if (open) fit.fit(); }).observe($("#term"));
 
-// ---- the chess table: pair's board in the pane, against one of the room's idle bots
-let playing = null;                        // the room whose chess table is open
-const projectColor = (cwd) => room.color(cwd);
+// ---- the chess table: pair's board in the pane, against one of the idle bots
+let playing = false;                       // the chess table is open
+const projectColor = (unit) => room.color(unit);
 const botFace = (p) => {
-  const b = state && (state.rooms[playing ?? cur].bots || []).find((x) => x.id === p.id);
-  return pixelAvatar(p.id, "agent", b ? projectColor(b.cwd) : "#8b93ad");
+  const b = byId(p.id);
+  return pixelAvatar(p.id, "agent", b ? projectColor(b.unit) : "#8b93ad");
 };
+const idleBots = () => ((state && state.bots) || []).filter((b) => b.background && !b.busy && !b.waiting)
+  .map((b) => ({ id: b.id, name: b.name, kind: "agent", present: true, color: projectColor(b.unit) }));
 const chessUI = chessPanel($("#chess"), {
-  post: async (body) => { const r = await api("/api/chess", { room: playing, ...body }); return { ok: !r.error, json: async () => r }; },
+  post: async (body) => { const r = await api("/api/chess", body); return { ok: !r.error, json: async () => r }; },
   me: () => "you",
-  people: () => ((state && state.rooms[playing].bots) || []).filter((b) => b.background && !b.busy && !b.waiting)
-    .map((b) => ({ id: b.id, name: b.name, kind: "agent", present: true, color: projectColor(b.cwd) })),
+  people: idleBots,
   face: (p) => p.id === "you" ? "" : `<span class="pic"><img src="${botFace(p)}" alt=""></span>`,
   small: (p) => `<img class="sm" src="${botFace(p)}" alt="">`,
 });
 function openChess() {
   closeBot(); closePong();
-  playing = cur;
+  playing = true;
   $("#pane").classList.remove("empty"); document.body.classList.remove("empty");
   $("#pane").classList.add("chessing"); document.body.classList.add("chessing"); $("#chess").hidden = false;
   showChess();
 }
 function showChess() {
-  const v = state.rooms[playing].chess;
+  const v = state.chess;
   const it = v && (v.white.id === "you" ? v.black : v.white);
-  if (it) { it.color = projectColor(((state.rooms[playing].bots || []).find((b) => b.id === it.id) || {}).cwd || ""); }
+  if (it) { it.color = projectColor((byId(it.id) || {}).unit || ""); }
   if (v) v.white.color = v.white.color || "#d97757", v.black.color = v.black.color || "#d97757";
   $("#who").textContent = it ? "chess with " + it.name : "chess";
-  $("#as").textContent = "on " + state.rooms[playing].name;
+  $("#as").textContent = "";
   chessUI.update(v);
 }
 function closeChess() {
-  if (playing === null) return;
-  playing = null; $("#chess").hidden = true; $("#pane").classList.remove("chessing"); document.body.classList.remove("chessing");
+  if (!playing) return;
+  playing = false; $("#chess").hidden = true; $("#pane").classList.remove("chessing"); document.body.classList.remove("chessing");
   $("#pane").classList.add("empty"); document.body.classList.add("empty");
   $("#who").textContent = ""; $("#as").textContent = "";
 }
 
-// ---- the ping-pong table: pair's game in the pane, against one of the room's idle bots
-let pongRoom = null;
-const idleBots = (ri) => ((state && state.rooms[ri].bots) || []).filter((b) => b.background && !b.busy && !b.waiting)
-  .map((b) => ({ id: b.id, name: b.name, kind: "agent", present: true, color: projectColor(b.cwd) }));
+// ---- the ping-pong table: pair's game in the pane, against one of the idle bots
+let pongOn = false;
 const pongUI = pongTable($("#pong"), {
-  me: () => "you", people: () => idleBots(pongRoom ?? cur),
+  me: () => "you", people: idleBots,
   small: (p) => `<img class="sm" src="${pixelAvatar(p.id, "agent", p.color)}" alt="">`,
   post: async () => ({}), api: () => "",
 });
 function openPong() {
   closeBot(); closeChess();
-  pongRoom = cur;
+  pongOn = true;
   $("#pane").classList.remove("empty"); $("#pane").classList.add("chessing"); document.body.classList.add("chessing"); document.body.classList.remove("empty");
-  $("#who").textContent = "ping-pong"; $("#as").textContent = "on " + state.rooms[cur].name;
+  $("#who").textContent = "ping-pong"; $("#as").textContent = "";
   pongUI.open();
 }
 function closePong() {
-  if (pongRoom === null) return;
-  pongRoom = null;
+  if (!pongOn) return;
+  pongOn = false;
   if (!$("#pong").hidden) pongUI.close();
   $("#pane").classList.add("empty"); $("#pane").classList.remove("chessing"); document.body.classList.remove("chessing"); document.body.classList.add("empty");
   $("#who").textContent = ""; $("#as").textContent = "";
 }
 // its own ✕ (or Esc) closes the card: then the pane is empty again
-new MutationObserver(() => { if ($("#pong").hidden && pongRoom !== null) closePong(); }).observe($("#pong"), { attributes: true, attributeFilter: ["hidden"] });
+new MutationObserver(() => { if ($("#pong").hidden && pongOn) closePong(); }).observe($("#pong"), { attributes: true, attributeFilter: ["hidden"] });
 
 // drop a file on the session: its path gets typed in, as in a terminal (copied over first for a remote machine)
 const pane = $("#pane");
@@ -275,7 +279,7 @@ pane.addEventListener("dragleave", () => pane.classList.remove("drop"));
 const typed = [];                          // for a session still connecting
 async function hand(file) {
   const o = open;
-  const r = await (await fetch(`/api/upload?room=${o.room}&name=${encodeURIComponent(file.name)}`, { method: "POST", body: file })).json();
+  const r = await (await fetch(`/api/upload?m=${encodeURIComponent(o.m)}&name=${encodeURIComponent(file.name)}`, { method: "POST", body: file })).json();
   if (r.error) return note(r.error);
   const t = (/[\s'"\\]/.test(r.path) ? "'" + r.path.replace(/'/g, "'\\''") + "'" : r.path) + " ";
   if (ws && ws.readyState === 1 && open === o) ws.send(enc.encode(t)); else if (open === o) typed.push(t);

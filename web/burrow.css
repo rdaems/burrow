@@ -12,7 +12,7 @@
 * { box-sizing:border-box; }
 html, body { height:100%; margin:0; overflow:hidden; }
 body { display:flex; flex-direction:column; background:var(--night) var(--stars); color:var(--text); font:14px/1.55 var(--mono); }
-button, input { font:inherit; color:inherit; }
+button, input, select { font:inherit; color:inherit; }
 ::selection { background:var(--gold); color:var(--ink); }
 .btn { cursor:pointer; background:var(--box); border:1px solid var(--line); border-radius:6px; padding:4px 11px; white-space:nowrap; }
 .btn:hover { border-color:var(--me); color:#fff; }

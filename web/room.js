@@ -1,7 +1,10 @@
-// The room: one machine, as pair's office (rdaems/pair-prompting, app/floor.js): its breaks, its mats,
-// its robots (pixel.js), furnished as pixel art (sprites.js). Every project (a working directory) is one unit: a cabinet
-// with the project's screen and name at its left end, a long desktop to the right where its bots sit
-// facing the screen, and an empty chair at the end (+) that starts another bot there.
+// The room: every machine's bots in one place, as pair's office (rdaems/pair-prompting, app/floor.js): its
+// breaks, its mats, its robots (pixel.js), furnished as pixel art (sprites.js). Every project (a working
+// directory, here or on another machine) is a desk: a cabinet with the project's screen and name at its left
+// end, a long desktop to the right where its bots sit facing the screen, and an empty chair at the end (+)
+// that starts another bot there. A desk you keep has its name on a plate; one that is only there while
+// bots work at it has it on a paper note (click it to keep the desk). A bot in a git worktree of the
+// project sits at the project's desk, its own copy of the files a laptop on the cabinet, plugged in.
 // Where a bot is says what it is doing:
 //   busy                at its project's desk, typing
 //   idle                by its desk, or on a break: coffee, the printer, the cooler, ping-pong,
@@ -14,14 +17,14 @@
 // The account's limits are in the room too: the coffee pot holds what's left of the five-hour
 // session, the cooler's bottle what's left of the week (Claude Code's own /usage).
 // Nothing else signals anything; what they say is never shown, only that they talk.
-// The machines are lettered on the wall, the current one underlined.
+// The other machines are lettered on the wall (the room itself is this one); one out of reach in red.
 //
 // What you do happens in the room as well: click a bot to open its session, the + chair for a new
-// bot, the empty cabinet for a project; drag furniture where you want it; carry a bot to the door
-// to stop it; drop a file on a bot to hand it over.
+// bot, the empty cabinet for a project, the + on the wall for a machine; drag furniture where you want
+// it; carry a bot to the door to stop it; drop a file on a bot to hand it over.
 //
-// startRoom(canvas, app) with app = { state(), cur(), open(), hl(), hover(id), act(action) };
-// returns { talk(room, from, to), size(), draw() }. The room is always W x H dots.
+// startRoom(canvas, app) with app = { state(), open(), pong(), hl(), hover(id), act(action) };
+// returns { talk(from, to), size(), draw(), color(unit) }. The room is always W x H dots.
 
 function startRoom(cv, app) {
   const C = pixelAvatar.C, INK = C.ink, INK2 = C.ink2;
@@ -30,19 +33,22 @@ function startRoom(cv, app) {
   const WALLC = "#28374b", WALLTOP = "#151e28", BASEBOARD = "#1b2433";
   const PLANK = "#734728", SEAM = "#6a4224";
   const PROJECT = ["#4a76b8", "#e8402a", "#2fa087", "#f2a531", "#9a74d6", "#5fcf4a", "#f06b72", "#8fc0e8"];
-  const WALL = 26, TALK = 4, SEAT = 18, ADD_W = 30, ROW = 46;
+  const WALL = 26, TALK = 4, SEAT = 18, ADD_W = 30, ROW = 46, LAP = 13;
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const shade = (hex, k) => "#" + [1, 3, 5].map((i) => Math.min(255, Math.round(parseInt(hex.slice(i, i + 2), 16) * k)).toString(16).padStart(2, "0")).join("");
   const mix = (a, b, k) => "#" + [1, 3, 5].map((i) => { const x = parseInt(a.slice(i, i + 2), 16), y = parseInt(b.slice(i, i + 2), 16); return Math.round(x + (y - x) * k).toString(16).padStart(2, "0"); }).join("");
   const rnd = (a, b) => a + Math.random() * (b - a);
   const any = (a) => a[Math.floor(Math.random() * a.length)];
   const fnv = (s) => { let h = 2166136261; for (const ch of s) h = Math.imul(h ^ ch.codePointAt(0), 16777619); return h >>> 0; };
-  const projectColor = (cwd) => PROJECT[fnv(cwd) % PROJECT.length];
+  const projectColor = (unit) => PROJECT[fnv(unit) % PROJECT.length];
   function projectLabel(cwd) {
     const n = cwd.replace(/\/+$/, "").split("/");
     if (cwd === "~" || cwd === "/root" || (n.length === 3 && (n[1] === "Users" || n[1] === "home"))) return "home";
     return n[n.length - 1] || cwd;
   }
+  // on another machine, "machine:project", as scp writes it
+  const machineName = (id) => { const m = id && app.state().machines.find((x) => x.id === id); return m ? m.name : ""; };
+  const deskLabel = (d) => (d.m ? machineName(d.m) + ":" : "") + projectLabel(d.dir);
 
   // ---- pair's lettering: 3x5 glyphs, upper case, like a Pico-8
   const F = {};
@@ -180,8 +186,8 @@ function startRoom(cv, app) {
   }
 
   // ---- the room: always the same size; its furniture stands where it was put (dragged by hand,
-  // kept per machine in rooms.json), or where it stands by default. A project's unit that has no
-  // place yet gets the first free one, and keeps it.
+  // kept in room.json), or where it stands by default. A project's desk that has no place yet gets
+  // the first free one, and keeps it.
   // as dense as pair's office: two CSS pixels a dot, a room as wide as pair's margin; as tall as the
   // window lets it be (what stands at the bottom stays at the bottom)
   const W = 256, K = 2;
@@ -225,13 +231,15 @@ function startRoom(cv, app) {
   }
 
   const dropped = new Map();
-  function layout(room, bots, moving) {
-    const saved = room.layout || {}, placed = {};
-    const order = [...(room.dirs || [])];
-    for (const b of bots) if (!order.includes(b.cwd)) order.push(b.cwd);
-    const units = order.map((cwd) => {
-      const n = bots.filter((b) => b.cwd === cwd).length, cab = Math.max(tinyW(projectLabel(cwd)) + 6, 22);
-      return { key: "u:" + cwd, cwd, cab, w: cab + 4 + (n + 1) * SEAT };
+  // a desk's bots: those in its own directory first, then those in each worktree
+  const sitters = (bots, d) => bots.filter((b) => b.unit === d.unit).sort((a, b) => (a.tree > b.tree) - (a.tree < b.tree));
+  function layout(s, bots, moving) {
+    const saved = s.layout || {}, placed = {};
+    const units = s.desks.map((d) => {
+      const n = sitters(bots, d).length, label = deskLabel(d);
+      const trees = [...new Set(sitters(bots, d).map((b) => b.tree).filter(Boolean))];
+      const cab = Math.max(tinyW(label) + 6, 22, trees.length ? 26 + trees.length * LAP : 0);
+      return { key: "u:" + d.unit, d, label, trees, cab, w: cab + 4 + (n + 1) * SEAT };
     });
     const where = (key, u) => {
       if (moving && moving.key === key) return moving.at;
@@ -260,10 +268,10 @@ function startRoom(cv, app) {
 
     const P = (k) => where(k);
     const desks = units.map((u) => {
-      const [x, y] = u.at, mine = bots.filter((b) => b.cwd === u.cwd);
+      const [x, y] = u.at, mine = sitters(bots, u.d);
       const seat = (k) => x + u.cab + 4 + SEAT / 2 + k * SEAT;
-      return { key: u.key, cwd: u.cwd, x0: x, w: u.w, cab: u.cab, y, color: projectColor(u.cwd),
-        seats: mine.map((b, k) => [b.id, seat(k)]), plus: seat(mine.length), at: u.at, u };
+      return { key: u.key, ...u.d, label: u.label, trees: u.trees, x0: x, w: u.w, cab: u.cab, y, color: projectColor(u.d.unit),
+        seats: mine.map((b, k) => [b.id, seat(k), b.tree]), plus: seat(mine.length), at: u.at, u };
     });
     const [bx, by] = P("board"), [wx, wy] = P("window");
     const xy = (k) => { const [x, y] = P(k); return { x, y }; };
@@ -291,12 +299,12 @@ function startRoom(cv, app) {
     return L;
   }
 
-  // ---- everyone, per machine: what each bot is doing, kept while you look at another machine
-  const worlds = new Map();
-  function world(i) {
-    if (!worlds.has(i)) worlds.set(i, { folk: new Map(), meeting: null, lastMeeting: -60, board: [], pong: { t: 0, from: 0 },
-      chess: { board: newBoard(), t: 0, turn: 0 }, T: 0, born: performance.now() });
-    return worlds.get(i);
+  // ---- everyone: what each bot is doing
+  let everyone = null;
+  function world() {
+    if (!everyone) everyone = { folk: new Map(), meeting: null, lastMeeting: -60, board: [], pong: { t: 0, from: 0 },
+      chess: { board: newBoard(), t: 0, turn: 0 }, T: 0, born: performance.now() };
+    return everyone;
   }
   // the chess board as pair keeps it: 64 squares from a1, upper case white, "." empty
   const START = "RNBQKBNRPPPPPPPP" + ".".repeat(32) + "pppppppprnbqkbnr";
@@ -322,8 +330,8 @@ function startRoom(cv, app) {
   }
 
   // `from` sent `to` a message: it walks over
-  function talk(ri, from, to) {
-    const w = world(ri), f = w.folk.get(from), g = w.folk.get(to);
+  function talk(from, to) {
+    const w = world(), f = w.folk.get(from), g = w.folk.get(to);
     if (!f || !g) return;
     for (const [a, b] of [[f, g], [g, f]]) if (a.act.kind === "visit" && a.act.to === b.id) { a.act.left = Math.max(a.act.left, TALK); return; }
     f.lying = false; f.carry = null; f.sat = false;
@@ -579,7 +587,7 @@ function startRoom(cv, app) {
       mate.carry = null; mate.act = { kind: "pong", side: 1, left, with: f.id, there: false };
       return { kind: "pong", side: 0, left, with: mate.id, there: false };
     }
-    if (r < 0.6 && !taken("chess") && !(app.state().rooms[app.cur()].chess && !app.state().rooms[app.cur()].chess.result)) return { kind: "chess", side: Math.random() < 0.5 ? 0 : 1, with: null, left: rnd(20, 45), there: false };
+    if (r < 0.6 && !taken("chess") && !(app.state().chess && !app.state().chess.result)) return { kind: "chess", side: Math.random() < 0.5 ? 0 : 1, with: null, left: rnd(20, 45), there: false };
     if (r < 0.65 && mate) return { kind: "visit", to: mate.id, left: rnd(6, 12), wave: 0.8, msg: false };
     const plants = L.plants.map((_, i) => i).filter((i) => !others.some((g) => g.act.kind === "plant" && g.act.i === i));
     if (r < 0.72 && plants.length) return { kind: "plant", i: any(plants), wait: 0 };
@@ -606,31 +614,23 @@ function startRoom(cv, app) {
   const hot = (x0, y0, x1, y1, action) => { hots.push({ x0, y0, x1, y1, action }); return over(x0, y0, x1, y1) && !moving && !held; };
   const box = (ctx, x, y, w, h, fill, edge = INK) => { ctx.fillStyle = edge; ctx.fillRect(x - 1, y - 1, w + 2, h + 2); ctx.fillStyle = fill; ctx.fillRect(x, y, w, h); };
   const rect = (ctx, x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
+  const clip = (t, room) => { const n = Math.max(0, Math.floor((room + 1) / 4)), m = t.replace(/\s+/g, " "); return m.length > n ? m.slice(0, n - 1) + "-" : m; };
   const say = (u, what) => u ? `${Math.max(0, 100 - u.used)}% of the ${what} left${u.resets ? ", new at " + u.resets.replace(/^.* at /, "") : ""}` : `the ${what}'s limit: not known yet`;
 
   function draw() {
     const ctx = cv.getContext("2d");
     ctx.setTransform(2, 0, 0, 2, 0, 0);      // drawn in dots; the canvas has two pixels a dot, for dragging
     ctx.imageSmoothingEnabled = false;
-    const s = app.state(), ri = app.cur(), room = s && s.rooms[ri];
+    const s = app.state();
     hots = []; tip = null;
     ctx.drawImage(floor(), 0, 0);
     rect(ctx, W - 1, 0, 1, H, INK2);
-    if (!room) return;
-    const w = world(ri), bots = room.bots || [], usage = room.usage || {};
-
-    // the machines, lettered on the wall
-    let tx = 22;
-    s.rooms.forEach((r, i) => {
-      const tw = tinyW(r.name), h = i !== ri && hot(tx - 2, 0, tx + tw + 2, 12, { kind: "room", i });
-      tiny(ctx, r.name, tx, 4, i === ri ? C.steel4 : h ? C.steel3 : C.steel1);
-      tx += tw + 7;
-    });
-    tiny(ctx, "+", tx, 4, hot(tx - 2, 0, tx + 5, 12, { kind: "addRoom" }) ? TERRACOTTA : C.steel1);
-    const L = layout(room, bots, moving);
+    if (!s) return;
+    const w = world(), bots = s.bots || [], usage = s.usage || {};
+    const L = layout(s, bots, moving);
     lastL = L;
-    if (Object.keys(L.placed).length) app.act({ kind: "layout", layout: { ...(room.layout || {}), ...L.placed } });
-    room.layout = { ...(room.layout || {}), ...L.placed };
+    if (Object.keys(L.placed).length) app.act({ kind: "layout", layout: { ...(s.layout || {}), ...L.placed } });
+    s.layout = { ...(s.layout || {}), ...L.placed };
 
     // keep a figure per bot; one that turns up later comes in through the door, one that is
     // stopped walks out of it
@@ -649,23 +649,32 @@ function startRoom(cv, app) {
     }
     const door = performance.now() - (w.doorAt || 0) < 900;
     if (tickDt > 0) {
-      w.T += tickDt; think(w, bots, L, tickDt, s.demo ? 40 : 600, usage, room.chess);
+      w.T += tickDt; think(w, bots, L, tickDt, s.demo ? 40 : 600, usage, s.chess);
       for (const f of w.folk.values()) if (f.leaving && walk(f, { x: 10, y: WALL + 1 }, 30, tickDt)) { w.folk.delete(f.id); w.doorAt = performance.now(); }
       tickDt = 0;
     }
     const T = w.T;
     drawDoor(ctx, 4, door || [...w.folk.values()].some((f) => f.act.kind === "door" || (f.leaving && f.y < WALL + 12))); drawClock(ctx, W - 9, 10);
-    if (room.error) {                        // trouble goes on the wall, in red, instead of the whiteboard
-      const nx = Math.max(tx + 11, 24), n = Math.max(0, Math.floor((W - 24 - nx) / 4));
-      const msg = room.error.replace(/\s+/g, " ");
-      tiny(ctx, msg.length > n ? msg.slice(0, n - 1) + "-" : msg, nx, 18, RED);
-    } else drawBoard(ctx, L.board, w);
-    drawWindow(ctx, L.window);
-
     // who is highlighted: the one under the pointer, the one whose session the pointer is over,
-    // a project's bots while the pointer is on its screen
+    // a project's bots while the pointer is on its screen, a machine's while it is on its name
     const hl = new Set();
     if (app.hl()) hl.add(app.hl());
+
+    // the other machines, lettered on the wall; one out of reach in red, why under the pointer
+    let tx = 22;
+    for (const m of s.machines) if (m.id) {
+      const tw = tinyW(m.name), h = over(tx - 2, 0, tx + tw + 2, 12);
+      if (h) { for (const b of bots) if (b.m === m.id) hl.add(b.id); if (m.error) tip = { text: clip(m.error, W - 8), x: tx + tw / 2, y: 20 }; }
+      tiny(ctx, m.name, tx, 4, m.error ? RED : h ? C.steel4 : C.steel2);
+      tx += tw + 7;
+    }
+    tiny(ctx, "+", tx, 4, hot(tx - 2, 0, tx + 5, 12, { kind: "addMachine" }) ? TERRACOTTA : C.steel1);
+    if (over(tx - 2, 0, tx + 5, 12)) tip = { text: "machine", x: tx + 1, y: 20 };
+    // trouble here goes on the wall, in red, instead of the whiteboard
+    const here = s.machines.find((m) => !m.id), trouble = s.note || (here && here.error);
+    if (trouble) { const nx = Math.max(tx + 11, 24); tiny(ctx, clip(trouble, W - 24 - nx), nx, 18, RED); }
+    else drawBoard(ctx, L.board, w);
+    drawWindow(ctx, L.window);
     // a bot and its seat at its project's desk are one thing: where the bot is only says what it
     // does. The pointer on either lights up both (and its session), and a click on either opens it
     if (hoverId) hl.add(hoverId);
@@ -695,11 +704,11 @@ function startRoom(cv, app) {
     items.push([L.meet.y - 1, () => drawTable(ctx, L.meet)]);
     for (const i of [0, 1]) { const st = L.meetSeat(i); items.push([st.y - 0.5, () => drawStool(ctx, st)]); }
     {
-      const c = L.chess, g = room.chess && !room.chess.result ? room.chess : null;
+      const c = L.chess, g = s.chess && !s.chess.result ? s.chess : null;
       if (hot(c.x - 12, c.y - 17, c.x + 12, c.y, { kind: "chess" }))
         tip = { text: g ? "chess with " + (g.white.id === "you" ? g.black.name : g.white.name) : "chess: play an idle bot", x: c.x, y: c.y - 18 };
     }
-    items.push([L.chess.y + 0.5, () => drawChess(ctx, L.chess, room.chess && !room.chess.result ? room.chess.board : w.chess.board)]);
+    items.push([L.chess.y + 0.5, () => drawChess(ctx, L.chess, s.chess && !s.chess.result ? s.chess.board : w.chess.board)]);
     for (const i of [0, 1]) { const st = L.chessSeat(i); items.push([st.y - 0.5, () => drawStool(ctx, st)]); }
     const brewing = [...w.folk.values()].some((f) => f.act.kind === "coffee" && f.act.stage === 1);
     items.push([L.coffeeAt.y, () => drawCoffee(ctx, L.coffeeAt, brewing, T, usage.session)]);
@@ -776,7 +785,7 @@ function startRoom(cv, app) {
     if (!b) return;
     const x = Math.round(f.x), y = Math.round(f.y), x0 = x - 11, y0 = y - 27;
     if (!f.held) rect(ctx, x - 5, y, 10, 1, "rgba(0,0,0,0.4)");
-    const im = body(b.id, projectColor(b.cwd), f.held ? "up" : f.arms, f.held ? "walk1" : f.legs, !b.background);
+    const im = body(b.id, projectColor(b.unit), f.held ? "up" : f.arms, f.held ? "walk1" : f.legs, !b.background);
     // its outline: terracotta while the pointer is on it or on its session, faint while its session is open
     const lit = hl.has(f.id) || (hovered && hovered.b.id === f.id) || (!hovered && over(x0 + 4, y0, x0 + 18, y + 1));
     const ring = f.leaving ? null : lit ? TERRACOTTA : app.open() === f.id ? OPEN : null;
@@ -794,7 +803,7 @@ function startRoom(cv, app) {
   }
   function drawSleeper(ctx, f, b, T, hl) {  // seen from above: the head on the pillow, a blanket, a plug
     if (!b) return;
-    const x = Math.round(f.x), y = Math.round(f.y), im = body(b.id, projectColor(b.cwd), "down", "stand", !b.background);
+    const x = Math.round(f.x), y = Math.round(f.y), im = body(b.id, projectColor(b.unit), "down", "stand", !b.background);
     const ring = hl.has(f.id) || over(x - 11, y - 28, x + 11, y) ? TERRACOTTA : app.open() === f.id ? OPEN : null;
     if (im) { if (ring) ctx.drawImage(halo(im, ring), 0, 0, SW, 16, x - 11, y - 28, SW, 16); ctx.drawImage(im, 0, 0, SW, 16, x - 11, y - 28, SW, 16); }
     box(ctx, x - 10, y - 13, 20, 9, C.steel2, MAT.k);
@@ -812,41 +821,60 @@ function startRoom(cv, app) {
   // a unit: the cabinet with the project's name and screen, the long desktop where its bots sit
   function drawDesk(ctx, d, w, T, hl) {
     const { x0, y, w: dw, cab } = d;
-    // the screen runs only while a bot sits at it typing; dim while one sits there idle; a
-    // blinking cursor while one waits for you
+    // a screen runs only while a bot sits at it typing; dim while one sits there idle; a blinking
+    // cursor while one waits for you. The big one is the project's own directory, a laptop a worktree's
     const seated = (f) => f && f.legs === "sit" && !f.lying && (f.act.kind === "desk" || f.act.kind === "sleep");
-    const at = d.seats.map(([id]) => w.folk.get(id)).filter(seated);
-    const busy = at.some((f) => f.busy), waits = at.some((f) => f.waiting), here = at.length > 0;
+    const at = (tree) => d.seats.filter((st) => st[2] === tree).map(([id]) => w.folk.get(id)).filter(seated);
+    function paint(g, gw, gh, tree, seed) {
+      const f = at(tree), busy = f.some((x) => x.busy), waits = f.some((x) => x.waiting);
+      rect(ctx, g.x, g.y, gw, gh, f.length ? C.blue0 : "#10141f");
+      if (!f.length) { rect(ctx, g.x + gw - 3, g.y + 1, 1, 1, "#232c40"); rect(ctx, g.x + gw - 4, g.y + 2, 1, 1, "#232c40"); return; }   // off: a glint
+      ctx.fillStyle = busy ? d.color : shade(d.color, 0.45);
+      const s = busy ? Math.floor(T * 5) : 0;
+      for (let r = 0; r < Math.floor(gh / 2); r++) ctx.fillRect(g.x + 1 + ((r * 3) % 4), g.y + 1 + r * 2, Math.min(gw - 2, 3 + ((r * 7 + s + seed) * 5) % (gw > 10 ? 11 : 4)), 1);
+      if (waits && !busy && Math.floor(T * 2) % 2) rect(ctx, g.x + 2, g.y + gh - 2, 2, 1, C.steel4);
+    }
     // the desktop, lower than the cabinet: a leg between each two chairs, a keyboard at each seat
     slab(ctx, x0 + cab - 2, y - 12, dw - cab + 2, 5, 4, WOOD);
     for (const x of [x0 + cab + 1, ...d.seats.map(([, x]) => x + 11), x0 + dw - 4]) {
       rect(ctx, x, y - 4, 2, 4, WOOD.k); rect(ctx, x, y - 4, 1, 3, WOOD.d); rect(ctx, x, y, 2, 1, SHADOW);
     }
     for (const x of [...d.seats.map(([, x]) => x), d.plus]) { rect(ctx, x - 9, y - 11, 7, 2, SP.F); rect(ctx, x - 8, y - 11, 5, 1, SP.B); }
-    // the cabinet, the project's name on a plate
+    // the cabinet, the project's name on a plate if you keep the desk, else on a note taped on
+    // (a click on it keeps the desk)
     slab(ctx, x0, y - 15, cab, 4, 11, WOOD);
-    const label = projectLabel(d.cwd);
-    plate(ctx, x0 + 2, y - 9, cab - 4);
-    tiny(ctx, label, Math.round(x0 + (cab - tinyW(label)) / 2), y - 8, C.steel3);
-    // its screen, standing on it; the pointer on the screen lights up the project's bots
-    const sx = Math.round(x0 + cab / 2 - 11), sy = y - 32, g = { x: sx + 2, y: sy + 2 };
-    const onScreen = over(sx, sy, sx + 22, sy + 18);
-    if (onScreen) { for (const [id] of d.seats) hl.add(id); tip = { text: d.cwd.replace(/^\/(Users|home)\/[^/]+/, "~"), x: sx + 11, y: sy - 1 }; }
-    rect(ctx, g.x, g.y, 18, 11, here ? C.blue0 : "#10141f");
-    if (!here) { rect(ctx, g.x + 15, g.y + 1, 1, 1, "#232c40"); rect(ctx, g.x + 14, g.y + 2, 1, 1, "#232c40"); }   // off: a glint
-    if (here) {
-      ctx.fillStyle = busy ? d.color : shade(d.color, 0.45);
-      const s = busy ? Math.floor(T * 5) : 0;
-      for (let r = 0; r < 5; r++) ctx.fillRect(g.x + 1 + ((r * 3) % 4), g.y + 1 + r * 2, 3 + ((r * 7 + s + d.cwd.length) * 5) % 11, 1);
-      if (waits && !busy && Math.floor(T * 2) % 2) rect(ctx, g.x + 2, g.y + 9, 2, 1, C.steel4);
+    const lx = Math.round(x0 + (cab - tinyW(d.label)) / 2);
+    if (d.kept) { plate(ctx, x0 + 2, y - 9, cab - 4); tiny(ctx, d.label, lx, y - 8, C.steel3); }
+    else {
+      const h = hot(x0 + 2, y - 10, x0 + cab - 2, y - 2, { kind: "keep", unit: d.unit });
+      paper(ctx, x0 + 2, y - 9, cab - 4, h);
+      tiny(ctx, d.label, lx, y - 8, INK2);
+      if (h) tip = { text: "keep this desk", x: x0 + cab / 2, y: y - 10 };
     }
+    // on it the project's screen, and a laptop for each worktree, plugged in; the pointer on one
+    // lights up the bots working there
+    const gw = 22 + d.trees.length * LAP, sx = Math.round(x0 + (cab - gw) / 2), sy = y - 32;
+    const where = (dir) => (d.m ? machineName(d.m) + ":" : "") + dir.replace(/^\/(Users|home)\/[^/]+/, "~");
+    const onScreen = over(sx, sy, sx + 22, sy + 18);
+    if (onScreen) { for (const [id] of d.seats) hl.add(id); tip = { text: where(d.dir), x: sx + 11, y: sy - 1 }; }
+    paint({ x: sx + 2, y: sy + 2 }, 18, 11, "", d.dir.length);
     const mon = sprites.get("monitor");
     if (onScreen) put(ctx, halo(mon, C.steel3), sx, sy);
     put(ctx, mon, sx, sy);
-    // a project with no bots can be forgotten: an x by its screen
-    if (!d.seats.length && over(x0, sy - 2, Math.max(x0 + cab, sx + 28), y)) {
-      const h = hot(sx + 21, sy - 2, sx + 27, sy + 6, { kind: "forget", dir: d.cwd });
-      tiny(ctx, "X", sx + 23, sy, h ? TERRACOTTA : C.steel2);
+    if (d.trees.length) rect(ctx, sx + 17, y - 13, gw - 22, 1, SP.F);       // the cable, along the top
+    d.trees.forEach((tree, k) => {
+      const px = sx + 23 + k * LAP, py = y - 22, lap = sprites.get("laptop");
+      const on = over(px, py, px + 12, py + 11), mine = d.seats.filter((st) => st[2] === tree);
+      if (on) { for (const [id] of mine) hl.add(id); tip = { text: tree.split("/").pop() + ": a worktree", x: px + 6, y: py - 1 }; }
+      paint({ x: px + 2, y: py + 2 }, 8, 5, tree, tree.length);
+      if (on || mine.some(([id]) => hl.has(id))) put(ctx, halo(lap, on ? C.steel3 : TERRACOTTA), px, py);
+      put(ctx, lap, px, py);
+    });
+    // a desk you keep can be let go: an x by its screens (it stays while bots work at it)
+    if (d.kept && over(x0, sy - 2, Math.max(x0 + cab, sx + gw + 6), y)) {
+      const ex = sx + gw, h = hot(ex - 1, sy - 2, ex + 5, sy + 6, { kind: "forget", unit: d.unit });
+      tiny(ctx, "X", ex + 1, sy, h ? TERRACOTTA : C.steel2);
+      if (h) tip = { text: d.seats.length ? "stop keeping this desk" : "forget this desk", x: ex + 2, y: sy - 1 };
     }
   }
   // a name plate on a cabinet's front: seven dots high, for one line of lettering
@@ -854,10 +882,16 @@ function startRoom(cv, app) {
     rect(ctx, x, y, w, 7, WOOD.k);
     rect(ctx, x + 1, y + 1, w - 2, 5, lit ? C.steel1 : "#2e1f28");
   }
+  // a note taped on instead, for a desk that is only there while bots work at it
+  function paper(ctx, x, y, w, lit) {
+    rect(ctx, x, y, w, 7, lit ? "#fff4d6" : "#e3d6ad");
+    rect(ctx, x, y + 6, w, 1, "#a8956a");
+    rect(ctx, x + Math.round(w / 2) - 2, y - 1, 5, 2, "rgba(255,255,255,0.5)");
+  }
   // an office chair at a project's desk, its sitter facing the screen; the empty one at the end
   // starts a bot
   function drawChair(ctx, x, y, d, plus, lit) {
-    const h = plus && hot(x - 8, y - 22, x + 9, y + 1, { kind: "spawn", dir: d.cwd });
+    const h = plus && hot(x - 8, y - 22, x + 9, y + 1, { kind: "spawn", m: d.m, dir: d.dir });
     if (h) tip = { text: "new bot", x, y: y - 22 };
     const im = sprites.get(plus ? "chairFree" : "chair");
     if (lit || h) put(ctx, halo(im, h ? d.color : TERRACOTTA), x - 4, y - 16);
@@ -1005,7 +1039,7 @@ function startRoom(cv, app) {
   cv.addEventListener("pointermove", (e) => {
     pointer = dots(e);
     if (press && !moving && !held && Math.hypot(pointer.x - press.x, pointer.y - press.y) > 1) {
-      const f = press.bot && world(app.cur()).folk.get(press.bot);
+      const f = press.bot && world().folk.get(press.bot);
       if (f && f.b && f.b.background && !f.lying) { held = f; f.held = true; f.sat = false; f.lying = false; }
       else if (press.piece && !(press.bot && !f)) moving = { key: press.piece.key, from: press.piece.at, u: press.piece.u, at: press.piece.at };
     }
@@ -1018,11 +1052,11 @@ function startRoom(cv, app) {
   });
   cv.addEventListener("pointerup", () => {
     if (moving) {
-      const room = app.state().rooms[app.cur()];
+      const s = app.state();
       const at = clampAt(moving.key, moving.at, moving.u);       // put down on the grid of dots
       dropped.set(moving.key, { at, t: performance.now() });
-      room.layout = { ...(room.layout || {}), [moving.key]: at };
-      app.act({ kind: "layout", layout: room.layout });
+      s.layout = { ...(s.layout || {}), [moving.key]: at };
+      app.act({ kind: "layout", layout: s.layout });
       moving = null;
     } else if (held) {
       const f = held; held = null; f.held = false;
@@ -1064,6 +1098,6 @@ function startRoom(cv, app) {
   new ResizeObserver(size).observe(cv.parentElement);
   size();
   requestAnimationFrame(frame);
-  window.__room = { worlds, size: () => ({ W, H, K }), layout: () => lastL };   // for poking at it from the console
+  window.__room = { world, size: () => ({ W, H, K }), layout: () => lastL };   // for poking at it from the console
   return { talk, size, draw, color: projectColor };
 }

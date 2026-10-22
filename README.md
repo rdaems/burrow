@@ -42,7 +42,25 @@ The terminal is light or dark to match the `theme` in Claude Code's settings on 
 
 ## Machines
 
-`~/.config/burrow/rooms.json`, written by the **+ machine** button:
+The browser version (`python3 web/server.py`, then http://localhost:7777) has one room for all of them. Its
+machines are Claude Code's own: this one, and each of `sshConfigs` in `~/.claude/settings.json`, the list the
+Desktop app's SSH environments use too. The **+** on the wall adds one there:
+
+```json
+"sshConfigs": [
+  { "id": "odyssey", "name": "odyssey", "sshHost": "odyssey" }
+]
+```
+
+`sshPort` and `sshIdentityFile` are used too. A desk on another machine is labelled `machine:project`, as scp
+writes it; the other machines are lettered on the wall (in red when burrow can't reach one: hover it for why).
+
+A desk is there while bots work at it, its name on a paper note: click the note to keep the desk (its name on
+a plate), the x by its screen to let it go. A session in a git worktree sits at its repository's desk; the
+worktree is a laptop on the cabinet beside the project's screen, plugged into it. burrow itself keeps only the
+desks you keep and where the furniture stands, in `~/.config/burrow/room.json`.
+
+The Rust app has a room per machine instead, in `~/.config/burrow/rooms.json`, written by its **+ machine** button:
 
 ```json
 [
