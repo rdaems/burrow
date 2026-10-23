@@ -165,7 +165,7 @@ addEventListener("focus", focus); addEventListener("blur", focus); document.addE
 
 // ---- the view: one thing at a time on the right, in place of the tiles, framed like one
 const PANELS = { dir: "#vDir", machine: "#vMachine", you: "#vYou", closet: "#vCloset", chess: "#chess", pong: "#pong", report: "#vReport", pair: "#vPair" };
-const TITLES = { dir: "a project", machine: "a machine", you: "you", closet: "the closet", chess: "chess", pong: "ping-pong", report: "report", pair: "pair" };
+const TITLES = { dir: "Add a project", machine: "Add a machine", you: "Your face", closet: "Furniture", chess: "Chess", pong: "Ping-pong", report: "Report", pair: "Pair room" };
 function openView(kind) {
   if (viewKind && viewKind !== kind) closeView(true);
   for (const t of tiles.all()) closeTile(t);
@@ -243,9 +243,7 @@ function askYou() {
 // ---- the closet: the furniture there is, drawn as it stands in the room; drag a piece into the
 // room to put it there, as many as you like. The fireplace takes a piece back out (it burns)
 const CATALOGUE = ["plant", "armchair", "mat", "window", "clock", "board", "meet", "chess", "pong", "coffee", "cooler", "printer", "add", "pair"];
-let closetFilled = false;
 function fillCloset() {
-  if (closetFilled) return;
   const el = $("#vCloset");
   el.innerHTML = "";
   for (const kind of CATALOGUE) {
@@ -256,7 +254,6 @@ function fillCloset() {
     it.addEventListener("pointerdown", (e) => carryOut(e, kind, it));
     el.appendChild(it);
   }
-  closetFilled = !!el.querySelector("img[src^='data:image/png;base64,iVBOR']");
 }
 // ---- a pair room (rdaems/pair-prompting): the piece holds the link of your own page in the room;
 // a click shows the chat itself in the view; a bot dropped on the piece gets the room's "bring"

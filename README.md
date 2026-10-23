@@ -2,21 +2,32 @@
 
 Persistent Claude Code sessions on your machines, shown as bots in a room.
 
-Each machine is a room. Every Claude Code session running on it is a little robot. The robot's place in the
-room tells you what it is doing; there are no notifications, badges or counters.
+One room for all your machines. Every Claude Code session running on them is a little robot. The robot's
+place in the room tells you what it is doing; there are no notifications, badges or counters.
 
 - **busy**: it sits at its desk and types, and its screen scrolls in its project's colour
-- **idle**: it gets up and walks around its project's rug, now and then sitting back down
-- **idle for 10 minutes**: it falls asleep at its desk
+- **idle**: it gets up and takes a break: coffee, the printer, the cooler, ping-pong, chess, the plants, the
+  window, the armchair, a meeting at the whiteboard
+- **asleep**: a session whose process Claude Code has stopped charges on a mat; opening it wakes it
 - **needs input**: it sits at its desk with its hand up (a question for you, a permission prompt)
 - **talking**: a bot that sends another one a message beams it across the room, antenna to antenna
 
-Sessions started in the same directory share a rug: one rug per project, one desk per bot, labelled
-with the folder name. The `+` beside a desk's screen starts another bot in that project; carry a desk to a door to remove it.
+Sessions started in the same directory share a desk, labelled with the folder name; a session in a git
+worktree sits at its repository's desk, the worktree a laptop on the cabinet. The `+` beside a desk's
+screen starts another bot there; the empty cabinet adds a project.
 
-Click a bot and its session opens next to the room. That pane is a real terminal running
-`claude attach <id>`, so you are using Claude Code itself. Close it (✕, or click the bot again)
-and the bot keeps working. Close burrow altogether and every bot keeps working too.
+Click a bot and its session opens next to the room, as a tile: a real terminal running `claude attach <id>`,
+so you are using Claude Code itself. Shift-click adds a tile beside the open ones; drag a tile by its band
+onto another to arrange them. Close one (✕, or click the floor) and the bot keeps working. Close burrow
+altogether and every bot keeps working too. To stop a session, carry its bot to its machine's door or onto
+the fire: a sign counts five seconds down, a click on it is the undo.
+
+Everything else happens in the room as well: drag furniture where you want it; the closet on the wall
+holds more (drag a piece into the room), the fire burns what is dragged into it (a desk, furniture, a
+bot); the coffee pot and the cooler's bottle show what is left of your usage limits; the printer prints
+a report; the chess and ping-pong tables are games against an idle bot; a pair room (pair.daems.me) is a
+table with a speakerphone: click it for the chat, drop a bot on it and it joins. Drop yourself or a bot on
+a piece of furniture and it uses it.
 
 ## How it works
 
@@ -53,13 +64,12 @@ Desktop app's SSH environments use too. The **+** on the wall adds one there:
 ]
 ```
 
-`sshPort` and `sshIdentityFile` are used too. A desk on another machine is labelled `machine:project`, as scp
-writes it; the other machines are lettered on the wall (in red when burrow can't reach one: hover it for why).
+`sshPort` and `sshIdentityFile` are used too. Each machine is a door in the wall (the first one is this
+machine); its desks and door are painted its colour. Bots come and go through their machine's door; a
+machine burrow can't reach has its door boarded up (hover it for why). The empty door frame adds a machine.
 
-A desk is there while bots work at it, its name on a paper note: click the note to keep the desk (its name on
-a plate), the x by its screen to let it go. A session in a git worktree sits at its repository's desk; the
-worktree is a laptop on the cabinet beside the project's screen, plugged into it. burrow itself keeps only the
-desks you keep and where the furniture stands, in `~/.config/burrow/room.json`.
+Every directory a session was ever seen in has a desk until you burn it. burrow itself keeps only the
+desks, the furniture and where it stands, your face, and the pair rooms' links, in `~/.config/burrow/room.json`.
 
 The Rust app has a room per machine instead, in `~/.config/burrow/rooms.json`, written by its **+ machine** button:
 
@@ -93,7 +103,9 @@ its plants, whiteboard, armchair, meeting table, stools and mug are Pixel Agents
 A new directory has to be trusted by Claude Code once (run `claude` there by hand) before a background
 session can start in it; burrow shows Claude's message if it isn't.
 
-Test hooks: `BURROW_OPEN=<id>` opens that bot as soon as it shows up in the first room;
+Test hooks (Rust app): `BURROW_OPEN=<id>` opens that bot as soon as it shows up in the first room;
 `BURROW_SPAWN=<dir>` starts a bot there at launch.
 `BURROW_DEMO=1` fills the rooms with made-up bots (nothing real is touched); `BURROW_SHOT=<file.png>` makes
 burrow save a screenshot of itself every second; `BURROW_ADD_DIR=1` opens the add-a-project dialog.
+Browser version: `BURROW_DEMO=1 BURROW_PORT=7778 python3 web/server.py`, and `node web/look.mjs URL W H steps.json`
+drives it in headless Chrome (clicks, drags, screenshots).

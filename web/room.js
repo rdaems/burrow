@@ -243,7 +243,7 @@ function startRoom(cv, app) {
     printer: "printer", armchair: "armchair", plant: "plant", board: "whiteboard", window: "window", clock: "clock", add: "project cabinet", pair: "pair room" };
   // the default places for desks: columns of them, as many as the room is wide
   const SLOTS = () => [104, 150, 196, 242, 288, 334].flatMap((y) => [...Array(Math.max(1, Math.floor((W - 10) / 124)))].map((_, i) => [10 + i * 124, y]));
-  const ON_WALL = new Set(["closet", "window", "clock"]);
+  const ON_WALL = new Set(["closet", "window", "clock"]), WALL_Y = { closet: 2, window: 4, clock: 5 };
   const onWall = (key) => ON_WALL.has(KIND(key));
   // what each piece covers, from where it stands
   function foot(key, [x, y], u) {
@@ -273,7 +273,7 @@ function startRoom(cv, app) {
   function clampAt(key, at, u, step = 1) {
     const q = (v) => Math.round(v / step) * step;
     const r = foot(key, at, u), [x, y] = at;
-    if (onWall(key)) return [q(Math.max(wallFrom() - (r[0] - x), Math.min(W - 2 - (r[2] - x), x))), y];
+    if (onWall(key)) return [q(Math.max(wallFrom() - (r[0] - x), Math.min(W - 2 - (r[2] - x), x))), WALL_Y[KIND(key)]];
     return [q(Math.max(2 - (r[0] - x), Math.min(W - 2 - (r[2] - x), x))),
             q(Math.max(WALL + 2 - (r[1] - y), Math.min(H - 1 - (r[3] - y), y)))];
   }
@@ -424,12 +424,12 @@ function startRoom(cv, app) {
       // a bot whose session is open sits at its desk for you, whatever it was doing; when the
       // session closes it gets up again
       f.open = opens.includes(b.id);
-      if (f.open && !work && !["desk", "door"].includes(f.act.kind)) { end(f); f.act = { kind: "desk" }; }
+      if (f.open && !work && !["desk", "doom"].includes(f.act.kind)) { end(f); f.act = { kind: "desk" }; }
       if (!f.open && !work && f.act.kind === "desk" && f.sat) f.act = { kind: "stand", left: 0.5 };
       if (work !== f.work) {
         f.work = work; f.idleSince = now;
         // to work, whatever it was doing (a bot by the door stays)
-        if (work && f.act.kind !== "door") { end(f); f.act = { kind: "desk" }; }
+        if (work && f.act.kind !== "doom") { end(f); f.act = { kind: "desk" }; }
         if (!work && f.act.kind === "desk") f.act = { kind: "stand", left: 0.5 + (fnv(b.id) % 20) / 10 };
       }
     }
@@ -485,7 +485,7 @@ function startRoom(cv, app) {
     // process Claude Code stopped charges too (it comes back when opened). You, when the window
     // has been left alone a minute, as pair's people who are away
     const sleepy = f.human ? app.away() > 60 : !f.work && !f.open && (now - f.idleSince > sleepAfter || (f.b && f.b.alive === false));
-    if (sleepy && f.act.kind !== "sleep" && f.act.kind !== "door") { end(f); f.act = { kind: "sleep", there: false }; }
+    if (sleepy && f.act.kind !== "sleep" && f.act.kind !== "doom") { end(f); f.act = { kind: "sleep", there: false }; }
     if (!sleepy && f.act.kind === "sleep") end(f);
     // you: with the bot whose session is open, at the table of the game you play; else about the
     // room like the others
@@ -783,7 +783,7 @@ function startRoom(cv, app) {
     s.machines.forEach((m, i) => {
       const x0 = 2 + i * DOOR, h = over(x0, WALL - 20, x0 + 16, WALL);
       const ajar = performance.now() - (w.doorAt[m.id] || 0) < 900 ||
-        [...w.folk.values()].some((f) => f.b && (f.b.m || "") === m.id && (f.act.kind === "door" || (f.leaving && f.y < WALL + 12)));
+        [...w.folk.values()].some((f) => f.b && (f.b.m || "") === m.id && ((f.act.kind === "doom" && f.act.where === "door") || (f.leaving && f.y < WALL + 12)));
       drawDoor(ctx, x0, paintOf(m.id), ajar && !m.error, !!m.error, h);
       if (h) { for (const b of bots) if ((b.m || "") === m.id) hl.add(b.id); tip = { text: clip(m.error ? m.name + ": " + m.error : m.name, W - 8), x: x0 + 8, y: 20 }; }
     });
@@ -858,7 +858,7 @@ function startRoom(cv, app) {
       const fd = moving && feeding && L.desks.find((d) => d.key === moving.key);
       const onIt = !moving && !held && over(...r);
       if (onIt && !w.sparkOn) { w.sparkOn = true; w.sparks = performance.now(); } else if (!onIt) w.sparkOn = false;
-      const burst = Math.max(performance.now() - w.sparks, performance.now() - w.flare) < 1500 ? Math.min(performance.now() - w.sparks, performance.now() - w.flare) / 1500 : -1;
+      const since = Math.min(performance.now() - w.sparks, performance.now() - w.flare), burst = since < 1500 ? since / 1500 : -1;
       items.push([F.y1, () => outlined(ctx, r, !!feeding || onIt, (c) => drawFire(c, F, T, !!feeding, burst), feeding ? RED : TERRACOTTA)]);
       const tx = F.x0 + 16, ty = F.y0 - 2;
       if (fd) tip = { text: fd.seats.length ? fd.label + " has bots" : "burn " + fd.label, x: tx, y: ty };

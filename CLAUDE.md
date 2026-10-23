@@ -377,6 +377,27 @@ person's own page is `/h/<token>` (the bookmark is the login), its `/state` JSON
   pair's, not its burrow name. If he wants them the same, that is a change in pair (a `?name=` on the
   bring link), not here.
 
+## Review round (2026-10-23, late evening)
+
+He: "do a code review of this project. Catch up on the rust version (keep them both). Go over the UI/UX,
+there's many small bugs and inconsistencies"; "As a style reference, I like the UI of pair room more.
+Though the assets are better here." A second session of his, `rust-vs-browser-drift-check`, was on the
+Rust side at the same time, so the Rust app was only checked to build (`cargo check` clean) and left alone.
+- Fixed: a wall piece kept the height it was put down at (his closet stood on the floor, drawn frontally):
+  `clampAt` pins wall pieces to `WALL_Y`. The stop countdown was cancelled by the bot's work changing, its
+  session opening or sleep (stale `"door"` act checks → `"doom"`). The fire's spark burst took the older
+  of a stir and a burning. `/api/furniture` without add or remove raised an unbound-variable error.
+  The closet's pictures are redrawn each time it opens (they were cached blank before the sprites loaded).
+- The chrome after pair (burrow.css): tiles and the view are pair's panels: a 1 px line, 8 px corners,
+  a band on `--box` with the name in terracotta (pair's panel h2) and the ✕ as pair's `.x`; the focused
+  or hovered tile has a terracotta line and a tinted band (pair's own-message bubble), no solid band any
+  more; the view is a panel on `--box` with pair's shadow; fields on `--code` with 6 px corners, `.btn`
+  with 6 px corners, chips and cards rounded as pair's. His earlier "no rounded corners anywhere" was
+  about the room's pixel art and the first tiles; pair's UI has them, so the HTML chrome has them now.
+  The room itself (canvas) is unchanged. View titles read like pair's panel titles ("Add a project",
+  "Furniture", "Report", "Pair room", "Your face").
+- README brought up to date (one room, desks for good, tiles, the closet, the fire, the games, pair).
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

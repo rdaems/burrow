@@ -826,6 +826,8 @@ class Handler(BaseHTTPRequestHandler):
                     key = b["remove"]
                     if kind_of(key) in FIXED or key not in fs:
                         raise RuntimeError("that stays")
+                else:
+                    raise RuntimeError("add or remove what?")
                     fs.remove(key)
                     hub.room["layout"].pop(key, None)
                     hub.room.get("pair", {}).pop(key, None)
