@@ -45,6 +45,14 @@
         <div id="vYou" class="faces" hidden><button type="button" class="btn" id="youPrev" title="previous face">←</button><span class="face"><img id="youFace" alt="your face"></span><button type="button" class="btn" id="youNext" title="another face">→</button></div>
         <div id="vCloset" class="closet" hidden></div>
         <pre id="vReport" class="paper" hidden></pre>
+        <div id="vPair" hidden>
+          <form class="vform pair-link">
+            <p>A pair room (<a href="https://pair.daems.me" target="_blank" rel="noopener">pair.daems.me</a>): the link of <b>your own page</b> in it (…/h/…), the one you bookmarked.</p>
+            <input class="field" name="url" placeholder="https://pair.daems.me/h/…" autocomplete="off" spellcheck="false">
+            <div class="err"></div>
+          </form>
+          <iframe class="pair-room" hidden title="the pair room"></iframe>
+        </div>
         <div id="chess" class="chess" hidden></div>
         <div id="pong" class="pong" hidden></div>
       </div>
@@ -101,6 +109,8 @@ async function act(a) {
   else if (a.kind === "you") askYou();
   else if (a.kind === "closet") { openView("closet"); fillCloset(); }
   else if (a.kind === "report") { openView("report"); fillReport(); }
+  else if (a.kind === "pairOpen") openPair(a.key);
+  else if (a.kind === "pair" && b) joinPair(a.key, b);
   else if (a.kind === "burn") { const r = await api("/api/furniture", { remove: a.key }); if (r.error) note(r.error); }
   else if (a.kind === "open" && b) openBot(b.m, b.id, a.shift);
   else if (a.kind === "chess" || a.kind === "pong") openGame(a.kind);
@@ -154,8 +164,8 @@ addEventListener("focus", focus); addEventListener("blur", focus); document.addE
 }
 
 // ---- the view: one thing at a time on the right, in place of the tiles, framed like one
-const PANELS = { dir: "#vDir", machine: "#vMachine", you: "#vYou", closet: "#vCloset", chess: "#chess", pong: "#pong", report: "#vReport" };
-const TITLES = { dir: "a project", machine: "a machine", you: "you", closet: "the closet", chess: "chess", pong: "ping-pong", report: "report" };
+const PANELS = { dir: "#vDir", machine: "#vMachine", you: "#vYou", closet: "#vCloset", chess: "#chess", pong: "#pong", report: "#vReport", pair: "#vPair" };
+const TITLES = { dir: "a project", machine: "a machine", you: "you", closet: "the closet", chess: "chess", pong: "ping-pong", report: "report", pair: "pair" };
 function openView(kind) {
   if (viewKind && viewKind !== kind) closeView(true);
   for (const t of tiles.all()) closeTile(t);
@@ -232,7 +242,7 @@ function askYou() {
 
 // ---- the closet: the furniture there is, drawn as it stands in the room; drag a piece into the
 // room to put it there, as many as you like. The fireplace takes a piece back out (it burns)
-const CATALOGUE = ["plant", "armchair", "mat", "window", "clock", "board", "meet", "chess", "pong", "coffee", "cooler", "printer", "add"];
+const CATALOGUE = ["plant", "armchair", "mat", "window", "clock", "board", "meet", "chess", "pong", "coffee", "cooler", "printer", "add", "pair"];
 let closetFilled = false;
 function fillCloset() {
   if (closetFilled) return;
@@ -247,6 +257,33 @@ function fillCloset() {
     el.appendChild(it);
   }
   closetFilled = !!el.querySelector("img[src^='data:image/png;base64,iVBOR']");
+}
+// ---- a pair room (rdaems/pair-prompting): the piece holds the link of your own page in the room;
+// a click shows the chat itself in the view; a bot dropped on the piece gets the room's "bring"
+// link typed into its session, and joins the chat as a new agent (pair gives it a name of its own)
+let pairKey = null;
+function openPair(key) {
+  pairKey = key;
+  openView("pair");
+  const info = (state && state.pair || {})[key], form = $("#vPair form"), fr = $("#vPair iframe");
+  form.querySelector(".err").textContent = "";
+  form.hidden = !!info; fr.hidden = !info;
+  if (info) { view.querySelector(".tas").textContent = info.room || ""; if (fr.src !== info.url) fr.src = info.url; }
+  else { fr.removeAttribute("src"); form.querySelector("input").value = ""; form.querySelector("input").focus(); }
+}
+$("#vPair form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const err = $("#vPair .err"), url = $("#vPair input").value.trim();
+  err.textContent = "…";
+  const r = await api("/api/pair", { key: pairKey, url });
+  if (r.error) { err.textContent = r.error; return; }
+  openPair(pairKey);
+});
+async function joinPair(key, b) {
+  const r = await api("/api/pair", { key });
+  if (r.error) { if (/no room linked/.test(r.error)) openPair(key); else note(r.error); return; }
+  const t = openBot(b.m, b.id, true), x = r.bring + "\r";
+  if (t.ws && t.ws.readyState === 1) t.ws.send(enc.encode(x)); else t.typed.push(x);
 }
 // ---- the printer's report: what goes on, as a printed page
 function fillReport() {

@@ -10,7 +10,7 @@
 #   BURROW_DEMO=1 python3 web/server.py    made-up bots, for working on the room
 
 import base64, collections, fcntl, getpass, hashlib, json, os, pty, queue, re, select, shlex, signal, socket, struct, subprocess
-import termios, threading, time, random
+import termios, threading, time, random, urllib.request, urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
@@ -130,7 +130,27 @@ def split_unit(u):
 FURNITURE = ["meet", "pong", "chess", "mat0", "mat1", "mat2", "coffee", "cooler", "printer", "armchair",
              "plant0", "plant1", "board", "window", "clock", "fire", "closet", "add"]
 FIXED = {"fire", "closet"}
-KINDS = {"meet", "pong", "chess", "mat", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "clock", "add"}
+KINDS = {"meet", "pong", "chess", "mat", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "clock", "add", "pair"}
+
+
+# A pair room (rdaems/pair-prompting, e.g. pair.daems.me): a chat where people and agents talk. The
+# piece holds your own page's link there (/h/<token>, the bookmark that is your login); its `state`
+# gives the room's name and your "bring" link, which makes a new agent of whatever chat it is pasted
+# into. A bot dropped on the piece gets that link typed into its session, and joins.
+def pair_state(url):
+    u = urlparse(url)
+    if u.scheme not in ("http", "https") or not re.fullmatch(r"/h/[A-Za-z0-9_-]+/?", u.path or ""):
+        raise RuntimeError("that is not your page in a pair room (…/h/<token>)")
+    base = f"{u.scheme}://{u.netloc}{u.path.rstrip('/')}"
+    try:
+        with urllib.request.urlopen(urllib.request.Request(base + "/state?since=0", headers={"Accept": "application/json"}), timeout=15) as r:
+            st = json.loads(r.read().decode())
+    except urllib.error.HTTPError as e:
+        raise RuntimeError("pair does not know that page" if e.code == 404 else f"pair answered {e.code}")
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        raise RuntimeError(f"pair is out of reach: {str(e)[:80]}")
+    return {"url": base, "room": st.get("room") or "", "bring": st.get("bring") or "", "invite": st.get("invite") or "",
+            "people": [p.get("name") for p in st.get("people") or []]}
 
 
 def kind_of(key):
@@ -323,7 +343,7 @@ class Hub:
             bots = self.bots()
             return {"machines": [{"id": mid, "name": m["name"], "ssh": m.get("ssh") or "", **{k: v for k, v in self.feeds.get(mid, {}).items() if k != "bots"}}
                                  for mid, m in self.machines.items()],
-                    "desks": self.desks(bots), "bots": bots, "layout": self.room["layout"], "furniture": self.room["furniture"],
+                    "desks": self.desks(bots), "bots": bots, "layout": self.room["layout"], "furniture": self.room["furniture"], "pair": self.room.get("pair", {}),
                     "usage": self.usage, "chess": self.chess_view(), "demo": DEMO, "width": self.room.get("width"),
                     "you": {"name": USER, **(self.room.get("you") or {})}}
 
@@ -808,9 +828,25 @@ class Handler(BaseHTTPRequestHandler):
                         raise RuntimeError("that stays")
                     fs.remove(key)
                     hub.room["layout"].pop(key, None)
+                    hub.room.get("pair", {}).pop(key, None)
                 save_room(hub.room)
             hub.push("state", hub.state())
             return {"key": key}
+        if path == "/api/pair":              # a pair piece: its link set ({key, url}), or looked up ({key}): the room and the bring link
+            key = b.get("key") or ""
+            if kind_of(key) != "pair":
+                raise RuntimeError("not a pair piece")
+            with hub.lock:
+                have = hub.room.setdefault("pair", {}).get(key)
+            url = (b.get("url") or "").strip() or (have or {}).get("url")
+            if not url:
+                raise RuntimeError("no room linked yet")
+            st = pair_state(url)
+            with hub.lock:
+                hub.room["pair"][key] = {"url": st["url"], "room": st["room"]}
+                save_room(hub.room)
+            hub.push("state", hub.state())
+            return st
         if path == "/api/room":              # the room's width in dots (the divider, dragged)
             hub.room["width"] = max(200, min(1200, int(b.get("width") or 256)))
             save_room(hub.room)

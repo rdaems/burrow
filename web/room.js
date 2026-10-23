@@ -240,7 +240,7 @@ function startRoom(cv, app) {
   const KIND = (key) => key.replace(/\d+$/, "");
   const FIXED = new Set(["fire", "closet"]);
   const NAMES = { meet: "meeting table", pong: "ping-pong table", chess: "chess table", mat: "charging mat", coffee: "coffee machine", cooler: "water cooler",
-    printer: "printer", armchair: "armchair", plant: "plant", board: "whiteboard", window: "window", clock: "clock", add: "project cabinet" };
+    printer: "printer", armchair: "armchair", plant: "plant", board: "whiteboard", window: "window", clock: "clock", add: "project cabinet", pair: "pair room" };
   // the default places for desks: columns of them, as many as the room is wide
   const SLOTS = () => [104, 150, 196, 242, 288, 334].flatMap((y) => [...Array(Math.max(1, Math.floor((W - 10) / 124)))].map((_, i) => [10 + i * 124, y]));
   const ON_WALL = new Set(["closet", "window", "clock"]);
@@ -263,6 +263,7 @@ function startRoom(cv, app) {
       case "clock": return [x, y, x + 12, y + 10];
       case "fire": return [x, y - 28, x + 32, y + 1];
       case "closet": return [x, y, x + 22, y + 24];
+      case "pair": return [x - 13, y - 20, x + 13, y + 1];
       default: return [x - 8, y - 31, x + 8, y + 1];     // a plant
     }
   }
@@ -329,7 +330,7 @@ function startRoom(cv, app) {
       floorY: FLOORY, board: b0 && { key: b0.key, x: b0.x, y: b0.y, x0: b0.x - 16, y0: b0.y - 26, x1: b0.x + 16, y1: b0.y }, clock: c0 && { key: c0.key, x0: c0.x, y0: c0.y },
       windows: all("window").map((p) => ({ key: p.key, x0: p.x, y0: p.y, x1: p.x + 21, y1: p.y + 18 })),
       fire: f0 && { key: f0.key, x0: f0.x, y0: f0.y - 28, x1: f0.x + 32, y1: f0.y }, closet: cl && { key: cl.key, x0: cl.x, y0: cl.y, x1: cl.x + 22, y1: cl.y + 24 },
-      meet: one("meet"), pong: one("pong"), chess: one("chess"), mats: all("mat"),
+      meet: one("meet"), pong: one("pong"), chess: one("chess"), mats: all("mat"), pairs: all("pair"),
       cooler: one("cooler"), plants: all("plant"), printer: one("printer"), chairs: all("armchair"),
       coffeeAt: one("coffee"), floor: { x0: 14, y0: WALL + 8, x1: W - 14, y1: FLOORY - 4 }, placed,
     };
@@ -865,6 +866,15 @@ function startRoom(cv, app) {
       else if (feeding) tip = { text: "stop " + held.b.name, x: tx, y: ty };
     }
     L.plants.forEach((pl) => piece(pl, "plant", (c) => drawPlant(c, pl, +(pl.key.match(/\d+$/) || [0])[0] % 2, lit(pl.key), T)));
+    for (const pr of L.pairs) {
+      // a pair room (a chat of people and agents, pair.daems.me): a click opens the chat; a bot
+      // dropped on it joins the chat. Its light is on once a room is linked
+      const info = (s.pair || {})[pr.key], h = hot(pr.x - 13, pr.y - 20, pr.x + 13, pr.y + 1, { kind: "pairOpen", key: pr.key });
+      const over_ = held && held.b && !held.b.human && pointer && inRect(pointer, foot("pair", [pr.x, pr.y]));
+      piece(pr, "pair", (c) => drawPair(c, pr, !!info, T, over_));
+      if (h) tip = { text: info ? info.room || "pair" : "pair: link a room", x: pr.x, y: pr.y - 22 };
+      else if (over_) tip = { text: info ? held.b.name + " joins " + (info.room || "the room") : "no room linked yet", x: pr.x, y: pr.y - 22 };
+    }
     if (L.pong) {
       piece(L.pong, "pong", (c) => drawPong(c, L.pong, w));
       if (hot(L.pong.x - 16, L.pong.y - 17, L.pong.x + 16, L.pong.y, { kind: "pong" })) tip = { text: "ping-pong", x: L.pong.x, y: L.pong.y - 18 };
@@ -1128,6 +1138,20 @@ function startRoom(cv, app) {
       else ctx.fillRect(x, y, 1, 1);
     }
   }
+  // a pair room: a small round table with a speakerphone on it, its light on while a room is linked,
+  // blinking while a bot is held over it (it would join the chat)
+  function drawPair(ctx, p, linked, T, over) {
+    const { x, y } = p, PL = { k: "#3f3740", d: "#595e60", m: "#757b7c", hi: "#b5bfc7" };
+    ELL(13, 4, 8).forEach((hw, j) => { rect(ctx, x - hw, y - 20 + j, hw * 2, 1, WOOD.k); if (hw > 1) rect(ctx, x - hw + 1, y - 20 + j, hw * 2 - 2, 1, j < 2 ? WOOD.hi : WOOD.top); });
+    for (const [yy, hw] of [[-12, 12], [-11, 11], [-10, 9]]) { rect(ctx, x - hw, y + yy, hw * 2, 1, WOOD.k); rect(ctx, x - hw + 1, y + yy, hw * 2 - 2, 1, WOOD.d); }
+    rect(ctx, x - 2, y - 9, 4, 8, WOOD.k); rect(ctx, x - 1, y - 9, 2, 8, WOOD.d);                       // the stem and the foot
+    rect(ctx, x - 6, y - 1, 12, 2, WOOD.k); rect(ctx, x - 5, y - 1, 10, 1, WOOD.d); rect(ctx, x - 5, y + 1, 10, 1, SHADOW);
+    // the speakerphone: a dark triangle-ish puck, a light on top
+    rect(ctx, x - 4, y - 18, 8, 4, PL.k); rect(ctx, x - 3, y - 18, 6, 3, PL.d); rect(ctx, x - 3, y - 18, 6, 1, PL.m);
+    rect(ctx, x - 6, y - 16, 2, 2, PL.k); rect(ctx, x + 4, y - 16, 2, 2, PL.k); rect(ctx, x - 1, y - 20, 2, 2, PL.k);
+    const on = linked && (!over || Math.floor(T * 6) % 2);
+    rect(ctx, x, y - 17, 1, 1, on ? SP.g : "#2a2f33");
+  }
   // the empty cabinet that adds a project: a plate with a + on it
   function drawAdd(ctx, a, lit) {
     slab(ctx, a.x0, a.y0, ADD_W, 4, 11, WOOD);
@@ -1164,6 +1188,7 @@ function startRoom(cv, app) {
       case "clock": drawClock(ctx, x + 6, y + 5); break;
       case "fire": drawFire(ctx, { x0: x, y0: y - 28, x1: x + 32, y1: y }, T, false); break;
       case "closet": drawCloset(ctx, { x0: x, y0: y }, false); break;
+      case "pair": drawPair(ctx, pt, true, T, false); break;
       case "add": drawAdd(ctx, { x0: x, y0: y - 15, x1: x + ADD_W, y1: y }, false); break;
     }
   }
@@ -1389,7 +1414,11 @@ function startRoom(cv, app) {
       if (out) { f.act = back(); if (bot) app.carried(f.id, e.clientX, e.clientY); }
       else if (bot && pointer && Math.abs(pointer.x - doorX(f.b.m)) < 11 && pointer.y < WALL + 14) f.act = { kind: "doom", where: "door", left: 5 };
       else if (bot && pointer && lastL && lastL.fire && inRect(pointer, [lastL.fire.x0, lastL.fire.y0, lastL.fire.x1, lastL.fire.y1])) f.act = { kind: "doom", where: "fire", left: 5 };
-      else f.act = (pointer && !f.work && useAt(f, pieceAt(pointer))) || back();
+      else {
+        const p = pointer && pieceAt(pointer);
+        if (p && KIND(p.key) === "pair") { if (bot) app.act({ kind: "pair", key: p.key, id: f.id }); else app.act({ kind: "pairOpen", key: p.key }); f.act = back(); }
+        else f.act = (pointer && !f.work && useAt(f, p)) || back();
+      }
       f.legs = "stand";
     } else if (press && press.action && press.action.kind === "undo") { const f = world().folk.get(press.action.id); if (f && f.act.kind === "doom") f.act = f.work ? { kind: "desk" } : rest(); }
     else if (press && press.action) { if (press.action.kind === "report") world().print = performance.now(); app.act({ ...press.action, shift: press.shift }); }

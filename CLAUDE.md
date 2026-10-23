@@ -358,6 +358,25 @@ on how many of a kind; your own avatar draggable and dropped onto things to use 
 - look.mjs: `{dragTo: "js giving [[x,y],…]"}`; room.js exposes `room.at(id)` (a figure's place in
   page pixels) and `room.hovered()` for driving it.
 
+## The pair room piece (2026-10-23, night)
+
+He: "the names of the bots are the same as in the pair room. Add a furniture piece that represents a pair
+room, hosted at pair.daems.me ie., this tool directly works as a frontend for that pair room server. If you
+click it you open the chat, you can drag bots on it to connect them to that chat". pair (rdaems/pair-
+prompting, read from GitHub; `pair_server.py` has no CORS and no frame headers): a room is its links; a
+person's own page is `/h/<token>` (the bookmark is the login), its `/state` JSON has the room's name and
+`bring`, a `/n/<token>` link; every chat that link is pasted into becomes a new agent, named by pair
+(`BOT_NAMES`, random), with the person's colour; the agent then talks over `/a/<its token>` with curl.
+- The piece (`pair` kind, from the closet): a round table with a speakerphone, its light on once a room
+  is linked. room.json `pair: {key: {url, room}}`; `/api/pair {key, url}` sets the link (the server fetches
+  `/state` to check it and for the name), `{key}` looks it up again and returns `bring`.
+- A click: the view shows the chat itself, pair's page in an iframe (`#vPair`); unlinked, a one-field form
+  for your page's link. A bot dropped on it: `joinPair` opens its session and types the bring link + Enter
+  (so Claude fetches it and joins). You dropped on it: the chat.
+- Not done: naming. pair names agents itself and `/n/<token>` takes no name, so a bot's pair handle is
+  pair's, not its burrow name. If he wants them the same, that is a change in pair (a `?name=` on the
+  bring link), not here.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

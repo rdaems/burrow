@@ -59,6 +59,8 @@ header { flex:none; background:var(--ink); padding:4px 16px; }
 .tile.view .tbar { cursor:default; }
 .tile.view .tbar button:focus { outline:none; }
 .vbody { flex:0 1 auto; min-height:0; overflow:auto; padding:18px 22px; }
+.pair-room { display:block; width:100%; height:calc(100vh - 160px); border:0; background:var(--night); }
+.vform a { color:var(--me); }
 .paper { margin:0; padding:16px 20px; background:#fbf8f1; color:#140f1e; font:13px/1.5 var(--mono); white-space:pre; overflow:auto; max-width:100%; }
 .vform { max-width:440px; }
 .vform h2 { margin:0 0 6px; font-size:13px; color:var(--me); font-weight:700; }
