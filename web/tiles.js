@@ -4,7 +4,8 @@
 // a side, it goes there (the other makes room); in the middle, they swap places. Drag the gap between
 // two tiles to resize them. Nothing is remembered: the tiles are what is open now.
 //
-// startTiles(el) → { add(tile), remove(tile), focus(tile), focused(), all(), relayout() }
+// startTiles(el) → { add(tile), remove(tile), focus(tile), focused(), all(), relayout(),
+//   preview(clientX, clientY), hide(), addAt(tile, target), forget(tile) }  (something carried in from outside)
 // newTile() → { el, bar, body, pinned, name(text, sub) }; the caller fills `body` and wires the
 // buttons (`el.querySelector(".tx")`, `.tpin`).
 
@@ -20,7 +21,7 @@ function newTile() {
 }
 
 function startTiles(el) {
-  const G = 6, MIN = 90;                     // the gap between tiles, the least a tile gets
+  const G = 10, OUT = 10, MIN = 90;          // the gap between tiles, around them, the least a tile gets
   let root = null, focusedTile = null;       // a node: {leaf: tile, parent} | {dir: "row"|"col", kids: [...], sizes: [...], parent}
   const gaps = [];                           // the draggable gaps, remade on each layout
   const drop = document.createElement("div");
@@ -85,7 +86,7 @@ function startTiles(el) {
   function relayout() {
     for (const g of gaps.splice(0)) g.remove();
     rects.clear();
-    if (root) place(root, { x: 0, y: 0, w: el.clientWidth, h: el.clientHeight });
+    if (root) place(root, { x: OUT, y: OUT, w: el.clientWidth - 2 * OUT, h: el.clientHeight - 2 * OUT });
     el.classList.toggle("empty", !root);
   }
   function resize(e, n, i, g) {              // drag the gap: the two beside it trade room
@@ -130,6 +131,47 @@ function startTiles(el) {
     if (tile) tile.el.classList.add("focus");
   }
 
+  // the drop zone under a point (client coordinates), shown: a side of a tile, or its middle; with
+  // nothing open, the whole pane. `not` is the tile being dragged, which is no target
+  function preview(cx, cy, not) {
+    drop.hidden = true;
+    const box = el.getBoundingClientRect();
+    if (cx < box.left || cx >= box.right || cy < box.top || cy >= box.bottom) return null;
+    const under = document.elementsFromPoint(cx, cy).find((x) => x.classList && x.classList.contains("tile") && (!not || x !== not.el));
+    const n = under && leaves(root).find((k) => k.leaf.el === under);
+    if (!n) {
+      if (root) return null;
+      Object.assign(drop.style, { left: OUT + "px", top: OUT + "px", width: el.clientWidth - 2 * OUT + "px", height: el.clientHeight - 2 * OUT + "px" });
+      drop.hidden = false;
+      return { n: null, side: "all" };
+    }
+    const r = rects.get(n), px = (cx - box.left - r.x) / r.w, py = (cy - box.top - r.y) / r.h;
+    const edge = Math.min(px, 1 - px, py, 1 - py);
+    const side = edge > 0.28 ? "swap" : px === edge ? "left" : 1 - px === edge ? "right" : py === edge ? "top" : "bottom";
+    const z = side === "swap" ? r : side === "left" ? { ...r, w: r.w / 2 } : side === "right" ? { ...r, x: r.x + r.w / 2, w: r.w / 2 }
+      : side === "top" ? { ...r, h: r.h / 2 } : { ...r, y: r.y + r.h / 2, h: r.h / 2 };
+    Object.assign(drop.style, { left: z.x + "px", top: z.y + "px", width: z.w + "px", height: z.h + "px" });
+    drop.hidden = false;
+    return { n, side };
+  }
+  const hide = () => { drop.hidden = true; };
+  // a new tile put where a preview pointed: beside the tile there, or in its place (the caller
+  // closes what was there; it is returned), or as the only one
+  function addAt(tile, target) {
+    if (!target || !target.n) { add(tile); return null; }
+    el.appendChild(tile.el);
+    let was = null;
+    if (target.side === "swap") { was = target.n.leaf; target.n.leaf = tile; }
+    else splitLeaf(target.n, tile, target.side);
+    tile.el.addEventListener("pointerdown", () => focus(tile), true);
+    tile.bar.addEventListener("pointerdown", (e) => lift(e, tile));
+    relayout();
+    focus(tile);
+    return was;
+  }
+  // a tile taken out of the tree without its place folding away (another took it)
+  function drop_(tile) { tile.el.remove(); if (focusedTile === tile) focusedTile = null; }
+
   // ---- dragging a tile by its band: a side of another tile puts it there, the middle swaps
   function lift(e, tile) {
     if (e.button !== 0 || e.target.tagName === "BUTTON" || leaves(root).length < 2) return;
@@ -137,20 +179,7 @@ function startTiles(el) {
     const x0 = e.clientX, y0 = e.clientY, bar = tile.bar;
     let on = false, target = null;
     try { bar.setPointerCapture(e.pointerId); } catch {}
-    const zone = (ev) => {
-      drop.hidden = true;
-      const under = document.elementsFromPoint(ev.clientX, ev.clientY).find((x) => x.classList && x.classList.contains("tile") && x !== tile.el);
-      const n = under && leaves(root).find((k) => k.leaf.el === under);
-      if (!n) return null;
-      const r = rects.get(n), px = (ev.clientX - el.getBoundingClientRect().left - r.x) / r.w, py = (ev.clientY - el.getBoundingClientRect().top - r.y) / r.h;
-      const edge = Math.min(px, 1 - px, py, 1 - py);
-      const side = edge > 0.28 ? "swap" : px === edge ? "left" : 1 - px === edge ? "right" : py === edge ? "top" : "bottom";
-      const z = side === "swap" ? r : side === "left" ? { ...r, w: r.w / 2 } : side === "right" ? { ...r, x: r.x + r.w / 2, w: r.w / 2 }
-        : side === "top" ? { ...r, h: r.h / 2 } : { ...r, y: r.y + r.h / 2, h: r.h / 2 };
-      Object.assign(drop.style, { left: z.x + "px", top: z.y + "px", width: z.w + "px", height: z.h + "px" });
-      drop.hidden = false;
-      return { n, side };
-    };
+    const zone = (ev) => preview(ev.clientX, ev.clientY, tile);
     bar.onpointermove = (ev) => {
       if (!on && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 4) return;
       on = true; tile.el.classList.add("lift");
@@ -169,5 +198,5 @@ function startTiles(el) {
 
   new ResizeObserver(relayout).observe(el);
   relayout();
-  return { add, remove, focus, focused: () => focusedTile, all: () => leaves(root).map((n) => n.leaf), relayout };
+  return { add, remove, focus, focused: () => focusedTile, all: () => leaves(root).map((n) => n.leaf), relayout, preview, hide, addAt, forget: drop_ };
 }

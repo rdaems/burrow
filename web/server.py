@@ -292,7 +292,8 @@ class Hub:
             return {"machines": [{"id": mid, "name": m["name"], "ssh": m.get("ssh") or "", **{k: v for k, v in self.feeds.get(mid, {}).items() if k != "bots"}}
                                  for mid, m in self.machines.items()],
                     "desks": self.desks(bots), "bots": bots, "layout": self.room["layout"],
-                    "usage": self.usage, "chess": self.chess_view(), "demo": DEMO, "you": {"name": USER}}
+                    "usage": self.usage, "chess": self.chess_view(), "demo": DEMO, "width": self.room.get("width"),
+                    "you": {"name": USER, **(self.room.get("you") or {})}}
 
     def keep(self, u, on):
         """a desk added (by you), or taken away: gone with its place, until a session runs there again"""
@@ -759,6 +760,15 @@ class Handler(BaseHTTPRequestHandler):
             save_room(hub.room)
             hub.push("state", hub.state())
             return {}
+        if path == "/api/room":              # the room's width in dots (the divider, dragged)
+            hub.room["width"] = max(200, min(1200, int(b.get("width") or 256)))
+            save_room(hub.room)
+            return {}
+        if path == "/api/you":               # how you look: the face's seed, your colour
+            hub.room["you"] = {k: str(b[k])[:40] for k in ("seed", "color") if b.get(k)}
+            save_room(hub.room)
+            hub.push("state", hub.state())
+            return {}
         if path == "/api/forget":            # a desk taken away (carried to the door)
             if any(x["unit"] == b["unit"] for x in hub.bots()):
                 raise RuntimeError("bots work at that desk")
@@ -766,6 +776,13 @@ class Handler(BaseHTTPRequestHandler):
             return {}
         mid = b.get("m") or ""
         m, poke = hub.machine(mid), hub.pokes.get(mid)
+        if path == "/api/complete":          # directories there that start with what was typed so far
+            d = (b.get("dir") or "").strip() or "~/"
+            if m.get("ssh") == "@demo":
+                base, _, part = d.rpartition("/")
+                return {"dirs": [f"{base}/{x}/" for x in ("alpha", "beta", "gamma") if x.startswith(part)]}
+            out = run(m, f"ls -d {sq(d)}*/ 2>/dev/null | head -40", timeout=15)
+            return {"dirs": [x for x in out.splitlines() if x]}
         if path == "/api/dir":               # a desk for a working directory there, kept
             d = (b.get("dir") or "").strip()
             if m.get("ssh") == "@demo":

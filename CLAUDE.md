@@ -240,6 +240,31 @@ visibility, let's do all the interfacing with the main desk with the computer sc
   bot (one pale chair when empty). Carry a desk up against a door: a sign "remove NAME?" over it (click),
   or "NAME has bots" in red (refused, server side too). Removing drops its layout entry as well.
 
+## His feedback round on the tiles (2026-10-23, night)
+
+- You talk the whole time a session has the focus (a dots bubble while standing with the bot), not only
+  while typing; the bot whose session is open sits down at its desk for you (`f.open`, in think()) and
+  gets up when the tile closes; never falls asleep while open.
+- The wall reaches the top bar (its dark top band read as a gap). Tiles have omarchy-like gaps: 10 px
+  between and around (`G`, `OUT` in tiles.js); the band is 28 px, ✕ and • 17 px; the focused tile wears
+  its bot's project colour (`--c` on the tile), the hovered one terracotta as before.
+- "Allow resizing the office layout horizontally": `#divider` between room and pane, dragged; the room's
+  width in dots is `W` (a `let` now), kept in room.json `width` (`/api/room`); default desk slots are
+  columns every 124 dots as the width allows (`SLOTS()`). "When there's just one pane, allow restructuring
+  it by dragging": read as dragging *into* it: a bot carried out of the room over the pane shows the tiles'
+  drop zone (`app.carry`/`carried`, `tiles.preview`/`addAt`), a side splits, the middle replaces, an empty
+  pane takes it whole.
+- The path of a desk's screen now starts with ~ (the 3x5 font had no ~ glyph, so it was dropped).
+- Removing a desk: he asked for "a container or a fire place, something that matches the 16bit theme".
+  A fireplace on the wall (default right of the whiteboard, draggable like the board): drag a desk into it,
+  the fire flares, "burn NAME" (or "NAME has bots", refused), let go and it is gone. The door sign is gone.
+- A click on your avatar: the `you` dialog, face (seed `name:n`, ◀ ▶) and clothes colour (swatches), kept in
+  room.json `you`, applied at once. The dir dialog completes paths as you type (`/api/complete`: the
+  machine's `ls -d prefix*/`, a datalist).
+- Games are not tiles any more: the chess or ping-pong table is clicked, an idle bot is drawn by lot, the
+  game starts at once in a dialog over everything (`#gameDialog`, pair's panels inside); closing it resigns.
+  pong.js got `start(bot)`. You and the bot walk to the room's table as before.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

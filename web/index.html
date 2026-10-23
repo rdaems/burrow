@@ -23,6 +23,7 @@
 </header>
 <main id="app">
   <div id="roomwrap"><canvas id="room"></canvas></div>
+  <div id="divider" title="drag: the room's width"></div>
   <section id="pane" class="empty"></section>
 </main>
 
@@ -31,7 +32,8 @@
     <h2>add a project</h2>
     <p>A working directory<span class="on"> on <b class="machine"></b></span>. Its bots will sit at one desk.</p>
     <select class="field" name="m"></select>
-    <input class="field" name="dir" placeholder="~/projects/something" autocomplete="off" spellcheck="false">
+    <input class="field" name="dir" list="dirs" placeholder="~/projects/something" autocomplete="off" spellcheck="false">
+    <datalist id="dirs"></datalist>
     <div class="err"></div>
   </form>
 </dialog>
@@ -44,16 +46,32 @@
     <div class="err"></div>
   </form>
 </dialog>
+<dialog id="youDialog">
+  <h2>you</h2>
+  <p>How you look in the room. The face is drawn from a seed, as everyone's; the colour is your clothes.</p>
+  <div class="you">
+    <img id="youFace" alt="">
+    <div>
+      <button class="btn" id="youPrev">◀ face</button><button class="btn" id="youNext">face ▶</button>
+      <div class="swatches" id="youColors"></div>
+    </div>
+  </div>
+</dialog>
+<dialog id="gameDialog" class="game">
+  <div class="tbar"><button class="tx" title="close">✕</button><span class="tname" id="gameName"></span></div>
+  <div class="gbody"><div id="chess" class="chess" hidden></div><div id="pong" class="pong" hidden></div></div>
+</dialog>
 
 <script>
-// burrow's page: the room (room.js) on the left, always the same, every machine's bots in it; on the
-// right what you opened, as tiles (tiles.js): a bot's session (`claude attach`, in xterm.js, through
-// server.py), the chess board, the ping-pong table. A click on a bot opens it in the focused tile,
-// unless that one is pinned (its • button) or you hold shift: then the old tile stays and the new one
-// splits it. ✕ closes a tile; so does a click on the room's floor (the unpinned ones), and a session's
-// pane closes itself when the attach ends (`exit`). The pointer on either side lights up the other: the
-// bot and its tile. You are in the room as well, so it knows what you do: which session has the focus,
-// what you type, whether the window is left alone.
+// burrow's page: the room (room.js) on the left, as wide as you drag the divider; on the right the
+// sessions you opened, as tiles (tiles.js): `claude attach` in xterm.js, through server.py. A click on
+// a bot opens it in the focused tile, unless that one is pinned (its • button) or you hold shift: then
+// the old tile stays and the new one splits it. A bot carried out of the room onto the pane opens where
+// you drop it. ✕ closes a tile; so does a click on the room's floor (the unpinned ones), and a session's
+// tile closes itself when the attach ends (`exit`). The pointer on either side lights up the other: the
+// bot and its tile. A game (chess, ping-pong) opens over everything, against an idle bot, at once.
+// You are in the room as well, so it knows what you do: which session has the focus, what you type,
+// whether the window is left alone; a click on you is how you look.
 let state = null;
 let blurAt = document.hasFocus() && !document.hidden ? 0 : performance.now();
 const $ = (s) => document.querySelector(s);
@@ -63,19 +81,23 @@ const byId = (id) => state && state.bots.find((b) => b.id === id);
 
 const tiles = startTiles($("#pane"));
 const botTiles = () => tiles.all().filter((t) => t.kind === "bot");
-const tileOf = (kind, id) => tiles.all().find((t) => t.kind === kind && (!id || t.id === id));
+const tileOf = (id) => tiles.all().find((t) => t.kind === "bot" && t.id === id);
 const focusedBot = () => { const t = tiles.focused(); return t && t.kind === "bot" ? t.id : null; };
 let hoverTile = null;                      // the tile the pointer is on
+const game = $("#gameDialog");
+let gameKind = null;                       // "chess" or "pong" while the game dialog is open
 
 const room = startRoom($("#room"), {
   state: () => state,
   open: focusedBot,
   opens: () => botTiles().map((t) => t.id),
-  chess: () => (tileOf("chess") && state && state.chess && !state.chess.result ? state.chess : null),
-  pong: () => { const t = tileOf("pong"); return t ? t.ui.playing() : null; },
+  chess: () => (game.open && gameKind === "chess" && state && state.chess && !state.chess.result ? state.chess : null),
+  pong: () => (game.open && gameKind === "pong" ? pongUI.playing() : null),
   away: () => (blurAt ? (performance.now() - blurAt) / 1000 : 0),
   hl: () => (hoverTile && hoverTile.kind === "bot" ? hoverTile.id : null),
   hover: (id) => { for (const t of botTiles()) t.el.classList.toggle("hl", t.id === id); },
+  carry: (id, cx, cy) => { if (cx === null) tiles.hide(); else tiles.preview(cx, cy); },
+  carried: (id, cx, cy) => { const z = tiles.preview(cx, cy); tiles.hide(); const b = byId(id); if (b && z) openBot(b.m, b.id, false, z); },
   act,
 });
 
@@ -83,9 +105,9 @@ async function act(a) {
   const b = a.id && byId(a.id);
   if (a.kind === "addMachine") ask($("#machineDialog"));
   else if (a.kind === "addDir") ask($("#dirDialog"));
+  else if (a.kind === "you") askYou();
   else if (a.kind === "open" && b) openBot(b.m, b.id, a.shift);
-  else if (a.kind === "chess") openGame("chess", a.shift);
-  else if (a.kind === "pong") openGame("pong", a.shift);
+  else if (a.kind === "chess" || a.kind === "pong") openGame(a.kind);
   else if (a.kind === "forget") { const r = await api("/api/forget", { unit: a.unit }); if (r.error) note(r.error); }
   else if (a.kind === "layout") await api("/api/layout", { layout: a.layout });
   else if (a.kind === "stop" && b) stopBot(b.m, b.id);
@@ -102,14 +124,15 @@ function note(msg) {                       // trouble goes on the wall, in red
 
 // ---- the feed
 const es = new EventSource("/events");
+let first = true;
 es.addEventListener("state", (e) => {
   state = JSON.parse(e.data);
+  if (first) { first = false; room.size(); }   // the room's width, as it was left
   for (const t of botTiles()) showWho(t);
-  const ch = tileOf("chess");
-  if (ch) showChess(ch);
+  if (game.open && gameKind === "chess") showChess();
   // a bot that gets work, or a question for you, leaves the ping-pong table
-  const pg = tileOf("pong"), pp = pg && pg.ui.playing();
-  if (pp && !state.bots.some((b) => b.id === pp.id && !b.busy && !b.waiting)) pg.ui.left();
+  const pp = game.open && gameKind === "pong" && pongUI.playing();
+  if (pp && !state.bots.some((b) => b.id === pp.id && !b.busy && !b.waiting)) pongUI.left();
   room.draw();
 });
 es.addEventListener("talk", (e) => { const t = JSON.parse(e.data); room.talk(t.from, t.to); });
@@ -120,7 +143,19 @@ const focus = () => {
 };
 addEventListener("focus", focus); addEventListener("blur", focus); document.addEventListener("visibilitychange", focus);
 
-// ---- dialogs: Enter adds, Esc closes
+// ---- the divider: the room as wide as you drag it (kept in room.json)
+{
+  const dv = $("#divider");
+  dv.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    const x0 = e.clientX, w0 = room.width();
+    try { dv.setPointerCapture(e.pointerId); } catch {}
+    dv.onpointermove = (ev) => room.width(w0 + ev.clientX - x0);
+    dv.onpointerup = () => { dv.onpointermove = dv.onpointerup = null; api("/api/room", { width: room.width() / 2 }); };
+  });
+}
+
+// ---- dialogs: Enter adds, Esc closes; the directory completes as you type (the machine's own ls)
 function ask(d) {
   d.querySelector(".err").textContent = "";
   const sel = d.querySelector("select");
@@ -135,8 +170,8 @@ function ask(d) {
   d.showModal();
   d.querySelector("input").focus();
 }
+for (const d of [$("#dirDialog"), $("#machineDialog"), $("#youDialog")]) d.addEventListener("click", (e) => { if (e.target === d) d.close(); });
 for (const d of [$("#dirDialog"), $("#machineDialog")]) {
-  d.addEventListener("click", (e) => { if (e.target === d) d.close(); });
   d.querySelector("form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.target)), err = d.querySelector(".err");
@@ -145,6 +180,38 @@ for (const d of [$("#dirDialog"), $("#machineDialog")]) {
     if (r.error) { err.textContent = r.error; return; }
     d.close();
   });
+}
+{
+  let timer = null, asked = "";
+  const inp = $("#dirDialog input"), list = $("#dirs");
+  inp.addEventListener("input", () => {
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      const dir = inp.value, m = $("#dirDialog select").value || "";
+      if (dir === asked) return;
+      asked = dir;
+      const r = await api("/api/complete", { m, dir });
+      if (r.dirs && inp.value === dir) list.innerHTML = r.dirs.map((x) => `<option value="${x.replace(/"/g, "&quot;")}"></option>`).join("");
+    }, 150);
+  });
+}
+
+// ---- you: how you look (room.json), a dialog off your avatar
+const COLORS = ["#d97757", "#4a76b8", "#e8402a", "#2fa087", "#f2a531", "#9a74d6", "#5fcf4a", "#f06b72", "#8fc0e8", "#c2c9d9"];
+function askYou() {
+  const d = $("#youDialog"), you = state.you, name = you.name;
+  let seed = you.seed || name, color = you.color || COLORS[0];
+  const show = () => {
+    $("#youFace").src = pixelAvatar(seed, "human", color);
+    $("#youColors").innerHTML = COLORS.map((c) => `<button style="background:${c}" class="${c === color ? "on" : ""}" data-c="${c}" title="${c}"></button>`).join("");
+  };
+  const save = () => { show(); api("/api/you", { seed, color }); };
+  const n = () => { const m = /:(\d+)$/.exec(seed); return m ? +m[1] : 0; };
+  $("#youPrev").onclick = () => { seed = name + ":" + Math.max(0, n() - 1); save(); };
+  $("#youNext").onclick = () => { seed = name + ":" + (n() + 1); save(); };
+  $("#youColors").onclick = (e) => { const b = e.target.closest("button"); if (b) { color = b.dataset.c; save(); } };
+  show();
+  d.showModal();
 }
 
 // ---- tiles: what every one has
@@ -165,12 +232,11 @@ function makeRoom(retain) {
   if (retain) cur.pin(true);
   else if (!cur.pinned) closeTile(cur);
 }
-function closeTile(t) {
-  if (t.kind === "bot" && t.ws) { const s = t.ws; t.ws = null; s.close(); }
-  if (t.kind === "pong" && !t.body.hidden) t.ui.close();
-  if (t.kind === "bot") t.term.dispose();
+function closeTile(t, keepPlace) {         // keepPlace: another tile took its place in the tree already
+  if (t.ws) { const s = t.ws; t.ws = null; s.close(); }
+  t.term.dispose();
   if (hoverTile === t) hoverTile = null;
-  tiles.remove(t);
+  if (keepPlace) tiles.forget(t); else tiles.remove(t);
   $("#pane").classList.toggle("empty", !tiles.all().length);
   room.draw();
 }
@@ -187,12 +253,15 @@ const enc = new TextEncoder(), dec = new TextDecoder();
 function showWho(t) {
   const b = byId(t.id), m = machine(t.m);
   t.name(b ? b.name : t.id, m ? "on " + m.name : "");
+  t.el.style.setProperty("--c", b ? room.color(b.unit) : "var(--line)");   // the focused tile wears its bot's colour
   t.term.options.theme = m && m.light ? LIGHT : DARK;
 }
-function openBot(mid, id, retain) {
-  const have = tileOf("bot", id);
+// open a bot's session: in the focused tile's place (see makeRoom), or `at` a previewed spot when
+// it was carried over from the room
+function openBot(mid, id, retain, at) {
+  const have = tileOf(id);
   if (have) { tiles.focus(have); have.term.focus(); return have; }
-  makeRoom(retain);
+  if (!at) makeRoom(retain);
   const t = makeTile("bot", id);
   t.m = mid; t.ws = null; t.typed = []; t.tail = "";
   const term = t.term = new Terminal({ fontFamily: '"Burrow Mono", "JetBrains Mono", Menlo, monospace', fontSize: 13, lineHeight: 1.15,
@@ -212,7 +281,8 @@ function openBot(mid, id, retain) {
   const el = document.createElement("div");
   el.className = "term";
   t.body.appendChild(el);
-  tiles.add(t);
+  const was = at ? tiles.addAt(t, at) : (tiles.add(t), null);
+  if (was) closeTile(was, true);
   $("#pane").classList.remove("empty");
   term.open(el);
   showWho(t);
@@ -240,14 +310,14 @@ function connect(t, term) {
   t.ws = s;
 }
 async function stopBot(mid, id) {
-  const t = tileOf("bot", id);
+  const t = tileOf(id);
   if (t) closeTile(t);
   const r = await api("/api/stop", { m: mid, id });
   if (r.error) note(r.error);
 }
 
-// ---- the chess table and the ping-pong table: pair's board and game, each a tile, against one of
-// the idle bots (one game of each for the room)
+// ---- a game, over everything: pair's chess board or ping-pong against one of the idle bots, drawn
+// by lot, starting at once. Closing it gives the game up
 const projectColor = (unit) => room.color(unit);
 const botFace = (p) => {
   const b = byId(p.id);
@@ -255,46 +325,56 @@ const botFace = (p) => {
 };
 const idleBots = () => ((state && state.bots) || []).filter((b) => !b.busy && !b.waiting)
   .map((b) => ({ id: b.id, name: b.name, kind: "agent", present: true, color: projectColor(b.unit) }));
-function openGame(kind, retain) {
-  const have = tileOf(kind);
-  if (have) { tiles.focus(have); return have; }
-  makeRoom(retain);
-  const t = makeTile(kind);
-  t.body.classList.add(kind);
+const chessUI = chessPanel($("#chess"), {
+  post: async (body) => { const r = await api("/api/chess", body); return { ok: !r.error, json: async () => r }; },
+  me: () => "you",
+  people: idleBots,
+  face: (p) => p.id === "you" ? "" : `<span class="pic"><img src="${botFace(p)}" alt=""></span>`,
+  small: (p) => `<img class="sm" src="${botFace(p)}" alt="">`,
+});
+const pongUI = pongTable($("#pong"), {
+  me: () => "you", people: idleBots,
+  small: (p) => `<img class="sm" src="${pixelAvatar(p.id, "agent", p.color)}" alt="">`,
+  post: async () => ({}), api: () => "",
+});
+async function openGame(kind) {
+  if (game.open) { if (gameKind === kind) return; closeGame(); }
+  const who = idleBots();
+  if (!who.length) return note("no idle bot to play with");
+  const it = who[Math.floor(Math.random() * who.length)];
+  gameKind = kind;
+  $("#chess").hidden = kind !== "chess"; $("#pong").hidden = kind !== "pong";
+  game.showModal();
   if (kind === "chess") {
-    t.ui = chessPanel(t.body, {
-      post: async (body) => { const r = await api("/api/chess", body); return { ok: !r.error, json: async () => r }; },
-      me: () => "you",
-      people: idleBots,
-      face: (p) => p.id === "you" ? "" : `<span class="pic"><img src="${botFace(p)}" alt=""></span>`,
-      small: (p) => `<img class="sm" src="${botFace(p)}" alt="">`,
-    });
-    tiles.add(t);
-    showChess(t);
+    const r = await api("/api/chess", { challenge: it.id });
+    if (r.error) { note(r.error); closeGame(); return; }
+    showChess();
   } else {
-    t.ui = pongTable(t.body, {
-      me: () => "you", people: idleBots,
-      small: (p) => `<img class="sm" src="${pixelAvatar(p.id, "agent", p.color)}" alt="">`,
-      post: async () => ({}), api: () => "",
-    });
-    tiles.add(t);
-    t.name("ping-pong");
-    t.ui.open();
-    // its own ✕ (or Esc) closes the card: then the tile goes
-    new MutationObserver(() => { if (t.body.hidden && tileOf("pong") === t) closeTile(t); }).observe(t.body, { attributes: true, attributeFilter: ["hidden"] });
+    $("#gameName").textContent = "ping-pong with " + it.name;
+    pongUI.start({ id: it.id, name: it.name, color: it.color });
   }
-  $("#pane").classList.remove("empty");
   room.draw();
-  return t;
 }
-function showChess(t) {
+function showChess() {
   const v = state.chess;
   const it = v && (v.white.id === "you" ? v.black : v.white);
   if (it) { it.color = projectColor((byId(it.id) || {}).unit || ""); }
   if (v) v.white.color = v.white.color || "#d97757", v.black.color = v.black.color || "#d97757";
-  t.name(it ? "chess with " + it.name : "chess");
-  t.ui.update(v);
+  $("#gameName").textContent = it ? "chess with " + it.name : "chess";
+  chessUI.update(v);
 }
+function closeGame() {
+  if (gameKind === "chess" && state && state.chess && !state.chess.result) api("/api/chess", { resign: true });
+  if (gameKind === "pong" && !$("#pong").hidden) pongUI.close();
+  gameKind = null;
+  if (game.open) game.close();
+  room.draw();
+}
+game.querySelector(".tx").onclick = closeGame;
+game.addEventListener("close", () => { if (gameKind) closeGame(); });
+game.addEventListener("click", (e) => { if (e.target === game) closeGame(); });
+// ping-pong's own ✕ hides its card: then the game is over here too
+new MutationObserver(() => { if ($("#pong").hidden && gameKind === "pong") closeGame(); }).observe($("#pong"), { attributes: true, attributeFilter: ["hidden"] });
 
 // drop a file on a session: its path gets typed in, as in a terminal (copied over first for a remote machine)
 async function hand(file, t) {

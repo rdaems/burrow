@@ -311,6 +311,7 @@ function pongTable(el, room) {
       if (isOpen()) draw();
     },
     open() { draw(); show(); },
+    start: (bot) => machineGame(bot),         // burrow: a game against this bot, right away
     close,
     // burrow: who you play right now, whether a ball is in the air; a bot that gets work leaves
     playing: () => (mode === "machine" && !over && opp ? { id: opp.id, ball: !!ball } : null),
