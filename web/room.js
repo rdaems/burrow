@@ -229,23 +229,31 @@ function startRoom(cv, app) {
   let H = 400, FLOORY = H - 6, DEF = {};
   function defaults() {
     DEF = {
-      meet: [W / 2, WALL + 34], pong: [60, 62], chess: [70, FLOORY - 32], mats: [132, FLOORY - 30],
+      meet: [W / 2, WALL + 34], pong: [60, 62], chess: [70, FLOORY - 32], mat0: [104, FLOORY - 30], mat1: [132, FLOORY - 30], mat2: [160, FLOORY - 30],
       coffee: [3, FLOORY], cooler: [36, FLOORY - 1], printer: [W / 2 + 4, FLOORY], armchair: [W - 32, FLOORY],
       plant0: [W - 8, FLOORY], plant1: [W - 12, 64], board: [W / 2 - 14, 5], window: [W - 40, 4], clock: [W - 15, 5], fire: [W - 74, FLOORY],
+      closet: [W - 44, 70],
     };
   }
+  // The furniture is what the server lists (room.json `furniture`): keys, a kind and maybe a number
+  // (plant0, mat2). The closet adds a piece, the fireplace burns one; the fire and the closet stay
+  const KIND = (key) => key.replace(/\d+$/, "");
+  const FIXED = new Set(["fire", "closet"]);
+  const NAMES = { meet: "meeting table", pong: "ping-pong table", chess: "chess table", mat: "charging mat", coffee: "coffee machine", cooler: "water cooler",
+    printer: "printer", armchair: "armchair", plant: "plant", board: "whiteboard", window: "window", clock: "clock" };
   // the default places for desks: columns of them, as many as the room is wide
   const SLOTS = () => [104, 150, 196, 242, 288, 334].flatMap((y) => [...Array(Math.max(1, Math.floor((W - 10) / 124)))].map((_, i) => [10 + i * 124, y]));
   const ON_WALL = new Set(["board", "window", "clock"]);
+  const onWall = (key) => ON_WALL.has(KIND(key));
   // what each piece covers, from where it stands
   function foot(key, [x, y], u) {
     if (u) return [x - 2, y - 35, x + u.w + 2, y + 2];
-    switch (key) {
+    switch (KIND(key)) {
       case "add": return [x - 2, y - 16, x + ADD_W + 2, y + 2];
       case "meet": return [x - 28, y - 20, x + 28, y + 4];
       case "pong": return [x - 38, y - 23, x + 38, y + 8];
       case "chess": return [x - 19, y - 18, x + 19, y + 2];
-      case "mats": return [x - 42, y - 26, x + 42, y + 3];
+      case "mat": return [x - 12, y - 29, x + 14, y + 1];
       case "coffee": return [x, y - 22, x + 20, y + 1];
       case "cooler": return [x - 5, y - 26, x + 5, y + 1];
       case "printer": return [x - 7, y - 15, x + 7, y + 1];
@@ -253,7 +261,8 @@ function startRoom(cv, app) {
       case "board": return [x, y, x + 28, y + 16];
       case "window": return [x, y, x + 21, y + 18];
       case "clock": return [x, y, x + 12, y + 10];
-      case "fire": return [x, y - 54, x + 32, y + 1];
+      case "fire": return [x, y - 24, x + 32, y + 1];
+      case "closet": return [x, y - 30, x + 22, y + 1];
       default: return [x - 8, y - 31, x + 8, y + 1];     // a plant
     }
   }
@@ -263,7 +272,7 @@ function startRoom(cv, app) {
   function clampAt(key, at, u, step = 1) {
     const q = (v) => Math.round(v / step) * step;
     const r = foot(key, at, u), [x, y] = at;
-    if (ON_WALL.has(key)) return [q(Math.max(wallFrom() - (r[0] - x), Math.min(W - 2 - (r[2] - x), x))), y];
+    if (onWall(key)) return [q(Math.max(wallFrom() - (r[0] - x), Math.min(W - 2 - (r[2] - x), x))), y];
     return [q(Math.max(2 - (r[0] - x), Math.min(W - 2 - (r[2] - x), x))),
             q(Math.max(WALL + 2 - (r[1] - y), Math.min(H - 1 - (r[3] - y), y)))];
   }
@@ -286,8 +295,9 @@ function startRoom(cv, app) {
       if (saved[key]) return clampAt(key, saved[key], u);       // the window may be shorter than when it was put there
       return DEF[key] && !u ? DEF[key] : null;
     };
+    const keys = s.furniture || Object.keys(DEF), at0 = {};
     const taken = [];
-    for (const k of Object.keys(DEF)) { const at = where(k); if (!ON_WALL.has(k)) taken.push(foot(k, at)); }
+    for (const k of keys) { const at = where(k); at0[k] = at; if (at && !onWall(k)) taken.push(foot(k, at)); }
     for (const u of units) { u.at = where(u.key, u); if (u.at) taken.push(foot(u.key, u.at, u)); }
     let addAt = where("add");
     if (addAt) taken.push(foot("add", addAt));
@@ -303,38 +313,42 @@ function startRoom(cv, app) {
     };
     for (const u of units) if (!u.at) { u.at = free(u.key, u); placed[u.key] = u.at; }
     if (!addAt) { addAt = free("add"); placed.add = addAt; }
+    for (const k of keys) if (!at0[k]) { at0[k] = onWall(k) ? [wallFrom(), 5] : free(k); placed[k] = at0[k]; }   // a piece without a place yet
 
-    const P = (k) => where(k);
+    const P = (k) => at0[k];
+    // the pieces by kind, in the order of their keys; most kinds are one at most, some can be many
+    const by = {};
+    for (const k of keys) { const [x, y] = P(k); (by[KIND(k)] = by[KIND(k)] || []).push({ key: k, x, y }); }
+    const one = (kind) => (by[kind] || [])[0] || null, all = (kind) => by[kind] || [];
     const desks = units.map((u) => {
       const [x, y] = u.at, mine = sitters(bots, u.d);
       const seat = (k) => x + u.cab + 4 + SEAT / 2 + k * SEAT;
       return { key: u.key, ...u.d, label: u.label, trees: u.trees, x0: x, w: u.w, cab: u.cab, y, color: projectColor(u.d.unit),
         seats: mine.map((b, k) => [b.id, seat(k), b.tree]), empty: mine.length ? null : seat(0), at: u.at, u };
     });
-    const [bx, by] = P("board"), [wx, wy] = P("window"), [cx, cy] = P("clock"), [fx, fy] = P("fire");
-    const xy = (k) => { const [x, y] = P(k); return { x, y }; };
-    const matsAt = xy("mats");
+    const b0 = one("board"), c0 = one("clock"), f0 = one("fire"), cl = one("closet");
     const L = {
       desks, add: { x0: addAt[0], y0: addAt[1] - 15, x1: addAt[0] + ADD_W, y1: addAt[1] },
-      floorY: FLOORY, board: { x0: bx, y0: by, x1: bx + 28, y1: by + 16 }, window: { x0: wx, y0: wy, x1: wx + 21, y1: wy + 18 }, clock: { x0: cx, y0: cy },
-      fire: { x0: fx, y0: fy - 54, x1: fx + 32, y1: fy },
-      meet: xy("meet"), pong: xy("pong"), chess: xy("chess"), mats: [-28, 0, 28].map((d) => ({ x: matsAt.x + d, y: matsAt.y })),
-      cooler: xy("cooler"), plants: [xy("plant0"), xy("plant1")], printer: xy("printer"), chair: xy("armchair"),
-      coffeeAt: xy("coffee"), floor: { x0: 14, y0: WALL + 8, x1: W - 14, y1: FLOORY - 4 }, placed,
+      floorY: FLOORY, board: b0 && { x0: b0.x, y0: b0.y, x1: b0.x + 28, y1: b0.y + 16 }, clock: c0 && { x0: c0.x, y0: c0.y },
+      windows: all("window").map((p) => ({ key: p.key, x0: p.x, y0: p.y, x1: p.x + 21, y1: p.y + 18 })),
+      fire: f0 && { x0: f0.x, y0: f0.y - 24, x1: f0.x + 32, y1: f0.y }, closet: cl && { x0: cl.x, y0: cl.y - 30, x1: cl.x + 22, y1: cl.y },
+      meet: one("meet"), pong: one("pong"), chess: one("chess"), mats: all("mat"),
+      cooler: one("cooler"), plants: all("plant"), printer: one("printer"), chairs: all("armchair"),
+      coffeeAt: one("coffee"), floor: { x0: 14, y0: WALL + 8, x1: W - 14, y1: FLOORY - 4 }, placed,
     };
-    L.coffee = { x: L.coffeeAt.x + 27, y: L.coffeeAt.y - 10 };
+    L.coffee = L.coffeeAt && { x: L.coffeeAt.x + 27, y: L.coffeeAt.y - 10 };
     // what can be picked up and moved, front to back
     L.pieces = [
       ...desks.map((d) => ({ key: d.key, at: d.at, u: d.u, r: foot(d.key, d.at, d.u) })),
       { key: "add", at: addAt, r: foot("add", addAt) },
-      ...Object.keys(DEF).map((k) => ({ key: k, at: P(k), r: foot(k, P(k)) })),
+      ...keys.map((k) => ({ key: k, at: P(k), r: foot(k, P(k)) })),
     ].sort((a, b) => b.r[3] - a.r[3]);
-    L.coolerSpot = (side) => ({ x: L.cooler.x + (side ? 10 : -8), y: L.cooler.y + 1 });
-    L.pongSpot = (side) => ({ x: L.pong.x + (side ? 22 : -22), y: L.pong.y + 1 });
-    L.chessSeat = (side) => ({ x: L.chess.x + (side ? 13 : -13), y: L.chess.y });
-    L.meetSeat = (i) => { const s = [[-23, 0, 1], [23, 0, -1], [-8, -5, 1], [8, -5, -1]][i]; return s && { x: L.meet.x + s[0], y: L.meet.y + s[1], dir: s[2] }; };
+    L.coolerSpot = (side) => L.cooler && { x: L.cooler.x + (side ? 10 : -8), y: L.cooler.y + 1 };
+    L.pongSpot = (side) => L.pong && { x: L.pong.x + (side ? 22 : -22), y: L.pong.y + 1 };
+    L.chessSeat = (side) => L.chess && { x: L.chess.x + (side ? 13 : -13), y: L.chess.y };
+    L.meetSeat = (i) => { const s = L.meet && [[-23, 0, 1], [23, 0, -1], [-8, -5, 1], [8, -5, -1]][i]; return s && { x: L.meet.x + s[0], y: L.meet.y + s[1], dir: s[2] }; };
     L.seat = (id) => { for (const d of desks) for (const [i, x] of d.seats) if (i === id) return { x, y: d.y }; return null; };
-    L.free = (x, y) => !L.pieces.some((p) => !ON_WALL.has(p.key) && x >= p.r[0] - 6 && x <= p.r[2] + 6 && y >= p.r[1] && y <= p.r[3] + 4);
+    L.free = (x, y) => !L.pieces.some((p) => !onWall(p.key) && x >= p.r[0] - 6 && x <= p.r[2] + 6 && y >= p.r[1] && y <= p.r[3] + 4);
     return L;
   }
 
@@ -518,6 +532,7 @@ function startRoom(cv, app) {
         break;
       case "coffee":
         // the pot holds what is left of the session's limit: an empty one gives nothing
+        if (!L.coffee) { f.act = rest(); break; }
         if (act.stage === 0) { if (walk(f, L.coffee, v, dt)) { f.dir = -1; f.arms = "reach"; act.stage = 1; } }
         else {
           act.wait += dt; const dry = usage.session && usage.session.used >= 100;
@@ -526,12 +541,13 @@ function startRoom(cv, app) {
         }
         break;
       case "print":
+        if (!L.printer) { f.act = rest(); break; }
         if (act.stage === 0) { if (walk(f, { x: L.printer.x - 9, y: L.printer.y }, v, dt)) { f.dir = 1; f.arms = "down"; act.stage = 1; } }
         else if ((act.wait += dt) > 2.4) { f.carry = "paper"; f.act = rest(); }
         break;
       case "cooler": {
         const s = L.coolerSpot(act.side), g = folk.get(act.with);
-        if (!g) { f.act = rest(); break; }
+        if (!g || !s) { f.act = rest(); break; }
         if (walk(f, s, v, dt)) {
           f.dir = act.side ? -1 : 1; f.arms = "down";
           if (Math.abs(g.x - f.x) < 24 && Math.abs(g.y - f.y) < 4 && Math.random() < dt * 0.4) f.chat = 1.2;
@@ -540,7 +556,7 @@ function startRoom(cv, app) {
         break;
       }
       case "pong": {
-        if (!act.you && !partner()) { f.act = rest(); break; }
+        if (!L.pong || (!act.you && !partner())) { f.act = rest(); break; }
         act.there = walk(f, L.pongSpot(act.side), v, dt);
         if (act.there) {
           f.dir = act.side ? -1 : 1;
@@ -552,6 +568,7 @@ function startRoom(cv, app) {
       case "chess": {
         // alone at the board it waits for someone to play, studying it; two play until it's over; against
         // you it plays until the game is over
+        if (!L.chess) { f.act = rest(); break; }
         if (act.with && !partner()) { act.with = null; act.left = Math.min(act.left, rnd(8, 16)); }
         act.there = sitAt(f, L.chessSeat(act.side), v, dt);
         if (act.there) {
@@ -582,7 +599,9 @@ function startRoom(cv, app) {
         break;
       }
       case "plant": {
-        const pl = L.plants[act.i] || L.plants[0], side = pl.x > (L.floor.x0 + L.floor.x1) / 2 ? -1 : 1;
+        const pl = L.plants.find((p) => p.key === act.at) || L.plants[0];
+        if (!pl) { f.act = rest(); break; }
+        const side = pl.x > (L.floor.x0 + L.floor.x1) / 2 ? -1 : 1;
         f.carry = "can";
         if (walk(f, { x: pl.x + side * 14, y: pl.y + 1 }, v, dt)) {
           f.dir = -side; f.arms = "can"; act.water = true;
@@ -590,17 +609,23 @@ function startRoom(cv, app) {
         }
         break;
       }
-      case "window":
-        if (walk(f, { x: Math.round((L.window.x0 + L.window.x1) / 2), y: WALL + 8 }, v, dt)) {
+      case "window": {
+        const win = L.windows.find((p) => p.key === act.at) || L.windows[0];
+        if (!win) { f.act = rest(); break; }
+        if (walk(f, { x: Math.round((win.x0 + win.x1) / 2), y: WALL + 8 }, v, dt)) {
           f.arms = "down"; f.dir = Math.sin(w.T * 0.7 + f.z) > 0 ? 1 : -1;
           if ((act.left -= dt) <= 0) f.act = rest();
         }
         break;
-      case "chair":
-        if (sitAt(f, { x: L.chair.x - 2, y: L.chair.y - 1 }, v, dt)) { f.dir = -1; f.legs = "sit"; f.arms = "book"; if ((act.left -= dt) <= 0) f.act = rest(); }
+      }
+      case "chair": {
+        const ch = L.chairs.find((p) => p.key === act.at) || L.chairs[0];
+        if (!ch) { f.act = rest(); break; }
+        if (sitAt(f, { x: ch.x - 2, y: ch.y - 1 }, v, dt)) { f.dir = -1; f.legs = "sit"; f.arms = "book"; if ((act.left -= dt) <= 0) f.act = rest(); }
         break;
+      }
       case "present":
-        if (!w.meeting || w.meeting.host !== f.id) { f.act = rest(); break; }
+        if (!w.meeting || w.meeting.host !== f.id || !L.board) { f.act = rest(); break; }
         if (walk(f, { x: L.board.x0 - 6, y: WALL + 3 }, v, dt)) {
           f.dir = 1; f.arms = Math.floor(w.T * 2) % 3 ? "reach" : "down";
           if ((act.wait += dt) > 0.6 && w.board.length < 40) { act.wait = 0; stroke(w); }
@@ -614,12 +639,14 @@ function startRoom(cv, app) {
         break;
       }
       case "sleep": {
-        // on a free mat if there is one, else asleep at the desk
-        const mat = L.mats.find((m) => !others.some((g) => g.act.kind === "sleep" && g.act.mat === L.mats.indexOf(m)));
-        const to = act.there ? (act.mat >= 0 ? L.mats[act.mat] : seat) : mat || seat;
+        // on a free mat if there is one, else asleep at the desk (a mat burnt from under it: the desk)
+        const mine = act.mat ? L.mats.find((m) => m.key === act.mat) : null;
+        if (act.mat && !mine) { act.mat = null; act.there = false; }
+        const mat = L.mats.find((m) => !others.some((g) => g.act.kind === "sleep" && g.act.mat === m.key));
+        const to = act.there ? mine || seat : mat || seat;
         if (to && (act.there || walk(f, to, v, dt))) {
-          if (!act.there) act.mat = mat ? L.mats.indexOf(mat) : -1;
-          act.there = true; f.x = to.x; f.y = to.y; f.lying = act.mat >= 0;
+          if (!act.there) act.mat = mat ? mat.key : null;
+          act.there = true; f.x = to.x; f.y = to.y; f.lying = !!act.mat;
           f.dir = f.lying ? 1 : -1; f.legs = "sit"; f.arms = "down"; f.z += dt;
         }
         break;
@@ -649,29 +676,31 @@ function startRoom(cv, app) {
       waiter.act.with = f.id; waiter.act.left = left;
       return { kind: "chess", side: 1 - waiter.act.side, with: waiter.id, left, there: false };
     }
-    if (mates.length >= 2 && !w.meeting && w.T - w.lastMeeting > 60 && r < 0.08) {
+    if (L.meet && L.board && mates.length >= 2 && !w.meeting && w.T - w.lastMeeting > 60 && r < 0.08) {
       w.meeting = { host: f.id, left: rnd(22, 38) }; w.lastMeeting = w.T; w.board = [];
       mates.slice(0, 4).forEach((g, i) => { g.carry = null; g.act = { kind: "meeting", seat: i }; });
       return { kind: "present", wait: 0 };
     }
-    if (r < 0.2 && !taken("coffee")) return { kind: "coffee", stage: 0, wait: 0 };
-    if (r < 0.28 && !taken("print")) return { kind: "print", stage: 0, wait: 0 };
-    if (r < 0.38 && mate) {
+    if (r < 0.2 && L.coffee && !taken("coffee")) return { kind: "coffee", stage: 0, wait: 0 };
+    if (r < 0.28 && L.printer && !taken("print")) return { kind: "print", stage: 0, wait: 0 };
+    if (r < 0.38 && mate && L.cooler) {
       const left = rnd(10, 22);
       mate.carry = null; mate.act = { kind: "cooler", side: 1, left, with: f.id };
       return { kind: "cooler", side: 0, left, with: mate.id };
     }
-    if (r < 0.5 && mate && !taken("pong") && !app.pong()) {
+    if (r < 0.5 && mate && L.pong && !taken("pong") && !app.pong()) {
       const left = rnd(15, 35);
       mate.carry = null; mate.act = { kind: "pong", side: 1, left, with: f.id, there: false };
       return { kind: "pong", side: 0, left, with: mate.id, there: false };
     }
-    if (r < 0.6 && !taken("chess") && !(app.state().chess && !app.state().chess.result)) return { kind: "chess", side: Math.random() < 0.5 ? 0 : 1, with: null, left: rnd(20, 45), there: false };
+    if (r < 0.6 && L.chess && !taken("chess") && !(app.state().chess && !app.state().chess.result)) return { kind: "chess", side: Math.random() < 0.5 ? 0 : 1, with: null, left: rnd(20, 45), there: false };
     if (r < 0.65 && mate) return { kind: "visit", to: mate.id, left: rnd(6, 12), wave: 0.8 };
-    const plants = L.plants.map((_, i) => i).filter((i) => !others.some((g) => g.act.kind === "plant" && g.act.i === i));
-    if (r < 0.72 && plants.length) return { kind: "plant", i: any(plants), wait: 0 };
-    if (r < 0.79 && !taken("window")) return { kind: "window", left: rnd(4, 9) };
-    if (r < 0.87 && !taken("chair")) return { kind: "chair", left: rnd(15, 35) };
+    // one of a kind there can be many of, not in use: a plant to water, a window, an armchair
+    const spare = (kind, ps) => ps.filter((p) => !others.some((g) => g.act.kind === kind && g.act.at === p.key));
+    const plants = spare("plant", L.plants), wins = spare("window", L.windows), chairs = spare("chair", L.chairs);
+    if (r < 0.72 && plants.length) return { kind: "plant", at: any(plants).key, wait: 0 };
+    if (r < 0.79 && wins.length) return { kind: "window", at: any(wins).key, left: rnd(4, 9) };
+    if (r < 0.87 && chairs.length) return { kind: "chair", at: any(chairs).key, left: rnd(15, 35) };
     for (let k = 0; k < 8; k++) {             // somewhere free to stand about
       const x = rnd(L.floor.x0, L.floor.x1), y = rnd(L.floor.y0, L.floor.y1);
       if (L.free(x, y)) return { kind: "loiter", x, y, left: rnd(3, 8) };
@@ -759,9 +788,9 @@ function startRoom(cv, app) {
     // trouble here goes on the wall, in red, instead of the whiteboard
     const here = s.machines.find((m) => !m.id), trouble = s.note || (here && here.error);
     if (trouble) { const nx = wallFrom(); tiny(ctx, clip(trouble, W - 24 - nx), nx, 18, RED); }
-    else drawBoard(ctx, L.board, w);
-    drawWindow(ctx, L.window);
-    drawClock(ctx, L.clock.x0 + 6, L.clock.y0 + 5);
+    else if (L.board) drawBoard(ctx, L.board, w);
+    for (const win of L.windows) drawWindow(ctx, win);
+    if (L.clock) drawClock(ctx, L.clock.x0 + 6, L.clock.y0 + 5);
     // a bot and its seat at its project's desk are one thing: where the bot is only says what it
     // does. The pointer on either lights up both (and its session), and a click on either opens it
     if (hoverId) hl.add(hoverId);
@@ -777,8 +806,8 @@ function startRoom(cv, app) {
       tiny(ctx, "+", Math.round(a.x0 + aw / 2 - 1), a.y0 + 7, h ? C.steel4 : C.steel2);
       if (h) tip = { text: "project", x: a.x0 + aw / 2, y: a.y0 - 2 };
     }
-    L.mats.forEach((m, i) => drawMat(ctx, m, [...w.folk.values()].some((f) => f.act.kind === "sleep" && f.act.there && f.act.mat === i), w.T));
-    drawRug(ctx, L.pong);
+    for (const m of L.mats) drawMat(ctx, m, [...w.folk.values()].some((f) => f.act.kind === "sleep" && f.act.there && f.act.mat === m.key), w.T);
+    if (L.pong) drawRug(ctx, L.pong);
 
     // everything that stands, back to front
     const items = [];
@@ -787,41 +816,59 @@ function startRoom(cv, app) {
       items.push([d.y - 1, () => drawDesk(ctx, d, w, T, hl)]);
       for (const [id, x] of d.seats) items.push([d.y - 0.5, () => drawChair(ctx, x, d.y, hl.has(id))]);
     }
-    items.push([L.meet.y - 1, () => drawTable(ctx, L.meet)]);
-    for (const i of [0, 1]) { const st = L.meetSeat(i); items.push([st.y - 0.5, () => drawStool(ctx, st)]); }
-    {
+    if (L.meet) {
+      items.push([L.meet.y - 1, () => drawTable(ctx, L.meet)]);
+      for (const i of [0, 1]) { const st = L.meetSeat(i); items.push([st.y - 0.5, () => drawStool(ctx, st)]); }
+    }
+    if (L.chess) {
       const c = L.chess, g = s.chess && !s.chess.result ? s.chess : null;
       if (hot(c.x - 12, c.y - 17, c.x + 12, c.y, { kind: "chess" }))
         tip = { text: g ? "chess with " + (g.white.id === "you" ? g.black.name : g.white.name) : "chess: play an idle bot", x: c.x, y: c.y - 18 };
+      items.push([c.y + 0.5, () => drawChess(ctx, c, g ? g.board : w.chess.board)]);
+      for (const i of [0, 1]) { const st = L.chessSeat(i); items.push([st.y - 0.5, () => drawStool(ctx, st)]); }
     }
-    items.push([L.chess.y + 0.5, () => drawChess(ctx, L.chess, s.chess && !s.chess.result ? s.chess.board : w.chess.board)]);
-    for (const i of [0, 1]) { const st = L.chessSeat(i); items.push([st.y - 0.5, () => drawStool(ctx, st)]); }
-    const brewing = [...w.folk.values()].some((f) => f.act.kind === "coffee" && f.act.stage === 1);
-    items.push([L.coffeeAt.y, () => drawCoffee(ctx, L.coffeeAt, brewing, T, usage.session)]);
-    items.push([L.cooler.y, () => drawCooler(ctx, L.cooler, usage.week)]);
-    const job = [...w.folk.values()].find((f) => f.act.kind === "print" && f.act.stage === 1);
-    items.push([L.printer.y, () => drawPrinter(ctx, L.printer, job && job.act.wait)]);
-    items.push([L.chair.y - 0.5, () => drawArmchair(ctx, L.chair)]);
-    {
-      // the fireplace: a desk held over it is about to burn (the fire flares); a desk with bots can't
+    if (L.coffeeAt) {
+      const brewing = [...w.folk.values()].some((f) => f.act.kind === "coffee" && f.act.stage === 1);
+      items.push([L.coffeeAt.y, () => drawCoffee(ctx, L.coffeeAt, brewing, T, usage.session)]);
+    }
+    if (L.cooler) items.push([L.cooler.y, () => drawCooler(ctx, L.cooler, usage.week)]);
+    if (L.printer) {
+      const job = [...w.folk.values()].find((f) => f.act.kind === "print" && f.act.stage === 1);
+      items.push([L.printer.y, () => drawPrinter(ctx, L.printer, job && job.act.wait)]);
+    }
+    for (const ch of L.chairs) items.push([ch.y - 0.5, () => drawArmchair(ctx, ch)]);
+    if (L.fire) {
+      // the fireplace: a desk or a piece of furniture held over it is about to burn (the fire
+      // flares); a desk with bots can't
       const feeding = moving && inFire(L, moving.key, moving.at, moving.u), fd = feeding && L.desks.find((d) => d.key === moving.key);
       items.push([L.fire.y1, () => drawFire(ctx, L.fire, T, !!feeding)]);
-      if (fd) tip = { text: fd.seats.length ? fd.label + " has bots" : "burn " + fd.label, x: L.fire.x0 + 16, y: L.fire.y0 + 6 };
-      else if (!moving && over(L.fire.x0, L.fire.y0, L.fire.x1, L.fire.y1)) tip = { text: "a desk dragged in here burns", x: L.fire.x0 + 16, y: L.fire.y0 + 6 };
+      const tx = L.fire.x0 + 16, ty = L.fire.y0 - 2;
+      if (fd) tip = { text: fd.seats.length ? fd.label + " has bots" : "burn " + fd.label, x: tx, y: ty };
+      else if (feeding) tip = { text: "burn the " + (NAMES[KIND(moving.key)] || KIND(moving.key)), x: tx, y: ty };
+      else if (!moving && over(L.fire.x0, L.fire.y0, L.fire.x1, L.fire.y1)) tip = { text: "what is dragged in here burns", x: tx, y: ty };
     }
-    L.plants.forEach((pl, i) => items.push([pl.y, () => drawPlant(ctx, pl, i)]));
-    items.push([L.pong.y - 0.5, () => drawPong(ctx, L.pong, w)]);
-    if (hot(L.pong.x - 16, L.pong.y - 17, L.pong.x + 16, L.pong.y, { kind: "pong" })) tip = { text: "ping-pong: play an idle bot", x: L.pong.x, y: L.pong.y - 18 };
+    L.plants.forEach((pl) => items.push([pl.y, () => drawPlant(ctx, pl, +(pl.key.match(/\d+$/) || [0])[0] % 2)]));
+    if (L.pong) {
+      items.push([L.pong.y - 0.5, () => drawPong(ctx, L.pong, w)]);
+      if (hot(L.pong.x - 16, L.pong.y - 17, L.pong.x + 16, L.pong.y, { kind: "pong" })) tip = { text: "ping-pong: play an idle bot", x: L.pong.x, y: L.pong.y - 18 };
+    }
+    if (L.closet) {
+      // the closet holds the furniture that is not in the room: a click opens it (on the right)
+      const c = L.closet, h = hot(c.x0, c.y0, c.x1, c.y1, { kind: "closet" });
+      items.push([c.y1, () => drawCloset(ctx, c, app.view() === "closet", h)]);
+      if (h) tip = { text: "furniture", x: c.x0 + 11, y: c.y0 - 2 };
+    }
     // the limits, in the coffee pot (this five-hour session) and the cooler's bottle (this week)
     const c0 = L.coffeeAt;
-    if (over(c0.x, c0.y - 22, c0.x + 20, c0.y + 1)) tip = { text: say(usage.session, "session"), x: c0.x + 10, y: c0.y - 24 };
-    if (over(L.cooler.x - 4, L.cooler.y - 22, L.cooler.x + 4, L.cooler.y + 1)) tip = { text: say(usage.week, "week"), x: L.cooler.x, y: L.cooler.y - 24 };
+    if (c0 && over(c0.x, c0.y - 22, c0.x + 20, c0.y + 1)) tip = { text: say(usage.session, "session"), x: c0.x + 10, y: c0.y - 24 };
+    if (L.cooler && over(L.cooler.x - 4, L.cooler.y - 22, L.cooler.x + 4, L.cooler.y + 1)) tip = { text: say(usage.week, "week"), x: L.cooler.x, y: L.cooler.y - 24 };
     hovered = null;
     for (const f of w.folk.values()) if (f.lying) drawSleeper(ctx, f, f.b, T, hl);
     items.sort((a, b) => a[0] - b[0]);
     for (const [, d] of items) d();
-    // a bot being carried, over everything
+    // a bot being carried, over everything; a piece carried in from the closet, where it would stand
     for (const f of w.folk.values()) if (f.held) drawFigure(ctx, f, f.b, T, hl);
+    if (carrying && carrying.at) { ctx.globalAlpha = 0.7; drawKind(ctx, carrying.kind, carrying.at, w, T); ctx.globalAlpha = 1; }
     if (held) hovered = null;
     if (!hovered && seatHover && !held) { const f = w.folk.get(seatHover.id); if (f && f.b) hovered = { b: f.b, x: seatHover.x + 3, y: seatHover.y - 16, seat: true }; }
 
@@ -995,55 +1042,98 @@ function startRoom(cv, app) {
   }
   // a desk carried to a door is on its way out: a sign over the door asks; a click on it takes
   // the desk away (its bots must be gone first)
-  // the fireplace: a midcentury freestanding one in the middle of the room (a Malm, as in a 1960s
-  // living room): an enamelled cone hood hung from its flue, open all round over a round bowl on a
-  // tripod, on a pad of pebbles, seen from above at a slant like the rest. A desk dragged into it
-  // burns (its bots must be gone first). 32 wide, 54 high, the pad at the bottom
-  const inFire = (L, key, at, u) => key.startsWith("u:") && meets(foot(key, at, u), [L.fire.x0, L.fire.y0, L.fire.x1, L.fire.y1 + 4]);
+  // the fireplace: a midcentury fire bowl in the middle of the room, seen from above like the tables:
+  // a round enamelled bowl on a stand, on an oval pad of pebbles, the fire burning in it. What is
+  // dragged into it burns: a desk (its bots must be gone first) or a piece of furniture. 32 x 24
+  const inFire = (L, key, at, u) => L.fire && key !== "add" && (key.startsWith("u:") || !FIXED.has(KIND(key))) &&
+    meets(foot(key, at, u), [L.fire.x0, L.fire.y0, L.fire.x1, L.fire.y1 + 4]);
+  const ELL = (rx, ry, rows) => [...Array(rows)].map((_, j) => Math.round(rx * Math.sqrt(Math.max(0, 1 - ((j + 0.5 - rows / 2) / (rows / 2)) ** 2))));
   function drawFire(ctx, f, T, feeding) {
     const { x0, y0 } = f, cx = x0 + 16, r = (y, x, w, c) => rect(ctx, cx + x, y0 + y, w, 1, c);
     const E = { k: "#4a2118", d: "#8e3d1d", m: "#c75b2b", hi: "#e8834a" };     // burnt-orange enamel: outline, shade, body, lit
-    const M = { k: "#3f3740", d: "#595e60", m: "#757b7c", hi: "#b5bfc7" };     // the black flue and legs, metal
     const ST = { k: "#4d4a4f", m: "#8d8a86", hi: "#aaa59e", d: "#6e6b6a" };    // the pebbles of the pad
-    // the pad, an oval of pebbles on the floor, and its shadow
-    const PAD = [[49, 9], [50, 13], [51, 15], [52, 16], [53, 15], [54, 13]];
-    for (const [y, hw] of PAD) r(y, -hw, hw * 2, ST.k);
-    for (const [y, hw] of PAD.slice(1, -1)) r(y, -hw + 1, hw * 2 - 2, ST.m);
-    r(49, -8, 16, ST.m);
-    for (const [x, y] of [[-12, 51], [-6, 50], [1, 50], [8, 50], [12, 52], [-10, 53], [-3, 52], [4, 52], [10, 52], [-7, 52]]) r(y, x, 2, ST.hi);
-    for (const [x, y] of [[-9, 51], [3, 51], [9, 51], [-13, 52], [-1, 53], [6, 53], [12, 51]]) r(y, x, 2, ST.d);
-    r(55, -14, 28, SHADOW);
-    // the tripod: a leg to the front, two splayed to the sides
-    for (let k = 0; k < 5; k++) { r(47 + k, -9 - k, 1, M.k); r(47 + k, 8 + k, 1, M.k); }
-    r(47, -1, 3, M.k); r(48, -1, 3, M.k); r(49, -1, 3, M.k); r(50, -1, 3, M.k); r(51, -1, 3, M.k); r(48, -1, 1, M.d); r(49, -1, 1, M.d); r(50, -1, 1, M.d);
-    // the bowl, open at the top: its inside dark, the fire burns in it (drawn after its back and
-    // before its front rim, so the rim stands in front of the embers)
-    r(37, -12, 24, E.k); r(38, -14, 28, E.k); r(38, -12, 24, "#120a0c"); r(39, -15, 30, E.k); r(39, -14, 28, "#1c0e10");
-    const k = Math.floor(T * 6) % 3, big = feeding ? 4 : 0;            // the fire, three frames; it flares for a desk
-    const flame = (x, h, c) => rect(ctx, cx + x, y0 + 39 - h, 1, h, c);
-    const F = [[-7, 1 + k], [-6, 3 + (k + 1) % 3], [-5, 5 + k], [-4, 7 + (k + 2) % 3], [-3, 8 + k], [-2, 9 + (k + 1) % 3], [-1, 10 + k], [0, 10 + (k + 2) % 3],
-      [1, 10 + k], [2, 9 + (k + 1) % 3], [3, 8 + k], [4, 7 + (k + 2) % 3], [5, 5 + k], [6, 3 + (k + 1) % 3], [7, 1 + k]];
-    for (const [x, h] of F) flame(x, Math.min(12, h + big), C.red1);
-    for (const [x, h] of F) flame(x, Math.max(1, Math.round(Math.min(12, h + big) * 0.66)), C.gold1);
-    for (const [x, h] of F) if (x > -4 && x < 4) flame(x, Math.max(1, Math.round(Math.min(12, h + big) * 0.35)), C.gold2);
-    r(38, -4, 8, "#3b2a1e"); r(38, -2, 4, "#5c3a26");                 // the logs
-    // the bowl's front, a shallow cone narrowing down to the stand, its rim lit
-    r(40, -15, 30, E.hi);
-    for (const [y, hw] of [[41, 14], [42, 13], [43, 11], [44, 9], [45, 7], [46, 5]]) {
-      r(y, -hw, hw * 2, E.k); r(y, -hw + 1, hw * 2 - 2, E.m); r(y, hw - 4, 3, E.d); r(y, -hw + 2, 2, E.hi);
+    // the pad, an oval of pebbles on the floor
+    ELL(16, 3.5, 7).forEach((hw, j) => { r(17 + j, -hw, hw * 2, ST.k); if (j && j < 6) r(17 + j, -hw + 1, hw * 2 - 2, ST.m); });
+    for (const [x, y] of [[-13, 19], [-8, 18], [3, 18], [9, 18], [13, 20], [-10, 22], [-4, 21], [5, 22], [11, 21], [-1, 20]]) r(y, x, 2, ST.hi);
+    for (const [x, y] of [[-11, 20], [1, 19], [8, 20], [-14, 20], [-2, 22], [7, 22], [13, 19]]) r(y, x, 2, ST.d);
+    r(24, -14, 28, SHADOW);
+    // the stand, and the bowl's side below its rim, lit along the top
+    r(19, -3, 6, "#3f3740"); r(20, -3, 6, "#3f3740"); r(21, -4, 8, "#3f3740"); r(19, -3, 1, "#595e60"); r(20, -3, 1, "#595e60");
+    for (const [y, hw] of [[15, 14], [16, 12], [17, 10], [18, 7]]) { r(y, -hw, hw * 2, E.k); r(y, -hw + 1, hw * 2 - 2, E.m); r(y, hw - 4, 3, E.d); }
+    // the bowl from above: an oval rim, dark inside
+    const top = ELL(15, 6, 12);
+    top.forEach((hw, j) => { r(4 + j, -hw, hw * 2, E.k); if (hw > 2) r(4 + j, -hw + 1, hw * 2 - 2, j < 3 ? E.d : j > 8 ? E.hi : E.m); });
+    ELL(12, 4, 8).forEach((hw, j) => r(6 + j, -hw, hw * 2, "#120a0c"));
+    // the fire in it, three frames, wider for a thing held over it; logs under it
+    const k = Math.floor(T * 6) % 3, big = feeding ? 2 : 0;
+    r(11, -6, 5, "#3b2a1e"); r(11, 2, 5, "#3b2a1e"); r(12, -2, 4, "#5c3a26");
+    const blob = (rx, ry, c) => { for (let dy = -4; dy <= 4; dy++) for (let dx = -13; dx <= 13; dx++) {
+      const wob = 0.7 * Math.sin(dx * 1.3 + k * 2.1 + dy), d = (dx / (rx + wob)) ** 2 + (dy / ry) ** 2;
+      if (d <= 1) r(10 + dy, dx, 1, c);
+    } };
+    blob(8 + big, 3 + big * 0.5, C.red1); blob(5 + big, 2 + big * 0.3, C.gold1); blob(2.5 + big * 0.5, 1, C.gold2);
+    if (feeding) for (const [x, h] of [[-5, 2 + k], [-1, 4 + (k + 1) % 3], [3, 3 + (k + 2) % 3]]) {    // it flares up
+      rect(ctx, cx + x, y0 + 6 - h, 1, h, C.red1); rect(ctx, cx + x, y0 + 6 - Math.ceil(h / 2), 1, Math.ceil(h / 2), C.gold1);
     }
-    r(47, -3, 6, E.k);
-    // the hood, a cone from a collar at the flue down to a wide lit rim, lit on the left, shaded on the
-    // right, hung over the fire; the flue above it, up out of the picture
-    for (let j = 0; j < 19; j++) {
-      const y = 8 + j, hw = 3 + Math.round((j * 12) / 18);
-      r(y, -hw, hw * 2, E.k); r(y, -hw + 1, hw * 2 - 2, E.m); r(y, hw - 1 - Math.round(hw / 3), Math.round(hw / 3), E.d);
-      r(y, -hw + 1 + Math.round(hw / 4), Math.max(1, Math.round(hw / 5)), E.hi);
-    }
-    r(26, -15, 30, E.k); r(27, -15, 30, E.hi); r(28, -14, 28, E.k);
-    r(7, -4, 8, M.k); r(7, -3, 6, M.d);                               // the collar
-    for (let y = 0; y < 7; y++) { r(y, -3, 6, M.k); r(y, -2, 4, M.d); r(y, -2, 1, M.hi); }
   }
+  // the closet: a wardrobe with the furniture that is not in the room; open while its page is
+  function drawCloset(ctx, c, open, lit) {
+    const { x0, y0 } = c;
+    slab(ctx, x0, y0, 22, 4, 26, WOOD);
+    for (const dx of [2, 12]) { rect(ctx, x0 + dx, y0 + 7, 8, 19, WOOD.d); rect(ctx, x0 + dx + 1, y0 + 8, 6, 17, WOOD.top); }
+    rect(ctx, x0 + 11, y0 + 5, 1, 24, WOOD.k);
+    if (open) {                               // the right door open: shelves inside, something on them
+      rect(ctx, x0 + 12, y0 + 5, 9, 24, "#1c1420");
+      for (const y of [12, 19]) rect(ctx, x0 + 13, y0 + y, 7, 1, WOOD.d);
+      rect(ctx, x0 + 14, y0 + 9, 2, 3, SP.g); rect(ctx, x0 + 17, y0 + 15, 3, 4, SP.C); rect(ctx, x0 + 14, y0 + 21, 4, 2, SP.y);
+      rect(ctx, x0 + 21, y0 + 4, 1, 26, WOOD.k); rect(ctx, x0 + 22, y0 + 5, 1, 24, WOOD.d);
+    }
+    const knob = lit ? TERRACOTTA : SP.C;
+    rect(ctx, x0 + 9, y0 + 17, 1, 2, knob); if (!open) rect(ctx, x0 + 12, y0 + 17, 1, 2, knob);
+  }
+  // any kind of furniture drawn at a spot, at rest: for the closet's pictures and for the ghost of
+  // a piece carried into the room (`at` as the layout keeps it: its anchor)
+  function drawKind(ctx, kind, [x, y], w, T) {
+    const pt = { x, y };
+    switch (kind) {
+      case "plant": drawPlant(ctx, pt, 0); break;
+      case "armchair": drawArmchair(ctx, pt); break;
+      case "mat": drawMat(ctx, pt, false, T); break;
+      case "coffee": drawCoffee(ctx, pt, false, T, null); break;
+      case "cooler": drawCooler(ctx, pt, null); break;
+      case "printer": drawPrinter(ctx, pt, null); break;
+      case "chess": drawChess(ctx, pt, null); for (const d of [-13, 13]) drawStool(ctx, { x: x + d, y }); break;
+      case "pong": drawRug(ctx, pt); drawPong(ctx, pt, w); break;
+      case "meet": drawTable(ctx, pt); for (const d of [-23, 23]) drawStool(ctx, { x: x + d, y }); break;
+      case "board": drawBoard(ctx, { x0: x, y0: y, x1: x + 28, y1: y + 16 }, w); break;
+      case "window": drawWindow(ctx, { x0: x, y0: y, x1: x + 21, y1: y + 18 }); break;
+      case "clock": drawClock(ctx, x + 6, y + 5); break;
+      case "fire": drawFire(ctx, { x0: x, y0: y - 24, x1: x + 32, y1: y }, T, false); break;
+      case "closet": drawCloset(ctx, { x0: x, y0: y - 30 }, false, false); break;
+    }
+  }
+  // a picture of a kind of furniture, for the closet: a canvas, two pixels a dot as the room
+  function icon(kind) {
+    const r = foot(kind, [0, 0]), pad = 4, c = document.createElement("canvas"), S = K;
+    c.width = (r[2] - r[0] + 2 * pad) * S; c.height = (r[3] - r[1] + 2 * pad) * S;
+    const ctx = c.getContext("2d");
+    ctx.imageSmoothingEnabled = false;
+    ctx.setTransform(S, 0, 0, S, (pad - r[0]) * S, (pad - r[1]) * S);
+    drawKind(ctx, kind, [0, 0], { board: [], folk: new Map(), pong: { t: 0, from: 0 } }, 0);
+    return c.toDataURL();
+  }
+  // a piece carried in from the closet (client coordinates): its ghost follows the pointer while
+  // it is over the room; put down, its place is returned (null outside the room)
+  let carrying = null;
+  function carryKind(kind, cx, cy) {
+    if (!kind) { carrying = null; draw(); return null; }
+    const b = cv.getBoundingClientRect(), x = (cx - b.left) / K, y = (cy - b.top) / K;
+    const inside = x >= 0 && x < W && y >= 0 && y < H;
+    carrying = { kind, at: inside ? clampAt(kind, [Math.round(x), Math.round(y)]) : null };
+    draw();
+    return carrying.at;
+  }
+  function placeKind(kind, cx, cy) { const at = carryKind(kind, cx, cy); carrying = null; draw(); return at; }
   function drawBoard(ctx, b, w) {           // Pixel Agents' whiteboard, wiped, and what the host draws on it
     put(ctx, "WHITEBOARD", b.x0 - 2, b.y0 - 8);
     const ix = b.x0 + INK_AREA.x, iy = b.y0 + INK_AREA.y;
@@ -1213,7 +1303,9 @@ function startRoom(cv, app) {
   cv.addEventListener("pointerup", (e) => {
     if (moving) {
       const s = app.state(), d = lastL && lastL.desks.find((d) => d.key === moving.key);
-      if (lastL && inFire(lastL, moving.key, moving.at, moving.u) && d && !d.seats.length) app.act({ kind: "forget", unit: d.unit });   // into the fire
+      const burn = lastL && inFire(lastL, moving.key, moving.at, moving.u);
+      if (burn && d && !d.seats.length) app.act({ kind: "forget", unit: d.unit });   // into the fire
+      else if (burn && !d) app.act({ kind: "burn", key: moving.key });
       else {
         const at = clampAt(moving.key, moving.at, moving.u);       // put down on the grid of dots
         dropped.set(moving.key, { at, t: performance.now() });
@@ -1277,5 +1369,5 @@ function startRoom(cv, app) {
   size();
   requestAnimationFrame(frame);
   window.__room = { world, size: () => ({ W, H, K }), layout: () => lastL };   // for poking at it from the console
-  return { talk, typed, size, draw, width, color: projectColor };
+  return { talk, typed, size, draw, width, color: projectColor, icon, carry: carryKind, place: placeKind, names: NAMES };
 }

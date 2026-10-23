@@ -124,13 +124,36 @@ def split_unit(u):
     return ("", u) if u.startswith(("/", "~")) else tuple(u.split(":", 1))
 
 
+# The furniture: what stands in the room, as keys; a key is its kind and, for a kind there can be
+# more of, a number (plant0, mat2). The closet in the room adds a piece, the fireplace burns one.
+FURNITURE = ["meet", "pong", "chess", "mat0", "mat1", "mat2", "coffee", "cooler", "printer", "armchair",
+             "plant0", "plant1", "board", "window", "clock", "fire", "closet"]
+MULTI = {"mat", "plant", "armchair", "window"}
+FIXED = {"fire", "closet"}                   # the room's own: not for burning
+KINDS = {"meet", "pong", "chess", "coffee", "cooler", "printer", "board", "clock"} | MULTI
+
+
+def kind_of(key):
+    return key.rstrip("0123456789")
+
+
+def furnish(room):
+    """a room from before the furniture list: the default pieces; its row of three mats became three"""
+    room.setdefault("furniture", list(FURNITURE))
+    at = room["layout"].pop("mats", None)
+    if at:
+        for i, d in enumerate((-28, 0, 28)):
+            room["layout"].setdefault(f"mat{i}", [at[0] + d, at[1]])
+    return room
+
+
 def load_room():
     """the first time, the desks and layout of the Rust app's rooms.json, one room per machine
     (not the desks of worktrees: those sit at their repo's desk now)"""
     if DEMO:
-        return {"desks": [HOME + "/projects/romuald"], "layout": {}}
+        return furnish({"desks": [HOME + "/projects/romuald"], "layout": {}})
     try:
-        return {"desks": [], "layout": {}, **json.load(open(ROOM))}
+        return furnish({"desks": [], "layout": {}, **json.load(open(ROOM))})
     except Exception:
         pass
     room = {"desks": [], "layout": {}}
@@ -145,7 +168,7 @@ def load_room():
                 room["layout"].update(r.get("layout", {}))
     except Exception:
         pass
-    return room
+    return furnish(room)
 
 
 def save_room(room):
@@ -291,7 +314,7 @@ class Hub:
             bots = self.bots()
             return {"machines": [{"id": mid, "name": m["name"], "ssh": m.get("ssh") or "", **{k: v for k, v in self.feeds.get(mid, {}).items() if k != "bots"}}
                                  for mid, m in self.machines.items()],
-                    "desks": self.desks(bots), "bots": bots, "layout": self.room["layout"],
+                    "desks": self.desks(bots), "bots": bots, "layout": self.room["layout"], "furniture": self.room["furniture"],
                     "usage": self.usage, "chess": self.chess_view(), "demo": DEMO, "width": self.room.get("width"),
                     "you": {"name": USER, **(self.room.get("you") or {})}}
 
@@ -760,6 +783,30 @@ class Handler(BaseHTTPRequestHandler):
             save_room(hub.room)
             hub.push("state", hub.state())
             return {}
+        if path == "/api/furniture":         # a piece out of the closet, put down at `at`; or one burnt in the fireplace
+            with hub.lock:
+                fs = hub.room["furniture"]
+                if b.get("add"):
+                    kind = b["add"]
+                    if kind not in KINDS:
+                        raise RuntimeError("no such furniture")
+                    if kind in MULTI:
+                        key = next(f"{kind}{i}" for i in range(100) if f"{kind}{i}" not in fs)
+                    elif kind in fs:
+                        raise RuntimeError(f"there is a {kind} already")
+                    else:
+                        key = kind
+                    fs.append(key)
+                    hub.room["layout"][key] = [int(b["at"][0]), int(b["at"][1])]
+                elif b.get("remove"):
+                    key = b["remove"]
+                    if kind_of(key) in FIXED or key not in fs:
+                        raise RuntimeError("that stays")
+                    fs.remove(key)
+                    hub.room["layout"].pop(key, None)
+                save_room(hub.room)
+            hub.push("state", hub.state())
+            return {"key": key}
         if path == "/api/room":              # the room's width in dots (the divider, dragged)
             hub.room["width"] = max(200, min(1200, int(b.get("width") or 256)))
             save_room(hub.room)

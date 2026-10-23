@@ -293,6 +293,39 @@ visibility, let's do all the interfacing with the main desk with the computer sc
   portrait's outfit ("a white shirt in the selector doesn't show up on the full body"); `body()` now reads
   the torso colours off the portrait's shoulders (pixels (6,19) and (15,19)).
 
+## The view and the closet (2026-10-23, late night)
+
+He: furniture must be addable "integrated in the floor, ie., there's a closet where you can click that
+opens a popup interface to drag new furniture in it"; "the popup is actually always on the star field on
+the right. When the popup opens, the tiles all go"; "make sure the popup interfaces are all the same,
+keep it simple, streamlined, minimalistic"; the games too; "you can also drag other furniture in the fire
+place"; the fireplace "without the hood, and make the perspective more from above, similar to the ping
+pong table and the chess table"; the top bar smaller still.
+- **The view** (`#view` in index.html, `openView`/`closeView`): one element in the pane, framed like a
+  focused tile (band, ✕, title), in the tiles' place; opening it closes every tile, opening a session
+  closes it; a click on the floor or Esc closes it. Its panels: the closet, chess, ping-pong, a project
+  (dir form), a machine (ssh form), you (the face picker). No `<dialog>` is left. `[hidden]` is
+  `display:none !important` now (the panels' own display rules used to beat the attribute).
+- **Furniture is a list** (room.json `furniture`, keys like `plant0`, `mat2`; `kind_of`/`KIND` strips the
+  number; seeded from `FURNITURE` in server.py, the old `mats` layout entry split into `mat0..2`).
+  room.js lays out what the list says (`layout()`: `by`, `one()`, `all()`); every `L.<piece>` may be null
+  and `L.windows`, `L.chairs`, `L.plants`, `L.mats` are arrays; breaks pick a free one by key (`act.at`,
+  `act.mat`). `/api/furniture` `{add: kind, at}` / `{remove: key}`. Kinds there can be many of: plant,
+  armchair, mat, window; the rest one at most (greyed in the closet while in the room). The fire and
+  the closet are `FIXED`: not burnable, not in the catalogue.
+- **The closet** is a wardrobe on the floor (`closet` in `DEF`, default right of the meeting table); its
+  right door stands open while its view is. The view shows every kind drawn as it stands in the room
+  (`room.icon(kind)`, two pixels a dot, `drawKind`); drag one into the room: `room.carry` draws its ghost
+  at the pointer, `room.place` gives the spot, the page posts the add. Pointer capture, not HTML drag.
+- **The fireplace burns furniture too**: `inFire` for any piece but the fixed ones and the `add` cabinet;
+  the sign says "burn the <name>" (`NAMES`); `act {kind:"burn", key}`. It is a **fire bowl** now
+  (`drawFire`, 32 x 24): an orange enamel bowl seen from above with the fire as a blob inside (`ELL` rows
+  for the ovals), a stand, a pebble pad; it flares with tongues when something is held over it.
+- **Ping-pong was broken** since the dialog days: pong.js's `show()` starts its frame loop only if its
+  card was hidden when `start()` ran, and the page unhid it first. The view hides `#pong` again right
+  before `pongUI.start`. Chess did work.
+- The header is 28 px.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

@@ -24,35 +24,32 @@
 <main id="app">
   <div id="roomwrap"><canvas id="room"></canvas></div>
   <div id="divider" title="drag: the room's width"></div>
-  <section id="pane" class="empty"></section>
+  <section id="pane" class="empty">
+    <!-- the view: what is not a session shows here, in place of the tiles, framed like one -->
+    <div id="view" class="tile view focus" hidden>
+      <div class="tbar"><button class="tx" title="close">✕</button><span class="tname"></span><span class="tas"></span></div>
+      <div class="vbody">
+        <form id="vDir" class="vform" hidden>
+          <p>A working directory<span class="on"> on <b class="machine"></b></span>. Its bots will sit at one desk.</p>
+          <select class="field" name="m"></select>
+          <input class="field" name="dir" list="dirs" placeholder="~/projects/something" autocomplete="off" spellcheck="false">
+          <datalist id="dirs"></datalist>
+          <div class="err"></div>
+        </form>
+        <form id="vMachine" class="vform" hidden>
+          <p>Reached over ssh, as <code>ssh</code> would (your ~/.ssh/config applies). It goes into Claude Code's own list,
+            <code>sshConfigs</code> in ~/.claude/settings.json, which the Desktop app has too. Nothing gets installed there.</p>
+          <input class="field" name="ssh" placeholder="odyssey" autocomplete="off" spellcheck="false">
+          <div class="err"></div>
+        </form>
+        <div id="vYou" class="faces" hidden><button type="button" class="btn" id="youPrev" title="previous face">←</button><span class="face"><img id="youFace" alt="your face"></span><button type="button" class="btn" id="youNext" title="another face">→</button></div>
+        <div id="vCloset" class="closet" hidden></div>
+        <div id="chess" class="chess" hidden></div>
+        <div id="pong" class="pong" hidden></div>
+      </div>
+    </div>
+  </section>
 </main>
-
-<dialog id="dirDialog">
-  <form method="dialog">
-    <h2>add a project</h2>
-    <p>A working directory<span class="on"> on <b class="machine"></b></span>. Its bots will sit at one desk.</p>
-    <select class="field" name="m"></select>
-    <input class="field" name="dir" list="dirs" placeholder="~/projects/something" autocomplete="off" spellcheck="false">
-    <datalist id="dirs"></datalist>
-    <div class="err"></div>
-  </form>
-</dialog>
-<dialog id="machineDialog">
-  <form method="dialog">
-    <h2>add a machine</h2>
-    <p>Reached over ssh, as <code>ssh</code> would (your ~/.ssh/config applies). It goes into Claude Code's own list,
-      <code>sshConfigs</code> in ~/.claude/settings.json, which the Desktop app has too. Nothing gets installed there.</p>
-    <input class="field" name="ssh" placeholder="odyssey" autocomplete="off" spellcheck="false">
-    <div class="err"></div>
-  </form>
-</dialog>
-<dialog id="youDialog">
-  <div class="faces"><button type="button" class="btn" id="youPrev" title="previous face">←</button><span class="face"><img id="youFace" alt="your face"></span><button type="button" class="btn" id="youNext" title="another face">→</button></div>
-</dialog>
-<dialog id="gameDialog" class="game">
-  <div class="tbar"><button class="tx" title="close">✕</button><span class="tname" id="gameName"></span></div>
-  <div class="gbody"><div id="chess" class="chess" hidden></div><div id="pong" class="pong" hidden></div></div>
-</dialog>
 
 <script>
 // burrow's page: the room (room.js) on the left, as wide as you drag the divider; on the right the
@@ -61,7 +58,9 @@
 // splits it. A bot carried out of the room onto the pane opens where you drop it. ✕ closes a tile; so
 // does a click on the room's floor (all of them), and a session's
 // tile closes itself when the attach ends (`exit`). The pointer on either side lights up the other: the
-// bot and its tile. A game (chess, ping-pong) opens over everything, against an idle bot, at once.
+// bot and its tile. Everything else the room asks of you shows in the same place, as one view framed
+// like a tile (the tiles go while it is open): the closet's furniture, a game (chess, ping-pong against
+// an idle bot drawn by lot, at once), a project or a machine to add, your face.
 // You are in the room as well, so it knows what you do: which session has the focus, what you type,
 // whether the window is left alone; a click on you is how you look.
 let state = null;
@@ -76,15 +75,16 @@ const botTiles = () => tiles.all().filter((t) => t.kind === "bot");
 const tileOf = (id) => tiles.all().find((t) => t.kind === "bot" && t.id === id);
 const focusedBot = () => { const t = tiles.focused(); return t && t.kind === "bot" ? t.id : null; };
 let hoverTile = null;                      // the tile the pointer is on
-const game = $("#gameDialog");
-let gameKind = null;                       // "chess" or "pong" while the game dialog is open
+const view = $("#view");
+let viewKind = null;                       // what the view shows: closet, chess, pong, dir, machine, you; null when tiles do
 
 const room = startRoom($("#room"), {
   state: () => state,
   open: focusedBot,
   opens: () => botTiles().map((t) => t.id),
-  chess: () => (game.open && gameKind === "chess" && state && state.chess && !state.chess.result ? state.chess : null),
-  pong: () => (game.open && gameKind === "pong" ? pongUI.playing() : null),
+  chess: () => (viewKind === "chess" && state && state.chess && !state.chess.result ? state.chess : null),
+  pong: () => (viewKind === "pong" ? pongUI.playing() : null),
+  view: () => viewKind,
   away: () => (blurAt ? (performance.now() - blurAt) / 1000 : 0),
   hl: () => (hoverTile && hoverTile.kind === "bot" ? hoverTile.id : null),
   hover: (id) => { for (const t of botTiles()) t.el.classList.toggle("hl", t.id === id); },
@@ -95,15 +95,17 @@ const room = startRoom($("#room"), {
 
 async function act(a) {
   const b = a.id && byId(a.id);
-  if (a.kind === "addMachine") ask($("#machineDialog"));
-  else if (a.kind === "addDir") ask($("#dirDialog"));
+  if (a.kind === "addMachine") ask("machine");
+  else if (a.kind === "addDir") ask("dir");
   else if (a.kind === "you") askYou();
+  else if (a.kind === "closet") { openView("closet"); fillCloset(); }
+  else if (a.kind === "burn") { const r = await api("/api/furniture", { remove: a.key }); if (r.error) note(r.error); }
   else if (a.kind === "open" && b) openBot(b.m, b.id, a.shift);
   else if (a.kind === "chess" || a.kind === "pong") openGame(a.kind);
   else if (a.kind === "forget") { const r = await api("/api/forget", { unit: a.unit }); if (r.error) note(r.error); }
   else if (a.kind === "layout") await api("/api/layout", { layout: a.layout });
   else if (a.kind === "stop" && b) stopBot(b.m, b.id);
-  else if (a.kind === "blank") { for (const t of tiles.all()) closeTile(t); }
+  else if (a.kind === "blank") { for (const t of tiles.all()) closeTile(t); closeView(); }
   else if (a.kind === "drop" && b) { const t = openBot(b.m, b.id, a.shift); for (const f of a.files) await hand(f, t); }
   else if (a.kind === "spawn") {
     const r = await api("/api/spawn", { m: a.m, dir: a.dir });
@@ -121,9 +123,10 @@ es.addEventListener("state", (e) => {
   state = JSON.parse(e.data);
   if (first) { first = false; room.size(); }   // the room's width, as it was left
   for (const t of botTiles()) showWho(t);
-  if (game.open && gameKind === "chess") showChess();
+  if (viewKind === "chess") showChess();
+  if (viewKind === "closet") fillCloset();
   // a bot that gets work, or a question for you, leaves the ping-pong table
-  const pp = game.open && gameKind === "pong" && pongUI.playing();
+  const pp = viewKind === "pong" && pongUI.playing();
   if (pp && !state.bots.some((b) => b.id === pp.id && !b.busy && !b.waiting)) pongUI.left();
   room.draw();
 });
@@ -147,8 +150,33 @@ addEventListener("focus", focus); addEventListener("blur", focus); document.addE
   });
 }
 
-// ---- dialogs: Enter adds, Esc closes; the directory completes as you type (the machine's own ls)
-function ask(d) {
+// ---- the view: one thing at a time on the right, in place of the tiles, framed like one
+const PANELS = { dir: "#vDir", machine: "#vMachine", you: "#vYou", closet: "#vCloset", chess: "#chess", pong: "#pong" };
+const TITLES = { dir: "a project", machine: "a machine", you: "you", closet: "the closet", chess: "chess", pong: "ping-pong" };
+function openView(kind) {
+  if (viewKind && viewKind !== kind) closeView(true);
+  for (const t of tiles.all()) closeTile(t);
+  viewKind = kind;
+  for (const [k, sel] of Object.entries(PANELS)) $(sel).hidden = k !== kind;
+  view.querySelector(".tname").textContent = TITLES[kind]; view.querySelector(".tas").textContent = "";
+  view.hidden = false;
+  $("#pane").classList.remove("empty");
+  room.draw();
+}
+function closeView(keep) {                 // keep: another view takes its place at once
+  if (!viewKind) return;
+  const was = viewKind;
+  viewKind = null;
+  if (was === "chess" && state && state.chess && !state.chess.result) api("/api/chess", { resign: true });
+  if (was === "pong") pongUI.close();
+  if (!keep) { view.hidden = true; $("#pane").classList.toggle("empty", !tiles.all().length); room.draw(); }
+}
+view.querySelector(".tx").onclick = () => closeView();
+
+// ---- a project, a machine: Enter adds; the directory completes as you type (the machine's own ls)
+function ask(kind) {
+  openView(kind);
+  const d = $(PANELS[kind]);
   d.querySelector(".err").textContent = "";
   const sel = d.querySelector("select");
   if (sel && state) {                      // which machine: a choice only when there is one
@@ -159,27 +187,25 @@ function ask(d) {
     d.querySelector(".machine").textContent = ms[0] ? ms[0].name : "";
   }
   d.querySelectorAll("input").forEach((i) => (i.value = ""));
-  d.showModal();
   d.querySelector("input").focus();
 }
-for (const d of [$("#dirDialog"), $("#machineDialog"), $("#youDialog")]) d.addEventListener("click", (e) => { if (e.target === d) d.close(); });
-for (const d of [$("#dirDialog"), $("#machineDialog")]) {
-  d.querySelector("form").addEventListener("submit", async (e) => {
+for (const d of [$("#vDir"), $("#vMachine")]) {
+  d.addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.target)), err = d.querySelector(".err");
     err.textContent = "…";
-    const r = d.id === "dirDialog" ? await api("/api/dir", { m: f.m || "", dir: f.dir }) : await api("/api/machine", f);
+    const r = d.id === "vDir" ? await api("/api/dir", { m: f.m || "", dir: f.dir }) : await api("/api/machine", f);
     if (r.error) { err.textContent = r.error; return; }
-    d.close();
+    closeView();
   });
 }
 {
   let timer = null, asked = "";
-  const inp = $("#dirDialog input"), list = $("#dirs");
+  const inp = $("#vDir input"), list = $("#dirs");
   inp.addEventListener("input", () => {
     clearTimeout(timer);
     timer = setTimeout(async () => {
-      const dir = inp.value, m = $("#dirDialog select").value || "";
+      const dir = inp.value, m = $("#vDir select").value || "";
       if (dir === asked) return;
       asked = dir;
       const r = await api("/api/complete", { m, dir });
@@ -190,7 +216,7 @@ for (const d of [$("#dirDialog"), $("#machineDialog")]) {
 
 // ---- you: your face, picked as at pair's door (← another face →), kept in room.json
 function askYou() {
-  const d = $("#youDialog"), name = state.you.name;
+  const name = state.you.name;
   let i = +(/:(-?\d+)$/.exec(state.you.seed || "") || [0, 0])[1];
   const seed = () => `${name}:${i}`;
   const show = () => { $("#youFace").src = pixelAvatar(seed(), "human", "#d97757"); };
@@ -198,7 +224,43 @@ function askYou() {
   $("#youPrev").onclick = () => { i--; save(); };
   $("#youNext").onclick = () => { i++; save(); };
   show();
-  d.showModal();
+  openView("you");
+}
+
+// ---- the closet: the furniture there is, drawn as it stands in the room; drag a piece into the
+// room to put it there. What there is one of at most is greyed while it is in the room. The
+// fireplace takes a piece back out (it burns)
+const CATALOGUE = ["plant", "armchair", "mat", "window", "clock", "board", "meet", "chess", "pong", "coffee", "cooler", "printer"];
+const MANY = new Set(["plant", "armchair", "mat", "window"]);
+function fillCloset() {
+  const el = $("#vCloset"), have = new Set(((state && state.furniture) || []).map((k) => k.replace(/\d+$/, "")));
+  el.innerHTML = "";
+  for (const kind of CATALOGUE) {
+    const it = document.createElement("div"), gone = !MANY.has(kind) && have.has(kind);
+    it.className = "item" + (gone ? " gone" : "");
+    it.innerHTML = `<img src="${room.icon(kind)}" alt=""><small>${room.names[kind]}</small>`;
+    it.title = gone ? "in the room" : "drag it into the room";
+    if (!gone) it.addEventListener("pointerdown", (e) => carryOut(e, kind, it));
+    el.appendChild(it);
+  }
+}
+function carryOut(e, kind, it) {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  try { it.setPointerCapture(e.pointerId); } catch {}
+  const x0 = e.clientX, y0 = e.clientY;
+  let on = false;
+  it.onpointermove = (ev) => {
+    if (!on && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 4) return;
+    on = true; it.classList.add("lift");
+    room.carry(kind, ev.clientX, ev.clientY);
+  };
+  it.onpointerup = async (ev) => {
+    it.onpointermove = it.onpointerup = null; it.classList.remove("lift");
+    if (!on) return;
+    const at = room.place(kind, ev.clientX, ev.clientY);
+    if (at) { const r = await api("/api/furniture", { add: kind, at }); if (r.error) note(r.error); }
+  };
 }
 
 // ---- tiles: what every one has
@@ -221,7 +283,7 @@ function closeTile(t, keepPlace) {         // keepPlace: another tile took its p
   t.term.dispose();
   if (hoverTile === t) hoverTile = null;
   if (keepPlace) tiles.forget(t); else tiles.remove(t);
-  $("#pane").classList.toggle("empty", !tiles.all().length);
+  $("#pane").classList.toggle("empty", !tiles.all().length && !viewKind);
   room.draw();
 }
 
@@ -242,6 +304,7 @@ function showWho(t) {
 // open a bot's session: in the focused tile's place (see makeRoom), or `at` a previewed spot when
 // it was carried over from the room
 function openBot(mid, id, retain, at) {
+  closeView();
   const have = tileOf(id);
   if (have) { tiles.focus(have); have.term.focus(); return have; }
   if (!at) makeRoom(retain);
@@ -299,8 +362,8 @@ async function stopBot(mid, id) {
   if (r.error) note(r.error);
 }
 
-// ---- a game, over everything: pair's chess board or ping-pong against one of the idle bots, drawn
-// by lot, starting at once. Closing it gives the game up
+// ---- a game in the view: pair's chess board or ping-pong against one of the idle bots, drawn
+// by lot, starting at once. Closing the view gives the game up
 const projectColor = (unit) => room.color(unit);
 const botFace = (p) => {
   const b = byId(p.id);
@@ -321,19 +384,18 @@ const pongUI = pongTable($("#pong"), {
   post: async () => ({}), api: () => "",
 });
 async function openGame(kind) {
-  if (game.open) { if (gameKind === kind) return; closeGame(); }
+  if (viewKind === kind) return;
   const who = idleBots();
   if (!who.length) return note("no idle bot to play with");
   const it = who[Math.floor(Math.random() * who.length)];
-  gameKind = kind;
-  $("#chess").hidden = kind !== "chess"; $("#pong").hidden = kind !== "pong";
-  game.showModal();
+  openView(kind);
   if (kind === "chess") {
     const r = await api("/api/chess", { challenge: it.id });
-    if (r.error) { note(r.error); closeGame(); return; }
+    if (r.error) { note(r.error); closeView(); return; }
     showChess();
   } else {
-    $("#gameName").textContent = "ping-pong with " + it.name;
+    view.querySelector(".tas").textContent = "with " + it.name;
+    $("#pong").hidden = true;                // pong.js shows its card itself, and starts its frames only then
     pongUI.start({ id: it.id, name: it.name, color: it.color });
   }
   room.draw();
@@ -343,21 +405,11 @@ function showChess() {
   const it = v && (v.white.id === "you" ? v.black : v.white);
   if (it) { it.color = projectColor((byId(it.id) || {}).unit || ""); }
   if (v) v.white.color = v.white.color || "#d97757", v.black.color = v.black.color || "#d97757";
-  $("#gameName").textContent = it ? "chess with " + it.name : "chess";
+  view.querySelector(".tas").textContent = it ? "with " + it.name : "";
   chessUI.update(v);
 }
-function closeGame() {
-  if (gameKind === "chess" && state && state.chess && !state.chess.result) api("/api/chess", { resign: true });
-  if (gameKind === "pong" && !$("#pong").hidden) pongUI.close();
-  gameKind = null;
-  if (game.open) game.close();
-  room.draw();
-}
-game.querySelector(".tx").onclick = closeGame;
-game.addEventListener("close", () => { if (gameKind) closeGame(); });
-game.addEventListener("click", (e) => { if (e.target === game) closeGame(); });
 // ping-pong's own ✕ hides its card: then the game is over here too
-new MutationObserver(() => { if ($("#pong").hidden && gameKind === "pong") closeGame(); }).observe($("#pong"), { attributes: true, attributeFilter: ["hidden"] });
+new MutationObserver(() => { if ($("#pong").hidden && viewKind === "pong") closeView(); }).observe($("#pong"), { attributes: true, attributeFilter: ["hidden"] });
 
 // drop a file on a session: its path gets typed in, as in a terminal (copied over first for a remote machine)
 async function hand(file, t) {
@@ -378,7 +430,10 @@ pane.addEventListener("drop", async (e) => {
   e.preventDefault();
   for (const file of e.dataTransfer.files) await hand(file, t);
 });
-addEventListener("keydown", (e) => { if (e.key === "Escape" && document.activeElement === document.body) { const t = tiles.focused(); if (t) closeTile(t); } });
+addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !(document.activeElement === document.body || view.contains(document.activeElement))) return;
+  if (viewKind) closeView(); else { const t = tiles.focused(); if (t) closeTile(t); }
+});
 </script>
 </body>
 </html>
