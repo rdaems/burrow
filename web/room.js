@@ -54,7 +54,6 @@ function startRoom(cv, app) {
   const PROJECT = ["#4a76b8", "#e8402a", "#2fa087", "#f2a531", "#9a74d6", "#5fcf4a", "#f06b72", "#8fc0e8"];
   const WALL = 26, SEAT = 18, ADD_W = 30, ROW = 46, LAP = 13, DOOR = 20, NAME = 8;
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const DPR = Math.max(1, Math.round(devicePixelRatio || 1));     // device pixels a CSS pixel: the canvas is drawn at that
   const shade = (hex, k) => "#" + [1, 3, 5].map((i) => Math.min(255, Math.round(parseInt(hex.slice(i, i + 2), 16) * k)).toString(16).padStart(2, "0")).join("");
   const mix = (a, b, k) => "#" + [1, 3, 5].map((i) => { const x = parseInt(a.slice(i, i + 2), 16), y = parseInt(b.slice(i, i + 2), 16); return Math.round(x + (y - x) * k).toString(16).padStart(2, "0"); }).join("");
   const rnd = (a, b) => a + Math.random() * (b - a);
@@ -92,21 +91,13 @@ function startRoom(cv, app) {
     const [k, rows] = g.split(" ");
     F[k] = rows.split("/").map((r) => r.padEnd(3, ".").slice(0, 3)).join("");
   }
-  // The canvas is drawn at the screen's resolution (DPR device pixels a CSS pixel): the pixel art
-  // stays on its grid of 2 CSS pixels a dot, but the lettering is finer, 3 device pixels a letter
-  // pixel on a retina screen (TS of a dot) instead of 4: a little smaller and crisper, still pixels
-  const TS = DPR >= 2 ? 0.75 : 1;
-  const tinyW = (s) => Math.max(0, ([...s].length * 4 - 1) * TS);
-  // the popups (a name over a bot, a path over a screen, the signs) are UI, not things in the room:
-  // they are set in the terminal's font, at the screen's resolution
-  const FONT = '5.5px "Burrow Mono", "JetBrains Mono", Menlo, monospace', measure = document.createElement("canvas").getContext("2d");
-  const labelW = (s) => { measure.font = FONT; return Math.ceil(measure.measureText(s).width); };
-  function label(ctx, s, x, y, col) { ctx.fillStyle = col; ctx.font = FONT; ctx.textBaseline = "top"; ctx.fillText(s, x, y - 0.4); }
+  // pair's lettering, a letter pixel a dot (he tried it smaller and in the terminal's font: worse)
+  const tinyW = (s) => Math.max(0, [...s].length * 4 - 1);
   function tiny(ctx, s, x, y, col) {
     ctx.fillStyle = col;
     [...s.toUpperCase()].forEach((ch, i) => {
       const gl = F[ch];
-      if (gl) for (let k = 0; k < 15; k++) if (gl[k] === "#") ctx.fillRect(x + (i * 4 + (k % 3)) * TS, y + Math.floor(k / 3) * TS, TS, TS);
+      if (gl) for (let k = 0; k < 15; k++) if (gl[k] === "#") ctx.fillRect(x + i * 4 + (k % 3), y + Math.floor(k / 3), 1, 1);
     });
   }
 
@@ -706,7 +697,7 @@ function startRoom(cv, app) {
 
   function draw() {
     const ctx = cv.getContext("2d");
-    ctx.setTransform(2 * DPR, 0, 0, 2 * DPR, 0, 0);      // drawn in dots; the canvas has two pixels a dot, for dragging
+    ctx.setTransform(2, 0, 0, 2, 0, 0);      // drawn in dots; the canvas has two pixels a dot, for dragging
     ctx.imageSmoothingEnabled = false;
     const s = app.state();
     hots = []; tip = null;
@@ -793,8 +784,7 @@ function startRoom(cv, app) {
     for (const f of w.folk.values()) if (!f.lying && !f.held) items.push([f.y, () => drawFigure(ctx, f, f.b, T, hl)]);
     for (const d of L.desks) {
       items.push([d.y - 1, () => drawDesk(ctx, d, w, T, hl)]);
-      for (const [id, x] of d.seats) items.push([d.y - 0.5, () => drawChair(ctx, x, d.y, false, hl.has(id))]);
-      if (d.empty) items.push([d.y - 0.5, () => drawChair(ctx, d.empty, d.y, true)]);
+      for (const [id, x] of d.seats) items.push([d.y - 0.5, () => drawChair(ctx, x, d.y, hl.has(id))]);
     }
     items.push([L.meet.y - 1, () => drawTable(ctx, L.meet)]);
     for (const i of [0, 1]) { const st = L.meetSeat(i); items.push([st.y - 0.5, () => drawStool(ctx, st)]); }
@@ -860,10 +850,10 @@ function startRoom(cv, app) {
     }
     // by its door to be stopped: a click on the sign over it stops it
     for (const f of w.folk.values()) if (f.act.kind === "door" && f.b && Math.hypot(f.x - doorX(f.b.m), f.y - WALL - 3) < 2) {
-      const text = "stop " + f.b.name + "?", tw = labelW(text), lx = Math.round(Math.min(W - tw - 2, doorX(f.b.m) - 6)), ly = WALL + 7;
+      const text = "stop " + f.b.name + "?", tw = tinyW(text), lx = Math.round(Math.min(W - tw - 2, doorX(f.b.m) - 6)), ly = WALL + 7;
       const h = hot(lx - 2, ly - 2, lx + tw + 2, ly + 7, { kind: "stop", id: f.id });
       box(ctx, lx - 2, ly - 2, tw + 4, 9, h ? TERRACOTTA : INK2);
-      label(ctx, text, lx, ly, h ? INK : C.steel4);
+      tiny(ctx, text, lx, ly, h ? INK : C.steel4);
     }
     // the bot under the pointer: its name over its head, and a click opens it
     if (hovered && !moving) {
@@ -872,9 +862,9 @@ function startRoom(cv, app) {
       hots.push({ x0: -1e9, y0: -1e9, x1: 1e9, y1: 1e9, action: b.human ? { kind: "you" } : { kind: "open", id: b.id } });
     }
     if (tip && !held && !moving) {
-      const t = tip.text, tw = labelW(t), lx = Math.round(Math.max(2, Math.min(W - tw - 2, tip.x - tw / 2))), ly = Math.round(Math.max(WALL + 2, tip.y - 8));
+      const t = tip.text, tw = tinyW(t), lx = Math.round(Math.max(2, Math.min(W - tw - 2, tip.x - tw / 2))), ly = Math.round(Math.max(WALL + 2, tip.y - 8));
       box(ctx, lx - 2, ly - 2, tw + 4, 9, INK2);
-      label(ctx, t, lx, ly, C.steel4);
+      tiny(ctx, t, lx, ly, C.steel4);
     }
     const id = hovered && !held ? hovered.b.id : null;
     if (id !== hoverId) { hoverId = id; app.hover(id); }
@@ -996,9 +986,9 @@ function startRoom(cv, app) {
     rect(ctx, x, y, w, 7, p.k);
     rect(ctx, x + 1, y + 1, w - 2, 5, lit ? C.steel1 : p.plate);
   }
-  // an office chair at a project's desk, its sitter facing the screen; a pale one where no bot is
-  function drawChair(ctx, x, y, free, lit) {
-    const im = sprites.get(free ? "chairFree" : "chair");
+  // an office chair at a project's desk, its sitter facing the screen; none where no bot is yet
+  function drawChair(ctx, x, y, lit) {
+    const im = sprites.get("chair");
     if (lit) put(ctx, halo(im, TERRACOTTA), x - 4, y - 16);
     put(ctx, im, x - 4, y - 16);
   }
@@ -1233,7 +1223,7 @@ function startRoom(cv, app) {
     const s = app.state();
     if (s && s.width && !widthSet) W = Math.max(200, Math.min(1200, Math.round(s.width)));
     H = Math.max(200, Math.floor(cv.parentElement.clientHeight / K)); FLOORY = H - 6; defaults();
-    if (cv.width !== W * 2 * DPR || cv.height !== H * 2 * DPR) { cv.width = W * 2 * DPR; cv.height = H * 2 * DPR; }
+    if (cv.width !== W * 2 || cv.height !== H * 2) { cv.width = W * 2; cv.height = H * 2; }
     cv.style.width = W * K + "px"; cv.style.height = H * K + "px";
     cv.parentElement.style.width = W * K + "px";
     draw();

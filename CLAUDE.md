@@ -274,10 +274,12 @@ visibility, let's do all the interfacing with the main desk with the computer sc
 - The `you` dialog is pair's door picker only: ← face →, nothing else, no text. No rounded corners anywhere.
 - Dragging furniture snaps to whole dots while it moves ("a bit of jittering should be visible"), as pair.
 - Lettering: he tried the terminal's font for all of it and did not like it ("still, try to make it a little
-  smaller and/or readable", "or only use the other font for the popups"). So: the canvas is drawn at the
-  screen's resolution (`DPR`); the pixel font stays for what is in the room (plates, the wall) at 3 device
-  pixels a letter pixel instead of 4 (`TS`), a quarter smaller and crisper; the popups (tips, the stop sign)
-  are UI and set in the terminal's font (`label()`, `labelW()`).
+  smaller and/or readable", "or only use the other font for the popups"). Tried next: the canvas at the
+  screen's resolution, the pixel font at 3 device pixels a letter pixel, the popups in the terminal's font;
+  "revert the last changes on the fonts, it's worse now". So it is pair's 3x5 font, a letter pixel a dot,
+  everywhere, and the canvas has two pixels a dot; leave the lettering alone.
+- An empty desk shows no chair ("when there's no bot yet at a table, do not show a chair"); the first bot
+  brings its chair. The desktop keeps its one-seat length so the desk does not jump when it comes.
 - The body wears what the portrait wears: pair's figure drew the torso in the person's colour whatever the
   portrait's outfit ("a white shirt in the selector doesn't show up on the full body"); `body()` now reads
   the torso colours off the portrait's shoulders (pixels (6,19) and (15,19)).

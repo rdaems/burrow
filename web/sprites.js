@@ -120,7 +120,6 @@ window.sprites = (() => {
       ".FFFFFFFFFF.",
     ]),
     chair: art(CHAIR),
-    chairFree: art(CHAIR, { F: "#757b7c", E: "#e1e3e9", G: "#b5bfc7", D: "#b5bfc7" }),
     counter: art([
       ".dddddddddddddddddd.",
       "dhwwwwwwwwwwwwwwwwhd",
