@@ -20,14 +20,28 @@ Click a bot and its session opens next to the room, as a tile: a real terminal r
 so you are using Claude Code itself. Shift-click adds a tile beside the open ones; drag a tile by its band
 onto another to arrange them. Close one (✕, or click the floor) and the bot keeps working. Close burrow
 altogether and every bot keeps working too. To stop a session, carry its bot to its machine's door or onto
-the fire: a sign counts five seconds down, a click on it is the undo.
+the fire, or type `exit` in its terminal: the bot goes to its door, a sign over it counts five seconds
+down, and a click on the sign is the undo. A bot started from burrow gets a name the way pair names its
+agents (`dapper-dan`, `merry-moe`).
 
-Everything else happens in the room as well: drag furniture where you want it; the closet on the wall
-holds more (drag a piece into the room), the fire burns what is dragged into it (a desk, furniture, a
-bot); the coffee pot and the cooler's bottle show what is left of your usage limits; the printer prints
-a report; the chess and ping-pong tables are games against an idle bot; a pair room (pair.daems.me) is a
-table with a speakerphone: click it for the chat, drop a bot on it and it joins. Drop yourself or a bot on
-a piece of furniture and it uses it.
+Everything else happens in the room as well, and what needs more than the room opens as a 16-bit panel
+beside it, never a dialog:
+
+- drag furniture where you want it; the closet on the wall holds more of every kind (drag a piece into
+  the room); the fire burns what is dragged into it, a desk, a piece of furniture or a bot
+- the coffee pot and the cooler's bottle show what is left of your usage limits; a click on either opens
+  the whole picture, every limit `/usage` reports and what is using it up
+- the printer prints an office report: who is there, and the statistics of the shift (coffee fetched,
+  water cooler talks, naps, games, meetings, messages beamed), row by row on a sheet that comes out of it
+- the whiteboard opens big and you draw on it; the host of a meeting draws on the same board
+- the window opens the outside: the sky by the hour, the sun or the moon, stars and lit windows at night
+- the chess and ping-pong tables are games against an idle bot, drawn by lot
+- a pair room ([pair](https://github.com/rdaems/pair-prompting), e.g. pair.daems.me) is a table with a
+  speakerphone: give it the link of your own page in the room, click it for the chat, drop a bot on it and
+  the bot joins the chat as an agent
+- drop yourself or a bot on a piece of furniture and it uses it: the armchair, a mat, the window, the
+  coffee machine, a plant, the printer, a table
+- a click on your own figure picks your face
 
 ## How it works
 
@@ -41,6 +55,8 @@ burrow owns nothing. The sessions are Claude Code's own **background sessions**:
 | stop a bot                | `claude stop <id>`                                    |
 | who talks to whom         | messages between sessions, from the transcripts written in the last minute (same poll) |
 | drop a file on the session | `scp` to `~/.cache/burrow/drop/<stamp>/`, then its path is typed into the prompt |
+| the limits                | `claude -p /usage --no-session-persistence` on this machine, every 5 min |
+| join a pair room          | the room's bring link (from your page's `/state`) is typed into the session |
 
 Nothing is installed on the machines except Claude Code. Remote machines are reached with your own `ssh`,
 so `~/.ssh/config`, agents and tailscale names all work. One multiplexed connection per machine is
@@ -71,7 +87,8 @@ machine burrow can't reach has its door boarded up (hover it for why). The empty
 Every directory a session was ever seen in has a desk until you burn it. burrow itself keeps only the
 desks, the furniture and where it stands, your face, and the pair rooms' links, in `~/.config/burrow/room.json`.
 
-The Rust app has a room per machine instead, in `~/.config/burrow/rooms.json`, written by its **+ machine** button:
+The Rust app (`src/`) is the earlier, native version and has not followed the browser version since the
+latter took over: one room per machine, in `~/.config/burrow/rooms.json`, written by its **+ machine** button:
 
 ```json
 [
@@ -95,10 +112,12 @@ Rust only: egui/eframe for the window, alacritty's `alacritty_terminal` for the 
 drawn dot by dot after [pair](https://github.com/rdaems/pair-prompting)'s office (`app/floor.js`): same
 robots, palette, furniture and lettering. JetBrains Mono (OFL, `assets/`) for the terminal.
 
-The browser version (`python3 web/server.py`) keeps pair's robots and lettering but furnishes the room as
-pixel art on a 16-dot grid, seen from above at a slant, after [Pixel Agents](https://github.com/pixel-agents-hq/pixel-agents):
-its plants, whiteboard, armchair, meeting table, stools and mug are Pixel Agents' own sprites (MIT,
-`web/sprites/`), the rest is drawn in `web/sprites.js` in the same manner.
+The browser version (`python3 web/server.py`, stdlib only: it polls, holds the ptys, speaks websocket and
+server-sent events itself) keeps pair's robots, lettering, palette and 16-bit panels, but furnishes the
+room as pixel art on a 16-dot grid, seen from above at a slant, after
+[Pixel Agents](https://github.com/pixel-agents-hq/pixel-agents): its plants, armchair, meeting table,
+stools and mug are Pixel Agents' own sprites (MIT, `web/sprites/`), the rest is drawn in `web/sprites.js`
+and `web/room.js` in the same manner. The terminal is xterm.js.
 
 A new directory has to be trusted by Claude Code once (run `claude` there by hand) before a background
 session can start in it; burrow shows Claude's message if it isn't.
