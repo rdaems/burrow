@@ -229,9 +229,9 @@ function startRoom(cv, app) {
   let H = 400, FLOORY = H - 6, DEF = {};
   function defaults() {
     DEF = {
-      meet: [W / 2, WALL + 34], pong: [60, 62], chess: [70, FLOORY - 32], mats: [176, FLOORY - 30],
-      coffee: [3, FLOORY], cooler: [36, FLOORY - 1], printer: [W / 2 + 4, FLOORY], armchair: [W - 38, FLOORY],
-      plant0: [W - 11, FLOORY], plant1: [W - 12, 64], board: [W / 2 - 14, 5], window: [W - 40, 4], fire: [W / 2 + 30, FLOORY],
+      meet: [W / 2, WALL + 34], pong: [60, 62], chess: [70, FLOORY - 32], mats: [132, FLOORY - 30],
+      coffee: [3, FLOORY], cooler: [36, FLOORY - 1], printer: [W / 2 + 4, FLOORY], armchair: [W - 32, FLOORY],
+      plant0: [W - 8, FLOORY], plant1: [W - 12, 64], board: [W / 2 - 14, 5], window: [W - 40, 4], fire: [W - 74, FLOORY],
     };
   }
   // the default places for desks: columns of them, as many as the room is wide
@@ -252,7 +252,7 @@ function startRoom(cv, app) {
       case "armchair": return [x - 6, y - 23, x + 18, y + 1];
       case "board": return [x, y, x + 28, y + 16];
       case "window": return [x, y, x + 21, y + 18];
-      case "fire": return [x, y - 24, x + 26, y + 1];
+      case "fire": return [x, y - 54, x + 32, y + 1];
       default: return [x - 8, y - 31, x + 8, y + 1];     // a plant
     }
   }
@@ -316,7 +316,7 @@ function startRoom(cv, app) {
     const L = {
       desks, add: { x0: addAt[0], y0: addAt[1] - 15, x1: addAt[0] + ADD_W, y1: addAt[1] },
       floorY: FLOORY, board: { x0: bx, y0: by, x1: bx + 28, y1: by + 16 }, window: { x0: wx, y0: wy, x1: wx + 21, y1: wy + 18 },
-      fire: { x0: fx, y0: fy - 24, x1: fx + 26, y1: fy },
+      fire: { x0: fx, y0: fy - 54, x1: fx + 32, y1: fy },
       meet: xy("meet"), pong: xy("pong"), chess: xy("chess"), mats: [-28, 0, 28].map((d) => ({ x: matsAt.x + d, y: matsAt.y })),
       cooler: xy("cooler"), plants: [xy("plant0"), xy("plant1")], printer: xy("printer"), chair: xy("armchair"),
       coffeeAt: xy("coffee"), floor: { x0: 14, y0: WALL + 8, x1: W - 14, y1: FLOORY - 4 }, placed,
@@ -805,8 +805,8 @@ function startRoom(cv, app) {
       // the fireplace: a desk held over it is about to burn (the fire flares); a desk with bots can't
       const feeding = moving && inFire(L, moving.key, moving.at, moving.u), fd = feeding && L.desks.find((d) => d.key === moving.key);
       items.push([L.fire.y1, () => drawFire(ctx, L.fire, T, !!feeding)]);
-      if (fd) tip = { text: fd.seats.length ? fd.label + " has bots" : "burn " + fd.label, x: L.fire.x0 + 13, y: L.fire.y0 - 2 };
-      else if (!moving && over(L.fire.x0, L.fire.y0, L.fire.x1, L.fire.y1)) tip = { text: "a desk dragged in here burns", x: L.fire.x0 + 13, y: L.fire.y0 - 2 };
+      if (fd) tip = { text: fd.seats.length ? fd.label + " has bots" : "burn " + fd.label, x: L.fire.x0 + 16, y: L.fire.y0 + 6 };
+      else if (!moving && over(L.fire.x0, L.fire.y0, L.fire.x1, L.fire.y1)) tip = { text: "a desk dragged in here burns", x: L.fire.x0 + 16, y: L.fire.y0 + 6 };
     }
     L.plants.forEach((pl, i) => items.push([pl.y, () => drawPlant(ctx, pl, i)]));
     items.push([L.pong.y - 0.5, () => drawPong(ctx, L.pong, w)]);
@@ -994,27 +994,54 @@ function startRoom(cv, app) {
   }
   // a desk carried to a door is on its way out: a sign over the door asks; a click on it takes
   // the desk away (its bots must be gone first)
-  // the fireplace, a brick hearth on the floor seen from above at a slant like the rest: a desk dragged
-  // into it burns (its bots must be gone first)
+  // the fireplace: a midcentury freestanding one in the middle of the room (a Malm, as in a 1960s
+  // living room): an enamelled cone hood hung from its flue, open all round over a round bowl on a
+  // tripod, on a pad of pebbles, seen from above at a slant like the rest. A desk dragged into it
+  // burns (its bots must be gone first). 32 wide, 54 high, the pad at the bottom
   const inFire = (L, key, at, u) => key.startsWith("u:") && meets(foot(key, at, u), [L.fire.x0, L.fire.y0, L.fire.x1, L.fire.y1 + 4]);
   function drawFire(ctx, f, T, feeding) {
-    const { x0, y0 } = f, BR = "#7a4a35", BRD = "#5c3626", MOR = "#3a2622", TOP = "#8d5a42";
-    slab(ctx, x0, y0, 26, 6, 18, { hi: "#a06b4e", top: TOP, d: MOR, k: "#2a1a1e" });       // the block, bricks on its front
-    for (let j = 0; j < 15; j += 3) for (let i = (j / 3) % 2 ? -2 : 0; i < 24; i += 5) {
-      const x = Math.max(1, i + 1), w = Math.min(4, 25 - x);
-      if (w > 0) rect(ctx, x0 + x, y0 + 7 + j, w, 2, ((i + j) / 5) % 3 === 1 ? BRD : BR);
-    }
-    rect(ctx, x0 + 6, y0 + 9, 14, 13, "#120a0c");                     // the hearth
-    rect(ctx, x0 + 5, y0 + 22, 16, 1, "#2a1a1e");
-    const k = Math.floor(T * 6) % 3, big = feeding ? 3 : 0;            // the fire, three frames
-    const flame = (x, h, c) => rect(ctx, x0 + x, y0 + 22 - h, 1, h, c);
-    const F = [[7, 2 + k], [8, 4 + (k + 1) % 3], [9, 6 + k], [10, 8 + (k + 2) % 3], [11, 9 + k], [12, 10 + (k + 1) % 3], [13, 11 + k],
-      [14, 9 + (k + 2) % 3], [15, 8 + k], [16, 6 + (k + 1) % 3], [17, 4 + k], [18, 2 + (k + 2) % 3]];
+    const { x0, y0 } = f, cx = x0 + 16, r = (y, x, w, c) => rect(ctx, cx + x, y0 + y, w, 1, c);
+    const E = { k: "#4a2118", d: "#8e3d1d", m: "#c75b2b", hi: "#e8834a" };     // burnt-orange enamel: outline, shade, body, lit
+    const M = { k: "#3f3740", d: "#595e60", m: "#757b7c", hi: "#b5bfc7" };     // the black flue and legs, metal
+    const ST = { k: "#4d4a4f", m: "#8d8a86", hi: "#aaa59e", d: "#6e6b6a" };    // the pebbles of the pad
+    // the pad, an oval of pebbles on the floor, and its shadow
+    const PAD = [[49, 9], [50, 13], [51, 15], [52, 16], [53, 15], [54, 13]];
+    for (const [y, hw] of PAD) r(y, -hw, hw * 2, ST.k);
+    for (const [y, hw] of PAD.slice(1, -1)) r(y, -hw + 1, hw * 2 - 2, ST.m);
+    r(49, -8, 16, ST.m);
+    for (const [x, y] of [[-12, 51], [-6, 50], [1, 50], [8, 50], [12, 52], [-10, 53], [-3, 52], [4, 52], [10, 52], [-7, 52]]) r(y, x, 2, ST.hi);
+    for (const [x, y] of [[-9, 51], [3, 51], [9, 51], [-13, 52], [-1, 53], [6, 53], [12, 51]]) r(y, x, 2, ST.d);
+    r(55, -14, 28, SHADOW);
+    // the tripod: a leg to the front, two splayed to the sides
+    for (let k = 0; k < 5; k++) { r(47 + k, -9 - k, 1, M.k); r(47 + k, 8 + k, 1, M.k); }
+    r(47, -1, 3, M.k); r(48, -1, 3, M.k); r(49, -1, 3, M.k); r(50, -1, 3, M.k); r(51, -1, 3, M.k); r(48, -1, 1, M.d); r(49, -1, 1, M.d); r(50, -1, 1, M.d);
+    // the bowl, open at the top: its inside dark, the fire burns in it (drawn after its back and
+    // before its front rim, so the rim stands in front of the embers)
+    r(37, -12, 24, E.k); r(38, -14, 28, E.k); r(38, -12, 24, "#120a0c"); r(39, -15, 30, E.k); r(39, -14, 28, "#1c0e10");
+    const k = Math.floor(T * 6) % 3, big = feeding ? 4 : 0;            // the fire, three frames; it flares for a desk
+    const flame = (x, h, c) => rect(ctx, cx + x, y0 + 39 - h, 1, h, c);
+    const F = [[-7, 1 + k], [-6, 3 + (k + 1) % 3], [-5, 5 + k], [-4, 7 + (k + 2) % 3], [-3, 8 + k], [-2, 9 + (k + 1) % 3], [-1, 10 + k], [0, 10 + (k + 2) % 3],
+      [1, 10 + k], [2, 9 + (k + 1) % 3], [3, 8 + k], [4, 7 + (k + 2) % 3], [5, 5 + k], [6, 3 + (k + 1) % 3], [7, 1 + k]];
     for (const [x, h] of F) flame(x, Math.min(12, h + big), C.red1);
     for (const [x, h] of F) flame(x, Math.max(1, Math.round(Math.min(12, h + big) * 0.66)), C.gold1);
-    for (const [x, h] of F) if (x > 8 && x < 17) flame(x, Math.max(1, Math.round(Math.min(12, h + big) * 0.35)), C.gold2);
-    rect(ctx, x0 + 8, y0 + 21, 10, 1, "#3b2a1e");                     // the logs
-    rect(ctx, x0 + 10, y0 + 20, 6, 1, "#5c3a26");
+    for (const [x, h] of F) if (x > -4 && x < 4) flame(x, Math.max(1, Math.round(Math.min(12, h + big) * 0.35)), C.gold2);
+    r(38, -4, 8, "#3b2a1e"); r(38, -2, 4, "#5c3a26");                 // the logs
+    // the bowl's front, a shallow cone narrowing down to the stand, its rim lit
+    r(40, -15, 30, E.hi);
+    for (const [y, hw] of [[41, 14], [42, 13], [43, 11], [44, 9], [45, 7], [46, 5]]) {
+      r(y, -hw, hw * 2, E.k); r(y, -hw + 1, hw * 2 - 2, E.m); r(y, hw - 4, 3, E.d); r(y, -hw + 2, 2, E.hi);
+    }
+    r(47, -3, 6, E.k);
+    // the hood, a cone from a collar at the flue down to a wide lit rim, lit on the left, shaded on the
+    // right, hung over the fire; the flue above it, up out of the picture
+    for (let j = 0; j < 19; j++) {
+      const y = 8 + j, hw = 3 + Math.round((j * 12) / 18);
+      r(y, -hw, hw * 2, E.k); r(y, -hw + 1, hw * 2 - 2, E.m); r(y, hw - 1 - Math.round(hw / 3), Math.round(hw / 3), E.d);
+      r(y, -hw + 1 + Math.round(hw / 4), Math.max(1, Math.round(hw / 5)), E.hi);
+    }
+    r(26, -15, 30, E.k); r(27, -15, 30, E.hi); r(28, -14, 28, E.k);
+    r(7, -4, 8, M.k); r(7, -3, 6, M.d);                               // the collar
+    for (let y = 0; y < 7; y++) { r(y, -3, 6, M.k); r(y, -2, 4, M.d); r(y, -2, 1, M.hi); }
   }
   function drawBoard(ctx, b, w) {           // Pixel Agents' whiteboard, wiped, and what the host draws on it
     put(ctx, "WHITEBOARD", b.x0 - 2, b.y0 - 8);

@@ -270,7 +270,11 @@ visibility, let's do all the interfacing with the main desk with the computer sc
 - The bubble is only while typing; standing next to the bot is the "session has focus" state.
 - Tiles: 6 px gaps, a 2 px border, the focused tile terracotta like the hovered one (not the bot's colour);
   no pin. A click replaces the focused tile, shift-click adds one beside it, a click on the floor closes all.
-- The fireplace stands on the floor (default between the printer and the armchair), drawn like the rest.
+- The fireplace stands on the floor, drawn like the rest. He: "bigger, and a 3d view (as the other furniture,
+  it's flat now). Think like a midcentury fireplace in the middle of the room": so it is a Malm, a 1960s
+  freestanding cone in burnt-orange enamel hung from its flue, open all round over a bowl on a tripod, on an
+  oval pad of pebbles; 32 x 54 dots (`drawFire`, procedural, its palette `E` at the top; black enamel is a
+  one-line change). Default left of the armchair; the mats moved left of it to make room.
 - The `you` dialog is pair's door picker only: ← face →, nothing else, no text. No rounded corners anywhere.
 - Dragging furniture snaps to whole dots while it moves ("a bit of jittering should be visible"), as pair.
 - Lettering: he tried the terminal's font for all of it and did not like it ("still, try to make it a little
