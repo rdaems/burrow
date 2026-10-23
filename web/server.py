@@ -157,6 +157,21 @@ def kind_of(key):
     return key.rstrip("0123456789")
 
 
+# a bot started here gets a name as pair gives its agents (rdaems/pair-prompting BOT_WORDS): one not in use
+# on that machine. A session named by Claude Code itself keeps its name
+BOT_WORDS = {
+    "b": ("bouncy brave breezy bubbly bold", "bob bea bert babs benny"), "c": ("cheery clever cosmic cozy curious", "cleo carl cora chip cass"),
+    "d": ("dapper daring dizzy dreamy dandy", "dan dot dora dex dolly"), "f": ("fancy fizzy frisky funky fuzzy", "fred flo finn fern felix"),
+    "g": ("giddy gentle groovy gutsy gleeful", "gus gina gil greta gary"), "h": ("happy hasty humble hearty hip", "hank hattie hugo hal hazel"),
+    "j": ("jazzy jolly jumpy jovial jaunty", "jim june jojo jack jade"), "l": ("lucky lively loyal lanky lofty", "lou lola leo lily lars"),
+    "m": ("merry mellow mighty misty mild", "max mona milo mabel moe"), "n": ("nifty nimble noble nutty nosy", "ned nora nico nell nate"),
+    "p": ("perky plucky peppy polite posh", "pete pam pip polly perry"), "r": ("rowdy rosy rusty radiant rapid", "rex rosie rudy ruth ray"),
+    "s": ("sunny snappy spunky sleepy swanky", "sam sue stan sid suzy"), "t": ("tidy tiny trusty toasty twinkly", "tom tess ted tina toby"),
+    "w": ("witty wobbly wacky wise wily", "walt wanda wes winnie wally"), "z": ("zany zesty zippy zen zealous", "zed zoe ziggy zara zack"),
+}
+BOT_NAMES = [f"{a}-{n}" for adj, names in BOT_WORDS.values() for a in adj.split() for n in names.split()]
+
+
 def furnish(room):
     """a room from before the furniture list gets the default pieces; its row of three mats became
     three; the project cabinet (add) became furniture, and the whiteboard came off the wall (its
@@ -252,12 +267,24 @@ def parse_agents(out):
 
 
 def parse_usage(out):
-    """`/usage`: "Current session: 3% used · resets Oct 21 at 3:20pm (…)" → {session: {used, resets}, week: …}"""
-    u = {}
+    """`/usage`: "Current session: 3% used · resets Oct 21 at 3:20pm (…)" → {session: {used, resets}, week: …,
+    bars: [{label, used, resets}, …] for every "Current …" line, and `text`: the rest of what it says
+    (what contributes to the limits), for the limits page"""
+    u, bars, text = {}, [], []
     for line in out.splitlines():
-        m = re.match(r"\s*Current (session|week \(all models\)): (\d+)% used(?: · resets (.*?))?\s*(?:\(.*\))?$", line)
+        m = re.match(r"\s*Current (.+?): (\d+)% used(?: · resets (.*?))?\s*(?:\(.*\))?$", line)
         if m:
-            u["session" if m.group(1) == "session" else "week"] = {"used": int(m.group(2)), "resets": m.group(3) or ""}
+            bar = {"label": m.group(1), "used": int(m.group(2)), "resets": m.group(3) or ""}
+            bars.append(bar)
+            if m.group(1) == "session":
+                u["session"] = bar
+            elif m.group(1) == "week (all models)":
+                u["week"] = bar
+        elif not line.startswith("You are currently"):
+            text.append(line.rstrip())
+    if bars:
+        u["bars"] = bars
+        u["text"] = "\n".join(text).strip()
     return u
 
 
@@ -826,11 +853,11 @@ class Handler(BaseHTTPRequestHandler):
                     key = b["remove"]
                     if kind_of(key) in FIXED or key not in fs:
                         raise RuntimeError("that stays")
-                else:
-                    raise RuntimeError("add or remove what?")
                     fs.remove(key)
                     hub.room["layout"].pop(key, None)
                     hub.room.get("pair", {}).pop(key, None)
+                else:
+                    raise RuntimeError("add or remove what?")
                 save_room(hub.room)
             hub.push("state", hub.state())
             return {"key": key}
@@ -884,7 +911,10 @@ class Handler(BaseHTTPRequestHandler):
             if m.get("ssh") == "@demo":
                 return {"error": "demo bots can't be started"}
             name = (b.get("name") or "").strip()
-            out = run(m, f"cd {sq(b['dir'])} && claude --bg{' -n ' + sq(name) if name else ''} 2>&1")
+            if not name:
+                taken = {x["name"] for x in hub.feeds.get(mid, {}).get("bots", [])}
+                name = random.choice([n for n in BOT_NAMES if n not in taken] or BOT_NAMES)
+            out = run(m, f"cd {sq(b['dir'])} && claude --bg -n {sq(name)} 2>&1")
             # "backgrounded · 7ebbc505 · name (idle — …)" or, unnamed, "backgrounded · 7ebbc505 (idle — …)",
             # maybe after "Starting background service…"
             mm = re.search(r"^\s*backgrounded · (\S+?)(?=[\s·]|$)", out, re.M)

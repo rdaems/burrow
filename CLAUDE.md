@@ -398,6 +398,46 @@ Rust side at the same time, so the Rust app was only checked to build (`cargo ch
   "Furniture", "Report", "Pair room", "Your face").
 - README brought up to date (one room, desks for good, tiles, the closet, the fire, the games, pair).
 
+## Round of 2026-10-23, night: 16-bit popups, the fire's throw, the board you draw on
+
+What he said: the orange outline only where a click does something ("we've overdone it a bit"), plants
+keep swaying; animate what is thrown into the fire, "coherent with the flames, think about z-depth";
+chess clicks on the board itself; popups narrower, and "never show the borders you use for the terminal.
+We need to think about that UI aspect, make it more like 16 bit"; the closet without boxes; the whiteboard
+opens big and you can draw on it, the bots as well; his avatar must stand still while dragged; a dragged
+desk takes its seated bots along (he walks himself); the chess subtitle was redundant; bot names like
+pair's; terminals a little lighter; a click on the coffee or the water: one popup with the limits "a lot
+like the info you get in the settings of the claude app"; the printer in 16-bit style, big, the sheet and
+the letters appearing row by row; and `exit` still feels weird (his question; see the reply in the log).
+- **Outlines**: `CLICK` in room.js lists the kinds a click does something on (add, closet, chess, pong,
+  printer, pair, board, coffee, cooler); only those get the terracotta outline; the fire's red one stays
+  for danger. Chess: the table top only (`top`), the stools are not it.
+- **The fire**: `toFire(r, img)` queues a picture of the thing (`snapshot()` of its footprint: a desk via
+  `drawDesk`, a piece via `drawKind`, a bot its carried pose); `drawFire` tosses it in an arc (0.35 s) to
+  the pit, then sinks it (0.8 s) clipped to the pit, drawn between the pit's floor and the flames, the
+  flames taller meanwhile (`w.burning`).
+- **The view is a 16-bit panel** (`#view.pn.window`, pair's door.css: the ink ring, two bevels, the
+  dithered `--f-window` fill from pixel.js, clipped corners, the pixel font at 16/22, pair's steel buttons
+  and fields), 640 px wide at most, centred; titles upper case. The tiles keep their chrome: they are
+  terminals. The closet shows bare pictures with names. Chess and ping-pong cards keep the terminal font.
+- **The printer** (`#vReport.print`): the printer sprite at six pixels a dot (`room.icon(kind, scale)`),
+  the sheet under it growing as the lines print, letter by letter (`fillReport`'s `tick`).
+- **The limits** (`#vLimits`, `fillLimits`): a bar per "Current …" line of `/usage` (`parse_usage` keeps
+  them all as `bars`, and the rest of the text as `text`: what contributes), opened from the coffee
+  machine or the cooler (`act limits`).
+- **The whiteboard** is ink (`w.ink`, 130 x 55, five pixels a board dot; `inkLine`, `wipe`, `cells`): the
+  meeting's host draws its boxes/arrows/dots there in its colour (`stroke(w, col)`), you draw big in the
+  view (`#vBoard`, `room.board.line`) in your colour; the small board shows any inked dot. A board more
+  than a third inked is wiped when a meeting starts.
+- Your avatar stands while held (`!you.held`); seated bots ride a desk being dragged (desk act).
+- **Names**: a bot started from here gets a free pair-style name (`BOT_NAMES` in server.py, `-n`).
+- **`exit`**: the tile closes and the bot walks to its door with the five-second undo sign (`room.exit`).
+  My view, given to him: hiding the terminal makes `exit` ambiguous (Claude Code means "detach"); in the
+  room the honest reading of typing exit is "I am done with this one", so it becomes the stop flow with
+  its undo, the same gesture as the door.
+- Fixed on the way: `/api/furniture` remove was unreachable since the review round's guard (burning was
+  broken on main for an hour); terminals on `--box` (#1a1626).
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

@@ -25,9 +25,9 @@
   <div id="roomwrap"><canvas id="room"></canvas></div>
   <div id="divider" title="drag: the room's width"></div>
   <section id="pane" class="empty">
-    <!-- the view: what is not a session shows here, in place of the tiles, framed like one -->
-    <div id="view" class="tile view" hidden>
-      <div class="tbar"><button class="tx" title="close">✕</button><span class="tname"></span><span class="tas"></span></div>
+    <!-- the view: what is not a session shows here, in place of the tiles: a 16-bit panel as pair's door -->
+    <div id="view" class="pn window" hidden>
+      <div class="vhead"><span class="tname"></span><span class="tas"></span><button type="button" class="btn small tx" title="close">✕</button></div>
       <div class="vbody">
         <form id="vDir" class="vform" hidden>
           <p>A working directory<span class="on"> on <b class="machine"></b></span>. Its bots will sit at one desk.</p>
@@ -44,7 +44,9 @@
         </form>
         <div id="vYou" class="faces" hidden><button type="button" class="btn" id="youPrev" title="previous face">←</button><span class="face"><img id="youFace" alt="your face"></span><button type="button" class="btn" id="youNext" title="another face">→</button></div>
         <div id="vCloset" class="closet" hidden></div>
-        <pre id="vReport" class="paper" hidden></pre>
+        <div id="vReport" class="print" hidden><img class="machine" alt=""><div class="sheet"><pre></pre></div></div>
+        <div id="vLimits" hidden></div>
+        <div id="vBoard" hidden><canvas class="board" width="130" height="55"></canvas><div class="row"><button type="button" class="btn" id="wipe">wipe</button></div></div>
         <div id="vPair" hidden>
           <form class="vform pair-link">
             <p>A pair room (<a href="https://pair.daems.me" target="_blank" rel="noopener">pair.daems.me</a>): the link of <b>your own page</b> in it (…/h/…), the one you bookmarked.</p>
@@ -109,6 +111,8 @@ async function act(a) {
   else if (a.kind === "you") askYou();
   else if (a.kind === "closet") { openView("closet"); fillCloset(); }
   else if (a.kind === "report") { openView("report"); fillReport(); }
+  else if (a.kind === "board") openBoard();
+  else if (a.kind === "limits") { openView("limits"); fillLimits(); }
   else if (a.kind === "pairOpen") openPair(a.key);
   else if (a.kind === "pair" && b) joinPair(a.key, b);
   else if (a.kind === "burn") { const r = await api("/api/furniture", { remove: a.key }); if (r.error) note(r.error); }
@@ -137,7 +141,7 @@ es.addEventListener("state", (e) => {
   for (const t of botTiles()) showWho(t);
   if (viewKind === "chess") showChess();
   if (viewKind === "closet") fillCloset();
-  if (viewKind === "report") fillReport();
+  if (viewKind === "limits") fillLimits();
   // a bot that gets work, or a question for you, leaves the ping-pong table
   const pp = viewKind === "pong" && pongUI.playing();
   if (pp && !state.bots.some((b) => b.id === pp.id && !b.busy && !b.waiting)) pongUI.left();
@@ -164,8 +168,8 @@ addEventListener("focus", focus); addEventListener("blur", focus); document.addE
 }
 
 // ---- the view: one thing at a time on the right, in place of the tiles, framed like one
-const PANELS = { dir: "#vDir", machine: "#vMachine", you: "#vYou", closet: "#vCloset", chess: "#chess", pong: "#pong", report: "#vReport", pair: "#vPair" };
-const TITLES = { dir: "Add a project", machine: "Add a machine", you: "Your face", closet: "Furniture", chess: "Chess", pong: "Ping-pong", report: "Report", pair: "Pair room" };
+const PANELS = { dir: "#vDir", machine: "#vMachine", you: "#vYou", closet: "#vCloset", chess: "#chess", pong: "#pong", report: "#vReport", pair: "#vPair", board: "#vBoard", limits: "#vLimits" };
+const TITLES = { dir: "A PROJECT", machine: "A MACHINE", you: "YOUR FACE", closet: "THE CLOSET", chess: "CHESS", pong: "PING-PONG", report: "REPORT", pair: "PAIR ROOM", board: "WHITEBOARD", limits: "LIMITS" };
 function openView(kind) {
   if (viewKind && viewKind !== kind) closeView(true);
   for (const t of tiles.all()) closeTile(t);
@@ -282,7 +286,35 @@ async function joinPair(key, b) {
   const t = openBot(b.m, b.id, true), x = r.bring + "\r";
   if (t.ws && t.ws.readyState === 1) t.ws.send(enc.encode(x)); else t.typed.push(x);
 }
-// ---- the printer's report: what goes on, as a printed page
+// ---- the whiteboard, big: the same ink the bots draw on (room.js), four pixels an ink pixel; draw
+// on it with the pointer, in your colour
+const bcv = $("#vBoard canvas"), bctx = bcv.getContext("2d");
+function openBoard() {
+  openView("board");
+  let shown = -1;
+  const show = () => { if (viewKind !== "board") return; const v = room.board.version(); if (v !== shown) { shown = v; bctx.clearRect(0, 0, bcv.width, bcv.height); bctx.drawImage(room.board.ink(), 0, 0); } requestAnimationFrame(show); };
+  show();
+}
+{
+  let last = null;
+  const at = (e) => { const r = bcv.getBoundingClientRect(); return [Math.floor((e.clientX - r.left) * bcv.width / r.width), Math.floor((e.clientY - r.top) * bcv.height / r.height)]; };
+  const col = () => (state && state.you && state.you.color) || "#d97757";
+  bcv.addEventListener("pointerdown", (e) => { if (e.button !== 0) return; e.preventDefault(); try { bcv.setPointerCapture(e.pointerId); } catch {} last = at(e); room.board.line(...last, ...last, col()); });
+  bcv.addEventListener("pointermove", (e) => { if (!last) return; const p = at(e); room.board.line(...last, ...p, col()); last = p; });
+  bcv.addEventListener("pointerup", () => { last = null; });
+  bcv.addEventListener("pointercancel", () => { last = null; });
+  $("#wipe").onclick = () => room.board.wipe();
+}
+// ---- the limits: what /usage says, as bars (the coffee pot is the first, the cooler's bottle the second)
+function fillLimits() {
+  const u = (state && state.usage) || {}, el = $("#vLimits"), bars = u.bars || [u.session && { label: "session", ...u.session }, u.week && { label: "week (all models)", ...u.week }].filter(Boolean);
+  const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  el.innerHTML = (bars.length ? bars.map((b) => `<div class="lim"><div class="lab">${esc(b.label)}</div><div class="bar"><i style="width:${Math.max(0, Math.min(100, b.used))}%"></i></div><div class="num">${100 - b.used}% left${b.resets ? " · new " + esc(b.resets.replace(/^(.*) at /, "$1 ")) : ""}</div></div>`).join("")
+    : `<p>Not known yet: Claude Code's /usage is asked every five minutes.</p>`)
+    + (u.text ? `<pre class="more">${esc(u.text)}</pre>` : "");
+}
+// ---- the printer's report: what goes on, printed row by row on a sheet that comes out of the printer
+let printing = 0;
 function fillReport() {
   if (!state) return;
   const t = new Date(), pad = (n) => String(n).padStart(2, "0");
@@ -301,7 +333,21 @@ function fillReport() {
   }
   const u = state.usage || {}, lim = (x, what) => x ? `${what}: ${Math.max(0, 100 - x.used)}% left${x.resets ? ", new " + x.resets.replace(/^.* at /, "at ") : ""}` : `${what}: ?`;
   lines.push(lim(u.session, "5h"), lim(u.week, "1w"));
-  $("#vReport").textContent = lines.join("\n");
+  // the sheet comes out row by row, every row letter by letter, as a line printer
+  const out = $("#vReport pre"), img = $("#vReport .machine"), job = ++printing;
+  if (!img.src) img.src = room.icon("printer", 6);
+  out.textContent = "";
+  $("#vReport .sheet").style.height = "0px";
+  let i = 0, j = 0;
+  const tick = () => {
+    if (job !== printing || viewKind !== "report") return;
+    if (i >= lines.length) return;
+    const line = lines[i];
+    out.textContent = lines.slice(0, i).join("\n") + (i ? "\n" : "") + line.slice(0, j);
+    $("#vReport .sheet").style.height = out.offsetHeight + 28 + "px";
+    if (j < line.length) { j += 2; setTimeout(tick, 12); } else { i++; j = 0; setTimeout(tick, 90); }
+  };
+  tick();
 }
 function carryOut(e, kind, it) {
   if (e.button !== 0) return;
@@ -347,7 +393,7 @@ function closeTile(t, keepPlace) {         // keepPlace: another tile took its p
 }
 
 // ---- a session: the real claude TUI, attached over a websocket, one terminal a tile
-const DARK = { background: "#140f1e", foreground: "#e6e1ef", cursor: "#e6e1ef", selectionBackground: "#d9775766",
+const DARK = { background: "#1a1626", foreground: "#e6e1ef", cursor: "#e6e1ef", selectionBackground: "#d9775766",
   black: "#2a2140", red: "#e8402a", green: "#5fcf4a", yellow: "#f2a531", blue: "#4a76b8", magenta: "#9a74d6", cyan: "#2fa087", white: "#c2c9d9",
   brightBlack: "#5d6280", brightRed: "#ff6b5a", brightGreen: "#8ee07a", brightYellow: "#ffe27a", brightBlue: "#8fc0e8", brightMagenta: "#c4a8f0", brightCyan: "#7fdcb0", brightWhite: "#f4f6fb" };
 const LIGHT = { background: "#fbf8f1", foreground: "#140f1e", cursor: "#140f1e", selectionBackground: "#d9775755",
@@ -407,7 +453,7 @@ function connect(t, term) {
   s.binaryType = "arraybuffer";
   const since = performance.now();
   s.onopen = () => { s.send(JSON.stringify({ size: [term.cols, term.rows] })); setTimeout(() => { for (const x of t.typed.splice(0)) if (t.ws === s) s.send(enc.encode(x)); }, 1000); };
-  s.onmessage = (e) => { const b = new Uint8Array(e.data); if (agentView(t, b)) closeTile(t); else term.write(b); };
+  s.onmessage = (e) => { const b = new Uint8Array(e.data); if (agentView(t, b)) { closeTile(t); room.exit(t.id); } else term.write(b); };
   // the attach ended: `exit` in the session, or the session stopped. The tile goes with it (the
   // session keeps running if it does). One that ends at once failed to attach: it stays, with what
   // claude said, until you close it
@@ -464,7 +510,6 @@ function showChess() {
   const it = v && (v.white.id === "you" ? v.black : v.white);
   if (it) { it.color = projectColor((byId(it.id) || {}).unit || ""); }
   if (v) v.white.color = v.white.color || "#d97757", v.black.color = v.black.color || "#d97757";
-  view.querySelector(".tas").textContent = it ? "with " + it.name : "";
   chessUI.update(v);
 }
 // ping-pong's own ✕ hides its card: then the game is over here too
