@@ -5,15 +5,20 @@
 // that starts another bot there. A desk you keep has its name on a plate; one that is only there while
 // bots work at it has it on a paper note (click it to keep the desk). A bot in a git worktree of the
 // project sits at the project's desk, its own copy of the files a laptop on the cabinet, plugged in.
-// Where a bot is says what it is doing:
-//   busy                at its project's desk, typing
-//   idle                by its desk, or on a break: coffee, the printer, the cooler, ping-pong,
+// The bots are the sessions `claude agents` lists, and where a bot is says what agent view would:
+//   working             at its project's desk, typing
+//   needs input         at its desk with its hand up (a question, a permission prompt), its screen's
+//                       cursor blinking; never falls asleep
+//   idle (done)         by its desk, or on a break: coffee, the printer, the cooler, ping-pong,
 //                       the plants, the window, the armchair, a meeting at the whiteboard
-//   idle 10 minutes     charging on a mat
-//   sends a message     walks over to whoever it wrote to and stands there talking for a moment
-//   waits for you       at its desk with its hand up (a permission prompt), its screen's cursor blinking
+//   idle 10 minutes,    charging on a mat (opening it wakes it: Claude Code restarts a stopped
+//   or process exited   process when you attach)
+//   sends a message     a beam from its antenna to whoever it wrote to
 //   stopped             walks out through its machine's door (and a new one comes in through it)
 // Free, two idle bots play ping-pong or chess; one alone at the chess board waits for an opponent.
+// You are in the room too, as pair draws its people: beside the bot whose session is open, a bubble
+// over your head while you type to it; at the chess or ping-pong table while you play; on a mat
+// while the window is left alone; otherwise about the room like the others.
 // The account's limits are in the room too: the coffee pot holds what's left of the five-hour
 // session, the cooler's bottle what's left of the week (Claude Code's own /usage).
 // Nothing else signals anything; what they say is never shown, only that they talk.
@@ -25,12 +30,12 @@
 // bot, the empty cabinet for a project, the empty door frame for a machine; drag furniture where you
 // want it; carry a bot to its door to stop it; drop a file on a bot to hand it over.
 //
-// startRoom(canvas, app) with app = { state(), open(), pong(), hl(), hover(id), act(action) };
-// returns { talk(from, to), size(), draw(), color(unit) }. The room is always W x H dots.
+// startRoom(canvas, app) with app = { state(), open(), chess(), pong(), away(), hl(), hover(id), act(action) };
+// returns { talk(from, to), typed(), size(), draw(), color(unit) }. The room is always W x H dots.
 
 function startRoom(cv, app) {
   const C = pixelAvatar.C, INK = C.ink, INK2 = C.ink2;
-  const TERRACOTTA = "#d97757", RED = "#ff6b5a", OPEN = "#8a4a3a";
+  const TERRACOTTA = "#d97757", RED = "#ff6b5a", OPEN = "#8a4a3a", YOU = TERRACOTTA;   // your clothes: pair's "me"
   const SP = sprites.PAL, WOOD = { hi: SP.h, top: SP.w, d: SP.d, k: SP.k, plate: "#2e1f28" }, SHADOW = SP.s;
   // the paint of another machine's door and desks, in the order of Claude Code's sshConfigs
   const PAINT = [
@@ -42,7 +47,7 @@ function startRoom(cv, app) {
   const WALLC = "#28374b", WALLTOP = "#151e28", BASEBOARD = "#1b2433";
   const PLANK = "#734728", SEAM = "#6a4224";
   const PROJECT = ["#4a76b8", "#e8402a", "#2fa087", "#f2a531", "#9a74d6", "#5fcf4a", "#f06b72", "#8fc0e8"];
-  const WALL = 26, TALK = 4, SEAT = 18, ADD_W = 30, ROW = 46, LAP = 13, DOOR = 20, NAME = 8;
+  const WALL = 26, SEAT = 18, ADD_W = 30, ROW = 46, LAP = 13, DOOR = 20, NAME = 8;
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const shade = (hex, k) => "#" + [1, 3, 5].map((i) => Math.min(255, Math.round(parseInt(hex.slice(i, i + 2), 16) * k)).toString(16).padStart(2, "0")).join("");
   const mix = (a, b, k) => "#" + [1, 3, 5].map((i) => { const x = parseInt(a.slice(i, i + 2), 16), y = parseInt(b.slice(i, i + 2), 16); return Math.round(x + (y - x) * k).toString(16).padStart(2, "0"); }).join("");
@@ -90,11 +95,12 @@ function startRoom(cv, app) {
     });
   }
 
-  // ---- robots: pixel.js's head on floor.js's body, drawn once per pose with an ink outline
+  // ---- figures: pixel.js's head on floor.js's body, drawn once per pose with an ink outline; the
+  // bots are robots, you are a person (pair's human figure)
   const SW = 22, SH = 29;
   const faces = new Map(), bodies = new Map();
-  function face(seed, color) {
-    const key = seed + color;
+  function face(seed, color, human) {
+    const key = seed + color + (human ? "h" : "");
     if (!faces.has(key)) {
       const im = new Image(), f = { px: null };
       im.onload = () => {
@@ -102,21 +108,21 @@ function startRoom(cv, app) {
         const x = c.getContext("2d"); x.drawImage(im, 0, 0);
         f.px = x.getImageData(0, 0, 20, 20).data;
       };
-      im.src = pixelAvatar(seed, "agent", color);
+      im.src = pixelAvatar(seed, human ? "human" : "agent", color);
       faces.set(key, f);
     }
     return faces.get(key);
   }
   // arms: down sw1 sw2 up wave fwd1 fwd2 reach mug paper book can; legs: stand walk1 walk2 sit
-  function body(seed, color, arms, legs, ghost) {
-    const f = face(seed, color);
+  function body(seed, color, arms, legs, human) {
+    const f = face(seed, color, human);
     if (!f.px) return null;
-    const key = seed + color + arms + legs + (ghost ? "g" : "");
+    const key = seed + color + arms + legs + (human ? "h" : "");
     if (bodies.has(key)) return bodies.get(key);
     const px = new Map(), line = new Set();
     const set = (x, y, c) => { if (c) px.set((y + 1) * SW + x + 1, c); };
     const rect = (x, y, w, h, c) => { for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) set(x + i, y + j, c); };
-    const cut = 16;                          // the portrait down to its neck
+    const cut = human ? 14 : 16;             // the portrait down to the chin (a robot's down to its neck)
     for (let y = 0; y <= cut; y++) for (let x = 0; x < 20; x++) {
       const i = (y * 20 + x) * 4, d = f.px;
       if (d[i + 3] < 128) continue;
@@ -124,9 +130,12 @@ function startRoom(cv, app) {
       set(x, y, c);
       if (c === INK) line.add((y + 1) * SW + x + 1);
     }
-    const c0 = C.steel3, c1 = C.steel1, skin = C.steel3, leg = C.steel1, top = cut + 1;
-    rect(6, top, 8, 22 - top, c0); rect(12, top, 2, 22 - top, c1);
-    set(9, top + 2, color); set(10, top + 2, color); set(9, top + 3, shade(color, 0.62));
+    const c0 = human ? color : C.steel3, c1 = human ? shade(color, 0.62) : C.steel1;
+    const skin = human ? pixelAvatar.skin(seed) : C.steel3, leg = human ? INK2 : C.steel1, top = cut + 1;
+    if (human) rect(9, top, 2, 1, shade(skin, 0.8));
+    const t0 = top + (human ? 1 : 0);
+    rect(6, t0, 8, 22 - t0, c0); rect(12, t0, 2, 22 - t0, c1);
+    if (!human) { set(9, top + 2, color); set(10, top + 2, color); set(9, top + 3, shade(color, 0.62)); }
     const arm = (x, y0, y1, hx, hy) => { rect(x, y0, 2, y1 - y0 + 1, c1); rect(hx, hy, 2, 1, skin); };
     const back = () => arm(4, 17, 20, 4, 21);
     const fwd = (hy, w = 3) => { rect(14, hy - 1, w, 2, c1); rect(14 + w, hy - 1, 2, 2, skin); };
@@ -160,11 +169,12 @@ function startRoom(cv, app) {
         return i + dx >= 0 && i + dx < SW && px.has(k) && !line.has(k);
       })) x.fillRect(i, y, 1, 1);
     }
-    // one in a terminal elsewhere: greyed, like pair's people who are away
-    for (const [k, col] of px) { x.fillStyle = ghost ? mix(col, C.steel0, 0.55) : col; x.fillRect(k % SW, Math.floor(k / SW), 1, 1); }
+    for (const [k, col] of px) { x.fillStyle = col; x.fillRect(k % SW, Math.floor(k / SW), 1, 1); }
     bodies.set(key, c);
     return c;
   }
+  // a figure's colour: a bot wears its project's, you wear yours
+  const colorOf = (b) => b.human ? YOU : projectColor(b.unit);
 
   // halo for a highlighted bot (or chair, or screen): one dot around its outline (not its shadow)
   const halos = new Map();
@@ -318,7 +328,7 @@ function startRoom(cv, app) {
   let everyone = null;
   function world() {
     if (!everyone) everyone = { folk: new Map(), meeting: null, lastMeeting: -60, board: [], pong: { t: 0, from: 0 }, doorAt: {},
-      chess: { board: newBoard(), t: 0, turn: 0 }, T: 0, born: performance.now() };
+      chess: { board: newBoard(), t: 0, turn: 0 }, beams: [], T: 0, born: performance.now() };
     return everyone;
   }
   // the chess board as pair keeps it: 64 squares from a1, upper case white, "." empty
@@ -344,13 +354,18 @@ function startRoom(cv, app) {
     return f.sat;
   }
 
-  // `from` sent `to` a message: it walks over
+  // `from` sent `to` a message: a beam from its antenna to the other's, wherever they are
+  const BEAM = 0.7;                          // seconds for it to cross the room
   function talk(from, to) {
     const w = world(), f = w.folk.get(from), g = w.folk.get(to);
-    if (!f || !g) return;
-    for (const [a, b] of [[f, g], [g, f]]) if (a.act.kind === "visit" && a.act.to === b.id) { a.act.left = Math.max(a.act.left, TALK); return; }
-    f.lying = false; f.carry = null; f.sat = false;
-    f.act = { kind: "visit", to, left: TALK, wave: 0, msg: true };
+    if (!f || !g || f === g) return;
+    w.beams.push({ from, to, t: 0 });
+    f.chat = Math.max(f.chat, 1);
+  }
+  // you typed to the open session: a bubble over your head
+  function typed() {
+    const f = world().folk.get("you");
+    if (f) f.chat = 2;
   }
 
   function think(w, bots, L, dt, sleepAfter, usage, game) {
@@ -359,7 +374,7 @@ function startRoom(cv, app) {
     const vs = game && !game.result ? (game.white.id === "you" ? game.black.id : game.white.id) : null;
     for (const f of folk.values()) {
       if (f.id === vs && !(f.act.kind === "chess" && f.act.you) && !f.work) { end(f); f.act = { kind: "chess", side: game.white.id === vs ? 0 : 1, you: true, left: 1e9, there: false }; }
-      if (f.act.kind === "chess" && (f.act.you ? f.id !== vs : !!vs)) end(f);   // the table is taken: the others get up
+      if (f.act.kind === "chess" && !f.human && (f.act.you ? f.id !== vs : !!vs)) end(f);   // the table is taken: the others get up
       if (f.id === vs && game.sans.length !== w.plies) { if (w.plies !== undefined && (game.sans.length % 2 === 1) === (game.white.id === vs)) f.moved = 0.9; }
     }
     w.plies = game ? game.sans.length : undefined;
@@ -367,16 +382,21 @@ function startRoom(cv, app) {
     const pp = app.pong(), pv = pp && pp.id;
     for (const f of folk.values()) {
       if (f.id === pv && !(f.act.kind === "pong" && f.act.you) && !f.work) { end(f); f.act = { kind: "pong", side: 1, you: true, left: 1e9, there: false }; }
-      if (f.act.kind === "pong" && (f.act.you ? f.id !== pv : !!pv)) end(f);
+      if (f.act.kind === "pong" && !f.human && (f.act.you ? f.id !== pv : !!pv)) end(f);
     }
+    // messages under way: the beam reaches the other, who takes it in
+    for (const bm of w.beams) { const was = bm.t; bm.t += dt; if (was < BEAM && bm.t >= BEAM) { const g = folk.get(bm.to); if (g) g.chat = Math.max(g.chat, 1); } }
+    w.beams = w.beams.filter((bm) => bm.t < BEAM + 0.4 && folk.has(bm.from) && folk.has(bm.to));
+    const you = folk.get("you");
+    if (you) you.chat = Math.max(0, you.chat - dt);
     for (const b of bots) {
-      const f = folk.get(b.id), work = b.busy || b.waiting;
+      const f = folk.get(b.id), work = b.waiting || (b.busy && b.alive !== false);
       f.chat = Math.max(0, f.chat - dt);
       f.busy = b.busy; f.waiting = b.waiting;
       if (work !== f.work) {
         f.work = work; f.idleSince = now;
-        // to work, whatever it was doing (a message still gets delivered first, a bot by the door stays)
-        if (work && !(f.act.kind === "visit" && f.act.msg) && f.act.kind !== "door") { end(f); f.act = { kind: "desk" }; }
+        // to work, whatever it was doing (a bot by the door stays)
+        if (work && f.act.kind !== "door") { end(f); f.act = { kind: "desk" }; }
         if (!work && f.act.kind === "desk") f.act = { kind: "stand", left: 0.5 + (fnv(b.id) % 20) / 10 };
       }
     }
@@ -397,6 +417,7 @@ function startRoom(cv, app) {
       if (first) homes.set(first[0], { x: Math.min(W - 8, d.x0 + d.w + 8), y: d.y + 1 });
     }
     for (const b of bots) if (!folk.get(b.id).held) thinkOne(w, folk.get(b.id), L, now, dt, homes.get(b.id), sleepAfter, usage);
+    if (you) thinkOne(w, you, L, now, dt, null, sleepAfter, usage);
     // two standing about in the same place: they step apart
     const loit = [...folk.values()].filter((f) => f.legs === "stand" && f.act.kind === "loiter");
     for (const a of loit) for (const b of loit) if (a.id < b.id && Math.abs(a.x - b.x) < 12 && Math.abs(a.y - b.y) < 4) {
@@ -427,13 +448,36 @@ function startRoom(cv, app) {
   function thinkOne(w, f, L, now, dt, home, sleepAfter, usage) {
     const folk = w.folk, others = [...folk.values()].filter((g) => g !== f && !g.leaving), v = 22;
     const seat = L.seat(f.id);
-    // waiting for an answer never falls asleep: it sits at its desk with its hand up
-    const sleepy = !f.work && now - f.idleSince > sleepAfter;
-    if (sleepy && f.act.kind !== "sleep" && !(f.act.kind === "visit" && f.act.msg) && f.act.kind !== "door") { end(f); f.act = { kind: "sleep", there: false }; }
+    // waiting for an answer never falls asleep: it sits at its desk with its hand up. A bot whose
+    // process Claude Code stopped charges too (it comes back when opened). You, when the window
+    // has been left alone a minute, as pair's people who are away
+    const sleepy = f.human ? app.away() > 60 : !f.work && (now - f.idleSince > sleepAfter || (f.b && f.b.alive === false));
+    if (sleepy && f.act.kind !== "sleep" && f.act.kind !== "door") { end(f); f.act = { kind: "sleep", there: false }; }
     if (!sleepy && f.act.kind === "sleep") end(f);
+    // you: with the bot whose session is open, at the table of the game you play; else about the
+    // room like the others
+    if (f.human && !sleepy) {
+      const o = app.open(), g = o && folk.get(o), game = app.chess(), pp = app.pong(), a = f.act;
+      if (game) { if (!(a.kind === "chess" && a.you)) { end(f); f.act = { kind: "chess", side: game.white.id === "you" ? 0 : 1, you: true, left: 1e9, there: false }; } }
+      else if (pp) { if (!(a.kind === "pong" && a.you)) { end(f); f.act = { kind: "pong", side: 0, you: true, left: 1e9, there: false }; } }
+      else if (g) { if (!(a.kind === "with" && a.to === g.id)) { end(f); f.act = { kind: "with", to: g.id }; } }
+      else if (a.kind === "with" || a.you) end(f);
+    }
     const act = f.act, partner = () => { const g = act.with && folk.get(act.with); return g && g.act.kind === act.kind && g.act.with === f.id ? g : null; };
     if (!["desk", "meeting", "chess", "chair", "sleep"].includes(act.kind)) f.sat = false;
     switch (act.kind) {
+      case "with": {
+        // beside the bot you talk to: right of its chair, unless another sits there, then in
+        // front of it; next to it anywhere else
+        const g = folk.get(act.to);
+        if (!g) { f.act = rest(); break; }
+        const seated = g.legs === "sit" && !g.lying;
+        const taken = seated && others.some((h) => h !== g && h.legs === "sit" && Math.abs(h.x - (g.x + SEAT)) < 4 && Math.abs(h.y - g.y) < 4);
+        const spot = g.lying ? { x: g.x + 16, y: g.y + 1 } : !seated ? { x: g.x + (f.x < g.x ? -14 : 14), y: g.y + 1 }
+          : taken ? { x: g.x + 2, y: g.y + 13 } : { x: g.x + 20, y: g.y + 1 };
+        if (walk(f, spot, 36, dt)) { f.dir = spot.x > g.x ? -1 : spot.x < g.x ? 1 : -1; f.arms = "down"; }
+        break;
+      }
       case "desk":
         if (seat && sitAt(f, seat, v, dt)) {
           f.dir = -1; f.legs = "sit"; f.carry = null;
@@ -506,7 +550,7 @@ function startRoom(cv, app) {
         // side it comes from, as in pair
         const side = f.x < g.x ? -1 : 1, seated = g.legs === "sit";
         const spot = seated ? { x: g.x + 20, y: g.y + 1 } : { x: g.x + side * 14, y: g.y + 1 };
-        if (walk(f, spot, act.msg ? 34 : v + 6, dt)) {
+        if (walk(f, spot, v + 6, dt)) {
           f.dir = spot.x > g.x ? -1 : 1;
           f.arms = (act.wave -= dt) > 0 ? "wave" : "down";
           if (f.chat <= 0 && Math.random() < dt * 1.5) f.chat = 1;
@@ -603,7 +647,7 @@ function startRoom(cv, app) {
       return { kind: "pong", side: 0, left, with: mate.id, there: false };
     }
     if (r < 0.6 && !taken("chess") && !(app.state().chess && !app.state().chess.result)) return { kind: "chess", side: Math.random() < 0.5 ? 0 : 1, with: null, left: rnd(20, 45), there: false };
-    if (r < 0.65 && mate) return { kind: "visit", to: mate.id, left: rnd(6, 12), wave: 0.8, msg: false };
+    if (r < 0.65 && mate) return { kind: "visit", to: mate.id, left: rnd(6, 12), wave: 0.8 };
     const plants = L.plants.map((_, i) => i).filter((i) => !others.some((g) => g.act.kind === "plant" && g.act.i === i));
     if (r < 0.72 && plants.length) return { kind: "plant", i: any(plants), wait: 0 };
     if (r < 0.79 && !taken("window")) return { kind: "window", left: rnd(4, 9) };
@@ -649,15 +693,16 @@ function startRoom(cv, app) {
 
     // keep a figure per bot; one that turns up later comes in through its machine's door, one that
     // is stopped walks out of it
-    const ids = new Set(bots.map((b) => b.id));
+    const ids = new Set(bots.map((b) => b.id)), you = { id: "you", name: (s.you && s.you.name) || "you", human: true, m: "" };
+    ids.add("you");
     for (const f of w.folk.values()) if (!ids.has(f.id) && !f.leaving) { f.leaving = true; f.held = false; f.lying = false; f.sat = false; f.legs = "stand"; }
     const late = performance.now() - w.born > 3000;
-    for (const b of bots) {
+    for (const b of [...bots, you]) {
       if (!w.folk.has(b.id)) {
-        const at = late ? { x: doorX(b.m), y: WALL + 3 } : L.seat(b.id) || { x: W / 2, y: H / 2 };
-        const work = b.busy || b.waiting;
-        w.folk.set(b.id, { id: b.id, x: at.x, y: at.y, dir: -1, arms: "down", legs: late ? "stand" : "sit", step: 0, sat: !late,
-          act: work ? { kind: "desk" } : rest(), carry: null, lying: false, busy: b.busy, waiting: b.waiting, work,
+        const at = late || b.human ? { x: doorX(b.m), y: WALL + 3 } : L.seat(b.id) || { x: W / 2, y: H / 2 };
+        const work = !b.human && (b.busy || b.waiting), stand = late || b.human;
+        w.folk.set(b.id, { id: b.id, x: at.x, y: at.y, dir: -1, arms: "down", legs: stand ? "stand" : "sit", step: 0, sat: !stand,
+          act: work ? { kind: "desk" } : rest(), carry: null, lying: false, busy: b.busy, waiting: b.waiting, work, human: !!b.human,
           idleSince: performance.now() / 1000, chat: 0, z: Math.random() * 2 });
       }
       w.folk.get(b.id).b = b;
@@ -754,6 +799,24 @@ function startRoom(cv, app) {
     if (held) hovered = null;
     if (!hovered && seatHover && !held) { const f = w.folk.get(seatHover.id); if (f && f.b) hovered = { b: f.b, x: seatHover.x + 3, y: seatHover.y - 16, seat: true }; }
 
+    // a message on its way: a beam in the sender's colour, up from its antenna, across the room over
+    // everyone's heads, down into the receiver's antenna; its bright head leads, its tail follows
+    for (const bm of w.beams) {
+      const f = w.folk.get(bm.from), g = w.folk.get(bm.to);
+      if (!f || !g) continue;
+      const top = (h) => Math.round(h.y) - (h.lying ? 27 : 29), UP = 6;
+      const ax = Math.round(f.x) + (f.dir < 0 ? -1 : 0), ay = top(f), bx = Math.round(g.x) + (g.dir < 0 ? -1 : 0), by = top(g);
+      const pts = [[ax, ay], [ax, ay - UP], [bx, by - UP], [bx, by]];
+      const len = [UP, Math.hypot(bx - ax, by - ay), UP], total = len[0] + len[1] + len[2];
+      const at = (s) => {                    // the point s dots along the beam
+        let k = 0; while (k < 2 && s > len[k]) { s -= len[k]; k++; }
+        const [x0, y0] = pts[k], [x1, y1] = pts[k + 1], u = len[k] ? s / len[k] : 0;
+        return [Math.round(x0 + (x1 - x0) * u), Math.round(y0 + (y1 - y0) * u)];
+      };
+      const head = Math.min(1, bm.t / BEAM) * total, tail = Math.max(0, (bm.t - 0.25) / BEAM) * total, col = colorOf(f.b);
+      for (let s = Math.ceil(tail); s <= head; s++) { const [x, y] = at(s); rect(ctx, x, y + 1, 1, 1, INK); rect(ctx, x, y, 1, 1, col); }
+      if (head < total) { const [x, y] = at(head); rect(ctx, x - 1, y - 1, 3, 3, INK); rect(ctx, x - 1, y - 1, 2, 2, C.steel4); }
+    }
     // talk, over everything: dots in a bubble, never the words
     for (const f of w.folk.values()) if (f.chat > 0 && !still) {
       const bx = Math.round(f.x) + 3, by = Math.round(f.y) - (f.lying ? 28 : 27) - 6;
@@ -770,8 +833,8 @@ function startRoom(cv, app) {
     // the bot under the pointer: its name over its head, and a click opens it
     if (hovered && !moving) {
       const { b, x, y } = hovered;
-      tip = { text: b.background ? b.name + (b.waiting ? " - waits for you" : "") : b.name + " (in a terminal)", x, y: y - 2 };
-      if (b.background) hots.push({ x0: -1e9, y0: -1e9, x1: 1e9, y1: 1e9, action: { kind: "open", id: b.id } });
+      tip = { text: b.human ? b.name : b.name + (b.waiting ? " - needs input" : b.alive === false ? " - stopped, opens again" : ""), x, y: y - 2 };
+      if (!b.human) hots.push({ x0: -1e9, y0: -1e9, x1: 1e9, y1: 1e9, action: { kind: "open", id: b.id } });
     }
     if (tip && !held && !moving) {
       const t = tip.text, tw = tinyW(t), lx = Math.round(Math.max(2, Math.min(W - tw - 2, tip.x - tw / 2))), ly = Math.round(Math.max(WALL + 2, tip.y - 8));
@@ -807,7 +870,7 @@ function startRoom(cv, app) {
     if (!b) return;
     const x = Math.round(f.x), y = Math.round(f.y), x0 = x - 11, y0 = y - 27;
     if (!f.held) rect(ctx, x - 5, y, 10, 1, "rgba(0,0,0,0.4)");
-    const im = body(b.id, projectColor(b.unit), f.held ? "up" : f.arms, f.held ? "walk1" : f.legs, !b.background);
+    const im = body(b.id, colorOf(b), f.held ? "up" : f.arms, f.held ? "walk1" : f.legs, b.human);
     // its outline: terracotta while the pointer is on it or on its session, faint while its session is open
     const lit = hl.has(f.id) || (hovered && hovered.b.id === f.id) || (!hovered && over(x0 + 4, y0, x0 + 18, y + 1));
     const ring = f.leaving ? null : lit ? TERRACOTTA : app.open() === f.id ? OPEN : null;
@@ -825,12 +888,13 @@ function startRoom(cv, app) {
   }
   function drawSleeper(ctx, f, b, T, hl) {  // seen from above: the head on the pillow, a blanket, a plug
     if (!b) return;
-    const x = Math.round(f.x), y = Math.round(f.y), im = body(b.id, projectColor(b.unit), "down", "stand", !b.background);
+    const x = Math.round(f.x), y = Math.round(f.y), im = body(b.id, colorOf(b), "down", "stand", b.human);
     const ring = hl.has(f.id) || over(x - 11, y - 28, x + 11, y) ? TERRACOTTA : app.open() === f.id ? OPEN : null;
     if (im) { if (ring) ctx.drawImage(halo(im, ring), 0, 0, SW, 16, x - 11, y - 28, SW, 16); ctx.drawImage(im, 0, 0, SW, 16, x - 11, y - 28, SW, 16); }
-    box(ctx, x - 10, y - 13, 20, 9, C.steel2, MAT.k);
-    rect(ctx, x - 10, y - 13, 20, 2, C.steel3);
-    rect(ctx, x - 10, y - 6, 20, 2, C.steel1);
+    const c0 = b.human ? YOU : C.steel2;      // a blanket: grey for a charging bot, yours in your colour
+    box(ctx, x - 10, y - 13, 20, 9, c0, MAT.k);
+    rect(ctx, x - 10, y - 13, 20, 2, shade(c0, 1.25));
+    rect(ctx, x - 10, y - 6, 20, 2, shade(c0, 0.7));
     zzz(ctx, f, x + 6, y - 24);
     if (over(x - 11, y - 28, x + 11, y)) hovered = { b, x, y: y - 28 };
   }
@@ -848,7 +912,8 @@ function startRoom(cv, app) {
     const seated = (f) => f && f.legs === "sit" && !f.lying && (f.act.kind === "desk" || f.act.kind === "sleep");
     const at = (tree) => d.seats.filter((st) => st[2] === tree).map(([id]) => w.folk.get(id)).filter(seated);
     function paint(g, gw, gh, tree, seed) {
-      const f = at(tree), busy = f.some((x) => x.busy), waits = f.some((x) => x.waiting);
+      // off while nobody sits there, or while the sitter's process is stopped
+      const f = at(tree).filter((x) => x.b && x.b.alive !== false), busy = f.some((x) => x.busy), waits = f.some((x) => x.waiting);
       rect(ctx, g.x, g.y, gw, gh, f.length ? C.blue0 : "#10141f");
       if (!f.length) { rect(ctx, g.x + gw - 3, g.y + 1, 1, 1, "#232c40"); rect(ctx, g.x + gw - 4, g.y + 2, 1, 1, "#232c40"); return; }   // off: a glint
       ctx.fillStyle = busy ? d.color : shade(d.color, 0.45);
@@ -1073,7 +1138,7 @@ function startRoom(cv, app) {
     pointer = dots(e);
     if (press && !moving && !held && Math.hypot(pointer.x - press.x, pointer.y - press.y) > 1) {
       const f = press.bot && world().folk.get(press.bot);
-      if (f && f.b && f.b.background && !f.lying) { held = f; f.held = true; f.sat = false; f.lying = false; }
+      if (f && f.b && !f.b.human && !f.lying) { held = f; f.held = true; f.sat = false; f.lying = false; }
       else if (press.piece && !(press.bot && !f)) moving = { key: press.piece.key, from: press.piece.at, u: press.piece.u, at: press.piece.at };
     }
     if (moving) {
@@ -1098,6 +1163,8 @@ function startRoom(cv, app) {
       else f.act = f.work ? { kind: "desk" } : rest();
       f.legs = "stand";
     } else if (press && press.action) app.act(press.action);
+    // a plain click on the floor or the wall, on nothing: what is open on the right goes away
+    else if (press && !press.bot && !press.piece && pointer && Math.hypot(pointer.x - press.x, pointer.y - press.y) <= 1) app.act({ kind: "blank" });
     press = null;
     draw();
   });
@@ -1107,7 +1174,7 @@ function startRoom(cv, app) {
   cv.addEventListener("dragover", (e) => { e.preventDefault(); pointer = dots(e); draw(); });
   cv.addEventListener("drop", (e) => {
     e.preventDefault(); pointer = dots(e); draw();
-    if (hovered && hovered.b.background && e.dataTransfer.files.length) app.act({ kind: "drop", id: hovered.b.id, files: [...e.dataTransfer.files] });
+    if (hovered && !hovered.b.human && e.dataTransfer.files.length) app.act({ kind: "drop", id: hovered.b.id, files: [...e.dataTransfer.files] });
   });
 
   // ---- size and run, twelve frames a second like a 16-bit game. The room is always W x H dots;
@@ -1132,5 +1199,5 @@ function startRoom(cv, app) {
   size();
   requestAnimationFrame(frame);
   window.__room = { world, size: () => ({ W, H, K }), layout: () => lastL };   // for poking at it from the console
-  return { talk, size, draw, color: projectColor };
+  return { talk, typed, size, draw, color: projectColor };
 }

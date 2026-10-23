@@ -18,14 +18,16 @@ button, input, select { font:inherit; color:inherit; }
 .btn:hover { border-color:var(--me); color:#fff; }
 .btn.warn { border-color:var(--me); color:var(--me); }
 
-/* the header, as pair's: the wordmark, what is open, its buttons */
+/* the header, as pair's: the wordmark (room-wide things go here later) */
 header { flex:none; background:var(--ink); border-bottom:1px solid var(--line); padding:10px 16px; }
 .top { display:flex; align-items:center; gap:10px; min-height:30px; }
-.top .t { flex:1; min-width:0; display:flex; align-items:baseline; gap:12px; }
 .mark { font:16px/16px "Burrow Pixel", monospace; color:var(--gold); text-shadow:2px 2px 0 #b86a1e; letter-spacing:1px; }
-.top h1 { margin:0; font-size:14px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* the pane's own bar: what is open, its buttons */
+.bar { flex:none; display:flex; align-items:center; gap:10px; min-height:30px; padding:6px 14px; border-bottom:1px solid var(--line); }
+.bar .t { flex:1; min-width:0; display:flex; align-items:baseline; gap:12px; }
+.bar h1 { margin:0; font-size:14px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 #as { color:var(--dim); white-space:nowrap; }
-body.empty .top .btn { display:none; }
+#pane.empty .bar { display:none; }
 
 /* the room keeps its width (room.js: two pixels a dot); what is open takes the rest */
 #app { flex:1; min-height:0; display:flex; }
@@ -43,7 +45,6 @@ body.empty .top .btn { display:none; }
 
 /* the chess table: pair's board and moves (room.css), in the pane */
 :root { --code:#100c19; }
-body.chessing #stop { display:none; }
 #pane.chessing #term { display:none; }
 #chess { flex:1; overflow-y:auto; padding:18px 22px; }
 #chess h2 { margin:0 0 10px; font-size:14px; color:var(--me); }

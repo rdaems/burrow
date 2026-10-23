@@ -191,6 +191,35 @@ folders) sit in its private `ccd-session-presets.json`. He chose, and it is buil
   or a grey bot popped up at the home desk now and then.
 - Chess and ping-pong: any idle bot, one game for the room.
 
+## A wrapper on `claude agents` (2026-10-23)
+
+He asked what a grey "in a terminal" bot was for, then: "What's the point of showing the grey bots, if I
+can't do anything with it? Let's approach it the same way as `claude agents` and not show them", and
+"closely mapping the `claude agents` system, as a wrapper". Checked against the docs (agent-view.md) and
+`claude agents --json` on arthroid:
+- The room = `claude agents --json` (no `--all`): background sessions only. `kind: "interactive"` rows
+  (a `claude` in someone's terminal) are listed but nothing can attach to them (`claude attach` by name
+  or pid: "No job matching"), and agent view hides them; so does burrow now. Completed sessions
+  (`--all`) stay out: 18 on the Mac alone.
+- State as agent view groups it: `state: blocked` or `status: waiting` = **needs input** (hand up; before,
+  only a permission prompt counted and a bot that had asked a question sat typing, because its process
+  still said `busy`); `working` = typing; `done` with a live process = idle. A row without a pid (the
+  supervisor stops idle processes after ~1 h; a sleeping `/loop`) is `alive: false`: it charges on a mat,
+  its screen off, and opening it restarts it (Claude Code does that on attach).
+- Messages between bots are a beam (up from the sender's antenna, across, down into the receiver's),
+  not a walk: "let them beam something across the floor, like a laser beam".
+- **You** are in the room, pair's human figure (`pixelAvatar(…, "human")`, `getpass.getuser()` as the
+  seed, terracotta clothes): beside the bot whose session is open, a dots bubble while you type to it
+  ("I would be standing next to you with a text balloon" — a speech bubble); at the chess/ping-pong
+  table opposite the bot while you play; asleep on a mat once the window has been unfocused a minute
+  (pair's away); otherwise on breaks like the bots. Not clickable, not draggable.
+- The header is the wordmark only (a settings button may come); the pane has its own bar: the session's
+  name, its machine, ✕. The stop button is gone (carry the bot to its door, or type `exit`).
+- A plain click on bare floor or wall closes the pane. So does the attach ending: `exit` in an attached
+  session does **not** end `claude attach`, it drops into Claude Code's agent view in the same pty (no
+  terminal title is set, so it is recognised by its prompt text, "describe a task for a new session");
+  Ctrl+Z ends the process. He has not decided whether he wants "normal" terminals in the pane.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

@@ -9,7 +9,7 @@
 #   python3 web/server.py            then open http://localhost:7777
 #   BURROW_DEMO=1 python3 web/server.py    made-up bots, for working on the room
 
-import base64, collections, fcntl, hashlib, json, os, pty, queue, re, select, shlex, signal, socket, struct, subprocess
+import base64, collections, fcntl, getpass, hashlib, json, os, pty, queue, re, select, shlex, signal, socket, struct, subprocess
 import termios, threading, time, random
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
@@ -25,6 +25,7 @@ CACHE = os.path.join(HOME, ".cache/burrow")
 DEMO = bool(os.environ.get("BURROW_DEMO"))
 PORT = int(os.environ.get("BURROW_PORT", "7777"))
 HOSTNAME = subprocess.run(["hostname", "-s"], capture_output=True, text=True).stdout.strip() or "here"
+USER = getpass.getuser()                       # you, in the room
 
 # a non-login shell over ssh has a bare PATH; claude lives here
 PATH = 'PATH="$HOME/.local/bin:$HOME/.claude/local:/opt/homebrew/bin:/usr/local/bin:$PATH"; export PATH; export COLORTERM=truecolor; '
@@ -173,18 +174,26 @@ def fold(cwd, line):
 
 
 def parse_agents(out):
+    """the sessions `claude agents` shows, with their state as agent view groups them: the background
+    ones (an interactive `claude` in someone's terminal is listed too, but nothing can attach to it, so
+    it is left out, as agent view does). `state` is the session's (working, blocked, done, failed,
+    stopped), `status` its process's (busy, waiting, idle) while that runs:
+      needs    blocked, or a prompt open (status waiting): it waits for you, whatever its process does
+      busy     a turn runs
+      idle     done, or nothing to do, its process still there
+    A session whose process has exited is listed only while it works or waits for you; the supervisor
+    restarts it when it is opened."""
     bots = []
     for x in json.loads(out.strip() or "[]"):
-        if "pid" not in x:
+        if x.get("kind") != "background" or not x.get("id"):
             continue
-        sid = x.get("sessionId") or ""
-        bid = x.get("id") or sid[:8]
+        state, status = x.get("state"), x.get("status")
+        needs = state == "blocked" or status == "waiting"
         bots.append({
-            "id": bid, "name": x.get("name") or bid, "cwd": x.get("cwd") or "",
-            "busy": x.get("status") == "busy" or x.get("state") == "working",
-            "waiting": x.get("status") == "waiting",
-            "background": x.get("kind") == "background",
-            "started": x.get("startedAt") or 0, "pid": x.get("pid") or 0, "session": sid,
+            "id": x["id"], "name": x.get("name") or x["id"], "cwd": x.get("cwd") or "",
+            "busy": not needs and (status == "busy" or state == "working"),
+            "waiting": needs, "alive": "pid" in x, "state": state or "",
+            "started": x.get("startedAt") or 0, "pid": x.get("pid") or 0, "session": x.get("sessionId") or "",
         })
     bots.sort(key=lambda b: b["started"])
     return bots
@@ -283,7 +292,7 @@ class Hub:
             return {"machines": [{"id": mid, "name": m["name"], "ssh": m.get("ssh") or "", **{k: v for k, v in self.feeds.get(mid, {}).items() if k != "bots"}}
                                  for mid, m in self.machines.items()],
                     "desks": self.desks(bots), "bots": bots, "layout": self.room["layout"],
-                    "usage": self.usage, "chess": self.chess_view(), "demo": DEMO}
+                    "usage": self.usage, "chess": self.chess_view(), "demo": DEMO, "you": {"name": USER}}
 
     def keep(self, u, on):
         with self.lock:
@@ -382,8 +391,9 @@ class Hub:
         if i == 1:
             bots = [("train", "train"), ("train/.claude/worktrees/eval", "eval"), ("", "home")]
         self.usage = {"session": {"used": 64, "resets": "3:20pm"}, "week": {"used": 23, "resets": "Oct 24 at 9am"}}
-        bots = [{"id": f"demo{i}{k:03}", "name": n, "cwd": f"{HOME}/projects/{d}" if d else HOME, "busy": k % 3 == 0, "waiting": False,
-                 "background": not (i == 0 and k == 6), "started": k, "pid": 1000 + k, "session": f"demo{k}"}
+        bots = [{"id": f"demo{i}{k:03}", "name": n, "cwd": f"{HOME}/projects/{d}" if d else HOME, "busy": k % 3 == 0, "waiting": k % 5 == 1,
+                 "alive": True, "state": "working" if k % 3 == 0 else "blocked" if k % 5 == 1 else "done",
+                 "started": k, "pid": 1000 + k, "session": f"demo{k}"}
                 for k, (d, n) in enumerate(bots)]
         m = self.machines[mid]
         self.fold(mid, m, bots)
@@ -392,6 +402,7 @@ class Hub:
                 if random.random() < 1 / 12:
                     b["busy"] = not b["busy"]
                     b["waiting"] = not b["busy"] and random.random() < 0.1
+                    b["state"] = "working" if b["busy"] else "blocked" if b["waiting"] else "done"
             if random.random() < 1 / 8:
                 a, b = random.sample(bots, 2)
                 self.push("talk", {"from": a["id"], "to": b["id"]})
@@ -420,7 +431,7 @@ class Hub:
         return v
 
     def idle_bot(self, bid):
-        return next((b for f in self.feeds.values() for b in f.get("bots", []) if b["id"] == bid and b["background"]
+        return next((b for f in self.feeds.values() for b in f.get("bots", []) if b["id"] == bid
                      and not b["busy"] and not b.get("waiting")), None)
 
     def chess_check(self):

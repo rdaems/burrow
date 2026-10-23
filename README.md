@@ -8,8 +8,8 @@ room tells you what it is doing; there are no notifications, badges or counters.
 - **busy**: it sits at its desk and types, and its screen scrolls in its project's colour
 - **idle**: it gets up and walks around its project's rug, now and then sitting back down
 - **idle for 10 minutes**: it falls asleep at its desk
-- **talking**: a bot that sends another one a message walks over to it, across the room if it is in
-  another project, and stands next to it for a moment
+- **needs input**: it sits at its desk with its hand up (a question for you, a permission prompt)
+- **talking**: a bot that sends another one a message beams it across the room, antenna to antenna
 
 Sessions started in the same directory share a rug: one rug per project, one desk per bot, labelled
 with the folder name. The empty desk at the end of a rug (`+`) starts another bot in that project.
@@ -35,8 +35,9 @@ Nothing is installed on the machines except Claude Code. Remote machines are rea
 so `~/.ssh/config`, agents and tailscale names all work. One multiplexed connection per machine is
 shared through `ControlMaster` (sockets in `~/.cache/burrow/`).
 
-Sessions you started yourself in some other terminal also appear, greyed out: they are on the machine
-and burrow shows them, but they belong to that terminal, so they don't open here.
+The bots are the sessions `claude agents` lists: background ones (`claude --bg`). A `claude` you run in
+some other terminal belongs to that terminal and cannot be attached to, so it is not in the room, as
+agent view leaves it out too. You are in the room as well: beside the bot whose session is open.
 
 The terminal is light or dark to match the `theme` in Claude Code's settings on that machine.
 

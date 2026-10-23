@@ -18,15 +18,16 @@
 <header>
   <div class="top">
     <span class="mark">BURROW</span>
-    <div class="t"><h1 id="who"></h1><span id="as"></span></div>
-    <button id="reconnect" class="btn" hidden>reconnect</button>
-    <button id="stop" class="btn">stop</button>
-    <button id="close" class="btn" title="close (the session keeps running)">✕</button>
   </div>
 </header>
 <main id="app">
   <div id="roomwrap"><canvas id="room"></canvas></div>
   <section id="pane" class="empty">
+    <div class="bar">
+      <div class="t"><h1 id="who"></h1><span id="as"></span></div>
+      <button id="reconnect" class="btn" hidden>reconnect</button>
+      <button id="close" class="btn" title="close (the session keeps running)">✕</button>
+    </div>
     <div id="term"></div>
     <div id="chess" class="side" hidden></div>
     <div id="pong" class="pong" hidden></div>
@@ -55,9 +56,12 @@
 <script>
 // burrow's page: the room (room.js) on the left, always the same, every machine's bots in it; the
 // session of the bot you clicked on the right (`claude attach`, in xterm.js, through server.py), an
-// empty screen when none is open. Closing it only detaches. The pointer on either side lights up the
-// other: the bot and its session.
+// empty screen when none is open. Closing it only detaches; so does a click on the room's floor, and
+// the pane closes itself when the attach ends (`exit` in the session). The pointer on either side
+// lights up the other: the bot and its session. You are in the room as well, so it knows what you do:
+// which session is open, what you type, whether the window is left alone.
 let state = null, open = null;             // open: {m, id}, a bot (its machine, its id)
+let blurAt = document.hasFocus() && !document.hidden ? 0 : performance.now();
 const $ = (s) => document.querySelector(s);
 const api = async (path, body) => (await fetch(path, { method: "POST", body: JSON.stringify(body || {}) })).json();
 const machine = (id) => state && state.machines.find((m) => m.id === id);
@@ -66,7 +70,9 @@ const byId = (id) => state && state.bots.find((b) => b.id === id);
 const room = startRoom($("#room"), {
   state: () => state,
   open: () => open && open.id,
+  chess: () => (playing && state && state.chess && !state.chess.result ? state.chess : null),
   pong: () => (pongOn ? pongUI.playing() : null),
+  away: () => (blurAt ? (performance.now() - blurAt) / 1000 : 0),
   hl: () => paneHover && open ? open.id : null,
   hover: (id) => $("#pane").classList.toggle("hl", !!open && open.id === id),
   act,
@@ -85,6 +91,7 @@ async function act(a) {
   else if (a.kind === "keep" || a.kind === "forget") await api("/api/" + a.kind, { unit: a.unit });
   else if (a.kind === "layout") await api("/api/layout", { layout: a.layout });
   else if (a.kind === "stop" && b) stopBot(b.m, b.id);
+  else if (a.kind === "blank") { closeBot(); closeChess(); closePong(); }
   else if (a.kind === "drop" && b) { openBot(b.m, b.id); for (const f of a.files) await hand(f); }
   else if (a.kind === "spawn") {
     const r = await api("/api/spawn", { m: a.m, dir: a.dir });
@@ -107,7 +114,11 @@ es.addEventListener("state", (e) => {
   room.draw();
 });
 es.addEventListener("talk", (e) => { const t = JSON.parse(e.data); room.talk(t.from, t.to); });
-const focus = () => api("/api/focus", { on: document.hasFocus() && !document.hidden });
+const focus = () => {
+  const on = document.hasFocus() && !document.hidden;
+  blurAt = on ? 0 : blurAt || performance.now();
+  api("/api/focus", { on });
+};
 addEventListener("focus", focus); addEventListener("blur", focus); document.addEventListener("visibilitychange", focus);
 
 // ---- dialogs: Enter adds, Esc closes
@@ -150,7 +161,7 @@ const fit = new FitAddon.FitAddon();
 term.loadAddon(fit);
 let termOpened = false, ws = null;
 const enc = new TextEncoder();
-term.onData((d) => ws && ws.readyState === 1 && ws.send(enc.encode(d)));
+term.onData((d) => { if (ws && ws.readyState === 1) { ws.send(enc.encode(d)); room.typed(); } });
 // shift+enter is a new line, as in the Rust pane: ESC CR, which claude reads as meta+enter (xterm.js sends a bare CR)
 term.attachCustomKeyEventHandler((e) => {
   if (e.key !== "Enter" || !e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return true;
@@ -159,6 +170,15 @@ term.attachCustomKeyEventHandler((e) => {
   return false;
 });
 term.onBinary((d) => ws && ws.readyState === 1 && ws.send(Uint8Array.from(d, (c) => c.charCodeAt(0))));
+// `exit` (or ← on an empty prompt) detaches: `claude attach` then shows Claude Code's agent view
+// (its prompt reads "describe a task for a new session"). The room is that view here, so the pane
+// closes instead. Ctrl+Z ends the attach itself, and the pane closes with it
+const dec = new TextDecoder();
+let tail = "";
+const agentView = (b) => {
+  tail = (tail + dec.decode(b, { stream: true })).replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "").slice(-300);
+  return /describe a task for a new session|enter to return · space to reply/.test(tail);
+};
 term.onResize(({ cols, rows }) => ws && ws.readyState === 1 && ws.send(JSON.stringify({ size: [cols, rows] })));
 
 function showWho() {
@@ -173,18 +193,21 @@ function openBot(mid, id) {
   open = { m: mid, id };
   $("#pane").classList.remove("empty"); document.body.classList.remove("empty");
   if (!termOpened) { term.open($("#term")); termOpened = true; }
-  term.reset();
+  term.reset(); tail = "";
   showWho();
-  stopping(false);
   requestAnimationFrame(() => { fit.fit(); connect(); term.focus(); });
 }
 function connect() {
   $("#reconnect").hidden = true;
   const s = new WebSocket(`ws://${location.host}/term?m=${encodeURIComponent(open.m)}&id=${encodeURIComponent(open.id)}`);
   s.binaryType = "arraybuffer";
+  const since = performance.now();
   s.onopen = () => { s.send(JSON.stringify({ size: [term.cols, term.rows] })); setTimeout(() => { for (const t of typed.splice(0)) if (ws === s) s.send(enc.encode(t)); }, 1000); };
-  s.onmessage = (e) => term.write(new Uint8Array(e.data));
-  s.onclose = () => { if (ws === s) { ws = null; $("#reconnect").hidden = false; } };
+  s.onmessage = (e) => { const b = new Uint8Array(e.data); if (agentView(b)) closeBot(); else term.write(b); };
+  // the attach ended: `exit` in the session, or the session stopped. The pane goes with it (the
+  // session keeps running if it does). One that ends at once failed to attach: it stays, with what
+  // claude said, and a button to try again
+  s.onclose = () => { if (ws === s) { ws = null; if (performance.now() - since > 3000) closeBot(); else $("#reconnect").hidden = false; } };
   ws = s;
 }
 function closeBot() {
@@ -199,13 +222,8 @@ async function stopBot(mid, id) {
   const r = await api("/api/stop", { m: mid, id });
   if (r.error) note(r.error);
 }
-function stopping(on) { $("#stop").textContent = on ? "really stop?" : "stop"; $("#stop").classList.toggle("warn", on); }
 $("#close").onclick = () => { closeBot(); closeChess(); closePong(); };
 $("#reconnect").onclick = () => { term.reset(); connect(); term.focus(); };
-$("#stop").onclick = async () => {
-  if (!$("#stop").classList.contains("warn")) { stopping(true); setTimeout(() => stopping(false), 3000); return; }
-  stopBot(open.m, open.id);
-};
 new ResizeObserver(() => { if (open) fit.fit(); }).observe($("#term"));
 
 // ---- the chess table: pair's board in the pane, against one of the idle bots
@@ -215,7 +233,7 @@ const botFace = (p) => {
   const b = byId(p.id);
   return pixelAvatar(p.id, "agent", b ? projectColor(b.unit) : "#8b93ad");
 };
-const idleBots = () => ((state && state.bots) || []).filter((b) => b.background && !b.busy && !b.waiting)
+const idleBots = () => ((state && state.bots) || []).filter((b) => !b.busy && !b.waiting)
   .map((b) => ({ id: b.id, name: b.name, kind: "agent", present: true, color: projectColor(b.unit) }));
 const chessUI = chessPanel($("#chess"), {
   post: async (body) => { const r = await api("/api/chess", body); return { ok: !r.error, json: async () => r }; },
