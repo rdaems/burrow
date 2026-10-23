@@ -284,6 +284,11 @@ visibility, let's do all the interfacing with the main desk with the computer sc
   everywhere, and the canvas has two pixels a dot; leave the lettering alone.
 - An empty desk shows no chair ("when there's no bot yet at a table, do not show a chair"); the first bot
   brings its chair. The desktop keeps its one-seat length so the desk does not jump when it comes.
+- The clock is a wall piece like the board and the window (`clock` in `DEF`, `ON_WALL`), dragged along the
+  wall; the wall's right end is no longer reserved for it.
+- Layout (2026-10-23, night): the header is 36 px (6 px padding), no line under it; the room has the tiles'
+  6 px margin around it (`#roomwrap` padding, `MARGIN` in room.js; the pane's own `OUT` makes the gap to the
+  first tile), so room and tiles sit on one grid.
 - The body wears what the portrait wears: pair's figure drew the torso in the person's colour whatever the
   portrait's outfit ("a white shirt in the selector doesn't show up on the full body"); `body()` now reads
   the torso colours off the portrait's shoulders (pixels (6,19) and (15,19)).

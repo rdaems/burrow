@@ -225,18 +225,18 @@ function startRoom(cv, app) {
   // as dense as pair's office: two CSS pixels a dot, a room as wide as pair's margin; as tall as the
   // window lets it be (what stands at the bottom stays at the bottom)
   let W = 256;
-  const K = 2;
+  const K = 2, MARGIN = 6;                                 // CSS pixels a dot; the margin around the room, the tiles' (tiles.js OUT)
   let H = 400, FLOORY = H - 6, DEF = {};
   function defaults() {
     DEF = {
       meet: [W / 2, WALL + 34], pong: [60, 62], chess: [70, FLOORY - 32], mats: [132, FLOORY - 30],
       coffee: [3, FLOORY], cooler: [36, FLOORY - 1], printer: [W / 2 + 4, FLOORY], armchair: [W - 32, FLOORY],
-      plant0: [W - 8, FLOORY], plant1: [W - 12, 64], board: [W / 2 - 14, 5], window: [W - 40, 4], fire: [W - 74, FLOORY],
+      plant0: [W - 8, FLOORY], plant1: [W - 12, 64], board: [W / 2 - 14, 5], window: [W - 40, 4], clock: [W - 15, 5], fire: [W - 74, FLOORY],
     };
   }
   // the default places for desks: columns of them, as many as the room is wide
   const SLOTS = () => [104, 150, 196, 242, 288, 334].flatMap((y) => [...Array(Math.max(1, Math.floor((W - 10) / 124)))].map((_, i) => [10 + i * 124, y]));
-  const ON_WALL = new Set(["board", "window"]);
+  const ON_WALL = new Set(["board", "window", "clock"]);
   // what each piece covers, from where it stands
   function foot(key, [x, y], u) {
     if (u) return [x - 2, y - 35, x + u.w + 2, y + 2];
@@ -252,6 +252,7 @@ function startRoom(cv, app) {
       case "armchair": return [x - 6, y - 23, x + 18, y + 1];
       case "board": return [x, y, x + 28, y + 16];
       case "window": return [x, y, x + 21, y + 18];
+      case "clock": return [x, y, x + 12, y + 10];
       case "fire": return [x, y - 54, x + 32, y + 1];
       default: return [x - 8, y - 31, x + 8, y + 1];     // a plant
     }
@@ -262,7 +263,7 @@ function startRoom(cv, app) {
   function clampAt(key, at, u, step = 1) {
     const q = (v) => Math.round(v / step) * step;
     const r = foot(key, at, u), [x, y] = at;
-    if (ON_WALL.has(key)) return [q(Math.max(wallFrom() - (r[0] - x), Math.min(W - 18 - (r[2] - x), x))), y];
+    if (ON_WALL.has(key)) return [q(Math.max(wallFrom() - (r[0] - x), Math.min(W - 2 - (r[2] - x), x))), y];
     return [q(Math.max(2 - (r[0] - x), Math.min(W - 2 - (r[2] - x), x))),
             q(Math.max(WALL + 2 - (r[1] - y), Math.min(H - 1 - (r[3] - y), y)))];
   }
@@ -310,12 +311,12 @@ function startRoom(cv, app) {
       return { key: u.key, ...u.d, label: u.label, trees: u.trees, x0: x, w: u.w, cab: u.cab, y, color: projectColor(u.d.unit),
         seats: mine.map((b, k) => [b.id, seat(k), b.tree]), empty: mine.length ? null : seat(0), at: u.at, u };
     });
-    const [bx, by] = P("board"), [wx, wy] = P("window"), [fx, fy] = P("fire");
+    const [bx, by] = P("board"), [wx, wy] = P("window"), [cx, cy] = P("clock"), [fx, fy] = P("fire");
     const xy = (k) => { const [x, y] = P(k); return { x, y }; };
     const matsAt = xy("mats");
     const L = {
       desks, add: { x0: addAt[0], y0: addAt[1] - 15, x1: addAt[0] + ADD_W, y1: addAt[1] },
-      floorY: FLOORY, board: { x0: bx, y0: by, x1: bx + 28, y1: by + 16 }, window: { x0: wx, y0: wy, x1: wx + 21, y1: wy + 18 },
+      floorY: FLOORY, board: { x0: bx, y0: by, x1: bx + 28, y1: by + 16 }, window: { x0: wx, y0: wy, x1: wx + 21, y1: wy + 18 }, clock: { x0: cx, y0: cy },
       fire: { x0: fx, y0: fy - 54, x1: fx + 32, y1: fy },
       meet: xy("meet"), pong: xy("pong"), chess: xy("chess"), mats: [-28, 0, 28].map((d) => ({ x: matsAt.x + d, y: matsAt.y })),
       cooler: xy("cooler"), plants: [xy("plant0"), xy("plant1")], printer: xy("printer"), chair: xy("armchair"),
@@ -735,7 +736,6 @@ function startRoom(cv, app) {
       tickDt = 0;
     }
     const T = w.T;
-    drawClock(ctx, W - 9, 10);
     // who is highlighted: the one under the pointer, the one whose session the pointer is over,
     // a project's bots while the pointer is on its screen, a machine's while it is on its door
     const hl = new Set();
@@ -761,6 +761,7 @@ function startRoom(cv, app) {
     if (trouble) { const nx = wallFrom(); tiny(ctx, clip(trouble, W - 24 - nx), nx, 18, RED); }
     else drawBoard(ctx, L.board, w);
     drawWindow(ctx, L.window);
+    drawClock(ctx, L.clock.x0 + 6, L.clock.y0 + 5);
     // a bot and its seat at its project's desk are one thing: where the bot is only says what it
     // does. The pointer on either lights up both (and its session), and a click on either opens it
     if (hoverId) hl.add(hoverId);
@@ -1249,10 +1250,10 @@ function startRoom(cv, app) {
   function size() {
     const s = app.state();
     if (s && s.width && !widthSet) W = Math.max(200, Math.min(1200, Math.round(s.width)));
-    H = Math.max(200, Math.floor(cv.parentElement.clientHeight / K)); FLOORY = H - 6; defaults();
+    H = Math.max(200, Math.floor((cv.parentElement.clientHeight - 2 * MARGIN) / K)); FLOORY = H - 6; defaults();
     if (cv.width !== W * 2 || cv.height !== H * 2) { cv.width = W * 2; cv.height = H * 2; }
     cv.style.width = W * K + "px"; cv.style.height = H * K + "px";
-    cv.parentElement.style.width = W * K + "px";
+    cv.parentElement.style.width = W * K + MARGIN + "px";      // its margin on the left; the pane's tiles keep theirs
     draw();
   }
   // the divider dragged: the room this many pixels wide (whole dots)

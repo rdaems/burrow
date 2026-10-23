@@ -19,13 +19,13 @@ button, input, select { font:inherit; color:inherit; }
 .btn.warn { border-color:var(--me); color:var(--me); }
 
 /* the header, as pair's: the wordmark (room-wide things go here later) */
-header { flex:none; background:var(--ink); border-bottom:1px solid var(--line); padding:10px 16px; }
-.top { display:flex; align-items:center; gap:10px; min-height:30px; }
+header { flex:none; background:var(--ink); padding:6px 16px; }
+.top { display:flex; align-items:center; gap:10px; min-height:24px; }
 .mark { font:16px/16px "Burrow Pixel", monospace; color:var(--gold); text-shadow:2px 2px 0 #b86a1e; letter-spacing:1px; }
 /* the room keeps its width (room.js: two pixels a dot); what is open takes the rest: tiles (tiles.js),
    each a border with a thicker band on top for its name and buttons, the stars between them */
 #app { flex:1; min-height:0; display:flex; }
-#roomwrap { flex:none; height:100%; overflow:hidden; }
+#roomwrap { flex:none; height:100%; overflow:hidden; padding:6px 0 6px 6px; }   /* the tiles' margin (tiles.js OUT) around the room too */
 #room { display:block; image-rendering:pixelated; image-rendering:crisp-edges; touch-action:none; }
 #divider { flex:none; width:6px; margin:0 -3px; cursor:col-resize; z-index:4; }
 #pane { flex:1; min-width:0; position:relative; overflow:hidden; }
