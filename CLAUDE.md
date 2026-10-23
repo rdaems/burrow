@@ -438,6 +438,34 @@ the letters appearing row by row; and `exit` still feels weird (his question; se
 - Fixed on the way: `/api/furniture` remove was unreachable since the review round's guard (burning was
   broken on main for an hour); terminals on `--box` (#1a1626).
 
+## Round of 2026-10-23, later: the report with humour, the outside, 16-bit terminals
+
+He: the printer's output "is boring. Make it funny. It's about some statistics"; paths overflowed the
+sheet; "Shall we try the same UI design on the terminals?"; `~` was a heart in the project form (the pixel
+font has no tilde); the path completion dropdown in 16-bit style; plants seemed to sway only once; a
+click on the window to look outside. And two things from before that were not right: seated bots must be
+fixed to a dragged desk, and the danger highlight belongs on the dragged object, not on the fire.
+- **Fixed to the desk**: `draw()` sets every seated bot of the desk being moved onto its seat each frame
+  (the think tick alone lagged a frame behind the pointer, hence the jagging).
+- **Danger**: `dangerNow` (something held over the fire) outlines the dragged desk or piece in red
+  (`danger(key)` in `piece()` and the desk item) and rings a held bot red (`drawFigure`); the fire only
+  flares. The hover for outlines and sway no longer depends on the previous frame's `hovered`.
+- **Statistics** (`w.stats`, `stat()`, in `thinkOne`: acts begun by kind, seconds busy/idle/asleep, beams
+  sent/got in `talk()`, `w.meetings`): `room.stats()`. The report (`fillReport`) is an office report with
+  captions that depend on the counts (coffee, cooler, prints, plants, naps, window, armchair, games,
+  meetings, beams, employee of the shift, most relaxed, the limits); projects by name, not path.
+- **Outside** (`#vOutside`, `drawOutside`): the window opens a 130 x 70 scene by the clock: the sky's
+  colour by hour (`SKY` keyframes), sun or moon on an arc, stars after dark, drifting clouds, hills, a few
+  houses with lights on at night. `CLICK` has `window`.
+- **Tiles as 16-bit windows** (a try, as he asked): the ink ring with a steel bevel, a dithered blue band
+  in the pixel font, gold for the focused/hovered one, the ✕ as a steel button; the terminal inside on
+  `--box`. The earlier pair-panel tile chrome is gone.
+- **Fields** in the view are set in the terminal font (`#view .field`): paths and hosts, and a real `~`.
+  The directory completion is a steel list under the field (`.suggest`, `#dirs`): ↑ ↓ pick, Tab/→/Enter
+  take, click too; no datalist.
+- Plants sway through four positions at 8 Hz (they did move, at two positions, which read as a jump).
+- look.mjs: `{drag: …, hold: true}` then `{release: [x, y]}` for a mid-drag look; arrow keys in `press`.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

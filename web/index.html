@@ -32,8 +32,8 @@
         <form id="vDir" class="vform" hidden>
           <p>A working directory<span class="on"> on <b class="machine"></b></span>. Its bots will sit at one desk.</p>
           <select class="field" name="m"></select>
-          <input class="field" name="dir" list="dirs" placeholder="~/projects/something" autocomplete="off" spellcheck="false">
-          <datalist id="dirs"></datalist>
+          <input class="field" name="dir" placeholder="~/projects/something" autocomplete="off" spellcheck="false">
+          <ul class="suggest" id="dirs" hidden></ul>
           <div class="err"></div>
         </form>
         <form id="vMachine" class="vform" hidden>
@@ -46,6 +46,7 @@
         <div id="vCloset" class="closet" hidden></div>
         <div id="vReport" class="print" hidden><img class="machine" alt=""><div class="sheet"><pre></pre></div></div>
         <div id="vLimits" hidden></div>
+        <div id="vOutside" hidden><canvas class="outside" width="130" height="70"></canvas></div>
         <div id="vBoard" hidden><canvas class="board" width="130" height="55"></canvas><div class="row"><button type="button" class="btn" id="wipe">wipe</button></div></div>
         <div id="vPair" hidden>
           <form class="vform pair-link">
@@ -113,6 +114,7 @@ async function act(a) {
   else if (a.kind === "report") { openView("report"); fillReport(); }
   else if (a.kind === "board") openBoard();
   else if (a.kind === "limits") { openView("limits"); fillLimits(); }
+  else if (a.kind === "outside") openOutside();
   else if (a.kind === "pairOpen") openPair(a.key);
   else if (a.kind === "pair" && b) joinPair(a.key, b);
   else if (a.kind === "burn") { const r = await api("/api/furniture", { remove: a.key }); if (r.error) note(r.error); }
@@ -168,8 +170,8 @@ addEventListener("focus", focus); addEventListener("blur", focus); document.addE
 }
 
 // ---- the view: one thing at a time on the right, in place of the tiles, framed like one
-const PANELS = { dir: "#vDir", machine: "#vMachine", you: "#vYou", closet: "#vCloset", chess: "#chess", pong: "#pong", report: "#vReport", pair: "#vPair", board: "#vBoard", limits: "#vLimits" };
-const TITLES = { dir: "A PROJECT", machine: "A MACHINE", you: "YOUR FACE", closet: "THE CLOSET", chess: "CHESS", pong: "PING-PONG", report: "REPORT", pair: "PAIR ROOM", board: "WHITEBOARD", limits: "LIMITS" };
+const PANELS = { dir: "#vDir", machine: "#vMachine", you: "#vYou", closet: "#vCloset", chess: "#chess", pong: "#pong", report: "#vReport", pair: "#vPair", board: "#vBoard", limits: "#vLimits", outside: "#vOutside" };
+const TITLES = { dir: "A PROJECT", machine: "A MACHINE", you: "YOUR FACE", closet: "THE CLOSET", chess: "CHESS", pong: "PING-PONG", report: "REPORT", pair: "PAIR ROOM", board: "WHITEBOARD", limits: "LIMITS", outside: "OUTSIDE" };
 function openView(kind) {
   if (viewKind && viewKind !== kind) closeView(true);
   for (const t of tiles.all()) closeTile(t);
@@ -217,8 +219,15 @@ for (const d of [$("#vDir"), $("#vMachine")]) {
   });
 }
 {
-  let timer = null, asked = "";
+  // the directory completes as you type: a list under the field (the machine's own ls); ↑ ↓ pick,
+  // Tab or → takes the one picked (Enter too, before it adds), a click as well
+  let timer = null, asked = "", dirs = [], pick = -1;
   const inp = $("#vDir input"), list = $("#dirs");
+  const show = () => {
+    list.innerHTML = dirs.map((x, i) => `<li${i === pick ? ' class="on"' : ""}>${x.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]))}</li>`).join("");
+    list.hidden = !dirs.length;
+  };
+  const take = () => { if (pick >= 0 && dirs[pick]) { inp.value = dirs[pick]; inp.dispatchEvent(new Event("input")); } };
   inp.addEventListener("input", () => {
     clearTimeout(timer);
     timer = setTimeout(async () => {
@@ -226,9 +235,19 @@ for (const d of [$("#vDir"), $("#vMachine")]) {
       if (dir === asked) return;
       asked = dir;
       const r = await api("/api/complete", { m, dir });
-      if (r.dirs && inp.value === dir) list.innerHTML = r.dirs.map((x) => `<option value="${x.replace(/"/g, "&quot;")}"></option>`).join("");
+      if (r.dirs && inp.value === dir) { dirs = r.dirs.filter((x) => x !== dir); pick = -1; show(); }
     }, 150);
   });
+  inp.addEventListener("keydown", (e) => {
+    if (list.hidden) return;
+    if (e.key === "ArrowDown") { pick = (pick + 1) % dirs.length; show(); e.preventDefault(); }
+    else if (e.key === "ArrowUp") { pick = (pick - 1 + dirs.length) % dirs.length; show(); e.preventDefault(); }
+    else if ((e.key === "Tab" || e.key === "ArrowRight") && pick >= 0) { take(); e.preventDefault(); }
+    else if (e.key === "Enter" && pick >= 0) { take(); e.preventDefault(); }
+    else if (e.key === "Escape") { dirs = []; show(); e.stopPropagation(); }
+  });
+  list.addEventListener("pointerdown", (e) => { const li = e.target.closest("li"); if (!li) return; e.preventDefault(); pick = [...list.children].indexOf(li); take(); inp.focus(); });
+  $("#vDir").addEventListener("submit", () => { dirs = []; show(); });
 }
 
 // ---- you: your face, picked as at pair's door (← another face →), kept in room.json
@@ -286,6 +305,44 @@ async function joinPair(key, b) {
   const t = openBot(b.m, b.id, true), x = r.bring + "\r";
   if (t.ws && t.ws.readyState === 1) t.ws.send(enc.encode(x)); else t.typed.push(x);
 }
+// ---- the window: the outside, by this computer's clock: the sky by the hour, the sun or the moon on
+// their arc, stars at night, clouds drifting, hills and a few roofs with their lights on after dark
+const ocv = $("#vOutside canvas"), octx = ocv.getContext("2d");
+function openOutside() {
+  openView("outside");
+  const draw = () => { if (viewKind !== "outside") return; drawOutside(octx, ocv.width, ocv.height, performance.now() / 1000); requestAnimationFrame(draw); };
+  draw();
+}
+const mixc = (a, b, k) => "#" + [1, 3, 5].map((i) => { const x = parseInt(a.slice(i, i + 2), 16), y = parseInt(b.slice(i, i + 2), 16); return Math.round(x + (y - x) * k).toString(16).padStart(2, "0"); }).join("");
+const SKY = [[0, "#0d1430"], [5, "#141d3f"], [6.5, "#d9775a"], [8, "#7fb2e0"], [17, "#7fb2e0"], [19, "#e07a4a"], [20.5, "#2a2550"], [22, "#0d1430"], [24, "#0d1430"]];
+function skyAt(h) { for (let i = 1; i < SKY.length; i++) if (h <= SKY[i][0]) { const [h0, c0] = SKY[i - 1], [h1, c1] = SKY[i]; return mixc(c0, c1, (h - h0) / (h1 - h0)); } return SKY[0][1]; }
+const STARS = [...Array(40)].map((_, i) => [(i * 37) % 130, (i * 53) % 44, i % 3]);
+function drawOutside(c, W, H, t) {
+  const now = new Date(), h = now.getHours() + now.getMinutes() / 60, horizon = 52, sky = skyAt(h);
+  const dark = h < 6 || h > 20.5 ? 1 : h < 8 ? (8 - h) / 2 : h > 18.5 ? (h - 18.5) / 2 : 0;
+  const r = (x, y, w, hh, col) => { c.fillStyle = col; c.fillRect(x, y, w, hh); };
+  for (let b = 0; b < 4; b++) r(0, b * 13, W, 13, mixc(sky, "#ffffff", 0.05 * (3 - b) * (1 - dark) + 0.02 * b));   // the sky, lighter toward the horizon
+  if (dark > 0) for (const [x, y, k] of STARS) if (((Math.floor(t * 2) + k) % 5) || k === 0) r(x, y, 1, 1, dark > 0.5 ? "#f4f6fb" : "#8b93ad");
+  // the sun from 6:30 to 20:30, the moon the rest of the night, on an arc over the hills
+  const day = h >= 6.5 && h <= 20.5, p = day ? (h - 6.5) / 14 : ((h + 24 - 20.5) % 24) / 10;
+  const sx = Math.round(10 + p * 110), sy = Math.round(horizon - 4 - Math.sin(p * Math.PI) * 44);
+  if (day) { r(sx - 3, sy - 2, 7, 5, "#ffe27a"); r(sx - 2, sy - 3, 5, 7, "#ffe27a"); r(sx - 1, sy - 1, 3, 3, "#fff6c0"); }
+  else { r(sx - 3, sy - 2, 7, 5, "#e8e5ef"); r(sx - 2, sy - 3, 5, 7, "#e8e5ef"); r(sx, sy - 2, 4, 5, sky); }
+  // clouds, drifting
+  for (let i = 0; i < 3; i++) {
+    const cx = Math.round((i * 47 + t * (2 + i)) % (W + 30)) - 15, cy = 8 + i * 11, col = mixc("#f4f6fb", sky, 0.25 + dark * 0.6);
+    r(cx, cy + 2, 18, 3, col); r(cx + 3, cy, 8, 2, col); r(cx + 12, cy + 1, 4, 1, col);
+  }
+  // hills, and a few roofs with their lights on after dark
+  const hill = mixc("#2b4a3a", "#101a22", dark);
+  for (let x = 0; x < W; x++) r(x, horizon - Math.round(6 * Math.sin(x / 17) + 4 * Math.sin(x / 7 + 2)) - 2, 1, H, hill);
+  const house = mixc("#3d3440", "#17141f", dark);
+  for (const [x, w, hh] of [[20, 9, 8], [34, 6, 12], [78, 8, 7], [92, 11, 10], [108, 5, 9]]) {
+    r(x, horizon + 6 - hh, w, hh, house);
+    if (dark > 0.4) for (let y = horizon + 8 - hh; y < horizon + 4; y += 3) for (let xx = x + 1; xx < x + w - 1; xx += 3) if ((xx * 7 + y * 3) % 5 < 3) r(xx, y, 1, 1, "#ffe27a");
+  }
+  r(0, horizon + 6, W, H - horizon - 6, mixc("#1f3a2c", "#0c1418", dark));
+}
 // ---- the whiteboard, big: the same ink the bots draw on (room.js), four pixels an ink pixel; draw
 // on it with the pointer, in your colour
 const bcv = $("#vBoard canvas"), bctx = bcv.getContext("2d");
@@ -313,26 +370,60 @@ function fillLimits() {
     : `<p>Not known yet: Claude Code's /usage is asked every five minutes.</p>`)
     + (u.text ? `<pre class="more">${esc(u.text)}</pre>` : "");
 }
-// ---- the printer's report: what goes on, printed row by row on a sheet that comes out of the printer
+// ---- the printer's report: the office's statistics since this page opened, with the staff list and
+// the limits, printed row by row on a sheet that comes out of the printer
 let printing = 0;
 function fillReport() {
   if (!state) return;
-  const t = new Date(), pad = (n) => String(n).padStart(2, "0");
-  const when = (ms) => { if (!ms) return ""; const d = new Date(ms); const today = d.toDateString() === t.toDateString(); return (today ? "" : `${pad(d.getDate())}/${pad(d.getMonth() + 1)} `) + `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
-  const home = (dir) => dir.replace(/^\/(Users|home)\/[^/]+/, "~");
-  const lines = [`burrow  ${pad(t.getDate())}/${pad(t.getMonth() + 1)}/${t.getFullYear()}  ${pad(t.getHours())}:${pad(t.getMinutes())}`, ""];
-  for (const m of state.machines) {
-    const bots = state.bots.filter((b) => (b.m || "") === m.id);
-    lines.push(`${m.name}${m.error ? "  (" + m.error + ")" : ""}`);
-    if (!bots.length) lines.push("  no sessions");
-    for (const b of bots) {
-      const st = b.waiting ? "needs input" : b.busy ? "working" : b.alive === false ? "asleep" : "idle";
-      lines.push(`  ${b.name.padEnd(14).slice(0, 14)} ${st.padEnd(12)} ${when(b.started).padEnd(12)} ${home(b.cwd || b.dir || "")}`);
-    }
-    lines.push("");
-  }
-  const u = state.usage || {}, lim = (x, what) => x ? `${what}: ${Math.max(0, 100 - x.used)}% left${x.resets ? ", new " + x.resets.replace(/^.* at /, "at ") : ""}` : `${what}: ?`;
-  lines.push(lim(u.session, "5h"), lim(u.week, "1w"));
+  const t = new Date(), pad = (n) => String(n).padStart(2, "0"), hm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const when = (ms) => { if (!ms) return ""; const d = new Date(ms); return (d.toDateString() === t.toDateString() ? "" : `${pad(d.getDate())}/${pad(d.getMonth() + 1)} `) + hm(d); };
+  const st = room.stats(), S = st.bots, name = (id) => (byId(id) || {}).name || id, bots = state.bots;
+  const sum = (k) => bots.reduce((a, b) => a + ((S[b.id] || {})[k] || 0), 0);
+  const top = (k) => { let best = null, n = 0; for (const b of bots) { const v = (S[b.id] || {})[k] || 0; if (v > n) { n = v; best = b; } } return best && { b: best, n }; };
+  const mins = (sec) => sec < 90 ? `${Math.round(sec)} s` : sec < 5400 ? `${Math.round(sec / 60)} min` : `${(sec / 3600).toFixed(1)} h`;
+  const proj = (b) => (b.tree ? b.tree.split("/").pop() + " (worktree)" : (b.cwd || "").replace(/^\/(Users|home)\/[^/]+$/, "~").split("/").pop() || "~");
+  const u = state.usage || {}, left = (x) => (x ? `${Math.max(0, 100 - x.used)}%` : "?");
+  const shift = Math.round((performance.now() - st.since) / 60000);
+  const lines = [`BURROW OFFICE REPORT                    ${pad(t.getDate())}/${pad(t.getMonth() + 1)}/${t.getFullYear()} ${hm(t)}`,
+    `Figures since this page opened, ${shift < 2 ? "a moment" : shift + " min"} ago. Approximate. Unaudited.`, ""];
+  // the staff
+  const working = bots.filter((b) => b.busy).length, asleep = bots.filter((b) => b.alive === false).length, waiting = bots.filter((b) => b.waiting).length;
+  lines.push(`STAFF  ${bots.length} session${bots.length === 1 ? "" : "s"} on ${state.machines.length} machine${state.machines.length === 1 ? "" : "s"}: ${working} working, ${waiting} waiting for you, ${asleep} asleep`);
+  for (const m of state.machines) for (const b of bots.filter((b) => (b.m || "") === m.id))
+    lines.push(`  ${b.name.padEnd(16).slice(0, 16)} ${m.name.padEnd(8).slice(0, 8)} ${(b.waiting ? "needs input" : b.busy ? "working" : b.alive === false ? "asleep" : "idle").padEnd(12)} ${when(b.started).padEnd(12)} ${proj(b)}`);
+  if (!bots.length) lines.push("  nobody. The plants are thriving.");
+  lines.push("");
+  // the break room
+  const coffee = sum("coffee"), cooler = sum("cooler"), prints = sum("print"), plants = sum("plant"), naps = sum("sleep"), windows = sum("window"), chairs = sum("chair");
+  lines.push("BREAK ROOM");
+  lines.push(coffee ? `  Coffee: ${coffee} cup${coffee === 1 ? "" : "s"}. The pot stands at ${left(u.session)}${u.session && u.session.resets ? ", refilled " + u.session.resets.replace(/^.* at /, "at ") : ""}.` : "  Coffee: none fetched. Everyone is strangely awake.");
+  lines.push(cooler ? `  Water cooler: ${cooler} conversation${cooler === 1 ? "" : "s"}. Topics undisclosed. The bottle: ${left(u.week)} left.` : "  Water cooler: no conversations. The bottle is " + left(u.week) + " full and lonely.");
+  lines.push(prints ? `  Printed: ${prints} page${prints === 1 ? "" : "s"} by the bots, plus this one. Paper jams: 0 (we are the printer).` : "  Printed: only this. The printer appreciates the attention.");
+  lines.push(plants ? `  Plants watered ${plants} time${plants === 1 ? "" : "s"}. They did not ask.` : "  Plants: not watered. They are plastic, probably.");
+  const nap = top("asleep");
+  lines.push(naps ? `  Naps on the mats: ${naps}. Longest sleeper: ${name(nap.b.id)} (${mins(nap.n)}).` : "  Naps: none. Nobody charged. Batteries are a state of mind.");
+  lines.push(windows ? `  Window: looked out of ${windows} time${windows === 1 ? "" : "s"}. It is ${t.getHours() >= 7 && t.getHours() < 20 ? "day" : "night"}. Nothing happened.` : "  Window: ignored. The outside can wait.");
+  lines.push(chairs ? `  Armchair: ${chairs} reading session${chairs === 1 ? "" : "s"}. Nobody finished the book.` : "  Armchair: empty. The book is still on page 1.");
+  lines.push("");
+  // games and meetings
+  const pong = sum("pong"), chess = sum("chess");
+  lines.push("GAMES");
+  lines.push(pong ? `  Ping-pong: ${pong} player${pong === 1 ? "" : "s"} at the table. The ball is still in play.` : "  Ping-pong: the ball sat on the table all shift.");
+  lines.push(chess ? `  Chess: ${chess} sat down at the board. Mostly pawns were moved.` : "  Chess: the board is in its starting position, as is everyone.");
+  lines.push("");
+  lines.push("MEETINGS");
+  const present = top("present");
+  lines.push(st.meetings ? `  ${st.meetings} held${present ? ", " + name(present.b.id) + " at the whiteboard" : ""}. Whiteboard ${Math.round(st.inked * 100)}% inked. Decisions taken: 0.` : "  None held. Productivity unaffected. Whiteboard " + Math.round(st.inked * 100) + "% inked.");
+  lines.push("");
+  // messages and the employee of the shift
+  const beams = sum("sent"), talker = top("sent"), worker = top("busy"), idler = top("idle");
+  lines.push("MESSAGES");
+  lines.push(beams ? `  ${beams} beamed across the room. ${talker ? name(talker.b.id) + " does most of the talking (" + talker.n + ")." : ""}` : "  None beamed. Everyone minds their own desk.");
+  lines.push("");
+  if (worker && worker.n > 30) lines.push(`EMPLOYEE OF THE SHIFT: ${name(worker.b.id)}, ${mins(worker.n)} at the keyboard.`);
+  if (idler && idler.n > 120 && (!worker || idler.b.id !== worker.b.id)) lines.push(`MOST RELAXED: ${name(idler.b.id)}, ${mins(idler.n)} not at it.`);
+  lines.push("", `LIMITS  5h session: ${left(u.session)} left · week: ${left(u.week)} left`);
+  lines.push("", "Printed on recycled pixels. Please do not feed to the fire.");
   // the sheet comes out row by row, every row letter by letter, as a line printer
   const out = $("#vReport pre"), img = $("#vReport .machine"), job = ++printing;
   if (!img.src) img.src = room.icon("printer", 6);
