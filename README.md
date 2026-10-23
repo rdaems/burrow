@@ -12,7 +12,7 @@ room tells you what it is doing; there are no notifications, badges or counters.
 - **talking**: a bot that sends another one a message beams it across the room, antenna to antenna
 
 Sessions started in the same directory share a rug: one rug per project, one desk per bot, labelled
-with the folder name. The empty desk at the end of a rug (`+`) starts another bot in that project.
+with the folder name. The `+` beside a desk's screen starts another bot in that project; carry a desk to a door to remove it.
 
 Click a bot and its session opens next to the room. That pane is a real terminal running
 `claude attach <id>`, so you are using Claude Code itself. Close it (✕, or click the bot again)

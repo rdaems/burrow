@@ -1,10 +1,11 @@
 // The room: every machine's bots in one place, as pair's office (rdaems/pair-prompting, app/floor.js): its
 // breaks, its mats, its robots (pixel.js), furnished as pixel art (sprites.js). Every project (a working
 // directory, here or on another machine) is a desk: a cabinet with the project's screen and name at its left
-// end, a long desktop to the right where its bots sit facing the screen, and an empty chair at the end (+)
-// that starts another bot there. A desk you keep has its name on a plate; one that is only there while
-// bots work at it has it on a paper note (click it to keep the desk). A bot in a git worktree of the
-// project sits at the project's desk, its own copy of the files a laptop on the cabinet, plugged in.
+// end, a long desktop to the right where its bots sit facing the screen, a chair a bot. The desk is
+// handled at its screen: hover it for the path, the + beside it starts another bot there. Desks stay
+// (every directory a session ran in, and the ones you add); carry one to a door to remove it. A bot in a
+// git worktree of the project sits at the project's desk, its own copy of the files a laptop on the
+// cabinet, plugged in.
 // The bots are the sessions `claude agents` lists, and where a bot is says what agent view would:
 //   working             at its project's desk, typing
 //   needs input         at its desk with its hand up (a question, a permission prompt), its screen's
@@ -26,11 +27,13 @@
 // its own colour (a palette swap, as 16-bit games told kinds of a thing apart), so no desk needs its
 // machine in its name; a machine out of reach has its door boarded up.
 //
-// What you do happens in the room as well: click a bot to open its session, the + chair for a new
-// bot, the empty cabinet for a project, the empty door frame for a machine; drag furniture where you
-// want it; carry a bot to its door to stop it; drop a file on a bot to hand it over.
+// What you do happens in the room as well: click a bot to open its session (shift-click keeps the
+// tile that was open), the + by a desk's screen for a new bot, the empty cabinet for a project, the
+// empty door frame for a machine; drag furniture where you want it; carry a bot to its door to stop
+// it, a desk to a door to remove it; drop a file on a bot to hand it over.
 //
-// startRoom(canvas, app) with app = { state(), open(), chess(), pong(), away(), hl(), hover(id), act(action) };
+// startRoom(canvas, app) with app = { state(), open(), opens(), chess(), pong(), away(), hl(), hover(id), act(action) }
+// (open: the bot whose tile has the focus, opens: every bot with a tile, hl: the one whose tile the pointer is on);
 // returns { talk(from, to), typed(), size(), draw(), color(unit) }. The room is always W x H dots.
 
 function startRoom(cv, app) {
@@ -264,7 +267,7 @@ function startRoom(cv, app) {
       const n = sitters(bots, d).length, label = deskLabel(d);
       const trees = [...new Set(sitters(bots, d).map((b) => b.tree).filter(Boolean))];
       const cab = Math.max(tinyW(label) + 6, 22, trees.length ? 26 + trees.length * LAP : 0);
-      return { key: "u:" + d.unit, d, label, trees, cab, w: cab + 4 + (n + 1) * SEAT };
+      return { key: "u:" + d.unit, d, label, trees, cab, w: cab + 4 + Math.max(1, n) * SEAT };   // a chair a bot; one when there is none
     });
     const where = (key, u) => {
       if (moving && moving.key === key) return moving.at;
@@ -296,7 +299,7 @@ function startRoom(cv, app) {
       const [x, y] = u.at, mine = sitters(bots, u.d);
       const seat = (k) => x + u.cab + 4 + SEAT / 2 + k * SEAT;
       return { key: u.key, ...u.d, label: u.label, trees: u.trees, x0: x, w: u.w, cab: u.cab, y, color: projectColor(u.d.unit),
-        seats: mine.map((b, k) => [b.id, seat(k), b.tree]), plus: seat(mine.length), at: u.at, u };
+        seats: mine.map((b, k) => [b.id, seat(k), b.tree]), empty: mine.length ? null : seat(0), at: u.at, u };
     });
     const [bx, by] = P("board"), [wx, wy] = P("window");
     const xy = (k) => { const [x, y] = P(k); return { x, y }; };
@@ -765,8 +768,8 @@ function startRoom(cv, app) {
     for (const f of w.folk.values()) if (!f.lying && !f.held) items.push([f.y, () => drawFigure(ctx, f, f.b, T, hl)]);
     for (const d of L.desks) {
       items.push([d.y - 1, () => drawDesk(ctx, d, w, T, hl)]);
-      for (const [id, x] of d.seats) items.push([d.y - 0.5, () => drawChair(ctx, x, d.y, d, false, hl.has(id))]);
-      items.push([d.y - 0.5, () => drawChair(ctx, d.plus, d.y, d, true)]);
+      for (const [id, x] of d.seats) items.push([d.y - 0.5, () => drawChair(ctx, x, d.y, false, hl.has(id))]);
+      if (d.empty) items.push([d.y - 0.5, () => drawChair(ctx, d.empty, d.y, true)]);
     }
     items.push([L.meet.y - 1, () => drawTable(ctx, L.meet)]);
     for (const i of [0, 1]) { const st = L.meetSeat(i); items.push([st.y - 0.5, () => drawStool(ctx, st)]); }
@@ -830,6 +833,14 @@ function startRoom(cv, app) {
       box(ctx, lx - 2, ly - 2, tw + 4, 9, h ? TERRACOTTA : INK2);
       tiny(ctx, text, lx, ly, h ? INK : C.steel4);
     }
+    // a desk pushed up against a door: a sign asks whether it goes
+    if (!moving) for (const d of L.desks) if (atDoor(d)) {
+      const busy = d.seats.length > 0, text = busy ? d.label + " has bots" : "remove " + d.label + "?", tw = tinyW(text);
+      const lx = Math.round(Math.max(2, Math.min(W - tw - 2, d.x0 + d.cab / 2 - tw / 2))), ly = WALL + 7;
+      const h = !busy && hot(lx - 2, ly - 2, lx + tw + 2, ly + 7, { kind: "forget", unit: d.unit });
+      box(ctx, lx - 2, ly - 2, tw + 4, 9, h ? TERRACOTTA : INK2);
+      tiny(ctx, text, lx, ly, h ? INK : busy ? RED : C.steel4);
+    }
     // the bot under the pointer: its name over its head, and a click opens it
     if (hovered && !moving) {
       const { b, x, y } = hovered;
@@ -873,7 +884,7 @@ function startRoom(cv, app) {
     const im = body(b.id, colorOf(b), f.held ? "up" : f.arms, f.held ? "walk1" : f.legs, b.human);
     // its outline: terracotta while the pointer is on it or on its session, faint while its session is open
     const lit = hl.has(f.id) || (hovered && hovered.b.id === f.id) || (!hovered && over(x0 + 4, y0, x0 + 18, y + 1));
-    const ring = f.leaving ? null : lit ? TERRACOTTA : app.open() === f.id ? OPEN : null;
+    const ring = f.leaving ? null : lit ? TERRACOTTA : app.opens().includes(f.id) ? OPEN : null;
     if (im) {
       ctx.save();
       if (f.dir < 0) { ctx.translate(x0 + SW, 0); ctx.scale(-1, 1); }
@@ -889,7 +900,7 @@ function startRoom(cv, app) {
   function drawSleeper(ctx, f, b, T, hl) {  // seen from above: the head on the pillow, a blanket, a plug
     if (!b) return;
     const x = Math.round(f.x), y = Math.round(f.y), im = body(b.id, colorOf(b), "down", "stand", b.human);
-    const ring = hl.has(f.id) || over(x - 11, y - 28, x + 11, y) ? TERRACOTTA : app.open() === f.id ? OPEN : null;
+    const ring = hl.has(f.id) || over(x - 11, y - 28, x + 11, y) ? TERRACOTTA : app.opens().includes(f.id) ? OPEN : null;
     if (im) { if (ring) ctx.drawImage(halo(im, ring), 0, 0, SW, 16, x - 11, y - 28, SW, 16); ctx.drawImage(im, 0, 0, SW, 16, x - 11, y - 28, SW, 16); }
     const c0 = b.human ? YOU : C.steel2;      // a blanket: grey for a charging bot, yours in your colour
     box(ctx, x - 10, y - 13, 20, 9, c0, MAT.k);
@@ -926,24 +937,23 @@ function startRoom(cv, app) {
     for (const x of [x0 + cab + 1, ...d.seats.map(([, x]) => x + 11), x0 + dw - 4]) {
       rect(ctx, x, y - 4, 2, 4, p.k); rect(ctx, x, y - 4, 1, 3, p.d); rect(ctx, x, y, 2, 1, SHADOW);
     }
-    for (const x of [...d.seats.map(([, x]) => x), d.plus]) { rect(ctx, x - 9, y - 11, 7, 2, SP.F); rect(ctx, x - 8, y - 11, 5, 1, SP.B); }
-    // the cabinet, the project's name on a plate if you keep the desk, else on a note taped on
-    // (a click on it keeps the desk)
+    for (const x of [...d.seats.map(([, x]) => x), ...(d.empty ? [d.empty] : [])]) { rect(ctx, x - 9, y - 11, 7, 2, SP.F); rect(ctx, x - 8, y - 11, 5, 1, SP.B); }
+    // the cabinet, the project's name on a plate
     slab(ctx, x0, y - 15, cab, 4, 11, p);
     const lx = Math.round(x0 + (cab - tinyW(d.label)) / 2);
-    if (d.kept) { plate(ctx, x0 + 2, y - 9, cab - 4, false, p); tiny(ctx, d.label, lx, y - 8, C.steel3); }
-    else {
-      const h = hot(x0 + 2, y - 10, x0 + cab - 2, y - 2, { kind: "keep", unit: d.unit });
-      paper(ctx, x0 + 2, y - 9, cab - 4, h);
-      tiny(ctx, d.label, lx, y - 8, INK2);
-      if (h) tip = { text: "keep this desk", x: x0 + cab / 2, y: y - 10 };
-    }
+    plate(ctx, x0 + 2, y - 9, cab - 4, false, p); tiny(ctx, d.label, lx, y - 8, C.steel3);
     // on it the project's screen, and a laptop for each worktree, plugged in; the pointer on one
-    // lights up the bots working there
+    // lights up the bots working there. The desk is handled at its screen: a + beside it starts a
+    // bot here
     const gw = 22 + d.trees.length * LAP, sx = Math.round(x0 + (cab - gw) / 2), sy = y - 32;
     const where = (dir) => (d.m ? machineName(d.m) + ":" : "") + dir.replace(/^\/(Users|home)\/[^/]+/, "~");
     const onScreen = over(sx, sy, sx + 22, sy + 18);
     if (onScreen) { for (const [id] of d.seats) hl.add(id); tip = { text: where(d.dir), x: sx + 11, y: sy - 1 }; }
+    {
+      const px = sx + gw + 1, h = hot(px - 2, sy - 2, px + 5, sy + 7, { kind: "spawn", m: d.m, dir: d.dir });
+      tiny(ctx, "+", px, sy, h ? d.color : C.steel2);
+      if (h) tip = { text: "new bot", x: px + 1, y: sy - 1 };
+    }
     paint({ x: sx + 2, y: sy + 2 }, 18, 11, "", d.dir.length);
     const mon = sprites.get("monitor");
     if (onScreen) put(ctx, halo(mon, C.steel3), sx, sy);
@@ -957,34 +967,21 @@ function startRoom(cv, app) {
       if (on || mine.some(([id]) => hl.has(id))) put(ctx, halo(lap, on ? C.steel3 : TERRACOTTA), px, py);
       put(ctx, lap, px, py);
     });
-    // a desk you keep can be let go: an x by its screens (it stays while bots work at it)
-    if (d.kept && over(x0, sy - 2, Math.max(x0 + cab, sx + gw + 6), y)) {
-      const ex = sx + gw, h = hot(ex - 1, sy - 2, ex + 5, sy + 6, { kind: "forget", unit: d.unit });
-      tiny(ctx, "X", ex + 1, sy, h ? TERRACOTTA : C.steel2);
-      if (h) tip = { text: d.seats.length ? "stop keeping this desk" : "forget this desk", x: ex + 2, y: sy - 1 };
-    }
   }
   // a name plate on a cabinet's front: seven dots high, for one line of lettering
   function plate(ctx, x, y, w, lit, p = WOOD) {
     rect(ctx, x, y, w, 7, p.k);
     rect(ctx, x + 1, y + 1, w - 2, 5, lit ? C.steel1 : p.plate);
   }
-  // a note taped on instead, for a desk that is only there while bots work at it
-  function paper(ctx, x, y, w, lit) {
-    rect(ctx, x, y, w, 7, lit ? "#fff4d6" : "#e3d6ad");
-    rect(ctx, x, y + 6, w, 1, "#a8956a");
-    rect(ctx, x + Math.round(w / 2) - 2, y - 1, 5, 2, "rgba(255,255,255,0.5)");
-  }
-  // an office chair at a project's desk, its sitter facing the screen; the empty one at the end
-  // starts a bot
-  function drawChair(ctx, x, y, d, plus, lit) {
-    const h = plus && hot(x - 8, y - 22, x + 9, y + 1, { kind: "spawn", m: d.m, dir: d.dir });
-    if (h) tip = { text: "new bot", x, y: y - 22 };
-    const im = sprites.get(plus ? "chairFree" : "chair");
-    if (lit || h) put(ctx, halo(im, h ? d.color : TERRACOTTA), x - 4, y - 16);
+  // an office chair at a project's desk, its sitter facing the screen; a pale one where no bot is
+  function drawChair(ctx, x, y, free, lit) {
+    const im = sprites.get(free ? "chairFree" : "chair");
+    if (lit) put(ctx, halo(im, TERRACOTTA), x - 4, y - 16);
     put(ctx, im, x - 4, y - 16);
-    if (plus) tiny(ctx, "+", x + 5, y - 21, h ? d.color : C.steel3);
   }
+  // a desk carried to a door is on its way out: a sign over the door asks; a click on it takes
+  // the desk away (its bots must be gone first)
+  const atDoor = (d) => { const i = app.state().machines.findIndex((m) => Math.abs(d.x0 + d.cab / 2 - (10 + doorOf(m.id) * DOOR)) < DOOR / 2 + 2); return i >= 0 && d.y - 35 < WALL + 10; };
   function drawBoard(ctx, b, w) {           // Pixel Agents' whiteboard, wiped, and what the host draws on it
     put(ctx, "WHITEBOARD", b.x0 - 2, b.y0 - 8);
     const ix = b.x0 + INK_AREA.x, iy = b.y0 + INK_AREA.y;
@@ -1131,7 +1128,7 @@ function startRoom(cv, app) {
     if (e.button !== 0) return;
     pointer = dots(e); draw();
     const h = [...hots].reverse().find((h) => over(h.x0, h.y0, h.x1, h.y1));
-    press = { x: pointer.x, y: pointer.y, action: h && h.action, bot: hovered && !hovered.seat && hovered.b.id, piece: pieceAt(pointer) };
+    press = { x: pointer.x, y: pointer.y, action: h && h.action, bot: hovered && !hovered.seat && hovered.b.id, piece: pieceAt(pointer), shift: e.shiftKey };
     cv.setPointerCapture(e.pointerId);
   });
   cv.addEventListener("pointermove", (e) => {
@@ -1162,7 +1159,7 @@ function startRoom(cv, app) {
       if (pointer && f.b && Math.abs(pointer.x - doorX(f.b.m)) < 11 && pointer.y < WALL + 14) f.act = { kind: "door", left: 6 };
       else f.act = f.work ? { kind: "desk" } : rest();
       f.legs = "stand";
-    } else if (press && press.action) app.act(press.action);
+    } else if (press && press.action) app.act({ ...press.action, shift: press.shift });
     // a plain click on the floor or the wall, on nothing: what is open on the right goes away
     else if (press && !press.bot && !press.piece && pointer && Math.hypot(pointer.x - press.x, pointer.y - press.y) <= 1) app.act({ kind: "blank" });
     press = null;

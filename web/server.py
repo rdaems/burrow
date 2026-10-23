@@ -273,17 +273,17 @@ class Hub:
         return sorted((b for f in self.feeds.values() for b in f.get("bots", [])), key=lambda b: b["started"])
 
     def desks(self, bots):
-        """the desks you keep, then one wherever a session runs that has none"""
+        """the desks: every directory a session was ever seen in, until you take the desk away"""
+        new = [b["unit"] for b in bots if b["unit"] not in self.room["desks"]]
+        if new:
+            self.room["desks"] += list(dict.fromkeys(new))
+            save_room(self.room)
         out, seen = [], set()
         for u in self.room["desks"]:
             mid, d = split_unit(u)
             if mid in self.machines and u not in seen:
                 seen.add(u)
-                out.append({"unit": u, "m": mid, "dir": d, "kept": True})
-        for b in bots:
-            if b["unit"] not in seen:
-                seen.add(b["unit"])
-                out.append({"unit": b["unit"], "m": b["m"], "dir": split_unit(b["unit"])[1], "kept": False})
+                out.append({"unit": u, "m": mid, "dir": d})
         return out
 
     def state(self):
@@ -295,9 +295,12 @@ class Hub:
                     "usage": self.usage, "chess": self.chess_view(), "demo": DEMO, "you": {"name": USER}}
 
     def keep(self, u, on):
+        """a desk added (by you), or taken away: gone with its place, until a session runs there again"""
         with self.lock:
             ds = [x for x in self.room["desks"] if x != u]
             self.room["desks"] = ds + [u] if on else ds
+            if not on:
+                self.room["layout"].pop("u:" + u, None)
             save_room(self.room)
         self.push("state", self.state())
 
@@ -756,8 +759,10 @@ class Handler(BaseHTTPRequestHandler):
             save_room(hub.room)
             hub.push("state", hub.state())
             return {}
-        if path in ("/api/keep", "/api/forget"):    # a desk you keep, or not any more
-            hub.keep(b["unit"], path == "/api/keep")
+        if path == "/api/forget":            # a desk taken away (carried to the door)
+            if any(x["unit"] == b["unit"] for x in hub.bots()):
+                raise RuntimeError("bots work at that desk")
+            hub.keep(b["unit"], False)
             return {}
         mid = b.get("m") or ""
         m, poke = hub.machine(mid), hub.pokes.get(mid)

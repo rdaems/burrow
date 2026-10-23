@@ -220,6 +220,26 @@ can't do anything with it? Let's approach it the same way as `claude agents` and
   terminal title is set, so it is recognised by its prompt text, "describe a task for a new session");
   Ctrl+Z ends the process. He has not decided whether he wants "normal" terminals in the pane.
 
+## Tiles, and desks handled at their screen (2026-10-23, later)
+
+He: "I want a tiling window behavior": each tile a border with a header that "is essentially a border, but
+thicker", the buttons on the left (✕, then a pin that says the tile is kept when another opens, default off),
+dragging panes "in the usual way"; "keep it minimalistic". And: no more + chair ("I don't like that
+visibility, let's do all the interfacing with the main desk with the computer screen"), desks always stay
+(pinning a desk was redundant), remove a desk by dragging it somewhere "in style".
+- `web/tiles.js`: a split tree (`{dir, kids, sizes}` / `{leaf}`), tiles absolutely positioned, a new tile
+  splits the focused one along its longer side, gaps are draggable, a tile dragged by its band onto a side
+  of another goes there (a sibling if the split runs that way, else a nested split), onto the middle swaps.
+  Nothing is persisted. The band is `--line` (the border, thicker), 22 px; ✕ and •/◦ on the left.
+- index.html: a tile a session (its own xterm + websocket), one for chess, one for ping-pong. A click on a
+  bot replaces the focused tile unless it is pinned or shift is held (then the old one is pinned and the
+  new one splits it; the same for the games). A click on bare floor closes the unpinned tiles. The room's
+  `open()` is the focused tile's bot (where you stand), `opens()` every tile's bot (their rings).
+- Desks: every directory a session is seen in is added to room.json `desks` for good (`Hub.desks`);
+  `kept`/the paper note/the x are gone. A `+` beside the screen starts a bot; the desk shows a chair a
+  bot (one pale chair when empty). Carry a desk up against a door: a sign "remove NAME?" over it (click),
+  or "NAME has bots" in red (refused, server side too). Removing drops its layout entry as well.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

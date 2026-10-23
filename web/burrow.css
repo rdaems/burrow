@@ -22,33 +22,40 @@ button, input, select { font:inherit; color:inherit; }
 header { flex:none; background:var(--ink); border-bottom:1px solid var(--line); padding:10px 16px; }
 .top { display:flex; align-items:center; gap:10px; min-height:30px; }
 .mark { font:16px/16px "Burrow Pixel", monospace; color:var(--gold); text-shadow:2px 2px 0 #b86a1e; letter-spacing:1px; }
-/* the pane's own bar: what is open, its buttons */
-.bar { flex:none; display:flex; align-items:center; gap:10px; min-height:30px; padding:6px 14px; border-bottom:1px solid var(--line); }
-.bar .t { flex:1; min-width:0; display:flex; align-items:baseline; gap:12px; }
-.bar h1 { margin:0; font-size:14px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-#as { color:var(--dim); white-space:nowrap; }
-#pane.empty .bar { display:none; }
-
-/* the room keeps its width (room.js: two pixels a dot); what is open takes the rest */
+/* the room keeps its width (room.js: two pixels a dot); what is open takes the rest: tiles (tiles.js),
+   each a border with a thicker band on top for its name and buttons, the stars between them */
 #app { flex:1; min-height:0; display:flex; }
 #roomwrap { flex:none; height:100%; overflow:hidden; }
 #room { display:block; image-rendering:pixelated; image-rendering:crisp-edges; touch-action:none; }
-#pane { flex:1; min-width:0; display:flex; flex-direction:column; background:var(--ink); position:relative; box-shadow:inset 2px 0 0 transparent; }
-#pane.hl { box-shadow:inset 2px 0 0 var(--me); }
-#pane.empty { background:transparent; }
-#pane.empty #term { visibility:hidden; }
-#pane.drop { outline:2px solid var(--me); outline-offset:-2px; }
-#term { flex:1; min-height:0; padding:10px 0 0 14px; }
-#term .xterm-viewport { background:transparent !important; }
-#term .xterm-viewport::-webkit-scrollbar { width:8px; }
-#term .xterm-viewport::-webkit-scrollbar-thumb { background:var(--ink2); }
+#pane { flex:1; min-width:0; position:relative; overflow:hidden; }
+.tile { position:absolute; display:flex; flex-direction:column; background:var(--ink); border:1px solid var(--line); overflow:hidden; }
+.tile.hl, .tile.drop { border-color:var(--me); }
+.tile.lift { opacity:.6; }
+.tbar { flex:none; display:flex; align-items:center; gap:8px; height:22px; padding:0 8px 0 6px; background:var(--line); font-size:12px; line-height:22px; color:var(--text); cursor:grab; user-select:none; }
+.tile.hl .tbar, .tile.drop .tbar { background:var(--me); color:var(--ink); }
+.tbar button { flex:none; background:none; border:0; padding:0 3px; color:inherit; cursor:pointer; font:inherit; line-height:22px; opacity:.75; }
+.tbar button:hover, .tbar .tpin.on { opacity:1; }
+.tbar .tpin.on { color:var(--gold); }
+.tile.hl .tbar .tpin.on { color:var(--ink); }
+.tname { font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; margin-left:4px; }
+.tas { color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+.tile.hl .tas, .tile.drop .tas { color:var(--ink); opacity:.7; }
+.tile:not(.focus) .tname { opacity:.8; }
+.tbody { flex:1; min-height:0; position:relative; display:flex; flex-direction:column; }
+.tdrop { position:absolute; background:rgba(217,119,87,.2); border:1px solid var(--me); pointer-events:none; z-index:3; }
+.tgap { position:absolute; z-index:2; }
+.tgap.row { cursor:col-resize; }
+.tgap.col { cursor:row-resize; }
+.term { flex:1; min-height:0; padding:8px 0 0 10px; }
+.term .xterm-viewport { background:transparent !important; }
+.term .xterm-viewport::-webkit-scrollbar { width:8px; }
+.term .xterm-viewport::-webkit-scrollbar-thumb { background:var(--ink2); }
 
-/* the chess table: pair's board and moves (room.css), in the pane */
+/* the chess table: pair's board and moves (room.css), in a tile */
 :root { --code:#100c19; }
-#pane.chessing #term { display:none; }
-#chess { flex:1; overflow-y:auto; padding:18px 22px; }
-#chess h2 { margin:0 0 10px; font-size:14px; color:var(--me); }
-#chess .err { margin:0 0 8px; }
+.chess { flex:1; overflow-y:auto; padding:18px 22px; }
+.chess h2 { margin:0 0 10px; font-size:14px; color:var(--me); }
+.chess .err { margin:0 0 8px; }
 .pic { position:relative; flex:none; display:inline-block; }
 .pic img, img.sm { image-rendering:pixelated; display:block; }
 img.sm { width:20px; height:20px; }
@@ -101,7 +108,7 @@ dialog code { color:var(--text); }
 .field:focus { border-color:var(--me); }
 .err { color:var(--me); min-height:18px; margin-top:8px; white-space:pre-wrap; }
 
-/* ping-pong: pair's card (room.css), in the pane */
+/* ping-pong: pair's card (room.css), in a tile */
 .pong { flex:1; overflow-y:auto; padding:18px 22px; }
 .pong[hidden] { display:none; }
 .pg-card { max-width:680px; }

@@ -7,6 +7,7 @@
 <script src="/pixel.js"></script>
 <script src="/sprites.js"></script>
 <script src="/room.js"></script>
+<script src="/tiles.js"></script>
 <script src="/chessboard.js"></script>
 <script src="/pong.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js"></script>
@@ -14,7 +15,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css">
 <link rel="stylesheet" href="/burrow.css">
 </head>
-<body class="empty">
+<body>
 <header>
   <div class="top">
     <span class="mark">BURROW</span>
@@ -22,22 +23,13 @@
 </header>
 <main id="app">
   <div id="roomwrap"><canvas id="room"></canvas></div>
-  <section id="pane" class="empty">
-    <div class="bar">
-      <div class="t"><h1 id="who"></h1><span id="as"></span></div>
-      <button id="reconnect" class="btn" hidden>reconnect</button>
-      <button id="close" class="btn" title="close (the session keeps running)">✕</button>
-    </div>
-    <div id="term"></div>
-    <div id="chess" class="side" hidden></div>
-    <div id="pong" class="pong" hidden></div>
-  </section>
+  <section id="pane" class="empty"></section>
 </main>
 
 <dialog id="dirDialog">
   <form method="dialog">
     <h2>add a project</h2>
-    <p>A working directory<span class="on"> on <b class="machine"></b></span>. Its bots will sit at one desk, and it stays when they're gone.</p>
+    <p>A working directory<span class="on"> on <b class="machine"></b></span>. Its bots will sit at one desk.</p>
     <select class="field" name="m"></select>
     <input class="field" name="dir" placeholder="~/projects/something" autocomplete="off" spellcheck="false">
     <div class="err"></div>
@@ -54,48 +46,54 @@
 </dialog>
 
 <script>
-// burrow's page: the room (room.js) on the left, always the same, every machine's bots in it; the
-// session of the bot you clicked on the right (`claude attach`, in xterm.js, through server.py), an
-// empty screen when none is open. Closing it only detaches; so does a click on the room's floor, and
-// the pane closes itself when the attach ends (`exit` in the session). The pointer on either side
-// lights up the other: the bot and its session. You are in the room as well, so it knows what you do:
-// which session is open, what you type, whether the window is left alone.
-let state = null, open = null;             // open: {m, id}, a bot (its machine, its id)
+// burrow's page: the room (room.js) on the left, always the same, every machine's bots in it; on the
+// right what you opened, as tiles (tiles.js): a bot's session (`claude attach`, in xterm.js, through
+// server.py), the chess board, the ping-pong table. A click on a bot opens it in the focused tile,
+// unless that one is pinned (its • button) or you hold shift: then the old tile stays and the new one
+// splits it. ✕ closes a tile; so does a click on the room's floor (the unpinned ones), and a session's
+// pane closes itself when the attach ends (`exit`). The pointer on either side lights up the other: the
+// bot and its tile. You are in the room as well, so it knows what you do: which session has the focus,
+// what you type, whether the window is left alone.
+let state = null;
 let blurAt = document.hasFocus() && !document.hidden ? 0 : performance.now();
 const $ = (s) => document.querySelector(s);
 const api = async (path, body) => (await fetch(path, { method: "POST", body: JSON.stringify(body || {}) })).json();
 const machine = (id) => state && state.machines.find((m) => m.id === id);
 const byId = (id) => state && state.bots.find((b) => b.id === id);
 
+const tiles = startTiles($("#pane"));
+const botTiles = () => tiles.all().filter((t) => t.kind === "bot");
+const tileOf = (kind, id) => tiles.all().find((t) => t.kind === kind && (!id || t.id === id));
+const focusedBot = () => { const t = tiles.focused(); return t && t.kind === "bot" ? t.id : null; };
+let hoverTile = null;                      // the tile the pointer is on
+
 const room = startRoom($("#room"), {
   state: () => state,
-  open: () => open && open.id,
-  chess: () => (playing && state && state.chess && !state.chess.result ? state.chess : null),
-  pong: () => (pongOn ? pongUI.playing() : null),
+  open: focusedBot,
+  opens: () => botTiles().map((t) => t.id),
+  chess: () => (tileOf("chess") && state && state.chess && !state.chess.result ? state.chess : null),
+  pong: () => { const t = tileOf("pong"); return t ? t.ui.playing() : null; },
   away: () => (blurAt ? (performance.now() - blurAt) / 1000 : 0),
-  hl: () => paneHover && open ? open.id : null,
-  hover: (id) => $("#pane").classList.toggle("hl", !!open && open.id === id),
+  hl: () => (hoverTile && hoverTile.kind === "bot" ? hoverTile.id : null),
+  hover: (id) => { for (const t of botTiles()) t.el.classList.toggle("hl", t.id === id); },
   act,
 });
-let paneHover = false;
-$("#pane").addEventListener("pointerenter", () => { paneHover = true; room.draw(); });
-$("#pane").addEventListener("pointerleave", () => { paneHover = false; room.draw(); });
 
 async function act(a) {
   const b = a.id && byId(a.id);
   if (a.kind === "addMachine") ask($("#machineDialog"));
   else if (a.kind === "addDir") ask($("#dirDialog"));
-  else if (a.kind === "open" && b) openBot(b.m, b.id);
-  else if (a.kind === "chess") openChess();
-  else if (a.kind === "pong") openPong();
-  else if (a.kind === "keep" || a.kind === "forget") await api("/api/" + a.kind, { unit: a.unit });
+  else if (a.kind === "open" && b) openBot(b.m, b.id, a.shift);
+  else if (a.kind === "chess") openGame("chess", a.shift);
+  else if (a.kind === "pong") openGame("pong", a.shift);
+  else if (a.kind === "forget") { const r = await api("/api/forget", { unit: a.unit }); if (r.error) note(r.error); }
   else if (a.kind === "layout") await api("/api/layout", { layout: a.layout });
   else if (a.kind === "stop" && b) stopBot(b.m, b.id);
-  else if (a.kind === "blank") { closeBot(); closeChess(); closePong(); }
-  else if (a.kind === "drop" && b) { openBot(b.m, b.id); for (const f of a.files) await hand(f); }
+  else if (a.kind === "blank") { for (const t of tiles.all()) if (!t.pinned) closeTile(t); }
+  else if (a.kind === "drop" && b) { const t = openBot(b.m, b.id, a.shift); for (const f of a.files) await hand(f, t); }
   else if (a.kind === "spawn") {
     const r = await api("/api/spawn", { m: a.m, dir: a.dir });
-    if (r.error) note(r.error); else openBot(a.m, r.id);
+    if (r.error) note(r.error); else openBot(a.m, r.id, a.shift);
   }
 }
 function note(msg) {                       // trouble goes on the wall, in red
@@ -106,11 +104,12 @@ function note(msg) {                       // trouble goes on the wall, in red
 const es = new EventSource("/events");
 es.addEventListener("state", (e) => {
   state = JSON.parse(e.data);
-  if (open) showWho();
-  if (playing) showChess();
+  for (const t of botTiles()) showWho(t);
+  const ch = tileOf("chess");
+  if (ch) showChess(ch);
   // a bot that gets work, or a question for you, leaves the ping-pong table
-  const pp = pongOn && pongUI.playing();
-  if (pp && !state.bots.some((b) => b.id === pp.id && !b.busy && !b.waiting)) pongUI.left();
+  const pg = tileOf("pong"), pp = pg && pg.ui.playing();
+  if (pp && !state.bots.some((b) => b.id === pp.id && !b.busy && !b.waiting)) pg.ui.left();
   room.draw();
 });
 es.addEventListener("talk", (e) => { const t = JSON.parse(e.data); room.talk(t.from, t.to); });
@@ -148,86 +147,107 @@ for (const d of [$("#dirDialog"), $("#machineDialog")]) {
   });
 }
 
-// ---- a session: the real claude TUI, attached over a websocket
+// ---- tiles: what every one has
+function makeTile(kind, id) {
+  const t = newTile();
+  t.kind = kind; t.id = id;
+  t.el.querySelector(".tx").onclick = () => closeTile(t);
+  t.el.querySelector(".tpin").onclick = () => t.pin(!t.pinned);
+  t.el.addEventListener("pointerenter", () => { hoverTile = t; room.draw(); });
+  t.el.addEventListener("pointerleave", () => { if (hoverTile === t) { hoverTile = null; room.draw(); } });
+  return t;
+}
+// where a new tile goes: in place of the focused one, unless that is pinned or shift is held (then
+// it stays, pinned, and the new one splits it)
+function makeRoom(retain) {
+  const cur = tiles.focused();
+  if (!cur) return;
+  if (retain) cur.pin(true);
+  else if (!cur.pinned) closeTile(cur);
+}
+function closeTile(t) {
+  if (t.kind === "bot" && t.ws) { const s = t.ws; t.ws = null; s.close(); }
+  if (t.kind === "pong" && !t.body.hidden) t.ui.close();
+  if (t.kind === "bot") t.term.dispose();
+  if (hoverTile === t) hoverTile = null;
+  tiles.remove(t);
+  $("#pane").classList.toggle("empty", !tiles.all().length);
+  room.draw();
+}
+
+// ---- a session: the real claude TUI, attached over a websocket, one terminal a tile
 const DARK = { background: "#140f1e", foreground: "#e6e1ef", cursor: "#e6e1ef", selectionBackground: "#d9775766",
   black: "#2a2140", red: "#e8402a", green: "#5fcf4a", yellow: "#f2a531", blue: "#4a76b8", magenta: "#9a74d6", cyan: "#2fa087", white: "#c2c9d9",
   brightBlack: "#5d6280", brightRed: "#ff6b5a", brightGreen: "#8ee07a", brightYellow: "#ffe27a", brightBlue: "#8fc0e8", brightMagenta: "#c4a8f0", brightCyan: "#7fdcb0", brightWhite: "#f4f6fb" };
 const LIGHT = { background: "#fbf8f1", foreground: "#140f1e", cursor: "#140f1e", selectionBackground: "#d9775755",
   black: "#140f1e", red: "#b8321f", green: "#2d8a3a", yellow: "#a8650f", blue: "#2c4580", magenta: "#5a3f94", cyan: "#1b6660", white: "#8b93ad",
   brightBlack: "#5d6280", brightRed: "#e8402a", brightGreen: "#3f9e2f", brightYellow: "#b86a1e", brightBlue: "#4a76b8", brightMagenta: "#9a74d6", brightCyan: "#2fa087", brightWhite: "#3b3a55" };
-const term = new Terminal({ fontFamily: '"Burrow Mono", "JetBrains Mono", Menlo, monospace', fontSize: 13, lineHeight: 1.15,
-  cursorBlink: true, allowProposedApi: true, theme: DARK, scrollback: 5000, macOptionIsMeta: true });
-const fit = new FitAddon.FitAddon();
-term.loadAddon(fit);
-let termOpened = false, ws = null;
-const enc = new TextEncoder();
-term.onData((d) => { if (ws && ws.readyState === 1) { ws.send(enc.encode(d)); room.typed(); } });
-// shift+enter is a new line, as in the Rust pane: ESC CR, which claude reads as meta+enter (xterm.js sends a bare CR)
-term.attachCustomKeyEventHandler((e) => {
-  if (e.key !== "Enter" || !e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return true;
-  e.preventDefault();
-  if (e.type === "keydown") term.input("\x1b\r");
-  return false;
-});
-term.onBinary((d) => ws && ws.readyState === 1 && ws.send(Uint8Array.from(d, (c) => c.charCodeAt(0))));
-// `exit` (or ← on an empty prompt) detaches: `claude attach` then shows Claude Code's agent view
-// (its prompt reads "describe a task for a new session"). The room is that view here, so the pane
-// closes instead. Ctrl+Z ends the attach itself, and the pane closes with it
-const dec = new TextDecoder();
-let tail = "";
-const agentView = (b) => {
-  tail = (tail + dec.decode(b, { stream: true })).replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "").slice(-300);
-  return /describe a task for a new session|enter to return · space to reply/.test(tail);
-};
-term.onResize(({ cols, rows }) => ws && ws.readyState === 1 && ws.send(JSON.stringify({ size: [cols, rows] })));
+const enc = new TextEncoder(), dec = new TextDecoder();
 
-function showWho() {
-  const b = byId(open.id), m = machine(open.m);
-  $("#who").textContent = b ? b.name : open.id;
-  $("#as").textContent = m ? "on " + m.name : "";
-  term.options.theme = m && m.light ? LIGHT : DARK;
+function showWho(t) {
+  const b = byId(t.id), m = machine(t.m);
+  t.name(b ? b.name : t.id, m ? "on " + m.name : "");
+  t.term.options.theme = m && m.light ? LIGHT : DARK;
 }
-function openBot(mid, id) {
-  if (open && open.m === mid && open.id === id) { term.focus(); return; }
-  closeBot(); closeChess(); closePong();
-  open = { m: mid, id };
-  $("#pane").classList.remove("empty"); document.body.classList.remove("empty");
-  if (!termOpened) { term.open($("#term")); termOpened = true; }
-  term.reset(); tail = "";
-  showWho();
-  requestAnimationFrame(() => { fit.fit(); connect(); term.focus(); });
+function openBot(mid, id, retain) {
+  const have = tileOf("bot", id);
+  if (have) { tiles.focus(have); have.term.focus(); return have; }
+  makeRoom(retain);
+  const t = makeTile("bot", id);
+  t.m = mid; t.ws = null; t.typed = []; t.tail = "";
+  const term = t.term = new Terminal({ fontFamily: '"Burrow Mono", "JetBrains Mono", Menlo, monospace', fontSize: 13, lineHeight: 1.15,
+    cursorBlink: true, allowProposedApi: true, theme: DARK, scrollback: 5000, macOptionIsMeta: true });
+  const fit = new FitAddon.FitAddon();
+  term.loadAddon(fit);
+  term.onData((d) => { if (t.ws && t.ws.readyState === 1) { t.ws.send(enc.encode(d)); room.typed(); } });
+  // shift+enter is a new line, as in the Rust pane: ESC CR, which claude reads as meta+enter (xterm.js sends a bare CR)
+  term.attachCustomKeyEventHandler((e) => {
+    if (e.key !== "Enter" || !e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return true;
+    e.preventDefault();
+    if (e.type === "keydown") term.input("\x1b\r");
+    return false;
+  });
+  term.onBinary((d) => t.ws && t.ws.readyState === 1 && t.ws.send(Uint8Array.from(d, (c) => c.charCodeAt(0))));
+  term.onResize(({ cols, rows }) => t.ws && t.ws.readyState === 1 && t.ws.send(JSON.stringify({ size: [cols, rows] })));
+  const el = document.createElement("div");
+  el.className = "term";
+  t.body.appendChild(el);
+  tiles.add(t);
+  $("#pane").classList.remove("empty");
+  term.open(el);
+  showWho(t);
+  new ResizeObserver(() => { if (t.ws) fit.fit(); }).observe(el);
+  requestAnimationFrame(() => { fit.fit(); connect(t, term); term.focus(); });
+  return t;
 }
-function connect() {
-  $("#reconnect").hidden = true;
-  const s = new WebSocket(`ws://${location.host}/term?m=${encodeURIComponent(open.m)}&id=${encodeURIComponent(open.id)}`);
+// `exit` (or ← on an empty prompt) detaches: `claude attach` then shows Claude Code's agent view
+// (its prompt reads "describe a task for a new session"). The room is that view here, so the tile
+// closes instead. Ctrl+Z ends the attach itself, and the tile closes with it
+const agentView = (t, b) => {
+  t.tail = (t.tail + dec.decode(b, { stream: true })).replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "").slice(-300);
+  return /describe a task for a new session|enter to return · space to reply/.test(t.tail);
+};
+function connect(t, term) {
+  const s = new WebSocket(`ws://${location.host}/term?m=${encodeURIComponent(t.m)}&id=${encodeURIComponent(t.id)}`);
   s.binaryType = "arraybuffer";
   const since = performance.now();
-  s.onopen = () => { s.send(JSON.stringify({ size: [term.cols, term.rows] })); setTimeout(() => { for (const t of typed.splice(0)) if (ws === s) s.send(enc.encode(t)); }, 1000); };
-  s.onmessage = (e) => { const b = new Uint8Array(e.data); if (agentView(b)) closeBot(); else term.write(b); };
-  // the attach ended: `exit` in the session, or the session stopped. The pane goes with it (the
+  s.onopen = () => { s.send(JSON.stringify({ size: [term.cols, term.rows] })); setTimeout(() => { for (const x of t.typed.splice(0)) if (t.ws === s) s.send(enc.encode(x)); }, 1000); };
+  s.onmessage = (e) => { const b = new Uint8Array(e.data); if (agentView(t, b)) closeTile(t); else term.write(b); };
+  // the attach ended: `exit` in the session, or the session stopped. The tile goes with it (the
   // session keeps running if it does). One that ends at once failed to attach: it stays, with what
-  // claude said, and a button to try again
-  s.onclose = () => { if (ws === s) { ws = null; if (performance.now() - since > 3000) closeBot(); else $("#reconnect").hidden = false; } };
-  ws = s;
-}
-function closeBot() {
-  if (ws) { const s = ws; ws = null; s.close(); }
-  open = null;
-  $("#who").textContent = ""; $("#as").textContent = "";
-  $("#pane").classList.add("empty"); $("#pane").classList.remove("hl"); document.body.classList.add("empty");
-  room.draw();
+  // claude said, until you close it
+  s.onclose = () => { if (t.ws === s) { t.ws = null; if (performance.now() - since > 3000) closeTile(t); } };
+  t.ws = s;
 }
 async function stopBot(mid, id) {
-  if (open && open.m === mid && open.id === id) closeBot();
+  const t = tileOf("bot", id);
+  if (t) closeTile(t);
   const r = await api("/api/stop", { m: mid, id });
   if (r.error) note(r.error);
 }
-$("#close").onclick = () => { closeBot(); closeChess(); closePong(); };
-$("#reconnect").onclick = () => { term.reset(); connect(); term.focus(); };
-new ResizeObserver(() => { if (open) fit.fit(); }).observe($("#term"));
 
-// ---- the chess table: pair's board in the pane, against one of the idle bots
-let playing = false;                       // the chess table is open
+// ---- the chess table and the ping-pong table: pair's board and game, each a tile, against one of
+// the idle bots (one game of each for the room)
 const projectColor = (unit) => room.color(unit);
 const botFace = (p) => {
   const b = byId(p.id);
@@ -235,78 +255,67 @@ const botFace = (p) => {
 };
 const idleBots = () => ((state && state.bots) || []).filter((b) => !b.busy && !b.waiting)
   .map((b) => ({ id: b.id, name: b.name, kind: "agent", present: true, color: projectColor(b.unit) }));
-const chessUI = chessPanel($("#chess"), {
-  post: async (body) => { const r = await api("/api/chess", body); return { ok: !r.error, json: async () => r }; },
-  me: () => "you",
-  people: idleBots,
-  face: (p) => p.id === "you" ? "" : `<span class="pic"><img src="${botFace(p)}" alt=""></span>`,
-  small: (p) => `<img class="sm" src="${botFace(p)}" alt="">`,
-});
-function openChess() {
-  closeBot(); closePong();
-  playing = true;
-  $("#pane").classList.remove("empty"); document.body.classList.remove("empty");
-  $("#pane").classList.add("chessing"); document.body.classList.add("chessing"); $("#chess").hidden = false;
-  showChess();
+function openGame(kind, retain) {
+  const have = tileOf(kind);
+  if (have) { tiles.focus(have); return have; }
+  makeRoom(retain);
+  const t = makeTile(kind);
+  t.body.classList.add(kind);
+  if (kind === "chess") {
+    t.ui = chessPanel(t.body, {
+      post: async (body) => { const r = await api("/api/chess", body); return { ok: !r.error, json: async () => r }; },
+      me: () => "you",
+      people: idleBots,
+      face: (p) => p.id === "you" ? "" : `<span class="pic"><img src="${botFace(p)}" alt=""></span>`,
+      small: (p) => `<img class="sm" src="${botFace(p)}" alt="">`,
+    });
+    tiles.add(t);
+    showChess(t);
+  } else {
+    t.ui = pongTable(t.body, {
+      me: () => "you", people: idleBots,
+      small: (p) => `<img class="sm" src="${pixelAvatar(p.id, "agent", p.color)}" alt="">`,
+      post: async () => ({}), api: () => "",
+    });
+    tiles.add(t);
+    t.name("ping-pong");
+    t.ui.open();
+    // its own ✕ (or Esc) closes the card: then the tile goes
+    new MutationObserver(() => { if (t.body.hidden && tileOf("pong") === t) closeTile(t); }).observe(t.body, { attributes: true, attributeFilter: ["hidden"] });
+  }
+  $("#pane").classList.remove("empty");
+  room.draw();
+  return t;
 }
-function showChess() {
+function showChess(t) {
   const v = state.chess;
   const it = v && (v.white.id === "you" ? v.black : v.white);
   if (it) { it.color = projectColor((byId(it.id) || {}).unit || ""); }
   if (v) v.white.color = v.white.color || "#d97757", v.black.color = v.black.color || "#d97757";
-  $("#who").textContent = it ? "chess with " + it.name : "chess";
-  $("#as").textContent = "";
-  chessUI.update(v);
-}
-function closeChess() {
-  if (!playing) return;
-  playing = false; $("#chess").hidden = true; $("#pane").classList.remove("chessing"); document.body.classList.remove("chessing");
-  $("#pane").classList.add("empty"); document.body.classList.add("empty");
-  $("#who").textContent = ""; $("#as").textContent = "";
+  t.name(it ? "chess with " + it.name : "chess");
+  t.ui.update(v);
 }
 
-// ---- the ping-pong table: pair's game in the pane, against one of the idle bots
-let pongOn = false;
-const pongUI = pongTable($("#pong"), {
-  me: () => "you", people: idleBots,
-  small: (p) => `<img class="sm" src="${pixelAvatar(p.id, "agent", p.color)}" alt="">`,
-  post: async () => ({}), api: () => "",
-});
-function openPong() {
-  closeBot(); closeChess();
-  pongOn = true;
-  $("#pane").classList.remove("empty"); $("#pane").classList.add("chessing"); document.body.classList.add("chessing"); document.body.classList.remove("empty");
-  $("#who").textContent = "ping-pong"; $("#as").textContent = "";
-  pongUI.open();
-}
-function closePong() {
-  if (!pongOn) return;
-  pongOn = false;
-  if (!$("#pong").hidden) pongUI.close();
-  $("#pane").classList.add("empty"); $("#pane").classList.remove("chessing"); document.body.classList.remove("chessing"); document.body.classList.add("empty");
-  $("#who").textContent = ""; $("#as").textContent = "";
-}
-// its own ✕ (or Esc) closes the card: then the pane is empty again
-new MutationObserver(() => { if ($("#pong").hidden && pongOn) closePong(); }).observe($("#pong"), { attributes: true, attributeFilter: ["hidden"] });
-
-// drop a file on the session: its path gets typed in, as in a terminal (copied over first for a remote machine)
-const pane = $("#pane");
-pane.addEventListener("dragover", (e) => { e.preventDefault(); pane.classList.add("drop"); });
-pane.addEventListener("dragleave", () => pane.classList.remove("drop"));
-const typed = [];                          // for a session still connecting
-async function hand(file) {
-  const o = open;
-  const r = await (await fetch(`/api/upload?m=${encodeURIComponent(o.m)}&name=${encodeURIComponent(file.name)}`, { method: "POST", body: file })).json();
+// drop a file on a session: its path gets typed in, as in a terminal (copied over first for a remote machine)
+async function hand(file, t) {
+  const r = await (await fetch(`/api/upload?m=${encodeURIComponent(t.m)}&name=${encodeURIComponent(file.name)}`, { method: "POST", body: file })).json();
   if (r.error) return note(r.error);
-  const t = (/[\s'"\\]/.test(r.path) ? "'" + r.path.replace(/'/g, "'\\''") + "'" : r.path) + " ";
-  if (ws && ws.readyState === 1 && open === o) ws.send(enc.encode(t)); else if (open === o) typed.push(t);
-  term.focus();
+  const x = (/[\s'"\\]/.test(r.path) ? "'" + r.path.replace(/'/g, "'\\''") + "'" : r.path) + " ";
+  if (t.ws && t.ws.readyState === 1) t.ws.send(enc.encode(x)); else t.typed.push(x);
+  t.term.focus();
 }
+const pane = $("#pane");
+const tileAt = (e) => { const el = e.target.closest && e.target.closest(".tile"); return el && botTiles().find((t) => t.el === el); };
+pane.addEventListener("dragover", (e) => { const t = tileAt(e); if (!t) return; e.preventDefault(); for (const o of botTiles()) o.el.classList.toggle("drop", o === t); });
+pane.addEventListener("dragleave", (e) => { if (!pane.contains(e.relatedTarget)) for (const o of botTiles()) o.el.classList.remove("drop"); });
 pane.addEventListener("drop", async (e) => {
-  e.preventDefault(); pane.classList.remove("drop");
-  if (open) for (const file of e.dataTransfer.files) await hand(file);
+  const t = tileAt(e);
+  for (const o of botTiles()) o.el.classList.remove("drop");
+  if (!t) return;
+  e.preventDefault();
+  for (const file of e.dataTransfer.files) await hand(file, t);
 });
-addEventListener("keydown", (e) => { if (e.key === "Escape" && document.activeElement === document.body) { closeBot(); closeChess(); closePong(); } });
+addEventListener("keydown", (e) => { if (e.key === "Escape" && document.activeElement === document.body) { const t = tiles.focused(); if (t) closeTile(t); } });
 </script>
 </body>
 </html>
