@@ -273,9 +273,14 @@ visibility, let's do all the interfacing with the main desk with the computer sc
 - The fireplace stands on the floor (default between the printer and the armchair), drawn like the rest.
 - The `you` dialog is pair's door picker only: ← face →, nothing else, no text. No rounded corners anywhere.
 - Dragging furniture snaps to whole dots while it moves ("a bit of jittering should be visible"), as pair.
-- To try, his question: `?text=mono` letters the room with the terminal's font at the screen's resolution
-  (`MONO`, `DPR` in room.js; the canvas is drawn at devicePixelRatio, the pixel art stays on whole device
-  pixels). Not decided.
+- Lettering: he tried the terminal's font for all of it and did not like it ("still, try to make it a little
+  smaller and/or readable", "or only use the other font for the popups"). So: the canvas is drawn at the
+  screen's resolution (`DPR`); the pixel font stays for what is in the room (plates, the wall) at 3 device
+  pixels a letter pixel instead of 4 (`TS`), a quarter smaller and crisper; the popups (tips, the stop sign)
+  are UI and set in the terminal's font (`label()`, `labelW()`).
+- The body wears what the portrait wears: pair's figure drew the torso in the person's colour whatever the
+  portrait's outfit ("a white shirt in the selector doesn't show up on the full body"); `body()` now reads
+  the torso colours off the portrait's shoulders (pixels (6,19) and (15,19)).
 
 ## Next
 

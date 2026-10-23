@@ -54,6 +54,7 @@ function startRoom(cv, app) {
   const PROJECT = ["#4a76b8", "#e8402a", "#2fa087", "#f2a531", "#9a74d6", "#5fcf4a", "#f06b72", "#8fc0e8"];
   const WALL = 26, SEAT = 18, ADD_W = 30, ROW = 46, LAP = 13, DOOR = 20, NAME = 8;
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const DPR = Math.max(1, Math.round(devicePixelRatio || 1));     // device pixels a CSS pixel: the canvas is drawn at that
   const shade = (hex, k) => "#" + [1, 3, 5].map((i) => Math.min(255, Math.round(parseInt(hex.slice(i, i + 2), 16) * k)).toString(16).padStart(2, "0")).join("");
   const mix = (a, b, k) => "#" + [1, 3, 5].map((i) => { const x = parseInt(a.slice(i, i + 2), 16), y = parseInt(b.slice(i, i + 2), 16); return Math.round(x + (y - x) * k).toString(16).padStart(2, "0"); }).join("");
   const rnd = (a, b) => a + Math.random() * (b - a);
@@ -91,17 +92,21 @@ function startRoom(cv, app) {
     const [k, rows] = g.split(" ");
     F[k] = rows.split("/").map((r) => r.padEnd(3, ".").slice(0, 3)).join("");
   }
-  // to try: ?text=mono letters with the terminal's font instead, drawn at the screen's resolution
-  // (the pixel art stays on its grid: whole device pixels a dot)
-  const MONO = new URLSearchParams(location.search).get("text") === "mono", FONT = '5.2px "Burrow Mono", "JetBrains Mono", Menlo, monospace';
-  const measure = document.createElement("canvas").getContext("2d");
-  const tinyW = (s) => { if (MONO) { measure.font = FONT; return Math.ceil(measure.measureText(s).width); } return Math.max(0, [...s].length * 4 - 1); };
+  // The canvas is drawn at the screen's resolution (DPR device pixels a CSS pixel): the pixel art
+  // stays on its grid of 2 CSS pixels a dot, but the lettering is finer, 3 device pixels a letter
+  // pixel on a retina screen (TS of a dot) instead of 4: a little smaller and crisper, still pixels
+  const TS = DPR >= 2 ? 0.75 : 1;
+  const tinyW = (s) => Math.max(0, ([...s].length * 4 - 1) * TS);
+  // the popups (a name over a bot, a path over a screen, the signs) are UI, not things in the room:
+  // they are set in the terminal's font, at the screen's resolution
+  const FONT = '5.5px "Burrow Mono", "JetBrains Mono", Menlo, monospace', measure = document.createElement("canvas").getContext("2d");
+  const labelW = (s) => { measure.font = FONT; return Math.ceil(measure.measureText(s).width); };
+  function label(ctx, s, x, y, col) { ctx.fillStyle = col; ctx.font = FONT; ctx.textBaseline = "top"; ctx.fillText(s, x, y - 0.4); }
   function tiny(ctx, s, x, y, col) {
     ctx.fillStyle = col;
-    if (MONO) { ctx.font = FONT; ctx.textBaseline = "top"; ctx.fillText(s, x, y - 0.3); return; }
     [...s.toUpperCase()].forEach((ch, i) => {
       const gl = F[ch];
-      if (gl) for (let k = 0; k < 15; k++) if (gl[k] === "#") ctx.fillRect(x + i * 4 + (k % 3), y + Math.floor(k / 3), 1, 1);
+      if (gl) for (let k = 0; k < 15; k++) if (gl[k] === "#") ctx.fillRect(x + (i * 4 + (k % 3)) * TS, y + Math.floor(k / 3) * TS, TS, TS);
     });
   }
 
@@ -140,7 +145,9 @@ function startRoom(cv, app) {
       set(x, y, c);
       if (c === INK) line.add((y + 1) * SW + x + 1);
     }
-    const c0 = human ? color : C.steel3, c1 = human ? shade(color, 0.62) : C.steel1;
+    const at = (x, y) => { const i = (y * 20 + x) * 4, d = f.px; return d[i + 3] < 128 ? null : "#" + [d[i], d[i + 1], d[i + 2]].map((v) => v.toString(16).padStart(2, "0")).join(""); };
+    // a person wears what their portrait wears (a coat is white, a suit grey): its shoulders' colours
+    const c0 = human ? at(6, 19) || color : C.steel3, c1 = human ? (at(15, 19) !== c0 && at(15, 19)) || shade(c0, 0.62) : C.steel1;
     const skin = human ? pixelAvatar.skin(seed) : C.steel3, leg = human ? INK2 : C.steel1, top = cut + 1;
     if (human) rect(9, top, 2, 1, shade(skin, 0.8));
     const t0 = top + (human ? 1 : 0);
@@ -227,7 +234,7 @@ function startRoom(cv, app) {
   // as dense as pair's office: two CSS pixels a dot, a room as wide as pair's margin; as tall as the
   // window lets it be (what stands at the bottom stays at the bottom)
   let W = 256;
-  const K = 2, DPR = new URLSearchParams(location.search).get("text") === "mono" ? Math.max(1, Math.round(devicePixelRatio)) : 1;
+  const K = 2;
   let H = 400, FLOORY = H - 6, DEF = {};
   function defaults() {
     DEF = {
@@ -853,10 +860,10 @@ function startRoom(cv, app) {
     }
     // by its door to be stopped: a click on the sign over it stops it
     for (const f of w.folk.values()) if (f.act.kind === "door" && f.b && Math.hypot(f.x - doorX(f.b.m), f.y - WALL - 3) < 2) {
-      const text = "stop " + f.b.name + "?", tw = tinyW(text), lx = Math.round(Math.min(W - tw - 2, doorX(f.b.m) - 6)), ly = WALL + 7;
+      const text = "stop " + f.b.name + "?", tw = labelW(text), lx = Math.round(Math.min(W - tw - 2, doorX(f.b.m) - 6)), ly = WALL + 7;
       const h = hot(lx - 2, ly - 2, lx + tw + 2, ly + 7, { kind: "stop", id: f.id });
       box(ctx, lx - 2, ly - 2, tw + 4, 9, h ? TERRACOTTA : INK2);
-      tiny(ctx, text, lx, ly, h ? INK : C.steel4);
+      label(ctx, text, lx, ly, h ? INK : C.steel4);
     }
     // the bot under the pointer: its name over its head, and a click opens it
     if (hovered && !moving) {
@@ -865,9 +872,9 @@ function startRoom(cv, app) {
       hots.push({ x0: -1e9, y0: -1e9, x1: 1e9, y1: 1e9, action: b.human ? { kind: "you" } : { kind: "open", id: b.id } });
     }
     if (tip && !held && !moving) {
-      const t = tip.text, tw = tinyW(t), lx = Math.round(Math.max(2, Math.min(W - tw - 2, tip.x - tw / 2))), ly = Math.round(Math.max(WALL + 2, tip.y - 8));
+      const t = tip.text, tw = labelW(t), lx = Math.round(Math.max(2, Math.min(W - tw - 2, tip.x - tw / 2))), ly = Math.round(Math.max(WALL + 2, tip.y - 8));
       box(ctx, lx - 2, ly - 2, tw + 4, 9, INK2);
-      tiny(ctx, t, lx, ly, C.steel4);
+      label(ctx, t, lx, ly, C.steel4);
     }
     const id = hovered && !held ? hovered.b.id : null;
     if (id !== hoverId) { hoverId = id; app.hover(id); }
