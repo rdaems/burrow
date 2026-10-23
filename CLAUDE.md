@@ -265,6 +265,18 @@ visibility, let's do all the interfacing with the main desk with the computer sc
   game starts at once in a dialog over everything (`#gameDialog`, pair's panels inside); closing it resigns.
   pong.js got `start(bot)`. You and the bot walk to the room's table as before.
 
+## His corrections (2026-10-23, late)
+
+- The bubble is only while typing; standing next to the bot is the "session has focus" state.
+- Tiles: 6 px gaps, a 2 px border, the focused tile terracotta like the hovered one (not the bot's colour);
+  no pin. A click replaces the focused tile, shift-click adds one beside it, a click on the floor closes all.
+- The fireplace stands on the floor (default between the printer and the armchair), drawn like the rest.
+- The `you` dialog is pair's door picker only: ← face →, nothing else, no text. No rounded corners anywhere.
+- Dragging furniture snaps to whole dots while it moves ("a bit of jittering should be visible"), as pair.
+- To try, his question: `?text=mono` letters the room with the terminal's font at the screen's resolution
+  (`MONO`, `DPR` in room.js; the canvas is drawn at devicePixelRatio, the pixel art stays on whole device
+  pixels). Not decided.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

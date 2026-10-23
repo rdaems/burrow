@@ -47,15 +47,7 @@
   </form>
 </dialog>
 <dialog id="youDialog">
-  <h2>you</h2>
-  <p>How you look in the room. The face is drawn from a seed, as everyone's; the colour is your clothes.</p>
-  <div class="you">
-    <img id="youFace" alt="">
-    <div>
-      <button class="btn" id="youPrev">◀ face</button><button class="btn" id="youNext">face ▶</button>
-      <div class="swatches" id="youColors"></div>
-    </div>
-  </div>
+  <div class="faces"><button type="button" class="btn" id="youPrev" title="previous face">←</button><span class="face"><img id="youFace" alt="your face"></span><button type="button" class="btn" id="youNext" title="another face">→</button></div>
 </dialog>
 <dialog id="gameDialog" class="game">
   <div class="tbar"><button class="tx" title="close">✕</button><span class="tname" id="gameName"></span></div>
@@ -65,9 +57,9 @@
 <script>
 // burrow's page: the room (room.js) on the left, as wide as you drag the divider; on the right the
 // sessions you opened, as tiles (tiles.js): `claude attach` in xterm.js, through server.py. A click on
-// a bot opens it in the focused tile, unless that one is pinned (its • button) or you hold shift: then
-// the old tile stays and the new one splits it. A bot carried out of the room onto the pane opens where
-// you drop it. ✕ closes a tile; so does a click on the room's floor (the unpinned ones), and a session's
+// a bot opens it in the focused tile, unless you hold shift: then the old tile stays and the new one
+// splits it. A bot carried out of the room onto the pane opens where you drop it. ✕ closes a tile; so
+// does a click on the room's floor (all of them), and a session's
 // tile closes itself when the attach ends (`exit`). The pointer on either side lights up the other: the
 // bot and its tile. A game (chess, ping-pong) opens over everything, against an idle bot, at once.
 // You are in the room as well, so it knows what you do: which session has the focus, what you type,
@@ -111,7 +103,7 @@ async function act(a) {
   else if (a.kind === "forget") { const r = await api("/api/forget", { unit: a.unit }); if (r.error) note(r.error); }
   else if (a.kind === "layout") await api("/api/layout", { layout: a.layout });
   else if (a.kind === "stop" && b) stopBot(b.m, b.id);
-  else if (a.kind === "blank") { for (const t of tiles.all()) if (!t.pinned) closeTile(t); }
+  else if (a.kind === "blank") { for (const t of tiles.all()) closeTile(t); }
   else if (a.kind === "drop" && b) { const t = openBot(b.m, b.id, a.shift); for (const f of a.files) await hand(f, t); }
   else if (a.kind === "spawn") {
     const r = await api("/api/spawn", { m: a.m, dir: a.dir });
@@ -196,20 +188,15 @@ for (const d of [$("#dirDialog"), $("#machineDialog")]) {
   });
 }
 
-// ---- you: how you look (room.json), a dialog off your avatar
-const COLORS = ["#d97757", "#4a76b8", "#e8402a", "#2fa087", "#f2a531", "#9a74d6", "#5fcf4a", "#f06b72", "#8fc0e8", "#c2c9d9"];
+// ---- you: your face, picked as at pair's door (← another face →), kept in room.json
 function askYou() {
-  const d = $("#youDialog"), you = state.you, name = you.name;
-  let seed = you.seed || name, color = you.color || COLORS[0];
-  const show = () => {
-    $("#youFace").src = pixelAvatar(seed, "human", color);
-    $("#youColors").innerHTML = COLORS.map((c) => `<button style="background:${c}" class="${c === color ? "on" : ""}" data-c="${c}" title="${c}"></button>`).join("");
-  };
-  const save = () => { show(); api("/api/you", { seed, color }); };
-  const n = () => { const m = /:(\d+)$/.exec(seed); return m ? +m[1] : 0; };
-  $("#youPrev").onclick = () => { seed = name + ":" + Math.max(0, n() - 1); save(); };
-  $("#youNext").onclick = () => { seed = name + ":" + (n() + 1); save(); };
-  $("#youColors").onclick = (e) => { const b = e.target.closest("button"); if (b) { color = b.dataset.c; save(); } };
+  const d = $("#youDialog"), name = state.you.name;
+  let i = +(/:(-?\d+)$/.exec(state.you.seed || "") || [0, 0])[1];
+  const seed = () => `${name}:${i}`;
+  const show = () => { $("#youFace").src = pixelAvatar(seed(), "human", "#d97757"); };
+  const save = () => { show(); api("/api/you", { seed: seed() }); };
+  $("#youPrev").onclick = () => { i--; save(); };
+  $("#youNext").onclick = () => { i++; save(); };
   show();
   d.showModal();
 }
@@ -219,18 +206,15 @@ function makeTile(kind, id) {
   const t = newTile();
   t.kind = kind; t.id = id;
   t.el.querySelector(".tx").onclick = () => closeTile(t);
-  t.el.querySelector(".tpin").onclick = () => t.pin(!t.pinned);
   t.el.addEventListener("pointerenter", () => { hoverTile = t; room.draw(); });
   t.el.addEventListener("pointerleave", () => { if (hoverTile === t) { hoverTile = null; room.draw(); } });
   return t;
 }
-// where a new tile goes: in place of the focused one, unless that is pinned or shift is held (then
-// it stays, pinned, and the new one splits it)
+// where a new tile goes: in place of the focused one, unless shift is held (then that stays and the
+// new one splits it)
 function makeRoom(retain) {
   const cur = tiles.focused();
-  if (!cur) return;
-  if (retain) cur.pin(true);
-  else if (!cur.pinned) closeTile(cur);
+  if (cur && !retain) closeTile(cur);
 }
 function closeTile(t, keepPlace) {         // keepPlace: another tile took its place in the tree already
   if (t.ws) { const s = t.ws; t.ws = null; s.close(); }
@@ -253,7 +237,6 @@ const enc = new TextEncoder(), dec = new TextDecoder();
 function showWho(t) {
   const b = byId(t.id), m = machine(t.m);
   t.name(b ? b.name : t.id, m ? "on " + m.name : "");
-  t.el.style.setProperty("--c", b ? room.color(b.unit) : "var(--line)");   // the focused tile wears its bot's colour
   t.term.options.theme = m && m.light ? LIGHT : DARK;
 }
 // open a bot's session: in the focused tile's place (see makeRoom), or `at` a previewed spot when

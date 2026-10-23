@@ -91,9 +91,14 @@ function startRoom(cv, app) {
     const [k, rows] = g.split(" ");
     F[k] = rows.split("/").map((r) => r.padEnd(3, ".").slice(0, 3)).join("");
   }
-  const tinyW = (s) => Math.max(0, [...s].length * 4 - 1);
+  // to try: ?text=mono letters with the terminal's font instead, drawn at the screen's resolution
+  // (the pixel art stays on its grid: whole device pixels a dot)
+  const MONO = new URLSearchParams(location.search).get("text") === "mono", FONT = '5.2px "Burrow Mono", "JetBrains Mono", Menlo, monospace';
+  const measure = document.createElement("canvas").getContext("2d");
+  const tinyW = (s) => { if (MONO) { measure.font = FONT; return Math.ceil(measure.measureText(s).width); } return Math.max(0, [...s].length * 4 - 1); };
   function tiny(ctx, s, x, y, col) {
     ctx.fillStyle = col;
+    if (MONO) { ctx.font = FONT; ctx.textBaseline = "top"; ctx.fillText(s, x, y - 0.3); return; }
     [...s.toUpperCase()].forEach((ch, i) => {
       const gl = F[ch];
       if (gl) for (let k = 0; k < 15; k++) if (gl[k] === "#") ctx.fillRect(x + i * 4 + (k % 3), y + Math.floor(k / 3), 1, 1);
@@ -222,18 +227,18 @@ function startRoom(cv, app) {
   // as dense as pair's office: two CSS pixels a dot, a room as wide as pair's margin; as tall as the
   // window lets it be (what stands at the bottom stays at the bottom)
   let W = 256;
-  const K = 2;
+  const K = 2, DPR = new URLSearchParams(location.search).get("text") === "mono" ? Math.max(1, Math.round(devicePixelRatio)) : 1;
   let H = 400, FLOORY = H - 6, DEF = {};
   function defaults() {
     DEF = {
       meet: [W / 2, WALL + 34], pong: [60, 62], chess: [70, FLOORY - 32], mats: [176, FLOORY - 30],
       coffee: [3, FLOORY], cooler: [36, FLOORY - 1], printer: [W / 2 + 4, FLOORY], armchair: [W - 38, FLOORY],
-      plant0: [W - 11, FLOORY], plant1: [W - 12, 64], board: [W / 2 - 14, 5], window: [W - 40, 4], fire: [W / 2 + 22, 4],
+      plant0: [W - 11, FLOORY], plant1: [W - 12, 64], board: [W / 2 - 14, 5], window: [W - 40, 4], fire: [W / 2 + 30, FLOORY],
     };
   }
   // the default places for desks: columns of them, as many as the room is wide
   const SLOTS = () => [104, 150, 196, 242, 288, 334].flatMap((y) => [...Array(Math.max(1, Math.floor((W - 10) / 124)))].map((_, i) => [10 + i * 124, y]));
-  const ON_WALL = new Set(["board", "window", "fire"]);
+  const ON_WALL = new Set(["board", "window"]);
   // what each piece covers, from where it stands
   function foot(key, [x, y], u) {
     if (u) return [x - 2, y - 35, x + u.w + 2, y + 2];
@@ -249,13 +254,13 @@ function startRoom(cv, app) {
       case "armchair": return [x - 6, y - 23, x + 18, y + 1];
       case "board": return [x, y, x + 28, y + 16];
       case "window": return [x, y, x + 21, y + 18];
-      case "fire": return [x, y, x + 26, y + 21];
+      case "fire": return [x, y - 24, x + 26, y + 1];
       default: return [x - 8, y - 31, x + 8, y + 1];     // a plant
     }
   }
   const meets = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
   // keep a piece in the room: on the floor, or along the wall for what hangs there
-  // (on a grid of `step` dots: a half while it is being dragged, so it follows the pointer pixel by pixel)
+  // (on a grid of `step` dots)
   function clampAt(key, at, u, step = 1) {
     const q = (v) => Math.round(v / step) * step;
     const r = foot(key, at, u), [x, y] = at;
@@ -313,7 +318,7 @@ function startRoom(cv, app) {
     const L = {
       desks, add: { x0: addAt[0], y0: addAt[1] - 15, x1: addAt[0] + ADD_W, y1: addAt[1] },
       floorY: FLOORY, board: { x0: bx, y0: by, x1: bx + 28, y1: by + 16 }, window: { x0: wx, y0: wy, x1: wx + 21, y1: wy + 18 },
-      fire: { x0: fx, y0: fy, x1: fx + 26, y1: fy + 21 },
+      fire: { x0: fx, y0: fy - 24, x1: fx + 26, y1: fy },
       meet: xy("meet"), pong: xy("pong"), chess: xy("chess"), mats: [-28, 0, 28].map((d) => ({ x: matsAt.x + d, y: matsAt.y })),
       cooler: xy("cooler"), plants: [xy("plant0"), xy("plant1")], printer: xy("printer"), chair: xy("armchair"),
       coffeeAt: xy("coffee"), floor: { x0: 14, y0: WALL + 8, x1: W - 14, y1: FLOORY - 4 }, placed,
@@ -484,14 +489,14 @@ function startRoom(cv, app) {
     switch (act.kind) {
       case "with": {
         // beside the bot you talk to, at its desk (it sits down for you): right of its chair,
-        // unless another sits there, then in front of it. Talking all the while
+        // unless another sits there, then in front of it (the bubble is yours while you type)
         const g = folk.get(act.to), gs = L.seat(act.to);
         if (!g) { f.act = rest(); break; }
         const seated = g.legs === "sit" && !g.lying, at = gs || g;
         const taken = seated && others.some((h) => h !== g && h.legs === "sit" && Math.abs(h.x - (at.x + SEAT)) < 4 && Math.abs(h.y - at.y) < 4);
         const spot = g.lying ? { x: g.x + 16, y: g.y + 1 } : taken ? { x: at.x + 2, y: at.y + 13 } : { x: at.x + 20, y: at.y + 1 };
         act.there = walk(f, spot, 36, dt);
-        if (act.there) { f.dir = spot.x > g.x ? -1 : spot.x < g.x ? 1 : -1; f.arms = "down"; if (f.chat <= 0) f.chat = 1.5; }
+        if (act.there) { f.dir = spot.x > g.x ? -1 : spot.x < g.x ? 1 : -1; f.arms = "down"; }
         break;
       }
       case "desk":
@@ -694,7 +699,7 @@ function startRoom(cv, app) {
 
   function draw() {
     const ctx = cv.getContext("2d");
-    ctx.setTransform(2, 0, 0, 2, 0, 0);      // drawn in dots; the canvas has two pixels a dot, for dragging
+    ctx.setTransform(2 * DPR, 0, 0, 2 * DPR, 0, 0);      // drawn in dots; the canvas has two pixels a dot, for dragging
     ctx.imageSmoothingEnabled = false;
     const s = app.state();
     hots = []; tip = null;
@@ -758,14 +763,6 @@ function startRoom(cv, app) {
     if (trouble) { const nx = wallFrom(); tiny(ctx, clip(trouble, W - 24 - nx), nx, 18, RED); }
     else drawBoard(ctx, L.board, w);
     drawWindow(ctx, L.window);
-    {
-      // the fireplace: a desk held over it is about to burn (the fire flares); a desk with bots can't
-      const feeding = moving && inFire(L, moving.key, moving.at, moving.u);
-      drawFire(ctx, L.fire, T, !!feeding);
-      const fd = feeding && L.desks.find((d) => d.key === moving.key);
-      if (fd) tip = { text: fd.seats.length ? fd.label + " has bots" : "burn " + fd.label, x: L.fire.x0 + 13, y: L.fire.y1 + 10 };
-      else if (!moving && over(L.fire.x0, L.fire.y0, L.fire.x1, L.fire.y1)) tip = { text: "a desk dragged in here burns", x: L.fire.x0 + 13, y: L.fire.y1 + 10 };
-    }
     // a bot and its seat at its project's desk are one thing: where the bot is only says what it
     // does. The pointer on either lights up both (and its session), and a click on either opens it
     if (hoverId) hl.add(hoverId);
@@ -807,6 +804,13 @@ function startRoom(cv, app) {
     const job = [...w.folk.values()].find((f) => f.act.kind === "print" && f.act.stage === 1);
     items.push([L.printer.y, () => drawPrinter(ctx, L.printer, job && job.act.wait)]);
     items.push([L.chair.y - 0.5, () => drawArmchair(ctx, L.chair)]);
+    {
+      // the fireplace: a desk held over it is about to burn (the fire flares); a desk with bots can't
+      const feeding = moving && inFire(L, moving.key, moving.at, moving.u), fd = feeding && L.desks.find((d) => d.key === moving.key);
+      items.push([L.fire.y1, () => drawFire(ctx, L.fire, T, !!feeding)]);
+      if (fd) tip = { text: fd.seats.length ? fd.label + " has bots" : "burn " + fd.label, x: L.fire.x0 + 13, y: L.fire.y0 - 2 };
+      else if (!moving && over(L.fire.x0, L.fire.y0, L.fire.x1, L.fire.y1)) tip = { text: "a desk dragged in here burns", x: L.fire.x0 + 13, y: L.fire.y0 - 2 };
+    }
     L.plants.forEach((pl, i) => items.push([pl.y, () => drawPlant(ctx, pl, i)]));
     items.push([L.pong.y - 0.5, () => drawPong(ctx, L.pong, w)]);
     if (hot(L.pong.x - 16, L.pong.y - 17, L.pong.x + 16, L.pong.y, { kind: "pong" })) tip = { text: "ping-pong: play an idle bot", x: L.pong.x, y: L.pong.y - 18 };
@@ -993,27 +997,27 @@ function startRoom(cv, app) {
   }
   // a desk carried to a door is on its way out: a sign over the door asks; a click on it takes
   // the desk away (its bots must be gone first)
-  // the fireplace on the wall: a desk dragged into it burns (its bots must be gone first)
-  const inFire = (L, key, at, u) => key.startsWith("u:") && meets(foot(key, at, u), [L.fire.x0, L.fire.y0, L.fire.x1, L.fire.y1 + 6]);
+  // the fireplace, a brick hearth on the floor seen from above at a slant like the rest: a desk dragged
+  // into it burns (its bots must be gone first)
+  const inFire = (L, key, at, u) => key.startsWith("u:") && meets(foot(key, at, u), [L.fire.x0, L.fire.y0, L.fire.x1, L.fire.y1 + 4]);
   function drawFire(ctx, f, T, feeding) {
-    const { x0, y0 } = f, BR = "#7a4a35", BRD = "#5c3626", MOR = "#3a2622";
-    rect(ctx, x0, y0 + 2, 26, 19, MOR);                                // the surround, bricks in rows
-    for (let j = 0; j < 19; j += 3) for (let i = (j / 3) % 2 ? -2 : 0; i < 26; i += 5) {
-      const w = Math.min(4, 26 - Math.max(0, i)), x = Math.max(0, i);
-      if (w > 0) rect(ctx, x0 + x, y0 + 2 + j, w, 2, ((i + j) / 5) % 3 === 1 ? BRD : BR);
+    const { x0, y0 } = f, BR = "#7a4a35", BRD = "#5c3626", MOR = "#3a2622", TOP = "#8d5a42";
+    slab(ctx, x0, y0, 26, 6, 18, { hi: "#a06b4e", top: TOP, d: MOR, k: "#2a1a1e" });       // the block, bricks on its front
+    for (let j = 0; j < 15; j += 3) for (let i = (j / 3) % 2 ? -2 : 0; i < 24; i += 5) {
+      const x = Math.max(1, i + 1), w = Math.min(4, 25 - x);
+      if (w > 0) rect(ctx, x0 + x, y0 + 7 + j, w, 2, ((i + j) / 5) % 3 === 1 ? BRD : BR);
     }
-    rect(ctx, x0 - 1, y0, 28, 2, WOOD.top); rect(ctx, x0 - 1, y0 + 1, 28, 1, WOOD.d);   // the mantel
-    rect(ctx, x0 + 6, y0 + 7, 14, 14, "#120a0c");                     // the hearth
-    rect(ctx, x0 + 4, y0 + 20, 18, 1, "#2a1a1e");
+    rect(ctx, x0 + 6, y0 + 9, 14, 13, "#120a0c");                     // the hearth
+    rect(ctx, x0 + 5, y0 + 22, 16, 1, "#2a1a1e");
     const k = Math.floor(T * 6) % 3, big = feeding ? 3 : 0;            // the fire, three frames
-    const flame = (x, h, c) => rect(ctx, x0 + x, y0 + 20 - h, 1, h, c);
-    const F = [[7, 3 + k], [8, 6 + (k + 1) % 3], [9, 8 + k], [10, 10 + (k + 2) % 3], [11, 11 + k], [12, 12 + (k + 1) % 3], [13, 13 + k],
-      [14, 11 + (k + 2) % 3], [15, 10 + k], [16, 7 + (k + 1) % 3], [17, 5 + k], [18, 3 + (k + 2) % 3]];
-    for (const [x, h] of F) flame(x, h + big, C.red1);
-    for (const [x, h] of F) flame(x, Math.max(1, Math.round((h + big) * 0.66)), C.gold1);
-    for (const [x, h] of F) if (x > 8 && x < 17) flame(x, Math.max(1, Math.round((h + big) * 0.35)), C.gold2);
-    rect(ctx, x0 + 8, y0 + 19, 10, 1, "#3b2a1e");                     // the logs
-    rect(ctx, x0 + 10, y0 + 18, 6, 1, "#5c3a26");
+    const flame = (x, h, c) => rect(ctx, x0 + x, y0 + 22 - h, 1, h, c);
+    const F = [[7, 2 + k], [8, 4 + (k + 1) % 3], [9, 6 + k], [10, 8 + (k + 2) % 3], [11, 9 + k], [12, 10 + (k + 1) % 3], [13, 11 + k],
+      [14, 9 + (k + 2) % 3], [15, 8 + k], [16, 6 + (k + 1) % 3], [17, 4 + k], [18, 2 + (k + 2) % 3]];
+    for (const [x, h] of F) flame(x, Math.min(12, h + big), C.red1);
+    for (const [x, h] of F) flame(x, Math.max(1, Math.round(Math.min(12, h + big) * 0.66)), C.gold1);
+    for (const [x, h] of F) if (x > 8 && x < 17) flame(x, Math.max(1, Math.round(Math.min(12, h + big) * 0.35)), C.gold2);
+    rect(ctx, x0 + 8, y0 + 21, 10, 1, "#3b2a1e");                     // the logs
+    rect(ctx, x0 + 10, y0 + 20, 6, 1, "#5c3a26");
   }
   function drawBoard(ctx, b, w) {           // Pixel Agents' whiteboard, wiped, and what the host draws on it
     put(ctx, "WHITEBOARD", b.x0 - 2, b.y0 - 8);
@@ -1173,7 +1177,7 @@ function startRoom(cv, app) {
     }
     if (moving) {
       const at = [moving.from[0] + pointer.x - press.x, moving.from[1] + (ON_WALL.has(moving.key) ? 0 : pointer.y - press.y)];
-      moving.at = clampAt(moving.key, at, moving.u, 0.5);
+      moving.at = clampAt(moving.key, at, moving.u);         // on the grid of dots while it moves, as pair: it steps
     }
     if (held) {
       held.x = Math.max(0, Math.min(W, pointer.x)); held.y = Math.max(WALL, Math.min(H, pointer.y + 24)); held.dir = -1;
@@ -1222,7 +1226,7 @@ function startRoom(cv, app) {
     const s = app.state();
     if (s && s.width && !widthSet) W = Math.max(200, Math.min(1200, Math.round(s.width)));
     H = Math.max(200, Math.floor(cv.parentElement.clientHeight / K)); FLOORY = H - 6; defaults();
-    if (cv.width !== W * 2 || cv.height !== H * 2) { cv.width = W * 2; cv.height = H * 2; }
+    if (cv.width !== W * 2 * DPR || cv.height !== H * 2 * DPR) { cv.width = W * 2 * DPR; cv.height = H * 2 * DPR; }
     cv.style.width = W * K + "px"; cv.style.height = H * K + "px";
     cv.parentElement.style.width = W * K + "px";
     draw();

@@ -1,27 +1,25 @@
 // The pane as a tiling window manager lays out windows: each tile a border with a thicker band on top
-// (its name, and on the left its buttons: ✕, and a pin that says it is kept when another is opened).
+// (its name, and on the left its ✕).
 // A new tile splits the focused one along its longer side. Drag a tile by its band onto another: on
 // a side, it goes there (the other makes room); in the middle, they swap places. Drag the gap between
 // two tiles to resize them. Nothing is remembered: the tiles are what is open now.
 //
 // startTiles(el) → { add(tile), remove(tile), focus(tile), focused(), all(), relayout(),
 //   preview(clientX, clientY), hide(), addAt(tile, target), forget(tile) }  (something carried in from outside)
-// newTile() → { el, bar, body, pinned, name(text, sub) }; the caller fills `body` and wires the
-// buttons (`el.querySelector(".tx")`, `.tpin`).
+// newTile() → { el, bar, body, name(text, sub) }; the caller fills `body` and wires the ✕
+// (`el.querySelector(".tx")`).
 
 function newTile() {
   const el = document.createElement("div");
   el.className = "tile";
-  el.innerHTML = `<div class="tbar"><button class="tx" title="close">✕</button><button class="tpin" title="keep this tile when another opens">◦</button>` +
-    `<span class="tname"></span><span class="tas"></span></div><div class="tbody"></div>`;
-  const t = { el, bar: el.querySelector(".tbar"), body: el.querySelector(".tbody"), pinned: false };
+  el.innerHTML = `<div class="tbar"><button class="tx" title="close">✕</button><span class="tname"></span><span class="tas"></span></div><div class="tbody"></div>`;
+  const t = { el, bar: el.querySelector(".tbar"), body: el.querySelector(".tbody") };
   t.name = (text, sub) => { el.querySelector(".tname").textContent = text; el.querySelector(".tas").textContent = sub || ""; };
-  t.pin = (on) => { t.pinned = on; const b = el.querySelector(".tpin"); b.textContent = on ? "•" : "◦"; b.classList.toggle("on", on); };
   return t;
 }
 
 function startTiles(el) {
-  const G = 10, OUT = 10, MIN = 90;          // the gap between tiles, around them, the least a tile gets
+  const G = 6, OUT = 6, MIN = 90;            // the gap between tiles, around them, the least a tile gets
   let root = null, focusedTile = null;       // a node: {leaf: tile, parent} | {dir: "row"|"col", kids: [...], sizes: [...], parent}
   const gaps = [];                           // the draggable gaps, remade on each layout
   const drop = document.createElement("div");
