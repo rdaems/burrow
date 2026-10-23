@@ -26,7 +26,7 @@
   <div id="divider" title="drag: the room's width"></div>
   <section id="pane" class="empty">
     <!-- the view: what is not a session shows here, in place of the tiles, framed like one -->
-    <div id="view" class="tile view focus" hidden>
+    <div id="view" class="tile view" hidden>
       <div class="tbar"><button class="tx" title="close">✕</button><span class="tname"></span><span class="tas"></span></div>
       <div class="vbody">
         <form id="vDir" class="vform" hidden>
@@ -44,6 +44,7 @@
         </form>
         <div id="vYou" class="faces" hidden><button type="button" class="btn" id="youPrev" title="previous face">←</button><span class="face"><img id="youFace" alt="your face"></span><button type="button" class="btn" id="youNext" title="another face">→</button></div>
         <div id="vCloset" class="closet" hidden></div>
+        <pre id="vReport" class="paper" hidden></pre>
         <div id="chess" class="chess" hidden></div>
         <div id="pong" class="pong" hidden></div>
       </div>
@@ -99,6 +100,7 @@ async function act(a) {
   else if (a.kind === "addDir") ask("dir");
   else if (a.kind === "you") askYou();
   else if (a.kind === "closet") { openView("closet"); fillCloset(); }
+  else if (a.kind === "report") { openView("report"); fillReport(); }
   else if (a.kind === "burn") { const r = await api("/api/furniture", { remove: a.key }); if (r.error) note(r.error); }
   else if (a.kind === "open" && b) openBot(b.m, b.id, a.shift);
   else if (a.kind === "chess" || a.kind === "pong") openGame(a.kind);
@@ -125,6 +127,7 @@ es.addEventListener("state", (e) => {
   for (const t of botTiles()) showWho(t);
   if (viewKind === "chess") showChess();
   if (viewKind === "closet") fillCloset();
+  if (viewKind === "report") fillReport();
   // a bot that gets work, or a question for you, leaves the ping-pong table
   const pp = viewKind === "pong" && pongUI.playing();
   if (pp && !state.bots.some((b) => b.id === pp.id && !b.busy && !b.waiting)) pongUI.left();
@@ -151,8 +154,8 @@ addEventListener("focus", focus); addEventListener("blur", focus); document.addE
 }
 
 // ---- the view: one thing at a time on the right, in place of the tiles, framed like one
-const PANELS = { dir: "#vDir", machine: "#vMachine", you: "#vYou", closet: "#vCloset", chess: "#chess", pong: "#pong" };
-const TITLES = { dir: "a project", machine: "a machine", you: "you", closet: "the closet", chess: "chess", pong: "ping-pong" };
+const PANELS = { dir: "#vDir", machine: "#vMachine", you: "#vYou", closet: "#vCloset", chess: "#chess", pong: "#pong", report: "#vReport" };
+const TITLES = { dir: "a project", machine: "a machine", you: "you", closet: "the closet", chess: "chess", pong: "ping-pong", report: "report" };
 function openView(kind) {
   if (viewKind && viewKind !== kind) closeView(true);
   for (const t of tiles.all()) closeTile(t);
@@ -228,21 +231,43 @@ function askYou() {
 }
 
 // ---- the closet: the furniture there is, drawn as it stands in the room; drag a piece into the
-// room to put it there. What there is one of at most is greyed while it is in the room. The
-// fireplace takes a piece back out (it burns)
-const CATALOGUE = ["plant", "armchair", "mat", "window", "clock", "board", "meet", "chess", "pong", "coffee", "cooler", "printer"];
-const MANY = new Set(["plant", "armchair", "mat", "window"]);
+// room to put it there, as many as you like. The fireplace takes a piece back out (it burns)
+const CATALOGUE = ["plant", "armchair", "mat", "window", "clock", "board", "meet", "chess", "pong", "coffee", "cooler", "printer", "add"];
+let closetFilled = false;
 function fillCloset() {
-  const el = $("#vCloset"), have = new Set(((state && state.furniture) || []).map((k) => k.replace(/\d+$/, "")));
+  if (closetFilled) return;
+  const el = $("#vCloset");
   el.innerHTML = "";
   for (const kind of CATALOGUE) {
-    const it = document.createElement("div"), gone = !MANY.has(kind) && have.has(kind);
-    it.className = "item" + (gone ? " gone" : "");
+    const it = document.createElement("div");
+    it.className = "item";
     it.innerHTML = `<img src="${room.icon(kind)}" alt=""><small>${room.names[kind]}</small>`;
-    it.title = gone ? "in the room" : "drag it into the room";
-    if (!gone) it.addEventListener("pointerdown", (e) => carryOut(e, kind, it));
+    it.title = "drag it into the room";
+    it.addEventListener("pointerdown", (e) => carryOut(e, kind, it));
     el.appendChild(it);
   }
+  closetFilled = !!el.querySelector("img[src^='data:image/png;base64,iVBOR']");
+}
+// ---- the printer's report: what goes on, as a printed page
+function fillReport() {
+  if (!state) return;
+  const t = new Date(), pad = (n) => String(n).padStart(2, "0");
+  const when = (ms) => { if (!ms) return ""; const d = new Date(ms); const today = d.toDateString() === t.toDateString(); return (today ? "" : `${pad(d.getDate())}/${pad(d.getMonth() + 1)} `) + `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  const home = (dir) => dir.replace(/^\/(Users|home)\/[^/]+/, "~");
+  const lines = [`burrow  ${pad(t.getDate())}/${pad(t.getMonth() + 1)}/${t.getFullYear()}  ${pad(t.getHours())}:${pad(t.getMinutes())}`, ""];
+  for (const m of state.machines) {
+    const bots = state.bots.filter((b) => (b.m || "") === m.id);
+    lines.push(`${m.name}${m.error ? "  (" + m.error + ")" : ""}`);
+    if (!bots.length) lines.push("  no sessions");
+    for (const b of bots) {
+      const st = b.waiting ? "needs input" : b.busy ? "working" : b.alive === false ? "asleep" : "idle";
+      lines.push(`  ${b.name.padEnd(14).slice(0, 14)} ${st.padEnd(12)} ${when(b.started).padEnd(12)} ${home(b.cwd || b.dir || "")}`);
+    }
+    lines.push("");
+  }
+  const u = state.usage || {}, lim = (x, what) => x ? `${what}: ${Math.max(0, 100 - x.used)}% left${x.resets ? ", new " + x.resets.replace(/^.* at /, "at ") : ""}` : `${what}: ?`;
+  lines.push(lim(u.session, "5h"), lim(u.week, "1w"));
+  $("#vReport").textContent = lines.join("\n");
 }
 function carryOut(e, kind, it) {
   if (e.button !== 0) return;

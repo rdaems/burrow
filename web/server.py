@@ -124,13 +124,13 @@ def split_unit(u):
     return ("", u) if u.startswith(("/", "~")) else tuple(u.split(":", 1))
 
 
-# The furniture: what stands in the room, as keys; a key is its kind and, for a kind there can be
-# more of, a number (plant0, mat2). The closet in the room adds a piece, the fireplace burns one.
+# The furniture: what stands in the room, as keys; a key is its kind and a number (plant0, mat2;
+# the first room's pieces have no number). There can be any number of a kind. The closet in the
+# room adds a piece, the fireplace burns one; the fire and the closet themselves stay.
 FURNITURE = ["meet", "pong", "chess", "mat0", "mat1", "mat2", "coffee", "cooler", "printer", "armchair",
-             "plant0", "plant1", "board", "window", "clock", "fire", "closet"]
-MULTI = {"mat", "plant", "armchair", "window"}
-FIXED = {"fire", "closet"}                   # the room's own: not for burning
-KINDS = {"meet", "pong", "chess", "coffee", "cooler", "printer", "board", "clock"} | MULTI
+             "plant0", "plant1", "board", "window", "clock", "fire", "closet", "add"]
+FIXED = {"fire", "closet"}
+KINDS = {"meet", "pong", "chess", "mat", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "clock", "add"}
 
 
 def kind_of(key):
@@ -138,12 +138,21 @@ def kind_of(key):
 
 
 def furnish(room):
-    """a room from before the furniture list: the default pieces; its row of three mats became three"""
+    """a room from before the furniture list gets the default pieces; its row of three mats became
+    three; the project cabinet (add) became furniture, and the whiteboard came off the wall (its
+    place on the wall is dropped: it gets one on the floor)"""
     room.setdefault("furniture", list(FURNITURE))
     at = room["layout"].pop("mats", None)
     if at:
         for i, d in enumerate((-28, 0, 28)):
             room["layout"].setdefault(f"mat{i}", [at[0] + d, at[1]])
+    if room.get("v", 1) < 2:
+        if "add" not in room["furniture"]:
+            room["furniture"].append("add")
+        b = room["layout"].get("board")
+        if b and b[1] < 30:
+            room["layout"].pop("board")
+        room["v"] = 2
     return room
 
 
@@ -790,12 +799,7 @@ class Handler(BaseHTTPRequestHandler):
                     kind = b["add"]
                     if kind not in KINDS:
                         raise RuntimeError("no such furniture")
-                    if kind in MULTI:
-                        key = next(f"{kind}{i}" for i in range(100) if f"{kind}{i}" not in fs)
-                    elif kind in fs:
-                        raise RuntimeError(f"there is a {kind} already")
-                    else:
-                        key = kind
+                    key = next(f"{kind}{i}" for i in range(1000) if f"{kind}{i}" not in fs)
                     fs.append(key)
                     hub.room["layout"][key] = [int(b["at"][0]), int(b["at"][1])]
                 elif b.get("remove"):

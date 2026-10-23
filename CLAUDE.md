@@ -326,6 +326,38 @@ pong table and the chess table"; the top bar smaller still.
   before `pongUI.start`. Chess did work.
 - The header is 28 px.
 
+## Interaction round (2026-10-23, evening)
+
+What he asked: stop a bot by putting it on the fire too, with a brief undo instead of a confirm click;
+the fireplace "too futuristic, use more flames going up", the danger zone highlighted on the fireplace
+while something is dragged over it; the closet against the top wall (it cannot be burnt); the whiteboard
+off the wall, on wheels on the floor; anything burnable, the project cabinet too (back from the closet);
+every piece with an action, if only a hover; the printer prints a report; the view "should NOT have an
+orange border and not fill the whole star screen. It's just a smaller rectangle in the center"; no limit
+on how many of a kind; your own avatar draggable and dropped onto things to use them.
+- **Stopping**: a bot dropped at its door or into the fire gets `act {kind:"doom", where, left:5}`: it
+  stands there, a sign over it "NAME stops - undo" with a shrinking bar, a click on the sign undoes.
+  At zero `claude stop`; through the door it walks out, in the fire it vanishes in a shower of sparks.
+  `w.stopped` keeps a stopped id from re-entering while the feed still lists it (30 s at most).
+- **Drops**: any figure (you too) dropped on a piece uses it (`useAt`): armchair = reads, mat = sleeps,
+  window, coffee, plant, printer; chess/ping-pong = a game (for you) or waiting at the board (a bot);
+  meeting table = sits a while. A working bot goes back to its desk.
+- **Hover**: every piece under the pointer gets a terracotta outline (`outlined()`: the piece drawn
+  into a canvas of its footprint and put with `halo`). Plants sway (the top of the sprite shifted a dot).
+  The fire outlines red while something is held over it; the pointer on it stirs sparks (`w.sparks`);
+  a burnt bot flares them (`w.flare`). The limits' tips are "63% 5h" / "77% 1w".
+- **The fire pit** (`drawFire`, 32 x 28): a ring of stones from above, embers and logs, flames rising
+  (taller while feeding), sparks (`burst` 0..1). The **closet** hangs on the wall (`ON_WALL`), drawn
+  frontally like the doors; the **whiteboard on wheels** is a floor piece (`drawBoard`, anchor bottom
+  centre, `INK_AREA` 26 x 11); the **project cabinet** is the `add` kind (`drawAdd`), burnable, in the
+  catalogue; `FIXED` = fire, closet. Every key is kind + number now (`/api/furniture` numbers them);
+  the old unnumbered keys stay valid. room.json `v: 2` marks the migration (add, board off the wall).
+- **The printer**: a click opens the report view (`fillReport`: machines, sessions with state, start
+  and directory, the limits) on a paper panel, and a page comes out of the printer (`w.print`).
+- **The view** is a centred rectangle (880 px at most, 48 px from the pane's edges), plain band.
+- look.mjs: `{dragTo: "js giving [[x,y],…]"}`; room.js exposes `room.at(id)` (a figure's place in
+  page pixels) and `room.hovered()` for driving it.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

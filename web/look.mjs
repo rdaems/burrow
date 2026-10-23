@@ -1,5 +1,5 @@
 // node web/look.mjs URL W H steps.json: drive headless Chrome over CDP (no packages) to look at the page.
-// steps: [{wait:ms} | {shot:"file.png"} | {js:"expr"} | {click:[x,y]} | {move:[x,y]} | {moveTo|clickTo:"js giving [x,y]"} | {drag:[[x,y],…]} | {key:"text"} | {press:"Enter", shift:true}]
+// steps: [{wait:ms} | {shot:"file.png"} | {js:"expr"} | {click:[x,y]} | {move:[x,y]} | {moveTo|clickTo:"js giving [x,y]"} | {drag:[[x,y],…]} | {dragTo:"js giving [[x,y],…]"} | {key:"text"} | {press:"Enter", shift:true}]
 import { spawn } from "node:child_process";
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -41,6 +41,7 @@ for (const s of steps) {
     if (s.clickTo) { await mouse("mousePressed", at, 1); await mouse("mouseReleased", at); }
   }
   if (s.click) { await mouse("mouseMoved", s.click); await mouse("mousePressed", s.click); await mouse("mouseReleased", s.click); }
+  if (s.dragTo) { const r = await send("Runtime.evaluate", { expression: s.dragTo, returnByValue: true }); s.drag = r.result.result.value; }   // the points from the page
   if (s.drag) {                              // press at the first point, move through the others, let go at the last
     await mouse("mouseMoved", s.drag[0]); await mouse("mousePressed", s.drag[0], 1);
     for (const p of s.drag.slice(1)) { await mouse("mouseMoved", p, 1); await sleep(60); }
