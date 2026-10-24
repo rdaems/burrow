@@ -12,8 +12,8 @@
 //                       cursor blinking; never falls asleep
 //   idle (done)         by its desk, or on a break: coffee, the printer, the cooler, ping-pong,
 //                       the plants, the window, the armchair, a meeting at the whiteboard
-//   idle 10 minutes,    charging on a mat (opening it wakes it: Claude Code restarts a stopped
-//   or process exited   process when you attach)
+//   process off         charging on a mat (Claude Code stops an idle process after about an hour, a
+//                       /loop sleeps between runs): opening it restarts it
 //   sends a message     a beam from its antenna to whoever it wrote to
 //   over (done, failed  switched off on the bench, the oldest at its left, the newest at its right end
 //   or stopped)         (agent view's Completed group; a click on the bench lists them all); a click on
@@ -406,7 +406,7 @@ function startRoom(cv, app) {
     if (f) f.chat = 2;
   }
 
-  function think(w, bots, L, dt, sleepAfter, usage, game) {
+  function think(w, bots, L, dt, usage, game) {
     const now = performance.now() / 1000, folk = w.folk;
     // the bot you play chess with sits at the table until the game is over (or it gets work)
     const vs = game && !game.result ? (game.white.id === "you" ? game.black.id : game.white.id) : null;
@@ -439,7 +439,7 @@ function startRoom(cv, app) {
       if (f.open && !work && !["desk", "doom"].includes(f.act.kind)) { end(f); f.act = { kind: "desk" }; }
       if (!f.open && !work && f.act.kind === "desk" && f.sat) f.act = { kind: "stand", left: 0.5 };
       if (work !== f.work) {
-        f.work = work; f.idleSince = now;
+        f.work = work;
         // to work, whatever it was doing (a bot by the door stays)
         if (work && f.act.kind !== "doom") { end(f); f.act = { kind: "desk" }; }
         if (!work && f.act.kind === "desk") f.act = { kind: "stand", left: 0.5 + (fnv(b.id) % 20) / 10 };
@@ -461,9 +461,9 @@ function startRoom(cv, app) {
       const first = d.seats.find(([id]) => { const f = folk.get(id); return f && !f.work && f.act.kind === "stand"; });
       if (first) homes.set(first[0], { x: Math.min(W - 8, d.x0 + d.w + 8), y: d.y + 1 });
     }
-    for (const b of bots) { const f = folk.get(b.id); if (f && !f.held && !f.benched) thinkOne(w, f, L, now, dt, homes.get(b.id), sleepAfter, usage); }
-    for (const f of [...folk.values()]) if (f.benched && !f.held) thinkOne(w, f, L, now, dt, null, sleepAfter, usage);   // on the way to the bench (its bot may be over)
-    if (you && !you.held) thinkOne(w, you, L, now, dt, null, sleepAfter, usage);
+    for (const b of bots) { const f = folk.get(b.id); if (f && !f.held && !f.benched) thinkOne(w, f, L, now, dt, homes.get(b.id), usage); }
+    for (const f of [...folk.values()]) if (f.benched && !f.held) thinkOne(w, f, L, now, dt, null, usage);   // on the way to the bench (its bot may be over)
+    if (you && !you.held) thinkOne(w, you, L, now, dt, null, usage);
     // two standing about in the same place: they step apart
     const loit = [...folk.values()].filter((f) => f.legs === "stand" && f.act.kind === "loiter");
     for (const a of loit) for (const b of loit) if (a.id < b.id && Math.abs(a.x - b.x) < 12 && Math.abs(a.y - b.y) < 4) {
@@ -494,16 +494,17 @@ function startRoom(cv, app) {
   // what everyone has been up to since the page opened, for the printer's report: acts begun, by
   // kind; seconds at work, idle, asleep; messages sent and got
   const stat = (w, id) => w.stats.get(id) || (w.stats.set(id, { busy: 0, idle: 0, asleep: 0, sent: 0, got: 0 }), w.stats.get(id));
-  function thinkOne(w, f, L, now, dt, home, sleepAfter, usage) {
+  function thinkOne(w, f, L, now, dt, home, usage) {
     const folk = w.folk, others = [...folk.values()].filter((g) => g !== f && !g.leaving), v = 22;
     const seat = L.seat(f.id), st = stat(w, f.id);
     if (f.act.kind !== f.lastKind) { f.lastKind = f.act.kind; st[f.act.kind] = (st[f.act.kind] || 0) + 1; }
     if (f.work) st.busy += dt; else st.idle += dt;
     if (f.act.kind === "sleep" && f.act.there) st.asleep += dt;
-    // waiting for an answer never falls asleep: it sits at its desk with its hand up. A bot whose
-    // process Claude Code stopped charges too (it comes back when opened). You, when the window
-    // has been left alone a minute, as pair's people who are away
-    const sleepy = f.benched ? false : f.human ? app.away() > 60 : !f.work && !f.open && (now - f.idleSince > sleepAfter || (f.b && f.b.alive === false));
+    // a bot charges on a mat only while its process is off (Claude Code stops an idle one after about
+    // an hour, a /loop sleeps between runs; opening it restarts it): an idle one with its process still
+    // there is about the room, one waiting for an answer sits at its desk with its hand up. You, when
+    // the window has been left alone a minute, as pair's people who are away
+    const sleepy = f.benched ? false : f.human ? app.away() > 60 : !f.work && !f.open && !!f.b && f.b.alive === false;
     if (sleepy && !["sleep", "doom", "bench"].includes(f.act.kind)) { end(f); f.act = { kind: "sleep", there: false }; }
     if (!sleepy && f.act.kind === "sleep") end(f);
     // you: with the bot whose session is open, at the table of the game you play; else about the
@@ -825,7 +826,7 @@ function startRoom(cv, app) {
         const work = !b.human && (b.busy || b.waiting), stand = late || b.human;
         w.folk.set(b.id, { id: b.id, x: at.x, y: at.y, dir: -1, arms: "down", legs: stand ? "stand" : "sit", step: 0, sat: !stand,
           act: work ? { kind: "desk" } : rest(), carry: null, lying: false, busy: b.busy, waiting: b.waiting, work, human: !!b.human,
-          idleSince: performance.now() / 1000, chat: 0, z: Math.random() * 2 });
+          chat: 0, z: Math.random() * 2 });
       }
       w.folk.get(b.id).b = b;
     }
@@ -838,7 +839,7 @@ function startRoom(cv, app) {
       if (!f.benched && !f.held) { end(f); f.benched = true; f.sat = false; f.lying = false; f.legs = "stand"; f.act = { kind: "bench", since: performance.now() }; }
     }
     if (tickDt > 0) {
-      w.T += tickDt; think(w, bots, L, tickDt, s.demo ? 40 : 600, usage, s.chess);
+      w.T += tickDt; think(w, bots, L, tickDt, usage, s.chess);
       for (const f of w.folk.values()) {
         const m = (f.b && f.b.m) || "";
         if (f.leaving && walk(f, { x: doorX(m), y: WALL + 1 }, 30, tickDt)) { w.folk.delete(f.id); w.doorAt[m] = performance.now(); }
@@ -1041,7 +1042,7 @@ function startRoom(cv, app) {
     // (one about to be stopped has its sign instead of a name, and a click on it is the undo)
     if (hovered && !moving) {
       const { b, x, y } = hovered, hf = w.folk.get(b.id), doomed = !!hf && hf.act.kind === "doom";
-      if (!doomed) tip = { text: b.human ? b.name : b.name + (b.over ? " - " + b.over : b.waiting ? " - needs input" : b.alive === false ? " - stopped, opens again" : ""), x, y: y - 2 };
+      if (!doomed) tip = { text: b.human ? b.name : b.name + (b.over ? " - " + b.over : b.waiting ? " - needs input" : b.alive === false ? " - process off, opens again" : ""), x, y: y - 2 };
       hots.push({ x0: -1e9, y0: -1e9, x1: 1e9, y1: 1e9, action: b.human ? { kind: "you" } : doomed ? { kind: "undo", id: b.id } : { kind: "open", id: b.id } });
     }
     // (while something is dragged, the only tips are the fire's, the door's and the pair table's: what the drop does)
@@ -1583,7 +1584,7 @@ function startRoom(cv, app) {
     const b = id && (app.state().bots || []).find((x) => x.id === id && x.over), at = b && world().benchAt.get(id);
     if (!b) return null;
     const f = { id, x: at ? at.x : W / 2, y: at ? at.y : H / 2, dir: -1, arms: "down", legs: "stand", step: 0, sat: false, act: { kind: "bench", since: performance.now() },
-      carry: null, lying: false, busy: false, waiting: false, work: false, human: false, idleSince: performance.now() / 1000, chat: 0, z: 0, b, benched: true };
+      carry: null, lying: false, busy: false, waiting: false, work: false, human: false, chat: 0, z: 0, b, benched: true };
     world().folk.set(id, f);
     return f;
   }

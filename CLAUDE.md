@@ -519,6 +519,18 @@ transcript stays for `claude --resume`). So:
   then `claude rm` (`/api/stop {rm: true}`), running or over; the sign says "NAME is deleted - undo".
 - The demo has over bots, bots that finish and come back, and `demo_stop` for the flows.
 
+## Idle bots wander (2026-10-24)
+
+He: "where do the 10 minutes come from, I think when the bot is idle it should start wandering right away.
+The sleeping bots at their desks is not a nice view." The 10 minutes (`sleepAfter`, 600 s; 40 in the demo)
+were burrow's own, from the first room (after pair's away state); Claude Code's only idle threshold is the
+supervisor stopping an idle process after about an hour. Idle bots did wander at once; the nap came after
+10 minutes, on a mat, or seated at the desk when no mat was free (you take one while the window is left
+alone). Now a bot sleeps only while its process is off (`alive: false`: reaped after an hour, a /loop
+between runs), so the mat means one thing, and opening it restarts it; the tip says "process off, opens
+again". A process-off bot with no free mat still sleeps at its desk (add mats from the closet). The demo
+has a bot between loop runs, and idle ones go off now and then.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

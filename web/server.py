@@ -520,6 +520,7 @@ class Hub:
                  "alive": True, "state": "working" if k % 3 == 0 else "blocked" if k % 5 == 1 else "done", "over": "", "endedAt": 0, "detail": "",
                  "started": now - 3600000 * (k + 1), "pid": 1000 + k, "session": f"demo{k}"}
                 for k, (d, n) in enumerate(bots)]
+        bots[-1].update(alive=False, busy=True, state="working", pid=0)      # a /loop between runs: its process is off
         # and some that are over: done, failed, stopped, as agent view's Completed group
         over = [("burrow", "tidy-tess", "done", "the bench built and tested, 4 seats"), ("hexant", "zany-zoe", "failed", "the ants got out of the sandbox"),
                 ("website", "posh-pam", "stopped", ""), ("burrow", "merry-max", "done", "README brought up to date"), ("football", "lucky-lou", "done", "the league table rebuilt")]
@@ -537,12 +538,18 @@ class Hub:
                     if random.random() < 1 / 400:      # one that is over comes back (opened again)
                         b.update(over="", busy=False, waiting=False, alive=True, state="done", pid=2000 + random.randrange(1000))
                     continue
+                if not b["alive"]:                     # between the runs of a /loop: the next run starts
+                    if random.random() < 1 / 60:
+                        b.update(alive=True, busy=True, waiting=False, state="working", pid=1000 + random.randrange(1000))
+                    continue
                 if random.random() < 1 / 12:
                     b["busy"] = not b["busy"]
                     b["waiting"] = not b["busy"] and random.random() < 0.1
                     b["state"] = "working" if b["busy"] else "blocked" if b["waiting"] else "done"
                 elif not b["busy"] and not b["waiting"] and random.random() < 1 / 300:     # an idle one finishes
                     b.update(over="done", alive=False, state="done", pid=0, endedAt=int(time.time() * 1000), detail="finished what it was doing")
+                elif not b["busy"] and not b["waiting"] and random.random() < 1 / 150:     # an idle one's process is stopped (a /loop between runs)
+                    b.update(alive=False, busy=True, state="working", pid=0)
             live = [b for b in bots if not b["over"]]
             if random.random() < 1 / 8 and len(live) >= 2:
                 a, b = random.sample(live, 2)
