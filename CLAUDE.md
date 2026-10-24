@@ -732,6 +732,40 @@ room counted a bot busy on `status busy` *or* `state working`, so a done session
 command typed away while agent view listed it under Completed. Now `busy` is `state == "working"`, and
 `status` decides only for a row without a state (`parse_agents`); `status: waiting` still means needs input.
 
+## Round of 2026-10-24, afternoon: the gravestone, the paper, the clock
+
+He: a burnt bot "burned immediately. Then it shows a gravestone. When I click that, the bot returns. But
+there's no progress/wait bar. The gravestone simply disappears after a while. After a few seconds, there's
+an animation that makes it fade away"; test the burning of all furniture; the gold band back to the pastel
+one, a little less saturated, and that gold on the floor too; the printer's report "like an old fashioned
+plotter ... with the little square holes on the sides", pixel font, a margin, less verbose; plants stop
+after two movements; a bigger plus; the clock "a control like amphetamine".
+- **The fire for a bot** (`bury`, `unbury`, `drawGrave`, `GRAVE`): at once: its picture into the flames
+  (`toFire`), a gravestone (`STONE`, 9 x 11) on a clear spot beside the pit (left, right, further out,
+  never on another stone; `w.graves`), the name on hover, a click brings it back where the stone stood
+  (`w.riseAt`); after 5 s the stone crumbles 1.5 s in an ordered dither (`BAYER`) and then `claude stop`
+  + `claude rm`. The feed leaves a buried bot out while its stone stands. The door and the bench keep
+  their countdown sign; `doom` is theirs only now.
+- **Burning tested** (look.mjs, every key into the fire): all floor pieces, the project cabinet and an
+  empty desk burn, a desk with bots is refused. The window and the clock could not: a wall piece was
+  pinned to the wall while dragged. Now a burnable wall piece comes off the wall while carried (free x
+  and y, in the room) and is hung back where it is let go; fixed ones (closet, switchboard) still slide
+  along the wall. A bench with sitters moves by its ends (a press on a sitter lifts the sitter).
+- **Gold**: `--f-gold` #fdf0bf into #f7d4a0 (`--pale1`/`--pale0`), and `GOLD` (#f7d4a0) is the room's hover
+  colour: outlines, halos, rings, the frame, the undo sign; `TERRACOTTA` is only your clothes now.
+- **Plants** stir twice under the pointer (`w.sway`: when the pointer came; four positions at 125 ms),
+  then rest until it comes back. **The plus** is a 5 x 5 cross with a bigger hot zone.
+- **The report** (`fillReport`): fanfold paper (`.sheet::before/::after`: sprocket holes behind a dashed
+  perforation), the pixel font 16/22; the font is proportional and a canvas measures a fallback, so a
+  hidden `.ruler` span in the paper's font measures: lines cut to the paper's width (`cut`), staff columns
+  padded to pixel stops (`row`, `padTo`), the date flush right (`two`). Shorter: staff, bench tally, break
+  room, games, meetings, messages, the employee of the shift, limits.
+- **The clock** is Amphetamine (`/api/awake {mode: off|work|for, minutes}`, `Hub.awake`, `awake_tick` on
+  every poll, `inhibitor()`: `caffeinate -i -s -w <server pid>`, else `systemd-inhibit`): off, while bots
+  work (any bot busy, anywhere; kept in room.json `awake`), or 1/3/8 h (not kept). The CLOCK panel
+  (`#vClock`, `fillClock`, `AWAKE`), the clock's light (`SP.Y` dot) while the inhibitor runs, the tip says
+  "awake 2h 13m more" / "awake, bots at work". The state carries `awake: {mode, until, on}`.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

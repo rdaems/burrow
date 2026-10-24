@@ -48,6 +48,7 @@
         <div id="vLimits" hidden></div>
         <div id="vSettings" class="settings" hidden></div>
         <div id="vDone" class="done" hidden></div>
+        <div id="vClock" class="awake" hidden><p>Keeps this computer awake, the way Amphetamine does: while bots work, or for a while.</p><div class="row"></div><div class="note"></div></div>
         <div id="vOutside" hidden><canvas class="outside" width="130" height="70"></canvas></div>
         <div id="vBoard" hidden><canvas class="board" width="130" height="55"></canvas><div class="row"><button type="button" class="btn" id="wipe">wipe</button></div></div>
         <div id="vPair" hidden>
@@ -135,6 +136,7 @@ async function act(a) {
   else if (a.kind === "limits") { openView("limits"); fillLimits(); }
   else if (a.kind === "settings") { openView("settings"); fillSettings(); }
   else if (a.kind === "completed") { openView("completed"); fillDone(); }
+  else if (a.kind === "clock") { openView("clock"); fillClock(); }
   else if (a.kind === "outside") openOutside();
   else if (a.kind === "pairOpen") openPair(a.key);
   else if (a.kind === "pair" && b) joinPair(a.key, b);
@@ -170,6 +172,7 @@ es.addEventListener("state", (e) => {
   if (viewKind === "limits") fillLimits();
   if (viewKind === "settings") fillSettings();
   if (viewKind === "completed") fillDone();
+  if (viewKind === "clock") fillClock();
   // a bot that gets work, or a question for you, leaves the ping-pong table
   const pp = viewKind === "pong" && pongUI.playing();
   if (pp && !state.bots.some((b) => b.id === pp.id && !b.busy && !b.waiting)) pongUI.left();
@@ -196,8 +199,8 @@ addEventListener("focus", focus); addEventListener("blur", focus); document.addE
 }
 
 // ---- the view: one thing at a time on the right, in place of the tiles, framed like one
-const PANELS = { dir: "#vDir", machine: "#vMachine", you: "#vYou", closet: "#vCloset", chess: "#chess", pong: "#pong", report: "#vReport", pair: "#vPair", board: "#vBoard", limits: "#vLimits", outside: "#vOutside", completed: "#vDone", settings: "#vSettings" };
-const TITLES = { dir: "A PROJECT", machine: "A MACHINE", you: "YOU", closet: "THE CLOSET", chess: "CHESS", pong: "PING-PONG", report: "REPORT", pair: "PAIR ROOM", board: "WHITEBOARD", limits: "LIMITS", outside: "OUTSIDE", completed: "COMPLETED", settings: "SETTINGS" };
+const PANELS = { dir: "#vDir", machine: "#vMachine", you: "#vYou", closet: "#vCloset", chess: "#chess", pong: "#pong", report: "#vReport", pair: "#vPair", board: "#vBoard", limits: "#vLimits", outside: "#vOutside", completed: "#vDone", settings: "#vSettings", clock: "#vClock" };
+const TITLES = { dir: "A PROJECT", machine: "A MACHINE", you: "YOU", closet: "THE CLOSET", chess: "CHESS", pong: "PING-PONG", report: "REPORT", pair: "PAIR ROOM", board: "WHITEBOARD", limits: "LIMITS", outside: "OUTSIDE", completed: "COMPLETED", settings: "SETTINGS", clock: "CLOCK" };
 function openView(kind) {
   if (viewKind && viewKind !== kind) closeView(true);
   for (const t of tiles.all()) closeTile(t);
@@ -480,6 +483,16 @@ function fillDone() {
       setTimeout(() => { if (performance.now() - armed >= 2500) { x.textContent = "✕"; x.classList.remove("warn"); } }, 2600);
     };
   }
+}
+// ---- the clock: this computer kept awake (caffeinate), as Amphetamine does: while bots work, for a
+// while, or not. The server runs the inhibitor; the choice shows on the clock's light and here
+const AWAKE = [["off", "off", 0], ["work", "while bots work", 0], ["for", "1 h", 60], ["for", "3 h", 180], ["for", "8 h", 480]];
+function fillClock() {
+  const a = (state && state.awake) || { mode: "off" }, row = $("#vClock .row");
+  row.innerHTML = AWAKE.map(([m, label, n]) => `<button type="button" class="btn${a.mode === m && m !== "for" ? " on" : ""}" data-mode="${m}" data-min="${n}">${label}</button>`).join("");
+  for (const btn of row.querySelectorAll("button")) btn.onclick = async () => { const r = await api("/api/awake", { mode: btn.dataset.mode, minutes: +btn.dataset.min }); if (r.error) note(r.error); };
+  const left = a.mode === "for" ? Math.max(0, a.until - Date.now()) : 0, h = Math.floor(left / 3600000), m = Math.round((left % 3600000) / 60000);
+  $("#vClock .note").textContent = a.mode === "for" ? `awake for ${h ? h + " h " : ""}${m} min more` : a.mode === "work" ? (a.on ? "awake: bots are at work" : "bots idle: it may sleep") : "it sleeps as it likes";
 }
 // ---- the printer's report: the office's statistics since this page opened, with the staff list and
 // the limits, printed row by row on a sheet that comes out of the printer

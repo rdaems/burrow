@@ -148,6 +148,7 @@ button, input, select { font:inherit; color:inherit; }
 .done .detail { grid-column:1 / -1; color:var(--steel3); font:12px/1.4 var(--mono); -webkit-font-smoothing:auto; text-shadow:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .done .rm { grid-column:4; grid-row:1; }
 .done p { margin:0; }
+.awake p { margin:0 0 4px; } .awake .row { flex-wrap:wrap; } .awake .note { margin-top:12px; color:var(--steel3); }
 .item { display:flex; flex-direction:column; align-items:center; gap:8px; padding:4px 2px; cursor:grab; user-select:none; touch-action:none; }
 .item:hover small { color:var(--gold2); }
 .item img { image-rendering:pixelated; display:block; pointer-events:none; }

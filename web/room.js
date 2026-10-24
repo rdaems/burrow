@@ -249,7 +249,7 @@ function startRoom(cv, app) {
   // switchboard (burrow's settings) stay
   const KIND = (key) => key.replace(/\d+$/, "");
   const FIXED = new Set(["fire", "closet", "settings"]);
-  const CLICK = new Set(["add", "closet", "chess", "pong", "printer", "pair", "board", "coffee", "cooler", "window", "bench", "armchair", "settings"]);   // a click does something there
+  const CLICK = new Set(["add", "closet", "chess", "pong", "printer", "pair", "board", "coffee", "cooler", "window", "bench", "armchair", "settings", "clock"]);   // a click does something there
   const NAMES = { meet: "meeting table", pong: "ping-pong table", chess: "chess table", coffee: "coffee machine", cooler: "water cooler",
     printer: "printer", armchair: "armchair", plant: "plant", board: "whiteboard", window: "window", clock: "clock", add: "project cabinet", pair: "pair room", bench: "bench", settings: "switchboard" };
   // the bench seats three sessions that are over, side by side (its ends are the bench's own: a click
@@ -961,7 +961,16 @@ function startRoom(cv, app) {
       outlined(ctx, [win.x0, win.y0, win.x1, win.y1], h, (c) => drawWindow(c, win));
       if (h) tip = { text: "outside", x: (win.x0 + win.x1) / 2, y: win.y1 + 10 };
     }
-    if (L.clock) outlined(ctx, foot("clock", [L.clock.x0, L.clock.y0]), lit(L.clock.key), (c) => drawClock(c, L.clock.x0 + 6, L.clock.y0 + 5));
+    if (L.clock) {
+      // the clock keeps this computer awake, as Amphetamine does: a click chooses (while bots work, for
+      // a while, not at all); its light is on while it does
+      const ck = L.clock, a = s.awake || { mode: "off" }, h = hot(ck.x0, ck.y0, ck.x0 + 12, ck.y0 + 10, { kind: "clock" });
+      outlined(ctx, foot("clock", [ck.x0, ck.y0]), h, (c) => drawClock(c, ck.x0 + 6, ck.y0 + 5, a.on));
+      if (h) {
+        const left = Math.max(0, a.until - Date.now()), hh = Math.floor(left / 3600000), mm = Math.round((left % 3600000) / 60000);
+        tip = { text: a.mode === "for" ? `awake ${hh ? hh + "h " : ""}${mm}m more` : a.mode === "work" ? (a.on ? "awake, bots at work" : "awake while bots work") : "clock", x: ck.x0 + 6, y: WALL + 10 };
+      }
+    }
     if (L.closet) {
       // the closet, against the wall: the furniture that is not in the room; a click opens it (on the right)
       const c = L.closet, h = hot(c.x0, c.y0, c.x1, c.y1, { kind: "closet" });
@@ -1628,8 +1637,9 @@ function startRoom(cv, app) {
     for (let j = 0; j < 18; j += 2) { ctx.fillRect(x, WALL - 20 + j, 1, 1); ctx.fillRect(x + 15, WALL - 20 + j, 1, 1); }
     tiny(ctx, "+", x + 6, WALL - 14, lit ? GOLD : C.steel1);
   }
-  function drawClock(ctx, x, y) {           // Pixel Agents' clock, telling this computer's time
+  function drawClock(ctx, x, y, awake) {    // Pixel Agents' clock, telling this computer's time; a light on it while it keeps the computer awake
     put(ctx, "clock", x - 6, y - 5);
+    if (awake) rect(ctx, x + 5, y - 5, 1, 1, SP.Y);
     const t = new Date();
     const hand = (ang, len) => { for (let i = 1; i <= len; i++) ctx.fillRect(Math.round(x - 1 + Math.sin(ang) * i), Math.round(y - Math.cos(ang) * i * 0.75), 1, 1); };
     ctx.fillStyle = SP.G; hand(((t.getHours() % 12) + t.getMinutes() / 60) / 12 * 2 * Math.PI, 2);

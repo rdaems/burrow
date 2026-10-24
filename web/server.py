@@ -11,6 +11,7 @@
 #   BURROW_DEMO=1 python3 web/server.py    made-up bots, for working on the room
 
 import base64, collections, fcntl, getpass, glob, hashlib, json, os, pty, queue, re, select, shlex, signal, socket, struct, subprocess
+import shutil
 import datetime, termios, threading, time, random, urllib.request, urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
@@ -268,6 +269,15 @@ def kind_of(key):
     return key.rstrip("0123456789")
 
 
+def inhibitor():
+    """the command that keeps this computer from sleeping while it runs, or None"""
+    if shutil.which("caffeinate"):
+        return ["caffeinate", "-i", "-s", "-w", str(os.getpid())]
+    if shutil.which("systemd-inhibit"):
+        return ["systemd-inhibit", "--what=idle:sleep", "--who=burrow", "--why=bots working", "sleep", "infinity"]
+    return None
+
+
 # a bot started here gets a name as pair gives its agents (rdaems/pair-prompting BOT_WORDS): one not in use
 # on that machine. A session named by Claude Code itself keeps its name
 BOT_WORDS = {
@@ -485,6 +495,8 @@ class Hub:
         self.own = collections.deque(maxlen=4)  # its pids: `claude -p` shows up in `claude agents` while it runs
         self.game = None            # the chess game you play against one of the idle bots
         self.demo_bots = {}         # the demo's made-up bots, by machine (stopped and deleted from here)
+        self.awake = {"mode": (self.room.get("awake") or {}).get("mode", "off"), "until": 0}   # the clock: this computer kept awake
+        self.caff = None            # the sleep inhibitor while it runs
 
     def set_machines(self, ms):
         """a watcher for each machine, from when it turns up in the settings until it goes"""
@@ -533,7 +545,7 @@ class Hub:
             return {"machines": [{"id": mid, "name": m["name"], "ssh": m.get("ssh") or "", **{k: v for k, v in self.feeds.get(mid, {}).items() if k != "bots"}}
                                  for mid, m in self.machines.items()],
                     "desks": self.desks(bots), "bots": bots, "layout": self.room["layout"], "furniture": self.room["furniture"], "pair": self.room.get("pair", {}),
-                    "usage": self.usage, "chess": self.chess_view(), "demo": DEMO, "width": self.room.get("width"), "shells": self.shells_view(),
+                    "usage": self.usage, "chess": self.chess_view(), "demo": DEMO, "awake": self.awake_view(), "width": self.room.get("width"), "shells": self.shells_view(),
                     "settings": options(self.room),
                     "you": {**(self.room.get("you") or {}), **you_of(self.room), "login": USER}, "pairAt": PAIR}
 
@@ -645,6 +657,7 @@ class Hub:
                 with self.lock:
                     self.feeds[mid] = {"bots": bots, "light": light, "error": None}
                 self.chess_check()
+                self.awake_tick()
                 for msg, a, b in talks:
                     if msg not in heard:
                         heard.add(msg)
@@ -722,6 +735,36 @@ class Hub:
                     bots.remove(b)
                 else:
                     b.update(over="stopped", busy=False, waiting=False, alive=False, state="stopped", pid=0, endedAt=int(time.time() * 1000))
+
+    # ---- the clock keeps this computer awake, as Amphetamine does: while bots work (anywhere in the
+    # room), or for some time, or not at all. `caffeinate` on a Mac (tied to this server's life with
+    # -w), `systemd-inhibit` elsewhere. The "while bots work" choice is kept in room.json; a duration is
+    # not (a restart of the server sleeps as usual)
+    def awake_view(self):
+        return {"mode": self.awake["mode"], "until": self.awake["until"], "on": self.caff is not None and self.caff.poll() is None}
+
+    def set_awake(self, mode, minutes=0):
+        with self.lock:
+            self.awake = {"mode": mode, "until": int(time.time() * 1000) + minutes * 60000 if mode == "for" else 0}
+            self.room["awake"] = {"mode": "work"} if mode == "work" else {}
+            save_room(self.room)
+        self.awake_tick()
+        self.push("state", self.state())
+
+    def awake_tick(self):
+        """the inhibitor runs exactly when the mode and the room say so (called on every poll)"""
+        a = self.awake
+        if a["mode"] == "for" and time.time() * 1000 > a["until"]:
+            a["mode"], a["until"] = "off", 0
+        want = a["mode"] == "for" or (a["mode"] == "work" and any(b["busy"] for f in self.feeds.values() for b in f.get("bots", [])))
+        on = self.caff is not None and self.caff.poll() is None
+        if want and not on:
+            cmd = inhibitor()
+            if cmd:
+                self.caff = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        elif on and not want:
+            self.caff.terminate()
+            self.caff = None
 
     # ---- chess against a bot: pair's table (chess.py has the rules), your opponent one of the
     # idle bots. It plays from here, not through Claude: two plies of material and a little chance.
@@ -1237,6 +1280,14 @@ class Handler(BaseHTTPRequestHandler):
             hub.room["width"] = max(200, min(1200, int(b.get("width") or 256)))
             save_room(hub.room)
             return {}
+        if path == "/api/awake":             # the clock: keep this computer awake while bots work, for some minutes, or not
+            mode, minutes = b.get("mode") or "off", int(b.get("minutes") or 0)
+            if mode not in ("off", "work", "for") or (mode == "for" and minutes <= 0):
+                raise RuntimeError("awake how?")
+            if mode != "off" and not inhibitor():
+                raise RuntimeError("no caffeinate or systemd-inhibit on this computer")
+            hub.set_awake(mode, minutes)
+            return hub.awake_view()
         if path == "/api/you":               # who you are: your name (empty: the login name), the face's seed, your colour
             with hub.lock:
                 you = dict(hub.room.get("you") or {})
