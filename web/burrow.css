@@ -65,7 +65,7 @@ button, input, select { font:inherit; color:inherit; }
 :root { --pixel:"Burrow Pixel", ui-monospace, Menlo, monospace;
   --steel0:#3b3a55; --steel1:#5d6280; --steel2:#8b93ad; --steel3:#c2c9d9; --steel4:#f4f6fb; --white:#fff;
   --scrub0:#10363f; --scrub1:#1b6660; --scrub2:#2fa087; --scrub3:#7fdcb0; --gold0:#b86a1e; --gold1:#f2a531; --gold2:#ffe27a; --tissue2:#f06b72;
-  --pale0:#f7d4a0; --pale1:#fdf0bf; }   /* the focused tile's pastel gold (pixel.js --f-gold); --pale0 is the room's hover colour as well (GOLD in room.js) */
+  --pale0:#f6c784; --pale1:#ffe9a4; }   /* the focused tile's pastel gold (pixel.js --f-gold); --pale0 is the room's hover colour as well (GOLD in room.js) */
 .pn { border:2px solid var(--ink); clip-path:polygon(2px 0,calc(100% - 2px) 0,100% 2px,100% calc(100% - 2px),calc(100% - 2px) 100%,2px 100%,0 calc(100% - 2px),0 2px); }
 .pn.window { background:var(--f-window); color:var(--white); text-shadow:2px 2px 0 var(--ink);
   box-shadow: inset 2px 2px 0 var(--steel4), inset -2px -2px 0 var(--steel2), inset 4px 4px 0 var(--steel3), inset -4px -4px 0 var(--steel1), inset 0 0 0 6px var(--ink); }

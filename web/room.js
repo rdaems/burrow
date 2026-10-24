@@ -48,7 +48,7 @@
 function startRoom(cv, app) {
   const C = pixelAvatar.C, INK = C.ink, INK2 = C.ink2;
   const TERRACOTTA = "#d97757", RED = "#ff6b5a", OPEN = "#8a4a3a", YOU = TERRACOTTA;   // your clothes: pair's "me"
-  const GOLD = "#f7d4a0";                     // what the pointer is on: the tiles' pastel gold (burrow.css --pale0), on the floor as well; terracotta stays yours
+  const GOLD = "#f6c784";                     // what the pointer is on: the tiles' pastel gold (burrow.css --pale0), on the floor as well; terracotta stays yours
   const SP = sprites.PAL, WOOD = { hi: SP.h, top: SP.w, d: SP.d, k: SP.k, plate: "#2e1f28" }, SHADOW = SP.s;
   // the paint of another machine's door and desks, in the order of Claude Code's sshConfigs
   const PAINT = [

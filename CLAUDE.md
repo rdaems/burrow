@@ -751,7 +751,8 @@ after two movements; a bigger plus; the clock "a control like amphetamine".
   pinned to the wall while dragged. Now a burnable wall piece comes off the wall while carried (free x
   and y, in the room) and is hung back where it is let go; fixed ones (closet, switchboard) still slide
   along the wall. A bench with sitters moves by its ends (a press on a sitter lifts the sitter).
-- **Gold**: `--f-gold` #fdf0bf into #f7d4a0 (`--pale1`/`--pale0`), and `GOLD` (#f7d4a0) is the room's hover
+- **Gold**: `--f-gold` #ffe9a4 into #f6c784 (`--pale1`/`--pale0`; the first try, #fdf0bf into #f7d4a0, was
+  "too bleak"), and `GOLD` (#f6c784) is the room's hover
   colour: outlines, halos, rings, the frame, the undo sign; `TERRACOTTA` is only your clothes now.
 - **Plants** stir twice under the pointer (`w.sway`: when the pointer came; four positions at 125 ms),
   then rest until it comes back. **The plus** is a 5 x 5 cross with a bigger hot zone.

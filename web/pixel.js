@@ -27,7 +27,7 @@
   s.setProperty("--f-window", dither(P.blue1, P.blue0));
   s.setProperty("--f-button", dither(P.steel4, P.steel3, 30));
   s.setProperty("--f-hot", dither(P.gold2, P.gold1, 30));
-  s.setProperty("--f-gold", dither("#fdf0bf", "#f7d4a0", 30));   // burrow: the focused tile's band, a pastel gold (gold2 and gold1 washed with white, a touch less saturated); the room's hover colour too
+  s.setProperty("--f-gold", dither("#ffe9a4", "#f6c784", 30));   // burrow: the focused tile's band, a pastel gold (gold2 and gold1 washed with a little white); the room's hover colour too
   s.setProperty("--f-green", dither(P.scrub2, P.scrub1, 30));
   s.setProperty("--stars", stars);
 })();
