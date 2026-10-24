@@ -23,11 +23,13 @@ screen starts another bot there; the empty cabinet adds a project.
 Click a bot and its session opens next to the room, as a tile: a real terminal running `claude attach <id>`,
 so you are using Claude Code itself. Shift-click adds a tile beside the open ones; drag a tile by its band
 onto another to arrange them. Close one (✕, or click the floor) and the bot keeps working. Close burrow
-altogether and every bot keeps working too. To stop a session, carry its bot onto the bench or to its
-machine's door, or type `exit` in its terminal: a sign over it counts five seconds down (a click on the
-sign, or carrying the bot away, is the undo), then it sits down on the bench, switched off, where it can be
-opened again. To delete a session from the list for good (`claude rm`; its transcript stays for
-`claude --resume`), carry the bot, running or on the bench, into the fire: the same countdown, then it goes up
+altogether and every bot keeps working too. Typing `exit` in a session detaches, as in Claude Code: the
+tile closes, the session runs on. To stop a session, carry its bot onto the bench or to its machine's door:
+a sign over it counts five seconds down (a click on the sign, or carrying the bot away, is the undo), then
+it sits down on the bench, switched off, where it can be opened again. Without a bench in the room, the
+sessions that are over wander about, switched off; the closet has a bench for them, or keep it that way
+and tidy up with the fire. To delete a session from the list for good (`claude rm`; its transcript stays
+for `claude --resume`), carry the bot, running or over, into the fire: the same countdown, then it goes up
 in flames. A bot started from burrow gets a name the way pair names its agents (`dapper-dan`, `merry-moe`).
 
 A click on a project's screen (or a worktree's laptop) opens your own terminal there: one login shell per

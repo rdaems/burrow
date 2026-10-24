@@ -515,9 +515,14 @@ transcript stays for `claude --resume`). So:
   sign, then `claude stop` and the figure, now grey, goes to sit at the free end of the last bench
   (`bench` act; `benchFill`); once the feed says `over` and it sits, the bench takes it over. A bot that
   goes over on its own (reaped after an hour idle, stopped from agent view) walks to the bench the same
-  way. No bench in the room: it leaves through its door as before. **The fire = delete**: `claude stop`
+  way. **The fire = delete**: `claude stop`
   then `claude rm` (`/api/stop {rm: true}`), running or over; the sign says "NAME is deleted - undo".
 - The demo has over bots, bots that finish and come back, and `demo_stop` for the flows.
+- His two decisions after it (2026-10-24): `exit` typed in a session only detaches, as in Claude Code (the
+  tile closes, nothing else; `room.exit` is gone), stopping is the bench, the door and the fire. **No bench
+  in the room: the over bots wander about** as figures, switched off (grey, the chest light), on breaks
+  like the others but never charging on a mat; "the user is encouraged to put a bench" (the closet has
+  one), or to keep it that way and tidy up with the fire. Tooltips to teach this may come later.
 
 ## Idle bots wander (2026-10-24)
 

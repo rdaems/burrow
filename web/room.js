@@ -17,7 +17,8 @@
 //   sends a message     a beam from its antenna to whoever it wrote to
 //   over (done, failed  switched off on the bench, the oldest at its left, the newest at its right end
 //   or stopped)         (agent view's Completed group; a click on the bench lists them all); a click on
-//                       one restarts it: it gets up and goes to its desk. A bot you stop sits down there
+//                       one restarts it: it gets up and goes to its desk. A bot you stop sits down there.
+//                       With no bench in the room they wander about, switched off (the closet has one)
 //   deleted             gone from the list (the fire, `claude rm`): up in flames
 // Free, two idle bots play ping-pong or chess; one alone at the chess board waits for an opponent.
 // You are in the room too, as pair draws its people: beside the bot whose session is open, a bubble
@@ -462,7 +463,9 @@ function startRoom(cv, app) {
       if (first) homes.set(first[0], { x: Math.min(W - 8, d.x0 + d.w + 8), y: d.y + 1 });
     }
     for (const b of bots) { const f = folk.get(b.id); if (f && !f.held && !f.benched) thinkOne(w, f, L, now, dt, homes.get(b.id), usage); }
-    for (const f of [...folk.values()]) if (f.benched && !f.held) thinkOne(w, f, L, now, dt, null, usage);   // on the way to the bench (its bot may be over)
+    // the figures whose session is over (on the way to the bench, or wandering about without one) think too
+    const live = new Set(bots.map((b) => b.id));
+    for (const f of [...folk.values()]) if (!live.has(f.id) && !f.human && !f.held && !f.leaving) thinkOne(w, f, L, now, dt, null, usage);
     if (you && !you.held) thinkOne(w, you, L, now, dt, null, usage);
     // two standing about in the same place: they step apart
     const loit = [...folk.values()].filter((f) => f.legs === "stand" && f.act.kind === "loiter");
@@ -504,7 +507,7 @@ function startRoom(cv, app) {
     // an hour, a /loop sleeps between runs; opening it restarts it): an idle one with its process still
     // there is about the room, one waiting for an answer sits at its desk with its hand up. You, when
     // the window has been left alone a minute, as pair's people who are away
-    const sleepy = f.benched ? false : f.human ? app.away() > 60 : !f.work && !f.open && !!f.b && f.b.alive === false;
+    const sleepy = f.benched || (f.b && f.b.over) ? false : f.human ? app.away() > 60 : !f.work && !f.open && !!f.b && f.b.alive === false;   // one that is over wanders, it does not charge
     if (sleepy && !["sleep", "doom", "bench"].includes(f.act.kind)) { end(f); f.act = { kind: "sleep", there: false }; }
     if (!sleepy && f.act.kind === "sleep") end(f);
     // you: with the bot whose session is open, at the table of the game you play; else about the
@@ -709,10 +712,10 @@ function startRoom(cv, app) {
       case "bench": {
         // stopped (from here, or elsewhere): switched off, it goes to sit at the free end of the last
         // bench; once Claude Code lists it as over and it sits, the bench draws it with the others.
-        // With no bench it leaves through its door. A stop that does not take in half a minute gets it
-        // up again
-        const b = f.b, bn = L.benches.at(-1);
-        if (!bn) { w.stopped.set(f.id, performance.now()); f.leaving = true; break; }
+        // With no bench it stands where it is until Claude Code lists it as over, then wanders about
+        // with the others. A stop that does not take in half a minute gets it up again
+        const b = f.b, bn = L.benches.at(-1), took = performance.now() - act.since > 30000;
+        if (!bn) { if ((b && b.over) || took) { f.benched = false; end(f); } break; }
         const k = w.benchFill || 0, sits = k < BENCH_SEATS, spot = sits ? benchSeat(bn, k) : benchEnd(bn);
         act.there = sits ? sitAt(f, spot, v, dt) : walk(f, spot, v, dt);
         if (act.there) { f.dir = -1; f.legs = sits ? "sit" : "stand"; f.arms = "down"; }
@@ -842,13 +845,23 @@ function startRoom(cv, app) {
       }
       w.folk.get(b.id).b = b;
     }
-    // a session that is over and still has a figure (just stopped, or being carried) sits down on the
-    // bench; once it sits, the bench draws it with the others
+    // a session that is over: with a bench in the room, its figure (if it has one: just stopped, or
+    // being carried) goes to sit there, and once it sits the bench draws it with the others. With no
+    // bench it is a figure like the others, switched off, wandering about the room (the closet has a
+    // bench for them; or the room is kept that way, and the fire tidies up)
+    const benched = L.benches.length > 0;
     for (const b of ended) {
-      const f = w.folk.get(b.id);
+      if (w.stopped.has(b.id)) continue;
+      let f = w.folk.get(b.id);
+      if (!f && !benched) {
+        const at = w.benchAt.get(b.id) || (late ? { x: doorX(b.m), y: WALL + 3 } : { x: rnd(L.floor.x0 + 10, L.floor.x1 - 10), y: rnd(L.floor.y0 + 10, L.floor.y1) });   // off the bench that was just burnt, in by the door, or about the room at the start
+        f = { id: b.id, x: at.x, y: at.y, dir: -1, arms: "down", legs: "stand", step: 0, sat: false, act: rest(), carry: null, lying: false,
+          busy: false, waiting: false, work: false, human: false, idleSince: performance.now() / 1000, chat: 0, z: Math.random() * 2 };
+        w.folk.set(b.id, f);
+      }
       if (!f) continue;
       f.b = b;
-      if (!f.benched && !f.held) { end(f); f.benched = true; f.sat = false; f.lying = false; f.legs = "stand"; f.act = { kind: "bench", since: performance.now() }; }
+      if (benched && !f.benched && !f.held) { end(f); f.benched = true; f.sat = false; f.lying = false; f.legs = "stand"; f.act = { kind: "bench", since: performance.now() }; }
     }
     if (tickDt > 0) {
       w.T += tickDt; think(w, bots, L, tickDt, usage, s.chess);
@@ -1108,6 +1121,7 @@ function startRoom(cv, app) {
       ctx.drawImage(doomed ? tinted(im, RED, flashA(T)) : im, dx, y0);
       ctx.restore();
     }
+    if (b.over && !f.held) { const led = b.over === "done" ? SP.g : b.over === "failed" ? SP.r : null; if (led) rect(ctx, f.dir < 0 ? x : x - 2, y0 + 19, 2, 1, led); }   // how it ended, on its chest
     if (f.act.kind === "sleep" && f.act.there) zzz(ctx, f, x + 2, y0 + 4);
     if (f.act.kind === "plant" && f.act.water && Math.floor(T * 6) % 2) { rect(ctx, x + 10 * f.dir, y0 + 21, 1, 1, C.blue3); rect(ctx, x + 11 * f.dir, y0 + 24, 1, 1, C.blue3); }
     if (!f.leaving && !f.held && over(x0 + 4, y0, x0 + 18, y + 1)) hovered = { b, x, y: y0 };
@@ -1744,8 +1758,6 @@ function startRoom(cv, app) {
   // at(id): where a figure stands, in CSS pixels of the page (for look.mjs, to drive the room from outside)
   const at = (id) => { const f = world().folk.get(id), b = cv.getBoundingClientRect(); return f ? [b.left + f.x * K, b.top + (f.y - 12) * K] : null; };
   // the whiteboard's ink, for the view: the canvas itself, a line on it (in ink pixels), a wipe
-  // `exit` typed in a session: the bot goes to its door to be stopped (the countdown, with its undo)
-  const exit = (id) => { const f = world().folk.get(id); if (f && f.b && !f.b.human && f.act.kind !== "doom") { end(f); f.act = { kind: "doom", where: lastL && lastL.benches.length ? "bench" : "door", left: 5 }; f.legs = "stand"; f.sat = false; f.lying = false; } };
   const board = { ink: () => ink(world()), line: (x0, y0, x1, y1, col) => inkLine(world(), x0, y0, x1, y1, col), wipe: () => wipe(world()), version: () => world().inkV || 0 };
-  return { talk, typed, size, draw, width, color: projectColor, icon, carry: carryKind, place: placeKind, names: NAMES, at, board, exit, stats, hovered: () => hovered && { id: hovered.b.id, seat: !!hovered.seat } };
+  return { talk, typed, size, draw, width, color: projectColor, icon, carry: carryKind, place: placeKind, names: NAMES, at, board, stats, hovered: () => hovered && { id: hovered.b.id, seat: !!hovered.seat } };
 }

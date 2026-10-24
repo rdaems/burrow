@@ -601,7 +601,8 @@ function openTerminal(t, at) {
 }
 // `exit` (or ← on an empty prompt) detaches: `claude attach` then shows Claude Code's agent view
 // (its prompt reads "describe a task for a new session"). The room is that view here, so the tile
-// closes instead. Ctrl+Z ends the attach itself, and the tile closes with it
+// closes instead, and nothing else happens: the session keeps running, as in Claude Code. Ctrl+Z ends
+// the attach itself, and the tile closes with it
 const agentView = (t, b) => {
   t.tail = (t.tail + dec.decode(b, { stream: true })).replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "").slice(-300);
   return /describe a task for a new session|enter to return · space to reply/.test(t.tail);
@@ -613,7 +614,7 @@ function connect(t, term) {
   s.binaryType = "arraybuffer";
   const since = performance.now();
   s.onopen = () => { s.send(JSON.stringify({ size: [term.cols, term.rows] })); setTimeout(() => { for (const x of t.typed.splice(0)) if (t.ws === s) s.send(enc.encode(x)); }, 1000); };
-  s.onmessage = (e) => { const b = new Uint8Array(e.data); t.active = performance.now(); if (!shell && agentView(t, b)) { closeTile(t); room.exit(t.id); } else term.write(b); };
+  s.onmessage = (e) => { const b = new Uint8Array(e.data); t.active = performance.now(); if (!shell && agentView(t, b)) closeTile(t); else term.write(b); };
   // the attach ended: `exit` in the session, or the session stopped (a shell: `exit` ended it). The
   // tile goes with it (the session keeps running if it does). One that ends at once failed to
   // attach: it stays, with what was said, until you close it
