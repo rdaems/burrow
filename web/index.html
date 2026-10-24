@@ -46,6 +46,7 @@
         <div id="vCloset" class="closet" hidden></div>
         <div id="vReport" class="print" hidden><img class="machine" alt=""><div class="sheet"><pre></pre></div></div>
         <div id="vLimits" hidden></div>
+        <div id="vDone" class="done" hidden></div>
         <div id="vOutside" hidden><canvas class="outside" width="130" height="70"></canvas></div>
         <div id="vBoard" hidden><canvas class="board" width="130" height="55"></canvas><div class="row"><button type="button" class="btn" id="wipe">wipe</button></div></div>
         <div id="vPair" hidden>
@@ -114,6 +115,7 @@ async function act(a) {
   else if (a.kind === "report") { openView("report"); fillReport(); }
   else if (a.kind === "board") openBoard();
   else if (a.kind === "limits") { openView("limits"); fillLimits(); }
+  else if (a.kind === "completed") { openView("completed"); fillDone(); }
   else if (a.kind === "outside") openOutside();
   else if (a.kind === "pairOpen") openPair(a.key);
   else if (a.kind === "pair" && b) joinPair(a.key, b);
@@ -122,7 +124,7 @@ async function act(a) {
   else if (a.kind === "chess" || a.kind === "pong") openGame(a.kind);
   else if (a.kind === "forget") { const r = await api("/api/forget", { unit: a.unit }); if (r.error) note(r.error); }
   else if (a.kind === "layout") await api("/api/layout", { layout: a.layout });
-  else if (a.kind === "stop" && b) stopBot(b.m, b.id);
+  else if (a.kind === "stop" && b) stopBot(b.m, b.id, a.rm);
   else if (a.kind === "blank") { for (const t of tiles.all()) closeTile(t); closeView(); }
   else if (a.kind === "drop" && b) { const t = openBot(b.m, b.id, a.shift); for (const f of a.files) await hand(f, t); }
   else if (a.kind === "spawn") {
@@ -144,6 +146,7 @@ es.addEventListener("state", (e) => {
   if (viewKind === "chess") showChess();
   if (viewKind === "closet") fillCloset();
   if (viewKind === "limits") fillLimits();
+  if (viewKind === "completed") fillDone();
   // a bot that gets work, or a question for you, leaves the ping-pong table
   const pp = viewKind === "pong" && pongUI.playing();
   if (pp && !state.bots.some((b) => b.id === pp.id && !b.busy && !b.waiting)) pongUI.left();
@@ -170,8 +173,8 @@ addEventListener("focus", focus); addEventListener("blur", focus); document.addE
 }
 
 // ---- the view: one thing at a time on the right, in place of the tiles, framed like one
-const PANELS = { dir: "#vDir", machine: "#vMachine", you: "#vYou", closet: "#vCloset", chess: "#chess", pong: "#pong", report: "#vReport", pair: "#vPair", board: "#vBoard", limits: "#vLimits", outside: "#vOutside" };
-const TITLES = { dir: "A PROJECT", machine: "A MACHINE", you: "YOUR FACE", closet: "THE CLOSET", chess: "CHESS", pong: "PING-PONG", report: "REPORT", pair: "PAIR ROOM", board: "WHITEBOARD", limits: "LIMITS", outside: "OUTSIDE" };
+const PANELS = { dir: "#vDir", machine: "#vMachine", you: "#vYou", closet: "#vCloset", chess: "#chess", pong: "#pong", report: "#vReport", pair: "#vPair", board: "#vBoard", limits: "#vLimits", outside: "#vOutside", completed: "#vDone" };
+const TITLES = { dir: "A PROJECT", machine: "A MACHINE", you: "YOUR FACE", closet: "THE CLOSET", chess: "CHESS", pong: "PING-PONG", report: "REPORT", pair: "PAIR ROOM", board: "WHITEBOARD", limits: "LIMITS", outside: "OUTSIDE", completed: "COMPLETED" };
 function openView(kind) {
   if (viewKind && viewKind !== kind) closeView(true);
   for (const t of tiles.all()) closeTile(t);
@@ -370,6 +373,37 @@ function fillLimits() {
     : `<p>Not known yet: Claude Code's /usage is asked every five minutes.</p>`)
     + (u.text ? `<pre class="more">${esc(u.text)}</pre>` : "");
 }
+// ---- the sessions that are over, as agent view's Completed group: how each ended, its name, where, when
+// and how long it ran, its last line; the newest first. A click opens one (Claude Code restarts it), its ✕
+// deletes it from the list (asked twice, as agent view's Ctrl+X)
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const projOf = (b) => (b.tree ? b.tree.split("/").pop() + " (worktree)" : (b.cwd || "").replace(/^\/(Users|home)\/[^/]+$/, "~").split("/").pop() || "~");
+const ago = (sec) => sec < 90 ? `${Math.round(sec)} s` : sec < 5400 ? `${Math.round(sec / 60)} min` : sec < 48 * 3600 ? `${(sec / 3600).toFixed(1)} h` : `${Math.round(sec / 86400)} d`;
+function fillDone() {
+  const el = $("#vDone"), t = new Date(), pad = (n) => String(n).padStart(2, "0");
+  const when = (ms) => { if (!ms) return ""; const d = new Date(ms); return (d.toDateString() === t.toDateString() ? "" : `${pad(d.getDate())}/${pad(d.getMonth() + 1)} `) + `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  const bots = ((state && state.bots) || []).filter((b) => b.over).sort((a, b) => (b.endedAt || b.started) - (a.endedAt || a.started));
+  const key = bots.map((b) => b.id + b.over + b.endedAt).join();   // redrawn only when the list changes (a ✕ being pressed twice stays put)
+  if (el.dataset.key === key) return;
+  el.dataset.key = key;
+  el.innerHTML = bots.length ? bots.map((b) => {
+    const m = machine(b.m || ""), where = (m && state.machines.length > 1 ? m.name + " · " : "") + projOf(b);
+    const ran = b.endedAt && b.started && b.endedAt > b.started ? ago((b.endedAt - b.started) / 1000) : "";
+    return `<div class="drow" data-id="${esc(b.id)}" title="open it"><span class="st ${b.over}">${b.over}</span><span class="nm">${esc(b.name)}</span><span class="where">${esc(where)}</span>` +
+      `<span class="when">${esc(when(b.endedAt))}${ran ? " · ran " + ran : ""}</span><button type="button" class="btn small rm" title="delete it from the list (claude rm)">✕</button>` +
+      (b.detail ? `<div class="detail">${esc(b.detail)}</div>` : "") + `</div>`;
+  }).join("") : `<p>Nobody is done yet.</p>`;
+  for (const row of el.querySelectorAll(".drow")) {
+    const b = byId(row.dataset.id), x = row.querySelector(".rm");
+    row.onclick = (e) => { if (e.target.closest(".rm")) return; if (b) openBot(b.m, b.id, e.shiftKey); };
+    let armed = 0;
+    x.onclick = () => {
+      if (performance.now() - armed < 2500) { x.textContent = "…"; if (b) stopBot(b.m, b.id, true); return; }
+      armed = performance.now(); x.textContent = "delete?"; x.classList.add("warn");
+      setTimeout(() => { if (performance.now() - armed >= 2500) { x.textContent = "✕"; x.classList.remove("warn"); } }, 2600);
+    };
+  }
+}
 // ---- the printer's report: the office's statistics since this page opened, with the staff list and
 // the limits, printed row by row on a sheet that comes out of the printer
 let printing = 0;
@@ -377,7 +411,7 @@ function fillReport() {
   if (!state) return;
   const t = new Date(), pad = (n) => String(n).padStart(2, "0"), hm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
   const when = (ms) => { if (!ms) return ""; const d = new Date(ms); return (d.toDateString() === t.toDateString() ? "" : `${pad(d.getDate())}/${pad(d.getMonth() + 1)} `) + hm(d); };
-  const st = room.stats(), S = st.bots, name = (id) => (byId(id) || {}).name || id, bots = state.bots;
+  const st = room.stats(), S = st.bots, name = (id) => (byId(id) || {}).name || id, bots = state.bots.filter((b) => !b.over), over = state.bots.filter((b) => b.over);
   const sum = (k) => bots.reduce((a, b) => a + ((S[b.id] || {})[k] || 0), 0);
   const top = (k) => { let best = null, n = 0; for (const b of bots) { const v = (S[b.id] || {})[k] || 0; if (v > n) { n = v; best = b; } } return best && { b: best, n }; };
   const mins = (sec) => sec < 90 ? `${Math.round(sec)} s` : sec < 5400 ? `${Math.round(sec / 60)} min` : `${(sec / 3600).toFixed(1)} h`;
@@ -392,6 +426,8 @@ function fillReport() {
   for (const m of state.machines) for (const b of bots.filter((b) => (b.m || "") === m.id))
     lines.push(`  ${b.name.padEnd(16).slice(0, 16)} ${m.name.padEnd(8).slice(0, 8)} ${(b.waiting ? "needs input" : b.busy ? "working" : b.alive === false ? "asleep" : "idle").padEnd(12)} ${when(b.started).padEnd(12)} ${proj(b)}`);
   if (!bots.length) lines.push("  nobody. The plants are thriving.");
+  const done = over.filter((b) => b.over === "done").length, failed = over.filter((b) => b.over === "failed").length, stopped = over.length - done - failed;
+  lines.push(over.length ? `  On the bench: ${over.length} session${over.length === 1 ? "" : "s"} over (${done} done, ${failed} failed, ${stopped} stopped). Switched off, not forgotten.` : "  The bench is empty. Nothing is ever finished here.");
   lines.push("");
   // the break room
   const coffee = sum("coffee"), cooler = sum("cooler"), prints = sum("print"), plants = sum("plant"), naps = sum("sleep"), windows = sum("window"), chairs = sum("chair");
@@ -551,10 +587,12 @@ function connect(t, term) {
   s.onclose = () => { if (t.ws === s) { t.ws = null; if (performance.now() - since > 3000) closeTile(t); } };
   t.ws = s;
 }
-async function stopBot(mid, id) {
+// stop a session (it is over then: on the bench); with rm it is deleted from the list as well
+// (agent view's second Ctrl+X, `claude rm`; the transcript stays, for `claude --resume`)
+async function stopBot(mid, id, rm) {
   const t = tileOf(id);
   if (t) closeTile(t);
-  const r = await api("/api/stop", { m: mid, id });
+  const r = await api("/api/stop", { m: mid, id, rm: !!rm });
   if (r.error) note(r.error);
 }
 
@@ -565,7 +603,7 @@ const botFace = (p) => {
   const b = byId(p.id);
   return pixelAvatar(p.id, "agent", b ? projectColor(b.unit) : "#8b93ad");
 };
-const idleBots = () => ((state && state.bots) || []).filter((b) => !b.busy && !b.waiting)
+const idleBots = () => ((state && state.bots) || []).filter((b) => !b.busy && !b.waiting && !b.over)
   .map((b) => ({ id: b.id, name: b.name, kind: "agent", present: true, color: projectColor(b.unit) }));
 const chessUI = chessPanel($("#chess"), {
   post: async (body) => { const r = await api("/api/chess", body); return { ok: !r.error, json: async () => r }; },

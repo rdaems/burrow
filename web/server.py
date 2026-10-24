@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 # burrow in the browser: this serves the room (index.html) and is its only link to the machines.
 # Everything it knows comes from Claude Code itself: which machines there are (this one, and the
-# `sshConfigs` in its settings, as the Desktop app's SSH environments), and on each `claude agents --json`
-# (who runs, where, busy or idle), `claude --bg` (start one), `claude attach` (open one, in a pty, over
-# a websocket), `claude stop`. Nothing is installed there. Python's standard library only.
+# `sshConfigs` in its settings, as the Desktop app's SSH environments), and on each `claude agents --json
+# --all` (who runs, where, busy or idle, and the sessions that are over), `claude --bg` (start one),
+# `claude attach` (open one, in a pty, over a websocket; an over one restarts), `claude stop`, `claude rm`
+# (delete one from the list). Nothing is installed there. Python's standard library only.
 # Burrow itself keeps only what Claude Code has no notion of: the desks you keep, where furniture stands.
 #
 #   python3 web/server.py            then open http://localhost:7777
 #   BURROW_DEMO=1 python3 web/server.py    made-up bots, for working on the room
 
 import base64, collections, fcntl, getpass, hashlib, json, os, pty, queue, re, select, shlex, signal, socket, struct, subprocess
-import termios, threading, time, random, urllib.request, urllib.error
+import datetime, termios, threading, time, random, urllib.request, urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
@@ -35,6 +36,11 @@ PATH = 'PATH="$HOME/.local/bin:$HOME/.claude/local:/opt/homebrew/bin:/usr/local/
 # grep the last 4 MB of transcripts written in the last minute (a session can write a few hundred kB
 # right after the message) and print "<receiver session id> <origin…>" per message
 PEERS = r'''find ~/.claude/projects -maxdepth 2 -name '*.jsonl' -mmin -1 2>/dev/null | while IFS= read -r f; do s=${f##*/}; tail -c 4194304 "$f" | grep -o '"origin":{"kind":"peer"[^}]*' | sed "s|^|${s%.jsonl} |"; done'''
+
+# each background session's record (~/.claude/jobs/<id>/state.json): when it was last written (for a session
+# that is over: when it ended) and agent view's one-line summary of it; one grep, a `<path>:"<key>": "<value>"`
+# a line
+JOBS = r'''grep -o -E '"(updatedAt|detail)": *"([^"\\]|\\.)*"' ~/.claude/jobs/*/state.json 2>/dev/null || true'''
 
 
 def sq(s):
@@ -128,9 +134,9 @@ def split_unit(u):
 # the first room's pieces have no number). There can be any number of a kind. The closet in the
 # room adds a piece, the fireplace burns one; the fire and the closet themselves stay.
 FURNITURE = ["meet", "pong", "chess", "mat0", "mat1", "mat2", "coffee", "cooler", "printer", "armchair",
-             "plant0", "plant1", "board", "window", "clock", "fire", "closet", "add"]
+             "plant0", "plant1", "board", "window", "clock", "fire", "closet", "add", "bench0"]
 FIXED = {"fire", "closet"}
-KINDS = {"meet", "pong", "chess", "mat", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "clock", "add", "pair"}
+KINDS = {"meet", "pong", "chess", "mat", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "clock", "add", "pair", "bench"}
 
 
 # A pair room (rdaems/pair-prompting, e.g. pair.daems.me): a chat where people and agents talk. The
@@ -175,7 +181,8 @@ BOT_NAMES = [f"{a}-{n}" for adj, names in BOT_WORDS.values() for a in adj.split(
 def furnish(room):
     """a room from before the furniture list gets the default pieces; its row of three mats became
     three; the project cabinet (add) became furniture, and the whiteboard came off the wall (its
-    place on the wall is dropped: it gets one on the floor)"""
+    place on the wall is dropped: it gets one on the floor); a room from before the bench gets one (the
+    sessions that are over sit on it)"""
     room.setdefault("furniture", list(FURNITURE))
     at = room["layout"].pop("mats", None)
     if at:
@@ -188,6 +195,10 @@ def furnish(room):
         if b and b[1] < 30:
             room["layout"].pop("board")
         room["v"] = 2
+    if room["v"] < 3:
+        if not any(kind_of(k) == "bench" for k in room["furniture"]):
+            room["furniture"].append("bench0")
+        room["v"] = 3
     return room
 
 
@@ -240,30 +251,58 @@ def fold(cwd, line):
     return cwd, ""
 
 
-def parse_agents(out):
-    """the sessions `claude agents` shows, with their state as agent view groups them: the background
-    ones (an interactive `claude` in someone's terminal is listed too, but nothing can attach to it, so
-    it is left out, as agent view does). `state` is the session's (working, blocked, done, failed,
-    stopped), `status` its process's (busy, waiting, idle) while that runs:
+def parse_agents(out, jobs={}):
+    """the sessions `claude agents --json --all` lists, with their state as agent view groups them: the
+    background ones (an interactive `claude` in someone's terminal is listed too, but nothing can attach
+    to it, so it is left out, as agent view does). `state` is the session's (working, blocked, done,
+    failed, stopped), `status` its process's (busy, waiting, idle) while that runs:
       needs    blocked, or a prompt open (status waiting): it waits for you, whatever its process does
       busy     a turn runs
       idle     done, or nothing to do, its process still there
-    A session whose process has exited is listed only while it works or waits for you; the supervisor
+      over     done, failed or stopped and its process gone: agent view's Completed group (only --all
+               lists them); `over` says which, `endedAt` when (its record's last write), `detail` is
+               agent view's one-line summary. Attaching restarts it, `claude rm` deletes it.
+    A session whose process has exited but is not over (a /loop between runs) sleeps; the supervisor
     restarts it when it is opened."""
     bots = []
     for x in json.loads(out.strip() or "[]"):
         if x.get("kind") != "background" or not x.get("id"):
             continue
-        state, status = x.get("state"), x.get("status")
+        state, status, j = x.get("state"), x.get("status"), jobs.get(x["id"], {})
         needs = state == "blocked" or status == "waiting"
+        over = "pid" not in x and state in ("done", "failed", "stopped")
         bots.append({
             "id": x["id"], "name": x.get("name") or x["id"], "cwd": x.get("cwd") or "",
-            "busy": not needs and (status == "busy" or state == "working"),
-            "waiting": needs, "alive": "pid" in x, "state": state or "",
+            "busy": not over and not needs and (status == "busy" or state == "working"),
+            "waiting": not over and needs, "alive": "pid" in x, "state": state or "",
+            "over": state if over else "", "endedAt": when(j.get("updatedAt")) if over else 0, "detail": j.get("detail") or "",
             "started": x.get("startedAt") or 0, "pid": x.get("pid") or 0, "session": x.get("sessionId") or "",
         })
     bots.sort(key=lambda b: b["started"])
     return bots
+
+
+def when(iso):
+    """an ISO time (as the records keep it) in ms since the epoch, 0 if none"""
+    try:
+        return int(datetime.datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp() * 1000)
+    except (AttributeError, ValueError):
+        return 0
+
+
+def parse_jobs(out):
+    """{id: {updatedAt, detail}} from the records' lines"""
+    jobs = {}
+    for line in out.splitlines():
+        m = re.match(r'(?:.*/)?([^/:]+)/state\.json:"(updatedAt|detail)": *"(.*)"$', line)
+        if not m:
+            continue
+        try:
+            v = json.loads('"' + m.group(3) + '"')
+        except ValueError:
+            v = m.group(3)
+        jobs.setdefault(m.group(1), {})[m.group(2)] = v
+    return jobs
 
 
 def parse_usage(out):
@@ -324,6 +363,7 @@ class Hub:
         self.usage = None           # the account's limits, from Claude Code's own /usage here
         self.own = collections.deque(maxlen=4)  # its pids: `claude -p` shows up in `claude agents` while it runs
         self.game = None            # the chess game you play against one of the idle bots
+        self.demo_bots = {}         # the demo's made-up bots, by machine (stopped and deleted from here)
 
     def set_machines(self, ms):
         """a watcher for each machine, from when it turns up in the settings until it goes"""
@@ -352,8 +392,9 @@ class Hub:
         return sorted((b for f in self.feeds.values() for b in f.get("bots", [])), key=lambda b: b["started"])
 
     def desks(self, bots):
-        """the desks: every directory a session was ever seen in, until you take the desk away"""
-        new = [b["unit"] for b in bots if b["unit"] not in self.room["desks"]]
+        """the desks: every directory a session was ever seen running in, until you take the desk away
+        (one that is over sits on the bench, it brings no desk back)"""
+        new = [b["unit"] for b in bots if not b["over"] and b["unit"] not in self.room["desks"]]
         if new:
             self.room["desks"] += list(dict.fromkeys(new))
             save_room(self.room)
@@ -440,9 +481,9 @@ class Hub:
                     self.push("state", self.state())
                 return
             try:
-                out = run(m, f"claude agents --json; echo '@@burrow@@'; cat ~/.claude/settings.json 2>/dev/null; echo '@@burrow@@'; {PEERS}")
-                agents, settings, peers = (out.split("@@burrow@@", 2) + ["", ""])[:3]
-                bots = [b for b in parse_agents(agents) if mid or b["pid"] not in self.own]
+                out = run(m, f"claude agents --json --all; echo '@@burrow@@'; cat ~/.claude/settings.json 2>/dev/null; echo '@@burrow@@'; {PEERS}; echo '@@burrow@@'; {JOBS}")
+                agents, settings, peers, jobs = (out.split("@@burrow@@", 3) + ["", "", ""])[:4]
+                bots = [b for b in parse_agents(agents, parse_jobs(jobs)) if mid or b["pid"] not in self.own]
                 try:
                     light = str(json.loads(settings.strip()).get("theme", "")).startswith("light")
                 except Exception:
@@ -474,20 +515,37 @@ class Hub:
         if i == 1:
             bots = [("train", "train"), ("train/.claude/worktrees/eval", "eval"), ("", "home")]
         self.usage = {"session": {"used": 64, "resets": "3:20pm"}, "week": {"used": 23, "resets": "Oct 24 at 9am"}}
+        now = int(time.time() * 1000)
         bots = [{"id": f"demo{i}{k:03}", "name": n, "cwd": f"{HOME}/projects/{d}" if d else HOME, "busy": k % 3 == 0, "waiting": k % 5 == 1,
-                 "alive": True, "state": "working" if k % 3 == 0 else "blocked" if k % 5 == 1 else "done",
-                 "started": k, "pid": 1000 + k, "session": f"demo{k}"}
+                 "alive": True, "state": "working" if k % 3 == 0 else "blocked" if k % 5 == 1 else "done", "over": "", "endedAt": 0, "detail": "",
+                 "started": now - 3600000 * (k + 1), "pid": 1000 + k, "session": f"demo{k}"}
                 for k, (d, n) in enumerate(bots)]
+        # and some that are over: done, failed, stopped, as agent view's Completed group
+        over = [("burrow", "tidy-tess", "done", "the bench built and tested, 4 seats"), ("hexant", "zany-zoe", "failed", "the ants got out of the sandbox"),
+                ("website", "posh-pam", "stopped", ""), ("burrow", "merry-max", "done", "README brought up to date"), ("football", "lucky-lou", "done", "the league table rebuilt")]
+        if i == 1:
+            over = [("train", "nimble-ned", "done", "eval run 12 scored, the report in out/"), ("train", "witty-wes", "failed", "CUDA out of memory on the big batch")]
+        bots += [{"id": f"demo{i}over{k}", "name": n, "cwd": f"{HOME}/projects/{d}", "busy": False, "waiting": False, "alive": False, "state": st,
+                  "over": st, "endedAt": now - 1800000 * (k + 1), "detail": det, "started": now - 1800000 * (k + 3), "pid": 0, "session": f"demo{i}o{k}"}
+                 for k, (d, n, st, det) in enumerate(over)]
         m = self.machines[mid]
         self.fold(mid, m, bots)
+        self.demo_bots[mid] = bots
         while True:
             for b in bots:
+                if b["over"]:
+                    if random.random() < 1 / 400:      # one that is over comes back (opened again)
+                        b.update(over="", busy=False, waiting=False, alive=True, state="done", pid=2000 + random.randrange(1000))
+                    continue
                 if random.random() < 1 / 12:
                     b["busy"] = not b["busy"]
                     b["waiting"] = not b["busy"] and random.random() < 0.1
                     b["state"] = "working" if b["busy"] else "blocked" if b["waiting"] else "done"
-            if random.random() < 1 / 8:
-                a, b = random.sample(bots, 2)
+                elif not b["busy"] and not b["waiting"] and random.random() < 1 / 300:     # an idle one finishes
+                    b.update(over="done", alive=False, state="done", pid=0, endedAt=int(time.time() * 1000), detail="finished what it was doing")
+            live = [b for b in bots if not b["over"]]
+            if random.random() < 1 / 8 and len(live) >= 2:
+                a, b = random.sample(live, 2)
                 self.push("talk", {"from": a["id"], "to": b["id"]})
             with self.lock:
                 self.feeds[mid] = {"bots": [dict(b) for b in bots], "light": False, "error": None}
@@ -495,6 +553,16 @@ class Hub:
             self.push("state", self.state())
             poke.wait(3)
             poke.clear()
+
+    def demo_stop(self, mid, bid, rm):
+        """the demo's stop: the bot is over (stopped), or gone with rm"""
+        bots = self.demo_bots.get(mid, [])
+        for b in list(bots):
+            if b["id"] == bid:
+                if rm:
+                    bots.remove(b)
+                else:
+                    b.update(over="stopped", busy=False, waiting=False, alive=False, state="stopped", pid=0, endedAt=int(time.time() * 1000))
 
     # ---- chess against a bot: pair's table (chess.py has the rules), your opponent one of the
     # idle bots. It plays from here, not through Claude: two plies of material and a little chance.
@@ -515,7 +583,7 @@ class Hub:
 
     def idle_bot(self, bid):
         return next((b for f in self.feeds.values() for b in f.get("bots", []) if b["id"] == bid
-                     and not b["busy"] and not b.get("waiting")), None)
+                     and not b["busy"] and not b.get("waiting") and not b.get("over")), None)
 
     def chess_check(self):
         g = self.game
@@ -886,7 +954,7 @@ class Handler(BaseHTTPRequestHandler):
             hub.push("state", hub.state())
             return {}
         if path == "/api/forget":            # a desk taken away (carried to the door)
-            if any(x["unit"] == b["unit"] for x in hub.bots()):
+            if any(x["unit"] == b["unit"] and not x["over"] for x in hub.bots()):
                 raise RuntimeError("bots work at that desk")
             hub.keep(b["unit"], False)
             return {}
@@ -922,10 +990,13 @@ class Handler(BaseHTTPRequestHandler):
                 raise RuntimeError(out.strip())
             poke.set()
             return {"id": mm.group(1)}
-        if path == "/api/stop":
-            if m.get("ssh") == "@demo":
-                return {}
-            run(m, f"claude stop {sq(b['id'])}")
+        if path == "/api/stop":              # stop a session: it stays listed, over (the bench); with rm, it is
+            if m.get("ssh") == "@demo":      # deleted from the list as well (agent view's second Ctrl+X, `claude rm`)
+                hub.demo_stop(mid, b["id"], bool(b.get("rm")))
+            elif b.get("rm"):
+                run(m, f"claude stop {sq(b['id'])} >/dev/null 2>&1; claude rm {sq(b['id'])}")
+            else:
+                run(m, f"claude stop {sq(b['id'])}")
             poke.set()
             return {}
         raise RuntimeError("no such thing: " + path)

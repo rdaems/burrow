@@ -11,6 +11,10 @@ place in the room tells you what it is doing; there are no notifications, badges
 - **asleep**: a session whose process Claude Code has stopped charges on a mat; opening it wakes it
 - **needs input**: it sits at its desk with its hand up (a question for you, a permission prompt)
 - **talking**: a bot that sends another one a message beams it across the room, antenna to antenna
+- **over** (done, failed or stopped, its process gone: agent view's *Completed*): it sits switched off on
+  the bench, the newest at the right end, a light on its chest for how it ended (green done, red failed);
+  the bench's ends open the whole list. Click one and Claude Code restarts it: it gets up and goes to its
+  desk. Hover one and its desk's screen lights up
 
 Sessions started in the same directory share a desk, labelled with the folder name; a session in a git
 worktree sits at its repository's desk, the worktree a laptop on the cabinet. The `+` beside a desk's
@@ -19,10 +23,12 @@ screen starts another bot there; the empty cabinet adds a project.
 Click a bot and its session opens next to the room, as a tile: a real terminal running `claude attach <id>`,
 so you are using Claude Code itself. Shift-click adds a tile beside the open ones; drag a tile by its band
 onto another to arrange them. Close one (✕, or click the floor) and the bot keeps working. Close burrow
-altogether and every bot keeps working too. To stop a session, carry its bot to its machine's door or onto
-the fire, or type `exit` in its terminal: the bot goes to its door, a sign over it counts five seconds
-down, and a click on the sign, or carrying the bot away, is the undo. A bot started from burrow gets a name the way pair names its
-agents (`dapper-dan`, `merry-moe`).
+altogether and every bot keeps working too. To stop a session, carry its bot onto the bench or to its
+machine's door, or type `exit` in its terminal: a sign over it counts five seconds down (a click on the
+sign, or carrying the bot away, is the undo), then it sits down on the bench, switched off, where it can be
+opened again. To delete a session from the list for good (`claude rm`; its transcript stays for
+`claude --resume`), carry the bot, running or on the bench, into the fire: the same countdown, then it goes up
+in flames. A bot started from burrow gets a name the way pair names its agents (`dapper-dan`, `merry-moe`).
 
 Everything else happens in the room as well, and what needs more than the room opens as a 16-bit panel
 beside it, never a dialog:
@@ -49,10 +55,11 @@ burrow owns nothing. The sessions are Claude Code's own **background sessions**:
 
 | burrow                    | runs on the machine (over ssh for a remote one)      |
 |---------------------------|------------------------------------------------------|
-| who is there, busy/idle   | `claude agents --json`, every 3 s (15 s when burrow is in the background) |
+| who is there, busy/idle, over | `claude agents --json --all`, every 3 s (15 s when burrow is in the background); the one-line summaries and end times of the sessions that are over from `~/.claude/jobs/*/state.json` (same poll) |
 | start a bot               | `cd <dir> && claude --bg [-n name]`                   |
 | open a bot                | `claude attach <id>` in a pty                         |
-| stop a bot                | `claude stop <id>`                                    |
+| stop a bot                | `claude stop <id>` (it stays listed: the bench)       |
+| delete a bot              | `claude stop <id>; claude rm <id>` (the fire)          |
 | who talks to whom         | messages between sessions, from the transcripts written in the last minute (same poll) |
 | drop a file on the session | `scp` to `~/.cache/burrow/drop/<stamp>/`, then its path is typed into the prompt |
 | the limits                | `claude -p /usage --no-session-persistence` on this machine, every 5 min |
@@ -62,9 +69,10 @@ Nothing is installed on the machines except Claude Code. Remote machines are rea
 so `~/.ssh/config`, agents and tailscale names all work. One multiplexed connection per machine is
 shared through `ControlMaster` (sockets in `~/.cache/burrow/`).
 
-The bots are the sessions `claude agents` lists: background ones (`claude --bg`). A `claude` you run in
-some other terminal belongs to that terminal and cannot be attached to, so it is not in the room, as
-agent view leaves it out too. You are in the room as well: beside the bot whose session is open.
+The bots are the sessions `claude agents --all` lists: background ones (`claude --bg`), the ones that are
+over included, as agent view's Completed group has them. A `claude` you run in some other terminal belongs
+to that terminal and cannot be attached to, so it is not in the room, as agent view leaves it out too. You
+are in the room as well: beside the bot whose session is open.
 
 The terminal is light or dark to match the `theme` in Claude Code's settings on that machine.
 

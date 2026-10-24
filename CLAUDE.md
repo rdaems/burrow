@@ -487,6 +487,38 @@ something"; cancelling a burning robot by dragging it away from the fire.
   little in front of it, the doorway, the pair table, the pieces `useAt` takes), not by the pointer.
   The cabinet is outlined and washed like the other pieces (it was drawn outside `piece()`).
 
+## The bench: the sessions that are over (2026-10-24)
+
+He: agents on arthroid were "not showing"; they had finished (`state: done`, their processes reaped, so the
+plain `claude agents --json` no longer listed them), "the bot must've set himself as completed. We should
+have a way of seeing the completed bots. As always, keep building consistently with the `claude agents`
+interface". Agent view (docs/agent-view.md): a *Completed* group (done green, failed red, stopped grey),
+`∙` for a process that has exited (attaching restarts it), the rows that don't fit fold into "… N more";
+`Ctrl+X` stops a session, `Ctrl+X` again within two seconds deletes it from the list (`claude rm`; the
+transcript stays for `claude --resume`). So:
+- The poll is `claude agents --json --all`; a row with no pid in state done/failed/stopped is `over` (that
+  state), with `endedAt` (its record's `updatedAt`) and `detail` (agent view's row summary) from one grep
+  over `~/.claude/jobs/*/state.json` in the same ssh round (`JOBS`, `parse_jobs`). Over bots bring no desk
+  back, don't play chess, don't hold a desk against burning.
+- **The bench** (`bench` kind, from the closet; room.json `v: 3` adds `bench0` to older rooms; its place by
+  `free()`, no default): the over bots sit on it switched off (`dim()`: greys, the ink kept; a 2-dot light
+  on the chest, green done / red failed / none stopped), three a bench, the oldest left, the newest right
+  (`BENCH_SEATS`, `benchSeat`); more benches seat more; the rest are only in the list. Hover a sitter: its
+  name and how it ended, its desk's screen lit (`litDesk`); the desk's screen lights its sitters too. A
+  click opens it (Claude Code restarts it): its figure gets up from the bench (`w.benchAt`) and walks to
+  its desk. The bench's ends (`completed` act) open the **COMPLETED** panel (`#vDone`, `fillDone`): a row a
+  session, newest first, state, name, machine · project, when and how long it ran, the summary; a click
+  opens, ✕ twice (within 2.5 s) deletes. Over bots are not folk: the bench draws them (`drawSitter`); one
+  picked up gets a figure (`lift`, `benched`) and goes back to the bench on its own when let go
+  (`resume`), unless onto the pane (opens) or into the fire.
+- **Stop** = the bench: a running bot dropped on the bench, at its door, or `exit` typed: the countdown
+  sign, then `claude stop` and the figure, now grey, goes to sit at the free end of the last bench
+  (`bench` act; `benchFill`); once the feed says `over` and it sits, the bench takes it over. A bot that
+  goes over on its own (reaped after an hour idle, stopped from agent view) walks to the bench the same
+  way. No bench in the room: it leaves through its door as before. **The fire = delete**: `claude stop`
+  then `claude rm` (`/api/stop {rm: true}`), running or over; the sign says "NAME is deleted - undo".
+- The demo has over bots, bots that finish and come back, and `demo_stop` for the flows.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

@@ -122,6 +122,17 @@ header { flex:none; background:var(--ink); padding:4px 16px; }
 #vLimits p { margin:0; }
 /* the closet: every kind of furniture as it stands in the room (two pixels a dot, as the room), to drag in */
 .closet { display:flex; flex-wrap:wrap; gap:14px 18px; align-items:flex-end; }
+/* the completed list: a row a session, as agent view's Completed group */
+.done .drow { display:grid; grid-template-columns:auto 1fr auto auto; gap:2px 12px; align-items:baseline; padding:8px 4px 6px; border-top:2px solid var(--ink); cursor:pointer; }
+.done .drow:first-child { border-top:0; padding-top:2px; }
+.done .drow:hover { background:rgba(255,255,255,.07); }
+.done .st { font-size:12px; letter-spacing:1px; text-transform:uppercase; }
+.done .st.done { color:var(--scrub3); } .done .st.failed { color:var(--tissue2); } .done .st.stopped { color:var(--steel2); }
+.done .nm { color:var(--gold2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.done .where, .done .when { font-size:12px; color:var(--steel3); white-space:nowrap; }
+.done .detail { grid-column:1 / -1; color:var(--steel3); font:12px/1.4 var(--mono); -webkit-font-smoothing:auto; text-shadow:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.done .rm { grid-column:4; grid-row:1; }
+.done p { margin:0; }
 .item { display:flex; flex-direction:column; align-items:center; gap:8px; padding:4px 2px; cursor:grab; user-select:none; touch-action:none; }
 .item:hover small { color:var(--gold2); }
 .item img { image-rendering:pixelated; display:block; pointer-events:none; }
