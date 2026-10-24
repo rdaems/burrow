@@ -98,7 +98,8 @@ Desktop app's SSH environments use too. The **+** on the wall adds one there:
 
 `sshPort` and `sshIdentityFile` are used too. Each machine is a door in the wall (the first one is this
 machine); its desks and door are painted its colour. Bots come and go through their machine's door; a
-machine burrow can't reach has its door boarded up (hover it for why). The empty door frame adds a machine.
+machine burrow can't reach has its door boarded up (hover it for why). The empty door frame adds a machine:
+its field offers the `Host` names of your `~/.ssh/config` that have no door yet.
 
 Every directory a session was ever seen in has a desk until you burn it. burrow itself keeps only the
 desks, the furniture and where it stands, your face, and the pair rooms' links, in `~/.config/burrow/room.json`.

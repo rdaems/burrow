@@ -37,9 +37,10 @@
           <div class="err"></div>
         </form>
         <form id="vMachine" class="vform" hidden>
-          <p>Reached over ssh, as <code>ssh</code> would (your ~/.ssh/config applies). It goes into Claude Code's own list,
-            <code>sshConfigs</code> in ~/.claude/settings.json, which the Desktop app has too. Nothing gets installed there.</p>
+          <p>Reached over ssh, as <code>ssh</code> would (your <code>~/.ssh/config</code> applies). It goes into Claude Code's own list,
+            <code>sshConfigs</code> in <code>~/.claude/settings.json</code>, which the Desktop app has too. Nothing gets installed there.</p>
           <input class="field" name="ssh" placeholder="odyssey" autocomplete="off" spellcheck="false">
+          <ul class="suggest" id="hosts" hidden></ul>
           <div class="err"></div>
         </form>
         <div id="vYou" class="faces" hidden><button type="button" class="btn" id="youPrev" title="previous face">←</button><span class="face"><img id="youFace" alt="your face"></span><button type="button" class="btn" id="youNext" title="another face">→</button></div>
@@ -207,7 +208,8 @@ function closeView(keep) {                 // keep: another view takes its place
 }
 view.querySelector(".tx").onclick = () => closeView();
 
-// ---- a project, a machine: Enter adds; the directory completes as you type (the machine's own ls)
+// ---- a project, a machine: Enter adds; the directory completes as you type (the machine's own ls),
+// the host from the Host entries of ~/.ssh/config
 function ask(kind) {
   openView(kind);
   const d = $(PANELS[kind]);
@@ -221,7 +223,9 @@ function ask(kind) {
     d.querySelector(".machine").textContent = ms[0] ? ms[0].name : "";
   }
   d.querySelectorAll("input").forEach((i) => (i.value = ""));
-  d.querySelector("input").focus();
+  const inp = d.querySelector("input");
+  inp.focus();
+  inp.dispatchEvent(new Event("focus"));   // its completions open at once (a window without the focus gets no focus event)
 }
 for (const d of [$("#vDir"), $("#vMachine")]) {
   d.addEventListener("submit", async (e) => {
@@ -233,37 +237,46 @@ for (const d of [$("#vDir"), $("#vMachine")]) {
     closeView();
   });
 }
-{
-  // the directory completes as you type: a list under the field (the machine's own ls); ↑ ↓ pick,
-  // Tab or → takes the one picked (Enter too, before it adds), a click as well
-  let timer = null, asked = "", dirs = [], pick = -1;
-  const inp = $("#vDir input"), list = $("#dirs");
+// a field that completes: a list under it from `choices(text)`, shown as soon as it has the focus and
+// as you type; ↑ ↓ pick, Tab or → takes the one picked (Enter too, before the form adds), a click as well
+function completes(inp, list, choices) {
+  let timer = null, asked = null, items = [], pick = -1;
   const show = () => {
-    list.innerHTML = dirs.map((x, i) => `<li${i === pick ? ' class="on"' : ""}>${x.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]))}</li>`).join("");
-    list.hidden = !dirs.length;
+    list.innerHTML = items.map((x, i) => `<li${i === pick ? ' class="on"' : ""}>${x.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]))}</li>`).join("");
+    list.hidden = !items.length;
   };
-  const take = () => { if (pick >= 0 && dirs[pick]) { inp.value = dirs[pick]; inp.dispatchEvent(new Event("input")); } };
-  inp.addEventListener("input", () => {
+  const take = () => { if (pick >= 0 && items[pick]) { inp.value = items[pick]; inp.dispatchEvent(new Event("input")); } };
+  const look = () => {
     clearTimeout(timer);
     timer = setTimeout(async () => {
-      const dir = inp.value, m = $("#vDir select").value || "";
-      if (dir === asked) return;
-      asked = dir;
-      const r = await api("/api/complete", { m, dir });
-      if (r.dirs && inp.value === dir) { dirs = r.dirs.filter((x) => x !== dir); pick = -1; show(); }
+      const text = inp.value;
+      if (text === asked) return;
+      asked = text;
+      const r = await choices(text);
+      if (inp.value === text) { items = r.filter((x) => x !== text); pick = -1; show(); }
     }, 150);
-  });
+  };
+  inp.addEventListener("input", look);
+  inp.addEventListener("focus", () => { asked = null; look(); });
   inp.addEventListener("keydown", (e) => {
     if (list.hidden) return;
-    if (e.key === "ArrowDown") { pick = (pick + 1) % dirs.length; show(); e.preventDefault(); }
-    else if (e.key === "ArrowUp") { pick = (pick - 1 + dirs.length) % dirs.length; show(); e.preventDefault(); }
+    if (e.key === "ArrowDown") { pick = (pick + 1) % items.length; show(); e.preventDefault(); }
+    else if (e.key === "ArrowUp") { pick = (pick - 1 + items.length) % items.length; show(); e.preventDefault(); }
     else if ((e.key === "Tab" || e.key === "ArrowRight") && pick >= 0) { take(); e.preventDefault(); }
     else if (e.key === "Enter" && pick >= 0) { take(); e.preventDefault(); }
-    else if (e.key === "Escape") { dirs = []; show(); e.stopPropagation(); }
+    else if (e.key === "Escape") { items = []; show(); e.stopPropagation(); }
   });
   list.addEventListener("pointerdown", (e) => { const li = e.target.closest("li"); if (!li) return; e.preventDefault(); pick = [...list.children].indexOf(li); take(); inp.focus(); });
-  $("#vDir").addEventListener("submit", () => { dirs = []; show(); });
+  inp.form.addEventListener("submit", () => { items = []; show(); });
 }
+completes($("#vDir input"), $("#dirs"), async (dir) => {         // the directories there that start as typed
+  const r = await api("/api/complete", { m: $("#vDir select").value || "", dir });
+  return r.dirs || [];
+});
+completes($("#vMachine input"), $("#hosts"), async (text) => {   // the hosts of ~/.ssh/config without a door yet
+  const r = await api("/api/hosts", {});
+  return (r.hosts || []).filter((h) => h.toLowerCase().startsWith(text.toLowerCase()));
+});
 
 // ---- you: your face, picked as at pair's door (← another face →), kept in room.json
 function askYou() {

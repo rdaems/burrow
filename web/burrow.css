@@ -102,7 +102,7 @@ header { flex:none; background:var(--ink); padding:4px 16px; }
 .outside { display:block; width:520px; max-width:100%; aspect-ratio:130/70; border:2px solid var(--ink); image-rendering:pixelated; }
 .vform p { margin:0 0 10px; color:var(--white); }
 .vform b { color:var(--gold2); font-weight:normal; }
-.vform code { color:var(--gold2); }
+.vform code { color:var(--gold2); font:14px/1 var(--mono); -webkit-font-smoothing:auto; text-shadow:none; }   /* paths, flags, keys: the terminal's font, as the fields (the pixel font has no ~) */
 .vform a { color:var(--gold2); }
 .pair-room { display:block; width:100%; height:calc(100vh - 180px); border:2px solid var(--ink); background:var(--night); }
 /* the whiteboard, big: four pixels an ink pixel, pair's paper white */

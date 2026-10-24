@@ -10,7 +10,7 @@
 #   python3 web/server.py            then open http://localhost:7777
 #   BURROW_DEMO=1 python3 web/server.py    made-up bots, for working on the room
 
-import base64, collections, fcntl, getpass, hashlib, json, os, pty, queue, re, select, shlex, signal, socket, struct, subprocess
+import base64, collections, fcntl, getpass, glob, hashlib, json, os, pty, queue, re, select, shlex, signal, socket, struct, subprocess
 import datetime, termios, threading, time, random, urllib.request, urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
@@ -92,6 +92,33 @@ def add_machine(ssh, name):
     with open(SETTINGS, "w") as f:           # in place: it may be a link into someone's dotfiles
         f.write(json.dumps(v, indent=2, ensure_ascii=False) + "\n")
     return mid
+
+
+def ssh_hosts():
+    """the Host names of ~/.ssh/config (and the files it includes), in its order, for the new door's
+    field: not the patterns (*, ?, !) and not the hosts that have a door already"""
+    doors = {c.get("sshHost") for c in claude_settings().get("sshConfigs") or [] if isinstance(c, dict)}
+    out = []
+
+    def read(path, depth):
+        try:
+            lines = open(path).read().splitlines()
+        except OSError:
+            return
+        for line in lines:
+            m = re.match(r"\s*(host|include)(?:\s+|\s*=\s*)(.+?)\s*$", line, re.I)
+            if not m:
+                continue
+            for word in m.group(2).split():
+                if m.group(1).lower() == "host":
+                    if not re.search(r"[*?!]", word) and word not in doors and word not in out:
+                        out.append(word)
+                elif depth < 4:
+                    for f in sorted(glob.glob(os.path.expanduser(word if word.startswith(("/", "~")) else "~/.ssh/" + word))):
+                        read(f, depth + 1)
+
+    read(HOME + "/.ssh/config", 0)
+    return out
 
 
 def ssh_opts(m=None):
@@ -1119,6 +1146,8 @@ class Handler(BaseHTTPRequestHandler):
             return {}
         mid = b.get("m") or ""
         m, poke = hub.machine(mid), hub.pokes.get(mid)
+        if path == "/api/hosts":             # the hosts of ~/.ssh/config, for the new door's field
+            return {"hosts": ssh_hosts()}
         if path == "/api/complete":          # directories there that start with what was typed so far
             d = (b.get("dir") or "").strip() or "~/"
             if m.get("ssh") == "@demo":

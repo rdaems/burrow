@@ -580,6 +580,37 @@ there".
   waiting at the chess board draws the next idle one more often (0.7).
 - A click on bare floor still closes the tiles, and sends you there (`loiter`, 20–45 s, then breaks).
 
+## Hosts for a new door, and Remote Control looked at (2026-10-24)
+
+He: hearts instead of `~` in the machine form (the pixel font has no tilde); a completion list there, "we know
+all the hosts from the config file", in the 16-bit style; "the color of the home desk on odyssey does not match
+odyssey's door"; and whether his persistent Remote Control session on odyssey is compatible with burrow ("I'm
+not saying it should! You should investigate if it makes sense").
+- Paths in the view's prose are `<code>`, set in the terminal's font like the fields (`.vform code`): a real `~`.
+- `completes(inp, list, choices)` in index.html is one completer for both fields (the steel list, ↑ ↓, Tab, a
+  click): it opens as soon as the field has the focus (`ask()` dispatches a focus event as well: a window
+  without the focus gets none) and as you type. The host field's choices: `/api/hosts` = `ssh_hosts()`, the
+  `Host` names of `~/.ssh/config` and its `Include`s, in its order, without patterns and without the hosts
+  that have a door already.
+- The home desk: the only one is `arthroid:/home/rembert` (teal, arthroid's); odyssey has no desk, its one
+  session there is over (over bots bring no desk back) and the app's sessions at its `~` are interactive rows,
+  hidden. A door and a desk take their paint from `paintOf(mid)`, the index in `state.machines`, so they
+  cannot disagree for one machine; the screen's hover says whose a desk is (`arthroid:~`).
+- **Remote Control**, checked on odyssey (2.1.306) and here (2.1.310). His `claude remote-control` runs as a
+  systemd user service (`claude-rc.service`, cwd `~`, same-dir mode): one `claude --print --sdk-url
+  …/code/sessions/cse_… --session-id cse_…` child per chat from the app, all in `~`. `claude agents --json`
+  lists them as `kind: "interactive"` with the app's chat names and their status; agent view hides them, so
+  does burrow; `claude attach` refuses them ("No job matching") and there is no terminal behind `--print`
+  anyway. Their links: the environment's `https://claude.ai/code?environment=env_…` (in the service's log),
+  a chat's `https://claude.ai/code/session_<id without cse_>`. So they coexist with the room and only show in
+  the coffee pot (one account's limits); nothing in Claude Code gives a terminal on them.
+- The other way round works: `claude --bg --remote-control -n name` is a background session that is also in
+  the app ("/remote-control is active · Continue here, on your phone, or at https://claude.ai/code/session_…";
+  the job's state.json has `bridgeSessionId: cse_…` and `--remote-control` in `respawnFlags`; tested in
+  football, stopped and removed). Not built: one flag on `/api/spawn` would make every bot started from the
+  room reachable from his phone, and its link is known for a click. His call: it puts every burrow bot in
+  the app's list too.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a
