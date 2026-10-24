@@ -309,7 +309,7 @@ function startRoom(cv, app) {
       if (saved[key]) return clampAt(key, saved[key], u);       // the window may be shorter than when it was put there
       return DEF[key] && !u ? DEF[key] : null;
     };
-    const keys = s.furniture || Object.keys(DEF), at0 = {};
+    const keys = (s.furniture || Object.keys(DEF)).filter((k) => KIND(k) !== "mat"), at0 = {};   // the charging mats of older rooms (a server from before drops them)
     const taken = [];
     for (const k of keys) { const at = where(k); at0[k] = at; if (at && !onWall(k)) taken.push(foot(k, at)); }
     for (const u of units) { u.at = where(u.key, u); if (u.at) taken.push(foot(u.key, u.at, u)); }
