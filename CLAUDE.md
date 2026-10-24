@@ -636,7 +636,9 @@ His decisions:
   out when there is no bench, so they leave like a session gone from the feed; the `bench` act with no
   bench just waits for `over`. "Many people (me included) would rather restart an old chat using
   `/resume`": `claude --resume`, `claude attach <id>` and agent view's `/resume` picker know them all.
-  A new room still gets `bench0` (`FURNITURE`); burn it to opt out.
+  A new room still gets `bench0` (`FURNITURE`); burn it to opt out, the closet has one to opt back in
+  (it was missing from the closet's `CATALOGUE` in index.html until the evening: his bench was burnt and
+  could not come back; a new kind goes in `CATALOGUE` as well as `KINDS`).
 - A brief tip on a sitter: "NAME - done - click to resume" (failed, stopped the same).
 - The report says "On the bench" or "Out of the room" for the over sessions, by whether there is a bench.
 
