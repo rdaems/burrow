@@ -481,6 +481,11 @@ something"; cancelling a burning robot by dragging it away from the fire.
 - A bot waiting to be stopped (`doom`) is hoverable again: its sign lights up, a click on the bot is the
   undo (not "open"), and picking it up cancels the stop (pointermove) so dragging it away rescues it;
   dropping it back on the fire or the door starts a fresh five seconds.
+- He: "the bots really hang on my mouse pointer, so they should flash red when my mouse is a little
+  higher than the fire"; the project cabinet did not flash. A held figure hangs 24 dots under the
+  pointer, so every drop target is now found by where it stands (`spot`, `dropAt`: the fire pit and a
+  little in front of it, the doorway, the pair table, the pieces `useAt` takes), not by the pointer.
+  The cabinet is outlined and washed like the other pieces (it was drawn outside `piece()`).
 
 ## Next
 

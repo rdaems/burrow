@@ -764,11 +764,10 @@ function startRoom(cv, app) {
     const on = (key) => !!hp && hp.key === key, lit = (key) => on(key) && CLICK.has(KIND(key));
     // what is being dragged over the fire (a desk without bots, a piece, a bot) is about to burn, a bot
     // held at its door is about to be stopped: it is outlined red and washed in red, flashing (tinted)
-    const fireRect = L.fire && [L.fire.x0, L.fire.y0, L.fire.x1, L.fire.y1];
-    const heldBot = held && held.b && !held.b.human && pointer ? held : null;
+    const heldBot = held && held.b && !held.b.human && pointer ? held : null, botDrop = heldBot && dropAt(L, heldBot);
     const movingDesk = moving && L.desks.find((d) => d.key === moving.key);
-    const atDoor = !!heldBot && Math.abs(pointer.x - doorX(heldBot.b.m)) < 11 && pointer.y < WALL + 14;
-    dangerNow = atDoor || !!(L.fire && ((moving && !(movingDesk && movingDesk.seats.length) && inFire(L, moving.key, moving.at, moving.u)) || (heldBot && inRect(pointer, fireRect))));
+    const atDoor = botDrop === "door";
+    dangerNow = atDoor || botDrop === "fire" || !!(L.fire && moving && !(movingDesk && movingDesk.seats.length) && inFire(L, moving.key, moving.at, moving.u));
     const danger = (key) => dangerNow && !!moving && moving.key === key, tintOf = (key) => (danger(key) ? flashA(w.T) : 0);
     // a desk being dragged takes its seated bots along, this very frame
     if (moving && moving.key.startsWith("u:")) {
@@ -851,7 +850,7 @@ function startRoom(cv, app) {
     // flat on the floor: the empty cabinet that adds a project, the mats, the ping-pong rug
     if (L.add) {
       const a = L.add, h = hot(a.x0 - 2, a.y0 - 10, a.x1 + 2, a.y1 + 1, { kind: "addDir" });
-      outlined(ctx, foot("add", [a.x0, a.y1]), h, (c) => drawAdd(c, a, h));
+      outlined(ctx, foot("add", [a.x0, a.y1]), h || danger(a.key), (c) => drawAdd(c, a, h), danger(a.key) ? RED : TERRACOTTA, tintOf(a.key));
       if (h) tip = { text: "project", x: a.x0 + ADD_W / 2, y: a.y0 - 2 };
     }
     for (const m of L.mats) outlined(ctx, foot("mat", [m.x, m.y]), lit(m.key), (c) => drawMat(c, m, [...w.folk.values()].some((f) => f.act.kind === "sleep" && f.act.there && f.act.mat === m.key), w.T));
@@ -896,7 +895,7 @@ function startRoom(cv, app) {
       // the fire flares and the fireplace lights up red. A desk with bots can't burn. The pointer
       // on it stirs sparks
       const F = L.fire, r = [F.x0, F.y0, F.x1, F.y1];
-      const feeding = (moving && inFire(L, moving.key, moving.at, moving.u)) || (held && held.b && !held.b.human && pointer && inRect(pointer, r));
+      const feeding = (moving && inFire(L, moving.key, moving.at, moving.u)) || botDrop === "fire";
       const fd = moving && feeding && L.desks.find((d) => d.key === moving.key);
       const onIt = !moving && !held && over(...r);
       if (onIt && !w.sparkOn) { w.sparkOn = true; w.sparks = performance.now(); } else if (!onIt) w.sparkOn = false;
@@ -915,7 +914,7 @@ function startRoom(cv, app) {
       // a pair room (a chat of people and agents, pair.daems.me): a click opens the chat; a bot
       // dropped on it joins the chat. Its light is on once a room is linked
       const info = (s.pair || {})[pr.key], h = hot(pr.x - 13, pr.y - 20, pr.x + 13, pr.y + 1, { kind: "pairOpen", key: pr.key });
-      const over_ = held && held.b && !held.b.human && pointer && inRect(pointer, foot("pair", [pr.x, pr.y]));
+      const over_ = !!heldBot && inRect(spot(heldBot), foot("pair", [pr.x, pr.y]));
       piece(pr, "pair", (c) => drawPair(c, pr, !!info, T, over_));
       if (h) tip = { text: info ? info.room || "pair" : "pair: link a room", x: pr.x, y: pr.y - 22 };
       else if (over_) tip = { text: info ? held.b.name + " joins " + (info.room || "the room") : "no room linked yet", x: pr.x, y: pr.y - 22 };
@@ -1122,6 +1121,16 @@ function startRoom(cv, app) {
   // countdown). `burst` (0..1) is a shower of sparks: the pointer stirred it, or something burnt
   const inFire = (L, key, at, u) => L.fire && (key.startsWith("u:") || !FIXED.has(KIND(key))) &&
     meets(foot(key, at, u), [L.fire.x0, L.fire.y0, L.fire.x1, L.fire.y1 + 4]);
+  // a held figure hangs 24 dots under the pointer, so what it is dropped on is found by where it
+  // stands, not by the pointer: `spot` is its feet, a little up; `dropAt` is where a bot would be
+  // stopped if let go: in the fire pit (standing in it or just in front of it), or in its own doorway
+  const spot = (f) => ({ x: f.x, y: f.y - 4 });
+  function dropAt(L, f) {
+    if (!L || !f.b) return null;
+    if (L.fire && f.x >= L.fire.x0 && f.x < L.fire.x1 && f.y >= L.fire.y0 && f.y < L.fire.y1 + 6) return "fire";
+    if (Math.abs(f.x - doorX(f.b.m)) < 11 && f.y < WALL + 16) return "door";
+    return null;
+  }
   const ELL = (rx, ry, rows) => [...Array(rows)].map((_, j) => Math.round(rx * Math.sqrt(Math.max(0, 1 - ((j + 0.5 - rows / 2) / (rows / 2)) ** 2))));
   function drawFire(ctx, f, T, feeding, burst = -1, burning = []) {
     const { x0, y0 } = f, cx = x0 + 16, r = (y, x, w, c) => rect(ctx, cx + x, y0 + y, w, 1, c);
@@ -1526,10 +1535,10 @@ function startRoom(cv, app) {
       const out = pointer && (pointer.x >= W || pointer.x < 0 || pointer.y < 0 || pointer.y >= H), bot = f.b && !f.b.human;
       const back = () => (f.work ? { kind: "desk" } : rest());
       if (out) { f.act = back(); if (bot) app.carried(f.id, e.clientX, e.clientY); }
-      else if (bot && pointer && Math.abs(pointer.x - doorX(f.b.m)) < 11 && pointer.y < WALL + 14) f.act = { kind: "doom", where: "door", left: 5 };
-      else if (bot && pointer && lastL && lastL.fire && inRect(pointer, [lastL.fire.x0, lastL.fire.y0, lastL.fire.x1, lastL.fire.y1])) f.act = { kind: "doom", where: "fire", left: 5 };
+      else if (bot && pointer && dropAt(lastL, f) === "door") f.act = { kind: "doom", where: "door", left: 5 };
+      else if (bot && pointer && dropAt(lastL, f) === "fire") f.act = { kind: "doom", where: "fire", left: 5 };
       else {
-        const p = pointer && pieceAt(pointer);
+        const p = pointer && pieceAt(spot(f));             // what it stands on, not what the pointer is on
         if (p && KIND(p.key) === "pair") { if (bot) app.act({ kind: "pair", key: p.key, id: f.id }); else app.act({ kind: "pairOpen", key: p.key }); f.act = back(); }
         else f.act = (pointer && !f.work && useAt(f, p)) || back();
       }
