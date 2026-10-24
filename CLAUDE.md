@@ -471,8 +471,10 @@ fixed to a dragged desk, and the danger highlight belongs on the dragged object,
 He: the gold on the active pane "a little bit too much, dim it a bit"; the text touched the pane's edges;
 "a clear feedback when I drag something above the fire, the object I drag should get a red overlay or
 something"; cancelling a burning robot by dragging it away from the fire.
-- The focused (or hovered) tile's band is `--f-gold` (gold1 dithering into gold0, one line added to
-  pixel.js), its bevel gold1/gold0; the bright `--f-hot` stays for buttons and the limits' bars.
+- The focused (or hovered) tile's band is `--f-gold` (one line added to pixel.js), its bevel `--pale1`/
+  `--pale0`; the bright `--f-hot` stays for buttons and the limits' bars. First made a darker amber
+  (gold1 into gold0); he: "I actually wanted to say to make it more pastel", so it is #ffeeaf dithering
+  into #f8cd8e, gold2 and gold1 washed with white.
 - `.term` has 10/12/8/12 px padding; the fit addon takes it off the parent's size, so nothing is cut.
 - Danger (`dangerNow`): what is held over the fire, or a bot held at its own door, is washed in red
   (`tinted`, source-atop) flashing five times a second (`flashA`) besides its red outline, and the sign

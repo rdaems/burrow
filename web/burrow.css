@@ -35,12 +35,12 @@ header { flex:none; background:var(--ink); padding:4px 16px; }
 #divider { flex:none; width:6px; margin:0 -3px; cursor:col-resize; z-index:4; }
 #pane { flex:1; min-width:0; position:relative; overflow:hidden; }
 /* a tile, as a 16-bit window like the popups (pair's door panels): an ink ring with a steel bevel,
-   clipped corners, a band on top in the pixel font (a dithered blue band; a dim gold for the focused one, and
+   clipped corners, a band on top in the pixel font (a dithered blue band; a pastel gold for the focused one, and
    for the one whose bot the pointer is on or a file is over) with its ✕ on the left; inside, the terminal */
 .tile { position:absolute; display:flex; flex-direction:column; background:var(--box); border:2px solid var(--ink); padding:4px; overflow:hidden;
   clip-path:polygon(2px 0,calc(100% - 2px) 0,100% 2px,100% calc(100% - 2px),calc(100% - 2px) 100%,2px 100%,0 calc(100% - 2px),0 2px);
   box-shadow: inset 2px 2px 0 var(--steel3), inset -2px -2px 0 var(--steel1), inset 0 0 0 4px var(--ink); }
-.tile.focus, .tile.hl, .tile.drop { box-shadow: inset 2px 2px 0 var(--gold1), inset -2px -2px 0 var(--gold0), inset 0 0 0 4px var(--ink); }
+.tile.focus, .tile.hl, .tile.drop { box-shadow: inset 2px 2px 0 var(--pale1), inset -2px -2px 0 var(--pale0), inset 0 0 0 4px var(--ink); }
 .tile.lift { opacity:.6; }
 .tbar { flex:none; display:flex; align-items:center; gap:8px; height:28px; padding:0 8px 0 4px; background:var(--f-window); font:16px/28px var(--pixel); -webkit-font-smoothing:none; color:var(--steel4); text-shadow:2px 2px 0 var(--ink); cursor:grab; user-select:none; }
 .tile.focus .tbar, .tile.hl .tbar, .tile.drop .tbar { background:var(--f-gold); color:var(--ink); text-shadow:none; }
@@ -66,7 +66,8 @@ header { flex:none; background:var(--ink); padding:4px 16px; }
    tiles' chrome: that is for terminals */
 :root { --pixel:"Burrow Pixel", ui-monospace, Menlo, monospace;
   --steel0:#3b3a55; --steel1:#5d6280; --steel2:#8b93ad; --steel3:#c2c9d9; --steel4:#f4f6fb; --white:#fff;
-  --scrub0:#10363f; --scrub1:#1b6660; --scrub2:#2fa087; --scrub3:#7fdcb0; --gold0:#b86a1e; --gold1:#f2a531; --gold2:#ffe27a; --tissue2:#f06b72; }
+  --scrub0:#10363f; --scrub1:#1b6660; --scrub2:#2fa087; --scrub3:#7fdcb0; --gold0:#b86a1e; --gold1:#f2a531; --gold2:#ffe27a; --tissue2:#f06b72;
+  --pale0:#f8cd8e; --pale1:#ffeeaf; }   /* the focused tile's pastel gold (pixel.js --f-gold) */
 .pn { border:2px solid var(--ink); clip-path:polygon(2px 0,calc(100% - 2px) 0,100% 2px,100% calc(100% - 2px),calc(100% - 2px) 100%,2px 100%,0 calc(100% - 2px),0 2px); }
 .pn.window { background:var(--f-window); color:var(--white); text-shadow:2px 2px 0 var(--ink);
   box-shadow: inset 2px 2px 0 var(--steel4), inset -2px -2px 0 var(--steel2), inset 4px 4px 0 var(--steel3), inset -4px -4px 0 var(--steel1), inset 0 0 0 6px var(--ink); }
