@@ -44,7 +44,7 @@
           <div class="err"></div>
         </form>
         <div id="vCloset" class="closet" hidden></div>
-        <div id="vReport" class="print" hidden><img class="machine" alt=""><div class="sheet"><pre></pre></div></div>
+        <div id="vReport" class="print" hidden><img class="machine" alt=""><div class="sheet"><pre></pre><span class="ruler" aria-hidden="true"></span></div></div>
         <div id="vLimits" hidden></div>
         <div id="vSettings" class="settings" hidden></div>
         <div id="vDone" class="done" hidden></div>
@@ -487,61 +487,45 @@ let printing = 0;
 function fillReport() {
   if (!state) return;
   const t = new Date(), pad = (n) => String(n).padStart(2, "0"), hm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  const when = (ms) => { if (!ms) return ""; const d = new Date(ms); return (d.toDateString() === t.toDateString() ? "" : `${pad(d.getDate())}/${pad(d.getMonth() + 1)} `) + hm(d); };
   const st = room.stats(), S = st.bots, name = (id) => (byId(id) || {}).name || id, bots = state.bots.filter((b) => !b.over), over = state.bots.filter((b) => b.over);
   const sum = (k) => bots.reduce((a, b) => a + ((S[b.id] || {})[k] || 0), 0);
   const top = (k) => { let best = null, n = 0; for (const b of bots) { const v = (S[b.id] || {})[k] || 0; if (v > n) { n = v; best = b; } } return best && { b: best, n }; };
   const mins = (sec) => sec < 90 ? `${Math.round(sec)} s` : sec < 5400 ? `${Math.round(sec / 60)} min` : `${(sec / 3600).toFixed(1)} h`;
-  const proj = (b) => (b.tree ? b.tree.split("/").pop() + " (worktree)" : (b.cwd || "").replace(/^\/(Users|home)\/[^/]+$/, "~").split("/").pop() || "~");
   const u = state.usage || {}, left = (x) => (x ? `${Math.max(0, 100 - x.used)}%` : "?");
-  const shift = Math.round((performance.now() - st.since) / 60000);
-  const lines = [`BURROW OFFICE REPORT                    ${pad(t.getDate())}/${pad(t.getMonth() + 1)}/${t.getFullYear()} ${hm(t)}`,
-    `Figures since this page opened, ${shift < 2 ? "a moment" : shift + " min"} ago. Approximate. Unaudited.`, ""];
-  // the staff
-  const working = bots.filter((b) => b.busy).length, asleep = bots.filter((b) => b.alive === false).length, waiting = bots.filter((b) => b.waiting).length;
-  lines.push(`STAFF  ${bots.length} session${bots.length === 1 ? "" : "s"} on ${state.machines.length} machine${state.machines.length === 1 ? "" : "s"}: ${working} working, ${waiting} waiting for you, ${asleep} asleep`);
+  const shift = Math.round((performance.now() - st.since) / 60000), n = (k, one) => `${k} ${one}${k === 1 ? "" : "s"}`;
+  // the pixel font is proportional, so the paper is measured in pixels: every line is cut to its width
+  // (nothing runs off the sheet), columns are padded with spaces up to a pixel stop
+  const out = $("#vReport pre"), ruler = $("#vReport .ruler");   // a hidden span in the paper's own font (a canvas would measure a fallback font)
+  ruler.style.font = getComputedStyle(out).font;
+  const px = (s) => { ruler.textContent = s; return ruler.getBoundingClientRect().width; }, wide = Math.max(240, out.clientWidth - 80), sp = px(" ");
+  const cut = (s) => { if (px(s) <= wide) return s; while (s.length && px(s + "-") > wide) s = s.slice(0, -1); return s + "-"; };
+  const padTo = (s, at) => { while (px(s) < at - sp / 2) s += " "; return s; };
+  const row = (...cells) => cells.reduce((line, c, i) => (i < cells.length - 1 ? padTo(line + c, [wide * 0.36, wide * 0.6][i] || 0) : line + c), "");   // columns at pixel stops
+  const two = (a, b) => padTo(a + " ", wide - px(b)) + b;     // the right end flush with the margin
+  const L = [two("BURROW OFFICE REPORT", `${pad(t.getDate())}/${pad(t.getMonth() + 1)} ${hm(t)}`), `since ${shift < 2 ? "a moment" : shift + " min"} ago, approximate`, ""];
+  const working = bots.filter((b) => b.busy).length, waiting = bots.filter((b) => b.waiting).length;
+  L.push(`STAFF  ${n(bots.length, "session")}: ${working} working, ${waiting} waiting for you`);
   for (const m of state.machines) for (const b of bots.filter((b) => (b.m || "") === m.id))
-    lines.push(`  ${b.name.padEnd(16).slice(0, 16)} ${m.name.padEnd(8).slice(0, 8)} ${(b.waiting ? "needs input" : b.busy ? "working" : b.alive === false ? "asleep" : "idle").padEnd(12)} ${when(b.started).padEnd(12)} ${proj(b)}`);
-  if (!bots.length) lines.push("  nobody. The plants are thriving.");
+    L.push(row(`  ${b.name.slice(0, 16)}`, m.name.slice(0, 10), b.waiting ? "needs you" : b.busy ? "working" : b.alive === false ? "off" : "idle"));
+  if (!bots.length) L.push("  nobody. the plants are thriving");
   const done = over.filter((b) => b.over === "done").length, failed = over.filter((b) => b.over === "failed").length, stopped = over.length - done - failed;
   const bench = (state.furniture || []).some((k) => k.replace(/\d+$/, "") === "bench");   // without one the over sessions are not in the room
-  const tally = `${over.length} over (${done} done, ${failed} failed, ${stopped} stopped)`;   // the sheet is 80 columns wide
-  lines.push(over.length ? (bench ? `  Bench: ${tally}. Switched off, not forgotten.` : `  No bench, so ${tally} stay out of the room.`)
-    : bench ? "  The bench is empty. Nothing is ever finished here." : "  No bench, nothing over. Nothing is ever finished here.");
-  lines.push("");
-  // the break room
-  const coffee = sum("coffee"), cooler = sum("cooler"), prints = sum("print"), plants = sum("plant"), naps = sum("sleep"), windows = sum("window"), chairs = sum("chair");
-  lines.push("BREAK ROOM");
-  lines.push(coffee ? `  Coffee: ${coffee} cup${coffee === 1 ? "" : "s"}. The pot stands at ${left(u.session)}${u.session && u.session.resets ? ", refilled " + u.session.resets.replace(/^.* at /, "at ") : ""}.` : "  Coffee: none fetched. Everyone is strangely awake.");
-  lines.push(cooler ? `  Water cooler: ${cooler} conversation${cooler === 1 ? "" : "s"}. Topics undisclosed. The bottle: ${left(u.week)} left.` : "  Water cooler: no conversations. The bottle is " + left(u.week) + " full and lonely.");
-  lines.push(prints ? `  Printed: ${prints} page${prints === 1 ? "" : "s"} by the bots, plus this one. Paper jams: 0 (we are the printer).` : "  Printed: only this. The printer appreciates the attention.");
-  lines.push(plants ? `  Plants watered ${plants} time${plants === 1 ? "" : "s"}. They did not ask.` : "  Plants: not watered. They are plastic, probably.");
-  const nap = top("asleep");
-  lines.push(naps ? `  Naps: ${naps}, on mats rolled out wherever. Longest sleeper: ${name(nap.b.id)} (${mins(nap.n)}).` : "  Naps: none. Nobody rolled out a mat. Batteries are a state of mind.");
-  lines.push(windows ? `  Window: looked out of ${windows} time${windows === 1 ? "" : "s"}. It is ${t.getHours() >= 7 && t.getHours() < 20 ? "day" : "night"}. Nothing happened.` : "  Window: ignored. The outside can wait.");
-  lines.push(chairs ? `  Armchair: ${chairs} reading session${chairs === 1 ? "" : "s"}. Nobody finished the book.` : "  Armchair: empty. The book is still on page 1.");
-  lines.push("");
-  // games and meetings
-  const pong = sum("pong"), chess = sum("chess");
-  lines.push("GAMES");
-  lines.push(pong ? `  Ping-pong: ${pong} player${pong === 1 ? "" : "s"} at the table. The ball is still in play.` : "  Ping-pong: the ball sat on the table all shift.");
-  lines.push(chess ? `  Chess: ${chess} sat down at the board. Mostly pawns were moved.` : "  Chess: the board is in its starting position, as is everyone.");
-  lines.push("");
-  lines.push("MEETINGS");
-  const present = top("present");
-  lines.push(st.meetings ? `  ${st.meetings} held${present ? ", " + name(present.b.id) + " at the whiteboard" : ""}. Whiteboard ${Math.round(st.inked * 100)}% inked. Decisions taken: 0.` : "  None held. Productivity unaffected. Whiteboard " + Math.round(st.inked * 100) + "% inked.");
-  lines.push("");
-  // messages and the employee of the shift
-  const beams = sum("sent"), talker = top("sent"), worker = top("busy"), idler = top("idle");
-  lines.push("MESSAGES");
-  lines.push(beams ? `  ${beams} beamed across the room. ${talker ? name(talker.b.id) + " does most of the talking (" + talker.n + ")." : ""}` : "  None beamed. Everyone minds their own desk.");
-  lines.push("");
-  if (worker && worker.n > 30) lines.push(`EMPLOYEE OF THE SHIFT: ${name(worker.b.id)}, ${mins(worker.n)} at the keyboard.`);
-  if (idler && idler.n > 120 && (!worker || idler.b.id !== worker.b.id)) lines.push(`MOST RELAXED: ${name(idler.b.id)}, ${mins(idler.n)} not at it.`);
-  lines.push("", `LIMITS  5h session: ${left(u.session)} left · week: ${left(u.week)} left`);
-  lines.push("", "Printed on recycled pixels. Please do not feed to the fire.");
+  if (over.length) L.push(`  ${bench ? "bench" : "no bench, out of the room"}: ${over.length} over (${done} done, ${failed} failed, ${stopped} stopped)`);
+  const coffee = sum("coffee"), cooler = sum("cooler"), naps = sum("sleep"), nap = top("asleep"), prints = sum("print");
+  L.push("", "BREAK ROOM");
+  L.push(coffee ? `  coffee: ${n(coffee, "cup")}, the pot at ${left(u.session)}` : `  coffee: none fetched, the pot at ${left(u.session)}`);
+  L.push(cooler ? `  cooler: ${n(cooler, "chat")}, topics undisclosed` : "  cooler: no chats, the bottle is lonely");
+  L.push(naps ? `  naps: ${naps}${nap ? `, longest ${name(nap.b.id)} (${mins(nap.n)})` : ""}` : "  naps: none, batteries are a state of mind");
+  L.push(prints ? `  printed: ${n(prints, "page")} by the bots, plus this one` : "  printed: this page only");
+  const pong = sum("pong"), chess = sum("chess"), beams = sum("sent"), talker = top("sent"), worker = top("busy"), present = top("present");
+  L.push("", `GAMES  ping-pong ${pong}, chess ${chess}${pong + chess ? "" : ", the balls sat still"}`);
+  L.push(`MEETINGS  ${st.meetings ? `${st.meetings} held${present ? ", " + name(present.b.id) + " at the board" : ""}` : "none"}, board ${Math.round(st.inked * 100)}% inked`);
+  L.push(`MESSAGES  ${beams ? `${beams} beamed${talker ? ", most by " + name(talker.b.id) : ""}` : "none, everyone minds their desk"}`);
+  if (worker && worker.n > 30) L.push("", `EMPLOYEE OF THE SHIFT  ${name(worker.b.id)}, ${mins(worker.n)} at the keys`);
+  L.push("", `LIMITS  5h ${left(u.session)} left, week ${left(u.week)} left`, "", "recycled pixels, keep away from the fire");
+  const lines = L.map(cut);
   // the sheet comes out row by row, every row letter by letter, as a line printer
-  const out = $("#vReport pre"), img = $("#vReport .machine"), job = ++printing;
+  const img = $("#vReport .machine"), job = ++printing;
   if (!img.src) img.src = room.icon("printer", 6);
   out.textContent = "";
   $("#vReport .sheet").style.height = "0px";
@@ -551,7 +535,7 @@ function fillReport() {
     if (i >= lines.length) return;
     const line = lines[i];
     out.textContent = lines.slice(0, i).join("\n") + (i ? "\n" : "") + line.slice(0, j);
-    $("#vReport .sheet").style.height = out.offsetHeight + 28 + "px";
+    $("#vReport .sheet").style.height = out.offsetHeight + 30 + "px";
     if (j < line.length) { j += 2; setTimeout(tick, 12); } else { i++; j = 0; setTimeout(tick, 90); }
   };
   tick();
