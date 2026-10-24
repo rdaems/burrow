@@ -30,6 +30,12 @@ opened again. To delete a session from the list for good (`claude rm`; its trans
 `claude --resume`), carry the bot, running or on the bench, into the fire: the same countdown, then it goes up
 in flames. A bot started from burrow gets a name the way pair names its agents (`dapper-dan`, `merry-moe`).
 
+A click on a project's screen (or a worktree's laptop) opens your own terminal there: one login shell per
+directory, in a tile like a session's. It is for the odd command or look, the bots do the work. Close the
+tile and the shell keeps running (the screen shows its prompt, and a line running while it prints); click
+the screen again to get back to it, with its recent output. `exit` ends it. Shells live as long as
+`server.py` does.
+
 Everything else happens in the room as well, and what needs more than the room opens as a 16-bit panel
 beside it, never a dialog:
 

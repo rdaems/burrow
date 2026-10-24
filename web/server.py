@@ -358,6 +358,7 @@ class Hub:
         self.folds = {}             # (machine id, cwd) → (desk directory, worktree or "")
         self.lock = threading.Lock()
         self.clients = []           # one queue per open page
+        self.shells = {}            # (machine id, directory) → Shell: your terminal at that screen
         self.focused = True
         self.pokes = {}
         self.usage = None           # the account's limits, from Claude Code's own /usage here
@@ -412,7 +413,7 @@ class Hub:
             return {"machines": [{"id": mid, "name": m["name"], "ssh": m.get("ssh") or "", **{k: v for k, v in self.feeds.get(mid, {}).items() if k != "bots"}}
                                  for mid, m in self.machines.items()],
                     "desks": self.desks(bots), "bots": bots, "layout": self.room["layout"], "furniture": self.room["furniture"], "pair": self.room.get("pair", {}),
-                    "usage": self.usage, "chess": self.chess_view(), "demo": DEMO, "width": self.room.get("width"),
+                    "usage": self.usage, "chess": self.chess_view(), "demo": DEMO, "width": self.room.get("width"), "shells": self.shells_view(),
                     "you": {"name": USER, **(self.room.get("you") or {})}}
 
     def keep(self, u, on):
@@ -424,6 +425,36 @@ class Hub:
                 self.room["layout"].pop("u:" + u, None)
             save_room(self.room)
         self.push("state", self.state())
+
+    # ---- your terminals (Shell): one per screen, by machine and directory
+    def shell(self, m, d):
+        """the terminal at that screen, started if there is none"""
+        with self.lock:
+            sh = self.shells.get((m["id"], d))
+            if sh and sh.alive:
+                return sh
+            sh = self.shells[(m["id"], d)] = Shell(m, d)
+        self.push_shells()
+        return sh
+
+    def drop_shell(self, sh):
+        with self.lock:
+            if self.shells.get(sh.key) is sh:
+                del self.shells[sh.key]
+        self.push_shells()
+
+    def kill_shells(self, unit):
+        """a desk taken away takes its terminals with it: the project's and its worktrees'"""
+        mid, d = ("", unit) if unit.startswith("/") else unit.split(":", 1)
+        for key, sh in self.shells.copy().items():
+            if key[0] == mid and (key[1] == d or (self.folds.get(key) or ("",))[0] == d):
+                sh.kill()
+
+    def shells_view(self):
+        return [{"m": k[0], "dir": k[1], "busy": sh.busy} for k, sh in self.shells.copy().items() if sh.alive]
+
+    def push_shells(self):
+        self.push("shells", self.shells_view())
 
     def push(self, kind, data):
         msg = f"event: {kind}\ndata: {json.dumps(data)}\n\n".encode()
@@ -779,6 +810,120 @@ def terminal(sock, m, bot):
         threading.Thread(target=lambda: os.waitpid(pid, 0), daemon=True).start()
 
 
+# ---- your terminal at a project's screen: one login shell per directory (the project's, or a
+# worktree's laptop), ad hoc, for a quick look or a command (the bots do the work). It lives as long
+# as this server does: a tile only attaches to it, closing the tile leaves it running, `exit` ends it.
+# Its recent output is kept and replayed to the next attach. A cd elsewhere inside it is its own business
+class Shell:
+    KEEP = 200_000                  # bytes of output kept for the next attach
+
+    def __init__(self, m, d):
+        self.key = (m["id"], d)
+        self.buf = bytearray()
+        self.socks = []
+        self.lock = threading.Lock()
+        self.last = 0.0
+        self.busy = False
+        self.alive = True
+        self.pid, self.fd = pty.fork()
+        if self.pid == 0:
+            os.environ.update(TERM="xterm-256color", COLORTERM="truecolor")
+            script = f'cd {sq(d)} 2>/dev/null; exec "${{SHELL:-/bin/sh}}" -l'
+            a = ["/bin/sh", "-c", PATH + script] if m.get("ssh") in (None, "", "@demo") else argv(m, script, True)
+            try:
+                os.execvp(a[0], a)
+            finally:
+                os._exit(127)
+        threading.Thread(target=self.read, daemon=True).start()
+
+    def read(self):
+        """the pty's output: kept, and sent on to whoever is attached; busy while it comes"""
+        try:
+            while True:
+                r, _, _ = select.select([self.fd], [], [], 0.5)
+                if r:
+                    b = os.read(self.fd, 65536)
+                    if not b:
+                        break
+                    with self.lock:
+                        self.buf += b
+                        del self.buf[:-self.KEEP]
+                        socks = list(self.socks)
+                    self.last = time.time()
+                    for s in socks:
+                        try:
+                            ws_send(s, b)
+                        except OSError:
+                            self.detach(s)
+                    if not self.busy:
+                        self.busy = True
+                        hub.push_shells()
+                elif self.busy and time.time() - self.last > 1.5:
+                    self.busy = False
+                    hub.push_shells()
+        except OSError:
+            pass
+        self.alive = False
+        with self.lock:
+            socks, self.socks = list(self.socks), []
+        for s in socks:
+            try:
+                ws_send(s, b"", 8)
+            except OSError:
+                pass
+        try:
+            os.close(self.fd)
+        except OSError:
+            pass
+        threading.Thread(target=lambda: os.waitpid(self.pid, 0), daemon=True).start()
+        hub.drop_shell(self)
+
+    def attach(self, sock):
+        with self.lock:
+            if self.buf:
+                ws_send(sock, bytes(self.buf))
+            self.socks.append(sock)
+
+    def detach(self, sock):
+        with self.lock:
+            if sock in self.socks:
+                self.socks.remove(sock)
+
+    def resize(self, cols, rows):
+        fcntl.ioctl(self.fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+
+    def write(self, data):
+        os.write(self.fd, data)
+
+    def kill(self):
+        try:
+            os.kill(self.pid, signal.SIGHUP)
+        except OSError:
+            pass
+
+
+def shell_ws(sock, sh):
+    """a terminal attached: keys and the size in, its output out (Shell.read); closing only detaches"""
+    sh.attach(sock)
+    try:
+        while True:
+            m = ws_recv(sock)
+            if m is None:
+                break
+            op, data = m
+            if op == 1:                      # text: control, as JSON
+                c = json.loads(data)
+                if c.get("size"):
+                    cols, rows = c["size"]
+                    sh.resize(cols, rows)
+            else:                            # binary: keys
+                sh.write(data)
+    except (OSError, ValueError):
+        pass
+    finally:
+        sh.detach(sock)
+
+
 def upload(m, name, data):
     """a file dropped on a session: kept here, and copied over to a remote machine; returns its path there"""
     stamp = str(int(time.time() * 1000))
@@ -826,8 +971,8 @@ class Handler(BaseHTTPRequestHandler):
         q = {k: v[0] for k, v in parse_qs(u.query).items()}
         if u.path == "/events":
             return self.events()
-        if u.path == "/term":
-            return self.term(q)
+        if u.path in ("/term", "/shell"):
+            return self.term(q, u.path == "/shell")
         name = "index.html" if u.path == "/" else u.path.lstrip("/")
         path = os.path.normpath(os.path.join(HERE, name))
         if not path.startswith(HERE + os.sep) or not os.path.isfile(path) or name.endswith(".py"):
@@ -855,13 +1000,14 @@ class Handler(BaseHTTPRequestHandler):
             hub.clients.remove(q)
             self.close_connection = True
 
-    def term(self, q):
+    def term(self, q, shell=False):
+        """a websocket: a session attached (`claude attach`), or your terminal at a screen (Shell)"""
         key = self.headers.get("Sec-WebSocket-Key")
         m = hub.machines.get(q.get("m", ""))
         if not m:
             return self.reply(404, {"error": "no such machine"})
-        if not key or not q.get("id"):
-            return self.reply(400, {"error": "a websocket for a bot"})
+        if not key or not q.get("dir" if shell else "id"):
+            return self.reply(400, {"error": "a websocket for a terminal"})
         accept = base64.b64encode(hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest()).decode()
         self.send_response(101)
         self.send_header("Upgrade", "websocket")
@@ -869,7 +1015,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Sec-WebSocket-Accept", accept)
         self.end_headers()
         self.wfile.flush()
-        terminal(self.connection, m, q["id"])
+        if shell:
+            shell_ws(self.connection, hub.shell(m, q["dir"]))
+        else:
+            terminal(self.connection, m, q["id"])
         self.close_connection = True
 
     def do_POST(self):
@@ -963,6 +1112,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/forget":            # a desk taken away (carried to the door)
             if any(x["unit"] == b["unit"] and not x["over"] for x in hub.bots()):
                 raise RuntimeError("bots work at that desk")
+            hub.kill_shells(b["unit"])
             hub.keep(b["unit"], False)
             return {}
         mid = b.get("m") or ""

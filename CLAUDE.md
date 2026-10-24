@@ -531,6 +531,27 @@ between runs), so the mat means one thing, and opening it restarts it; the tip s
 again". A process-off bot with no free mat still sleeps at its desk (add mats from the closet). The demo
 has a bot between loop runs, and idle ones go off now and then.
 
+## Your terminals (2026-10-24)
+
+He: "we need normal terminals as well. Maybe if you click on the main screen of a project, a normal terminal
+opens. But I want to keep it simple"; then: "there's just one terminal for each project, and the user is
+encouraged to only use it ad-hoc. The agents should primarily run scripts and apps"; a `cd` to another
+project inside it: "simply ignore that"; "that terminal is stored if you click it away. That's it".
+- Nothing new on the floor: a shell has no agent behind it, its user is you. A click on a project's screen
+  (or a worktree's laptop) opens a tile with a login shell in that directory on that machine, band "name on
+  machine" like a session's (`openShell`, kind `shell`, keyed machine:dir). You walk to the desk and stand
+  under the screen while the tile has the focus (`screen` act, bubble while typing). Files dropped on the
+  tile or on the screen get their path typed in.
+- **One per screen, kept by the server** (`Shell` in server.py, `hub.shells` by (machine id, dir)): a
+  pty read by its own thread, the last 200 kB kept and replayed on attach; `/shell?m=&dir=` attaches,
+  closing the tile only detaches, `exit` ends it (the tile closes with the socket). A burnt desk kills
+  its shells (`kill_shells`, worktrees via `folds`). Not kept over a restart of server.py, by design
+  (tmux was ruled out on day one).
+- The screen shows it: a prompt on the last row with a blinking cursor while the shell exists, a grey
+  line running while output comes (`busy`: output in the last 1.5 s, pushed as the `shells` event, or the
+  open tile's own output). The bots' bars keep the rows above. Hover a shell's tile and its screen lights
+  up; hover the screen and the tile does.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

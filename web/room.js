@@ -510,11 +510,12 @@ function startRoom(cv, app) {
     // you: with the bot whose session is open, at the table of the game you play; else about the
     // room like the others
     if (f.human && !sleepy) {
-      const o = app.open(), g = o && folk.get(o), game = app.chess(), pp = app.pong(), a = f.act;
+      const o = app.open(), g = o && folk.get(o), game = app.chess(), pp = app.pong(), sh = app.shell(), a = f.act;
       if (game) { if (!(a.kind === "chess" && a.you)) { end(f); f.act = { kind: "chess", side: game.white.id === "you" ? 0 : 1, you: true, left: 1e9, there: false }; } }
       else if (pp) { if (!(a.kind === "pong" && a.you)) { end(f); f.act = { kind: "pong", side: 0, you: true, left: 1e9, there: false }; } }
       else if (g) { if (!(a.kind === "with" && a.to === g.id)) { end(f); f.act = { kind: "with", to: g.id }; } }
-      else if (a.kind === "with" || a.you) end(f);
+      else if (sh) { if (!(a.kind === "screen" && a.m === sh.m && a.dir === sh.dir)) { end(f); f.act = { kind: "screen", m: sh.m, dir: sh.dir }; } }
+      else if (a.kind === "with" || a.kind === "screen" || a.you) end(f);
     }
     const act = f.act, partner = () => { const g = act.with && folk.get(act.with); return g && g.act.kind === act.kind && g.act.with === f.id ? g : null; };
     if (!["desk", "meeting", "chess", "chair", "sleep", "bench"].includes(act.kind)) f.sat = false;
@@ -529,6 +530,16 @@ function startRoom(cv, app) {
         const spot = g.lying ? { x: g.x + 16, y: g.y + 1 } : taken ? { x: at.x + 2, y: at.y + 13 } : { x: at.x + 20, y: at.y + 1 };
         act.there = walk(f, spot, 36, dt);
         if (act.there) { f.dir = spot.x > g.x ? -1 : spot.x < g.x ? 1 : -1; f.arms = "down"; }
+        break;
+      }
+      case "screen": {
+        // at the screen whose terminal you have open: in front of its cabinet, under the screen (or
+        // under the laptop, for a worktree's), the bubble while you type
+        const d = L.desks.find((x) => (x.m || "") === act.m && (x.dir === act.dir || x.trees.includes(act.dir)));
+        if (!d) { f.act = rest(); break; }
+        const { sx } = screenAt(d), k = d.trees.indexOf(act.dir);
+        act.there = walk(f, { x: k < 0 ? sx + 11 : sx + 29 + k * LAP, y: d.y + 13 }, 36, dt);
+        if (act.there) { f.dir = -1; f.arms = "down"; }
         break;
       }
       case "desk":
@@ -771,6 +782,7 @@ function startRoom(cv, app) {
 
   // ---- drawing, and what is under the pointer: hot spots are collected while drawing
   let pointer = null, hots = [], hovered = null, tip = null, lastL = null, moving = null, held = null, hoverId = null, lastHp = null, dangerNow = false;
+  let screenHover = null, hoverScreen = null;    // the screen (or laptop) under the pointer: {m, dir}; the one told to the page
   const over = (x0, y0, x1, y1) => !!pointer && pointer.x >= x0 && pointer.x < x1 && pointer.y >= y0 && pointer.y < y1;
   const hot = (x0, y0, x1, y1, action) => { hots.push({ x0, y0, x1, y1, action }); return over(x0, y0, x1, y1) && !moving && !held; };
   const box = (ctx, x, y, w, h, fill, edge = INK) => { ctx.fillStyle = edge; ctx.fillRect(x - 1, y - 1, w + 2, h + 2); ctx.fillStyle = fill; ctx.fillRect(x, y, w, h); };
@@ -783,7 +795,7 @@ function startRoom(cv, app) {
     ctx.setTransform(2, 0, 0, 2, 0, 0);      // drawn in dots; the canvas has two pixels a dot, for dragging
     ctx.imageSmoothingEnabled = false;
     const s = app.state();
-    hots = []; tip = null;
+    hots = []; tip = null; screenHover = null;
     ctx.drawImage(floor(), 0, 0);
     rect(ctx, W - 1, 0, 1, H, INK2);
     if (!s) return;
@@ -1053,6 +1065,8 @@ function startRoom(cv, app) {
     }
     const id = hovered && !held ? hovered.b.id : null;
     if (id !== hoverId) { hoverId = id; app.hover(id); }
+    const sk = screenHover && !held && !moving ? screenHover.m + ":" + screenHover.dir : null;
+    if (sk !== hoverScreen) { hoverScreen = sk; app.hoverShell(sk); }
     const onHot = hots.some((h) => over(h.x0, h.y0, h.x1, h.y1));
     cv.style.cursor = moving || held ? "grabbing" : onHot ? "pointer" : pieceAt(pointer) ? "grab" : "default";
   }
@@ -1153,15 +1167,24 @@ function startRoom(cv, app) {
     // cursor while one waits for you. The big one is the project's own directory, a laptop a worktree's
     const seated = (f) => f && f.legs === "sit" && !f.lying && (f.act.kind === "desk" || f.act.kind === "sleep");
     const at = (tree) => d.seats.filter((st) => st[2] === tree).map(([id]) => w.folk.get(id)).filter(seated);
+    // your terminal there (app.shells: one per screen, kept by the server): its prompt on the
+    // screen's last row, the cursor blinking, a grey line running while output comes
+    const shells = app.shells(), shellAt = (dir) => shells.find((s) => s.m === (d.m || "") && s.dir === dir);
+    const hs = app.hlShell(), hsAt = (dir) => !!hs && hs.m === (d.m || "") && hs.dir === dir;   // its tile under the pointer
     function paint(g, gw, gh, tree, seed) {
       // off while nobody sits there, or while the sitter's process is stopped
       const f = at(tree).filter((x) => x.b && x.b.alive !== false), busy = f.some((x) => x.busy), waits = f.some((x) => x.waiting);
-      rect(ctx, g.x, g.y, gw, gh, f.length ? C.blue0 : "#10141f");
-      if (!f.length) { rect(ctx, g.x + gw - 3, g.y + 1, 1, 1, "#232c40"); rect(ctx, g.x + gw - 4, g.y + 2, 1, 1, "#232c40"); return; }   // off: a glint
+      const sh = shellAt(tree || d.dir), py = g.y + gh - 2;
+      rect(ctx, g.x, g.y, gw, gh, f.length || sh ? C.blue0 : "#10141f");
+      if (!f.length && !sh) { rect(ctx, g.x + gw - 3, g.y + 1, 1, 1, "#232c40"); rect(ctx, g.x + gw - 4, g.y + 2, 1, 1, "#232c40"); return; }   // off: a glint
       ctx.fillStyle = busy ? d.color : shade(d.color, 0.45);
       const s = busy ? Math.floor(T * 5) : 0;
-      for (let r = 0; r < Math.floor(gh / 2); r++) ctx.fillRect(g.x + 1 + ((r * 3) % 4), g.y + 1 + r * 2, Math.min(gw - 2, 3 + ((r * 7 + s + seed) * 5) % (gw > 10 ? 11 : 4)), 1);
-      if (waits && !busy && Math.floor(T * 2) % 2) rect(ctx, g.x + 2, g.y + gh - 2, 2, 1, C.steel4);
+      if (f.length) for (let r = 0; r < Math.floor(gh / 2) - (sh ? 1 : 0); r++) ctx.fillRect(g.x + 1 + ((r * 3) % 4), g.y + 1 + r * 2, Math.min(gw - 2, 3 + ((r * 7 + s + seed) * 5) % (gw > 10 ? 11 : 4)), 1);
+      if (waits && !busy && Math.floor(T * 2) % 2) rect(ctx, g.x + 2, py - (sh ? 2 : 0), 2, 1, C.steel4);
+      if (!sh) return;
+      rect(ctx, g.x + 1, py, 2, 1, C.steel3);
+      if (sh.busy) rect(ctx, g.x + 4, py, Math.min(gw - 6, 2 + ((Math.floor(T * 6) * 7) % (gw > 10 ? 9 : 3))), 1, C.steel2);
+      else if (Math.floor(T * 2) % 2) rect(ctx, g.x + 4, py, 1, 1, C.steel4);
     }
     // the desktop, lower than the cabinet: a leg between each two chairs, a keyboard at each seat
     slab(ctx, x0 + cab - 2, y - 12, dw - cab + 2, 5, 4, p);
@@ -1175,11 +1198,11 @@ function startRoom(cv, app) {
     plate(ctx, x0 + 2, y - 9, cab - 4, false, p); tiny(ctx, d.label, lx, y - 8, C.steel3);
     // on it the project's screen, and a laptop for each worktree, plugged in; the pointer on one
     // lights up the bots working there. The desk is handled at its screen: a + beside it starts a
-    // bot here
+    // bot here, a click on the screen (or a laptop) opens your terminal there
     const gw = 22 + d.trees.length * LAP, { sx, sy } = screenAt(d);
     const where = (dir) => (d.m ? machineName(d.m) + ":" : "") + dir.replace(/^\/(Users|home)\/[^/]+/, "~");
-    const onScreen = over(sx, sy, sx + 22, sy + 18);
-    if (onScreen) { for (const [id] of d.seats) hl.add(id); tip = { text: where(d.dir), x: sx + 11, y: sy - 1 }; }
+    const onScreen = hot(sx, sy, sx + 22, sy + 18, { kind: "shell", m: d.m || "", dir: d.dir });
+    if (onScreen) { for (const [id] of d.seats) hl.add(id); tip = { text: where(d.dir), x: sx + 11, y: sy - 1 }; screenHover = { m: d.m || "", dir: d.dir }; }
     {
       const px = sx + gw + 1, h = hot(px - 2, sy - 2, px + 5, sy + 7, { kind: "spawn", m: d.m, dir: d.dir });
       tiny(ctx, "+", px, sy, h ? d.color : C.steel2);
@@ -1187,15 +1210,15 @@ function startRoom(cv, app) {
     }
     paint({ x: sx + 2, y: sy + 2 }, 18, 11, "", d.dir.length);
     const mon = sprites.get("monitor");
-    if (onScreen || lit) put(ctx, halo(mon, onScreen ? C.steel3 : TERRACOTTA), sx, sy);
+    if (onScreen || lit || hsAt(d.dir)) put(ctx, halo(mon, onScreen ? C.steel3 : TERRACOTTA), sx, sy);
     put(ctx, mon, sx, sy);
     if (d.trees.length) rect(ctx, sx + 17, y - 13, gw - 22, 1, SP.F);       // the cable, along the top
     d.trees.forEach((tree, k) => {
       const px = sx + 23 + k * LAP, py = y - 22, lap = sprites.get("laptop");
-      const on = over(px, py, px + 12, py + 11), mine = d.seats.filter((st) => st[2] === tree);
-      if (on) { for (const [id] of mine) hl.add(id); tip = { text: tree.split("/").pop() + ": a worktree", x: px + 6, y: py - 1 }; }
+      const on = hot(px, py, px + 12, py + 11, { kind: "shell", m: d.m || "", dir: tree }), mine = d.seats.filter((st) => st[2] === tree);
+      if (on) { for (const [id] of mine) hl.add(id); tip = { text: tree.split("/").pop() + ": a worktree", x: px + 6, y: py - 1 }; screenHover = { m: d.m || "", dir: tree }; }
       paint({ x: px + 2, y: py + 2 }, 8, 5, tree, tree.length);
-      if (on || mine.some(([id]) => hl.has(id))) put(ctx, halo(lap, on ? C.steel3 : TERRACOTTA), px, py);
+      if (on || hsAt(tree) || mine.some(([id]) => hl.has(id))) put(ctx, halo(lap, on ? C.steel3 : TERRACOTTA), px, py);
       put(ctx, lap, px, py);
     });
   }
@@ -1682,6 +1705,7 @@ function startRoom(cv, app) {
   cv.addEventListener("drop", (e) => {
     e.preventDefault(); pointer = dots(e); draw();
     if (hovered && !hovered.b.human && e.dataTransfer.files.length) app.act({ kind: "drop", id: hovered.b.id, files: [...e.dataTransfer.files] });
+    else if (screenHover && e.dataTransfer.files.length) app.act({ kind: "dropShell", ...screenHover, files: [...e.dataTransfer.files] });   // on a screen: into your terminal there
   });
 
   // ---- size and run, twelve frames a second like a 16-bit game. The room is always W x H dots;

@@ -87,6 +87,9 @@ const tiles = startTiles($("#pane"));
 const botTiles = () => tiles.all().filter((t) => t.kind === "bot");
 const tileOf = (id) => tiles.all().find((t) => t.kind === "bot" && t.id === id);
 const focusedBot = () => { const t = tiles.focused(); return t && t.kind === "bot" ? t.id : null; };
+const shellTiles = () => tiles.all().filter((t) => t.kind === "shell");
+const shellOf = (m, dir) => shellTiles().find((t) => t.m === m && t.dir === dir);
+const focusedShell = () => { const t = tiles.focused(); return t && t.kind === "shell" ? { m: t.m, dir: t.dir } : null; };
 let hoverTile = null;                      // the tile the pointer is on
 const view = $("#view");
 let viewKind = null;                       // what the view shows: closet, chess, pong, dir, machine, you; null when tiles do
@@ -101,6 +104,12 @@ const room = startRoom($("#room"), {
   away: () => (blurAt ? (performance.now() - blurAt) / 1000 : 0),
   hl: () => (hoverTile && hoverTile.kind === "bot" ? hoverTile.id : null),
   hover: (id) => { for (const t of botTiles()) t.el.classList.toggle("hl", t.id === id); },
+  // your terminals: the one whose tile has the focus (you stand at its screen), every one the server
+  // keeps (its screen shows a prompt; busy while output comes, from the server or the open tile)
+  shell: focusedShell,
+  shells: () => ((state && state.shells) || []).map((s) => { const t = shellOf(s.m, s.dir); return { m: s.m, dir: s.dir, busy: s.busy || (!!t && performance.now() - t.active < 1000) }; }),
+  hlShell: () => (hoverTile && hoverTile.kind === "shell" ? { m: hoverTile.m, dir: hoverTile.dir } : null),
+  hoverShell: (key) => { for (const t of shellTiles()) t.el.classList.toggle("hl", key === t.m + ":" + t.dir); },
   carry: (id, cx, cy) => { if (cx === null) tiles.hide(); else tiles.preview(cx, cy); },
   carried: (id, cx, cy) => { const z = tiles.preview(cx, cy); tiles.hide(); const b = byId(id); if (b && z) openBot(b.m, b.id, false, z); },
   act,
@@ -121,6 +130,8 @@ async function act(a) {
   else if (a.kind === "pair" && b) joinPair(a.key, b);
   else if (a.kind === "burn") { const r = await api("/api/furniture", { remove: a.key }); if (r.error) note(r.error); }
   else if (a.kind === "open" && b) openBot(b.m, b.id, a.shift);
+  else if (a.kind === "shell") openShell(a.m, a.dir, a.shift);
+  else if (a.kind === "dropShell") { const t = openShell(a.m, a.dir, a.shift); for (const f of a.files) await hand(f, t); }
   else if (a.kind === "chess" || a.kind === "pong") openGame(a.kind);
   else if (a.kind === "forget") { const r = await api("/api/forget", { unit: a.unit }); if (r.error) note(r.error); }
   else if (a.kind === "layout") await api("/api/layout", { layout: a.layout });
@@ -139,10 +150,11 @@ function note(msg) {                       // trouble goes on the wall, in red
 // ---- the feed
 const es = new EventSource("/events");
 let first = true;
+es.addEventListener("shells", (e) => { if (state) { state.shells = JSON.parse(e.data); room.draw(); } });   // a terminal started, ended, busy or quiet
 es.addEventListener("state", (e) => {
   state = JSON.parse(e.data);
   if (first) { first = false; room.size(); }   // the room's width, as it was left
-  for (const t of botTiles()) showWho(t);
+  for (const t of tiles.all()) showWho(t);
   if (viewKind === "chess") showChess();
   if (viewKind === "closet") fillCloset();
   if (viewKind === "limits") fillLimits();
@@ -529,8 +541,9 @@ const LIGHT = { background: "#fbf8f1", foreground: "#140f1e", cursor: "#140f1e",
 const enc = new TextEncoder(), dec = new TextDecoder();
 
 function showWho(t) {
-  const b = byId(t.id), m = machine(t.m);
-  t.name(b ? b.name : t.id, m ? "on " + m.name : "");
+  const m = machine(t.m), on = m ? "on " + m.name : "";
+  if (t.kind === "shell") t.name(t.dir.replace(/\/+$/, "").split("/").pop() || t.dir, on);
+  else { const b = byId(t.id); t.name(b ? b.name : t.id, on); }
   t.term.options.theme = m && m.light ? LIGHT : DARK;
 }
 // open a bot's session: in the focused tile's place (see makeRoom), or `at` a previewed spot when
@@ -541,7 +554,25 @@ function openBot(mid, id, retain, at) {
   if (have) { tiles.focus(have); have.term.focus(); return have; }
   if (!at) makeRoom(retain);
   const t = makeTile("bot", id);
-  t.m = mid; t.ws = null; t.typed = []; t.tail = "";
+  t.m = mid;
+  return openTerminal(t, at);
+}
+// your terminal at a project's screen (or a worktree's laptop): one login shell per directory, kept
+// by the server while it runs (closing the tile only detaches, `exit` ends it). Ad hoc: the bots do
+// the work, this is for a quick look or a command
+function openShell(mid, dir, retain) {
+  closeView();
+  const have = shellOf(mid, dir);
+  if (have) { tiles.focus(have); have.term.focus(); return have; }
+  makeRoom(retain);
+  const t = makeTile("shell", mid + ":" + dir);
+  t.m = mid; t.dir = dir;
+  t.fresh = !((state && state.shells) || []).some((s) => s.m === mid && s.dir === dir);   // started by this click: if it ends at once, what it said stays
+  return openTerminal(t, null);
+}
+// the terminal in a tile (xterm.js), wired to its websocket
+function openTerminal(t, at) {
+  t.ws = null; t.typed = []; t.tail = ""; t.active = 0;
   const term = t.term = new Terminal({ fontFamily: '"Burrow Mono", "JetBrains Mono", Menlo, monospace', fontSize: 13, lineHeight: 1.15,
     cursorBlink: true, allowProposedApi: true, theme: DARK, scrollback: 5000, macOptionIsMeta: true });
   const fit = new FitAddon.FitAddon();
@@ -576,15 +607,17 @@ const agentView = (t, b) => {
   return /describe a task for a new session|enter to return · space to reply/.test(t.tail);
 };
 function connect(t, term) {
-  const s = new WebSocket(`ws://${location.host}/term?m=${encodeURIComponent(t.m)}&id=${encodeURIComponent(t.id)}`);
+  const shell = t.kind === "shell";
+  const s = new WebSocket(shell ? `ws://${location.host}/shell?m=${encodeURIComponent(t.m)}&dir=${encodeURIComponent(t.dir)}`
+    : `ws://${location.host}/term?m=${encodeURIComponent(t.m)}&id=${encodeURIComponent(t.id)}`);
   s.binaryType = "arraybuffer";
   const since = performance.now();
   s.onopen = () => { s.send(JSON.stringify({ size: [term.cols, term.rows] })); setTimeout(() => { for (const x of t.typed.splice(0)) if (t.ws === s) s.send(enc.encode(x)); }, 1000); };
-  s.onmessage = (e) => { const b = new Uint8Array(e.data); if (agentView(t, b)) { closeTile(t); room.exit(t.id); } else term.write(b); };
-  // the attach ended: `exit` in the session, or the session stopped. The tile goes with it (the
-  // session keeps running if it does). One that ends at once failed to attach: it stays, with what
-  // claude said, until you close it
-  s.onclose = () => { if (t.ws === s) { t.ws = null; if (performance.now() - since > 3000) closeTile(t); } };
+  s.onmessage = (e) => { const b = new Uint8Array(e.data); t.active = performance.now(); if (!shell && agentView(t, b)) { closeTile(t); room.exit(t.id); } else term.write(b); };
+  // the attach ended: `exit` in the session, or the session stopped (a shell: `exit` ended it). The
+  // tile goes with it (the session keeps running if it does). One that ends at once failed to
+  // attach: it stays, with what was said, until you close it
+  s.onclose = () => { if (t.ws === s) { t.ws = null; if ((shell && !t.fresh) || performance.now() - since > 3000) closeTile(t); } };
   t.ws = s;
 }
 // stop a session (it is over then: on the bench); with rm it is deleted from the list as well
@@ -653,12 +686,12 @@ async function hand(file, t) {
   t.term.focus();
 }
 const pane = $("#pane");
-const tileAt = (e) => { const el = e.target.closest && e.target.closest(".tile"); return el && botTiles().find((t) => t.el === el); };
-pane.addEventListener("dragover", (e) => { const t = tileAt(e); if (!t) return; e.preventDefault(); for (const o of botTiles()) o.el.classList.toggle("drop", o === t); });
-pane.addEventListener("dragleave", (e) => { if (!pane.contains(e.relatedTarget)) for (const o of botTiles()) o.el.classList.remove("drop"); });
+const tileAt = (e) => { const el = e.target.closest && e.target.closest(".tile"); return el && tiles.all().find((t) => t.el === el); };
+pane.addEventListener("dragover", (e) => { const t = tileAt(e); if (!t) return; e.preventDefault(); for (const o of tiles.all()) o.el.classList.toggle("drop", o === t); });
+pane.addEventListener("dragleave", (e) => { if (!pane.contains(e.relatedTarget)) for (const o of tiles.all()) o.el.classList.remove("drop"); });
 pane.addEventListener("drop", async (e) => {
   const t = tileAt(e);
-  for (const o of botTiles()) o.el.classList.remove("drop");
+  for (const o of tiles.all()) o.el.classList.remove("drop");
   if (!t) return;
   e.preventDefault();
   for (const file of e.dataTransfer.files) await hand(file, t);
