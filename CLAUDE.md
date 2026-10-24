@@ -611,6 +611,15 @@ not saying it should! You should investigate if it makes sense").
   room reachable from his phone, and its link is known for a click. His call: it puts every burrow bot in
   the app's list too.
 
+## README with pictures (2026-10-24)
+
+He: "re-write the readme, explain the first principles, add some screenshots. Keep it simple, elegant". The
+principles are his own from this file (owns nothing, the room is the interface, the terminal is Claude Code's,
+one room for all machines, an office). The pictures in `docs/` come from the demo on :7778 through look.mjs at
+1280x820 (the window the hero shows); demo bots cannot be attached to, so the hero's tile is the burrow desk's
+shell with `claude` started in it and quit again; `room.png` is a crop of the desks at device pixels, the
+panels are crops too. Redo them the same way when the room changes much.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a
