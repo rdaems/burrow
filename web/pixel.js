@@ -27,7 +27,7 @@
   s.setProperty("--f-window", dither(P.blue1, P.blue0));
   s.setProperty("--f-button", dither(P.steel4, P.steel3, 30));
   s.setProperty("--f-hot", dither(P.gold2, P.gold1, 30));
-  s.setProperty("--f-gold", dither("#ffeeaf", "#f8cd8e", 30));   // burrow: the focused tile's band, a pastel gold (gold2 and gold1 washed with white)
+  s.setProperty("--f-gold", dither("#f0be8c", "#ecab78", 30));   // burrow: the focused tile's band, between the pastel gold and the room's terracotta (#d97757), nearer the gold
   s.setProperty("--f-green", dither(P.scrub2, P.scrub1, 30));
   s.setProperty("--stars", stars);
 })();

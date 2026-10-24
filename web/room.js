@@ -239,7 +239,7 @@ function startRoom(cv, app) {
     DEF = {
       meet: [W / 2, WALL + 34], pong: [60, 62], chess: [70, FLOORY - 32], mat0: [104, FLOORY - 30], mat1: [132, FLOORY - 30], mat2: [160, FLOORY - 30],
       coffee: [3, FLOORY], cooler: [36, FLOORY - 1], printer: [W / 2 + 4, FLOORY], armchair: [W - 32, FLOORY],
-      plant0: [W - 8, FLOORY], plant1: [W - 12, 64], board: [W / 2 + 46, WALL + 34], window: [W - 40, 4], clock: [W - 15, 5], fire: [W - 74, FLOORY],
+      plant0: [W - 8, FLOORY], plant1: [W - 12, 64], board: [W / 2 + 46, WALL + 34], window: [W - 40, 4], clock: [W - 15, 5], fire: [W - 92, FLOORY],
       closet: [W - 72, 2], settings0: [W - 92, 5],
     };
   }
@@ -248,12 +248,13 @@ function startRoom(cv, app) {
   // switchboard (burrow's settings) stay
   const KIND = (key) => key.replace(/\d+$/, "");
   const FIXED = new Set(["fire", "closet", "settings"]);
-  const CLICK = new Set(["add", "closet", "chess", "pong", "printer", "pair", "board", "coffee", "cooler", "window", "bench", "settings"]);   // a click does something there
+  const CLICK = new Set(["add", "closet", "chess", "pong", "printer", "pair", "board", "coffee", "cooler", "window", "bench", "armchair", "settings"]);   // a click does something there
   const NAMES = { meet: "meeting table", pong: "ping-pong table", chess: "chess table", coffee: "coffee machine", cooler: "water cooler",
     printer: "printer", armchair: "armchair", plant: "plant", board: "whiteboard", window: "window", clock: "clock", add: "project cabinet", pair: "pair room", bench: "bench", settings: "switchboard" };
   // the bench seats three sessions that are over, side by side (its ends are the bench's own: a click
   // there lists them all)
   const BENCH_SEATS = 3, benchSeat = (bn, k) => ({ x: bn.x - 14 + k * 14, y: bn.y });
+  const FIRE = { w: 48, h: 42, S: 1.5 };     // the fire pit's footprint, drawn to scale from its 32 x 28 original
   const benchEnd = (bn) => ({ x: bn.x + 36 <= W - 8 ? bn.x + 36 : bn.x - 36, y: bn.y });   // standing room at its end (the left one at the room's edge)
   // the default places for desks: columns of them, as many as the room is wide
   const SLOTS = () => [104, 150, 196, 242, 288, 334].flatMap((y) => [...Array(Math.max(1, Math.floor((W - 10) / 124)))].map((_, i) => [10 + i * 124, y]));
@@ -274,7 +275,7 @@ function startRoom(cv, app) {
       case "board": return [x - 16, y - 26, x + 16, y + 1];
       case "window": return [x, y, x + 21, y + 18];
       case "clock": return [x, y, x + 12, y + 10];
-      case "fire": return [x, y - 28, x + 32, y + 1];
+      case "fire": return [x, y - FIRE.h, x + FIRE.w, y + 1];
       case "closet": return [x, y, x + 22, y + 24];
       case "settings": return [x, y, x + 14, y + 14];
       case "pair": return [x - 13, y - 20, x + 13, y + 1];
@@ -344,7 +345,7 @@ function startRoom(cv, app) {
       desks, add: a0 && { key: a0.key, x0: a0.x, y0: a0.y - 15, x1: a0.x + ADD_W, y1: a0.y },
       floorY: FLOORY, board: b0 && { key: b0.key, x: b0.x, y: b0.y, x0: b0.x - 16, y0: b0.y - 26, x1: b0.x + 16, y1: b0.y }, clock: c0 && { key: c0.key, x0: c0.x, y0: c0.y },
       windows: all("window").map((p) => ({ key: p.key, x0: p.x, y0: p.y, x1: p.x + 21, y1: p.y + 18 })),
-      fire: f0 && { key: f0.key, x0: f0.x, y0: f0.y - 28, x1: f0.x + 32, y1: f0.y }, closet: cl && { key: cl.key, x0: cl.x, y0: cl.y, x1: cl.x + 22, y1: cl.y + 24 },
+      fire: f0 && { key: f0.key, x0: f0.x, y0: f0.y - FIRE.h, x1: f0.x + FIRE.w, y1: f0.y }, closet: cl && { key: cl.key, x0: cl.x, y0: cl.y, x1: cl.x + 22, y1: cl.y + 24 },
       settings: sw && { key: sw.key, x0: sw.x, y0: sw.y, x1: sw.x + 14, y1: sw.y + 14 },
       meet: one("meet"), pong: one("pong"), chess: one("chess"), pairs: all("pair"), benches: all("bench"),
       cooler: one("cooler"), plants: all("plant"), printer: one("printer"), chairs: all("armchair"),
@@ -381,7 +382,7 @@ function startRoom(cv, app) {
   function end(f) { f.lying = false; f.carry = null; f.act = rest(0.06); }
   function wake(f) { f.lying = false; f.legs = "stand"; f.carry = "roll"; f.act = { kind: "stand", left: 1.5 }; }   // up, the mat rolled up under its arm
   // a clear bit of floor for a mat: inside the floor, off every piece (with a margin), off the other mats
-  const MATR = (x, y) => [x - 12, y - 24, x + 12, y + 1];
+  const MATR = (x, y) => [x - 17, y - 18, x + 17, y + 1];
   function napClear(L, x, y, others) {
     const r = MATR(x, y);
     if (r[0] < L.floor.x0 - 6 || r[2] > L.floor.x1 + 6 || r[1] < WALL + 6 || r[3] > L.floor.y1 + 4) return false;
@@ -538,8 +539,8 @@ function startRoom(cv, app) {
       const o = app.open(), g = o && folk.get(o), game = app.chess(), pp = app.pong(), sh = app.shell(), a = f.act;
       if (game) { if (!(a.kind === "chess" && a.you)) { end(f); f.act = { kind: "chess", side: game.white.id === "you" ? 0 : 1, you: true, left: 1e9, there: false }; } }
       else if (pp) { if (!(a.kind === "pong" && a.you)) { end(f); f.act = { kind: "pong", side: 0, you: true, left: 1e9, there: false }; } }
-      else if (g) { if (!(a.kind === "with" && a.to === g.id)) { end(f); f.act = { kind: "with", to: g.id }; } }
-      else if (sh) { if (!(a.kind === "screen" && a.m === sh.m && a.dir === sh.dir)) { end(f); f.act = { kind: "screen", m: sh.m, dir: sh.dir }; } }
+      else if (g) { if (!(a.kind === "with" && a.to === g.id) && !a.chosen) { end(f); f.act = { kind: "with", to: g.id }; } }      // (a seat you clicked yourself keeps you)
+      else if (sh) { if (!(a.kind === "screen" && a.m === sh.m && a.dir === sh.dir) && !a.chosen) { end(f); f.act = { kind: "screen", m: sh.m, dir: sh.dir }; } }
       else if (a.kind === "with" || a.kind === "screen" || a.you) end(f);
     }
     const act = f.act, partner = () => { const g = act.with && folk.get(act.with); return g && g.act.kind === act.kind && g.act.with === f.id ? g : null; };
@@ -552,7 +553,7 @@ function startRoom(cv, app) {
         if (!g) { f.act = rest(); break; }
         const seated = g.legs === "sit" && !g.lying, at = gs || g;
         const taken = seated && others.some((h) => h !== g && h.legs === "sit" && Math.abs(h.x - (at.x + SEAT)) < 4 && Math.abs(h.y - at.y) < 4);
-        const spot = g.lying ? { x: g.x + 16, y: g.y + 1 } : taken ? { x: at.x + 2, y: at.y + 13 } : { x: at.x + 20, y: at.y + 1 };
+        const spot = g.lying ? { x: g.x + 20, y: g.y + 1 } : taken ? { x: at.x + 2, y: at.y + 13 } : { x: at.x + 20, y: at.y + 1 };
         act.there = walk(f, spot, 36, dt);
         if (act.there) { f.dir = spot.x > g.x ? -1 : spot.x < g.x ? 1 : -1; f.arms = "down"; }
         break;
@@ -756,7 +757,7 @@ function startRoom(cv, app) {
         // the undo. Then `claude stop`: it goes to sit on the bench (or, with no bench, out through
         // the door), or up in flames
         const bn = L.benches.at(-1);
-        const spot = act.where === "fire" && L.fire ? { x: L.fire.x0 + 16, y: L.fire.y1 - 10 } : act.where === "bench" && bn ? benchEnd(bn) : { x: doorX(f.b && f.b.m), y: WALL + 3 };
+        const spot = act.where === "fire" && L.fire ? { x: L.fire.x0 + FIRE.w / 2, y: L.fire.y1 - 14 } : act.where === "bench" && bn ? benchEnd(bn) : { x: doorX(f.b && f.b.m), y: WALL + 3 };
         f.x = spot.x; f.y = spot.y; f.dir = -1; f.arms = act.where === "fire" ? "up" : "down"; f.legs = "stand";
         if ((act.left -= dt) <= 0 && !f.gone) {
           f.gone = true;
@@ -1028,7 +1029,11 @@ function startRoom(cv, app) {
       piece(pr, "printer", (c) => drawPrinter(c, pr, job ? job.act.wait : printing < 3 ? printing : undefined));
       if (h) tip = { text: "report", x: pr.x, y: pr.y - 16 };
     }
-    for (const ch of L.chairs) piece(ch, "armchair", (c) => drawArmchair(c, ch));
+    for (const ch of L.chairs) {              // a click on one: you go and sit in it (a bot in it gets up)
+      const h = hot(ch.x - 6, ch.y - 23, ch.x + 18, ch.y + 1, { kind: "sit", key: ch.key });
+      piece(ch, "armchair", (c) => drawArmchair(c, ch));
+      if (h) tip = { text: "have a seat", x: ch.x + 6, y: ch.y - 24 };
+    }
     if (L.board) {
       const b = L.board, h = hot(b.x - 15, b.y - 26, b.x + 15, b.y - 11, { kind: "board" });
       piece(b, "board", (c) => drawBoard(c, b, w));
@@ -1108,7 +1113,7 @@ function startRoom(cv, app) {
     for (const bm of w.beams) {
       const f = w.folk.get(bm.from), g = w.folk.get(bm.to);
       if (!f || !g) continue;
-      const top = (h) => Math.round(h.y) - (h.lying ? 27 : 29), UP = 6;
+      const top = (h) => Math.round(h.y) - (h.lying ? 20 : 29), UP = 6;
       const ax = Math.round(f.x) + (f.dir < 0 ? -1 : 0), ay = top(f), bx = Math.round(g.x) + (g.dir < 0 ? -1 : 0), by = top(g);
       const pts = [[ax, ay], [ax, ay - UP], [bx, by - UP], [bx, by]];
       const len = [UP, Math.hypot(bx - ax, by - ay), UP], total = len[0] + len[1] + len[2];
@@ -1123,7 +1128,7 @@ function startRoom(cv, app) {
     }
     // talk, over everything: dots in a bubble, never the words
     for (const f of w.folk.values()) if (f.chat > 0 && !still) {
-      const bx = Math.round(f.x) + 3, by = Math.round(f.y) - (f.lying ? 28 : 27) - 6;
+      const bx = Math.round(f.x) + 3, by = Math.round(f.y) - (f.lying ? 20 : 27) - 6;
       rect(ctx, bx - 1, by - 1, 11, 7, INK); rect(ctx, bx, by, 9, 5, C.steel4); rect(ctx, bx, by + 5, 1, 1, C.steel4);
       for (let i = 0; i < 3; i++) if ((Math.floor(f.chat * 4) + i) % 3) rect(ctx, bx + 2 + i * 2, by + 2, 1, 1, INK);
     }
@@ -1230,17 +1235,18 @@ function startRoom(cv, app) {
     dims.set(im, c);
     return c;
   }
-  function drawSleeper(ctx, f, b, T, hl) {  // seen from above: the head on the pillow, a blanket
+  function drawSleeper(ctx, f, b, T, hl) {  // lying on its back on the mat, head to the left: the standing figure turned on its side
     if (!b) return;
     const x = Math.round(f.x), y = Math.round(f.y), im = body(seedOf(b), colorOf(b), "down", "stand", b.human);
-    const ring = hl.has(f.id) || over(x - 11, y - 28, x + 11, y) ? TERRACOTTA : app.opens().includes(f.id) ? OPEN : null;
-    if (im) { if (ring) ctx.drawImage(halo(im, ring), 0, 0, SW, 16, x - 11, y - 28, SW, 16); ctx.drawImage(im, 0, 0, SW, 16, x - 11, y - 28, SW, 16); }
-    const c0 = b.human ? colorOf(b) : C.steel2;   // a blanket: grey for a bot, yours in your colour
-    box(ctx, x - 10, y - 13, 20, 9, c0, MAT.k);
-    rect(ctx, x - 10, y - 13, 20, 2, shade(c0, 1.25));
-    rect(ctx, x - 10, y - 6, 20, 2, shade(c0, 0.7));
-    zzz(ctx, f, x + 6, y - 24);
-    if (over(x - 11, y - 28, x + 11, y)) hovered = { b, x, y: y - 28 };
+    const on = over(x - 15, y - 17, x + 15, y - 1), ring = hl.has(f.id) || on ? TERRACOTTA : app.opens().includes(f.id) ? OPEN : null;
+    if (im) {
+      ctx.save(); ctx.translate(x, y - 9); ctx.rotate(-Math.PI / 2);      // a quarter turn: the sprite's top goes left
+      if (ring) ctx.drawImage(halo(im, ring), -SW / 2, -14);
+      ctx.drawImage(im, -SW / 2, -14);
+      ctx.restore();
+    }
+    zzz(ctx, f, x - 12, y - 22);
+    if (on) hovered = { b, x, y: y - 20 };
   }
   const zed = (ctx, x, y) => { ctx.fillRect(x, y, 3, 1); ctx.fillRect(x + 1, y + 1, 1, 1); ctx.fillRect(x, y + 2, 3, 1); };
   function zzz(ctx, f, x, y) {
@@ -1351,41 +1357,44 @@ function startRoom(cv, app) {
   }
   const ELL = (rx, ry, rows) => [...Array(rows)].map((_, j) => Math.round(rx * Math.sqrt(Math.max(0, 1 - ((j + 0.5 - rows / 2) / (rows / 2)) ** 2))));
   function drawFire(ctx, f, T, feeding, burst = -1, burning = []) {
-    const { x0, y0 } = f, cx = x0 + 16, r = (y, x, w, c) => rect(ctx, cx + x, y0 + y, w, 1, c);
+    // every measure of the 32 x 28 original scaled by FIRE.S (X), so the pit keeps its proportions
+    const { x0, y0 } = f, S = FIRE.S, X = (v) => Math.round(v * S), cx = x0 + X(16), r = (y, x, w, c) => rect(ctx, cx + x, y0 + y, w, 1, c);
     const ST = { k: "#4d4a4f", m: "#8d8a86", hi: "#aaa59e", d: "#6e6b6a" };    // the stones
-    // the ring of stones, 32 x 12 at the bottom, lit along its far side, in shade on the near one
-    const top = ELL(15, 6, 12);
-    top.forEach((hw, j) => { r(16 + j, -hw, hw * 2, ST.k); if (hw > 2) r(16 + j, -hw + 1, hw * 2 - 2, j < 4 ? ST.hi : j > 7 ? ST.d : ST.m); });
-    for (const [x, y] of [[-12, 20], [-6, 17], [2, 17], [9, 18], [12, 22], [-10, 25], [-1, 26], [6, 26], [11, 25], [-13, 23]]) r(y, x, 1, ST.k);
-    ELL(12, 4, 8).forEach((hw, j) => r(18 + j, -hw, hw * 2, "#120a0c"));
-    r(28, -14, 28, SHADOW);
+    // the ring of stones at the bottom, lit along its far side, in shade on the near one
+    const rows = X(12), top = ELL(X(15), X(6), rows), ty = X(16);
+    top.forEach((hw, j) => { r(ty + j, -hw, hw * 2, ST.k); if (hw > 2) r(ty + j, -hw + 1, hw * 2 - 2, j < rows / 3 ? ST.hi : j > rows * 2 / 3 ? ST.d : ST.m); });
+    for (const [x, y] of [[-12, 20], [-6, 17], [2, 17], [9, 18], [12, 22], [-10, 25], [-1, 26], [6, 26], [11, 25], [-13, 23], [-3, 17], [14, 20], [3, 27], [-8, 27]]) r(X(y), X(x), 1, ST.k);
+    ELL(X(12), X(4), X(8)).forEach((hw, j) => r(X(18) + j, -hw, hw * 2, "#120a0c"));
+    r(X(28), -X(14), X(28), SHADOW);
     // what was thrown in: tossed over to the pit in an arc, then it sinks into it, the flames in
     // front of it (what is below the pit's floor is not seen)
+    const floorY = y0 + X(23);
     for (const o of burning) {
-      const t = (performance.now() - o.t0) / 1000, tx = cx - Math.round(o.w / 2), ty = y0 + 23 - o.h;
-      if (t < 0.35) { const k = t / 0.35, e = k * (2 - k); ctx.drawImage(o.img, Math.round(o.x + (tx - o.x) * e), Math.round(o.y + (ty - o.y) * e - Math.sin(k * Math.PI) * 12)); }
+      const t = (performance.now() - o.t0) / 1000, tx = cx - Math.round(o.w / 2), oy = floorY - o.h;
+      if (t < 0.35) { const k = t / 0.35, e = k * (2 - k); ctx.drawImage(o.img, Math.round(o.x + (tx - o.x) * e), Math.round(o.y + (oy - o.y) * e - Math.sin(k * Math.PI) * X(12))); }
       else {
         const k = Math.min(1, (t - 0.35) / 0.8);
-        ctx.save(); ctx.beginPath(); ctx.rect(x0 + 3, y0 - 40, 26, 63); ctx.clip();
-        ctx.drawImage(o.img, tx, ty + Math.round(k * k * (o.h + 4)));
+        ctx.save(); ctx.beginPath(); ctx.rect(x0 + X(3), y0 - 40, X(26), floorY - (y0 - 40)); ctx.clip();
+        ctx.drawImage(o.img, tx, oy + Math.round(k * k * (o.h + 4)));
         ctx.restore();
       }
     }
-    const k = Math.floor(T * 6) % 3, big = feeding ? 4 : burning.length ? 3 : 0;
+    const k = Math.floor(T * 6) % 3, big = feeding ? X(4) : burning.length ? X(3) : 0;
     // embers and two logs
-    for (const [x, y] of [[-9, 21], [-7, 23], [7, 20], [9, 23], [-3, 24], [4, 24]]) r(y, x, 1, (k + x) % 2 ? C.red1 : "#7a2a18");
-    r(22, -7, 6, "#3b2a1e"); r(23, -8, 7, "#5c3a26"); r(22, 1, 6, "#3b2a1e"); r(23, 2, 6, "#5c3a26");
-    // the flames, up from the embers: tongues of three heights a frame, red, gold in them, yellow at the heart
-    const flame = (x, h, c) => rect(ctx, cx + x, y0 + 22 - h, 1, h, c);
-    const F = [[-7, 2 + k], [-6, 4 + (k + 1) % 3], [-5, 6 + k], [-4, 8 + (k + 2) % 3], [-3, 10 + k], [-2, 12 + (k + 1) % 3], [-1, 14 + k], [0, 15 + (k + 2) % 3],
-      [1, 14 + k], [2, 12 + (k + 1) % 3], [3, 10 + k], [4, 8 + (k + 2) % 3], [5, 6 + k], [6, 4 + (k + 1) % 3], [7, 2 + k]];
-    for (const [x, h] of F) flame(x, Math.min(18, h + big), C.red1);
-    for (const [x, h] of F) flame(x, Math.max(1, Math.round(Math.min(18, h + big) * 0.62)), C.gold1);
-    for (const [x, h] of F) if (x > -4 && x < 4) flame(x, Math.max(1, Math.round(Math.min(18, h + big) * 0.3)), C.gold2);
+    for (const [x, y] of [[-9, 21], [-7, 23], [7, 20], [9, 23], [-3, 24], [4, 24], [-11, 22], [11, 21], [0, 22]]) r(X(y), X(x), 1, (k + x) % 2 ? C.red1 : "#7a2a18");
+    r(X(22), -X(7), X(6), "#3b2a1e"); r(X(23), -X(8), X(7), "#5c3a26"); r(X(22), X(1), X(6), "#3b2a1e"); r(X(23), X(2), X(6), "#5c3a26");
+    // the flames, up from the embers: a tongue a dot, tallest in the middle, of three heights a frame;
+    // red, gold in them, yellow at the heart
+    const base = X(22), hw = X(7), hmax = X(18), flame = (x, h, c) => rect(ctx, cx + x, y0 + base - h, 1, h, c);
+    const F = [];
+    for (let x = -hw; x <= hw; x++) F.push([x, Math.round(X(15) - X(13) * Math.abs(x) / hw) + (k + Math.abs(x)) % 3]);
+    for (const [x, h] of F) flame(x, Math.min(hmax, h + big), C.red1);
+    for (const [x, h] of F) flame(x, Math.max(1, Math.round(Math.min(hmax, h + big) * 0.62)), C.gold1);
+    for (const [x, h] of F) if (Math.abs(x) < X(4)) flame(x, Math.max(1, Math.round(Math.min(hmax, h + big) * 0.3)), C.gold2);
     if (burst >= 0) for (let i = 0; i < 14; i++) {      // sparks, out and up, dying out
       const a = (i * 2.399) % 6.283, sp = 0.5 + ((i * 7919) % 100) / 200, t = burst * sp * 1.6;
       if (t > 1) continue;
-      const sx = Math.round(Math.sin(a) * 16 * t), sy = Math.round(22 - 8 * Math.cos(a) * t - 26 * t);
+      const sx = Math.round(Math.sin(a) * X(16) * t), sy = Math.round(X(22) - X(8) * Math.cos(a) * t - X(26) * t);
       r(sy, sx, 1, t < 0.5 ? C.gold2 : t < 0.8 ? C.gold1 : C.red1);
     }
   }
@@ -1521,7 +1530,7 @@ function startRoom(cv, app) {
       case "board": drawBoard(ctx, pt, { ink: null }); break;
       case "window": drawWindow(ctx, { x0: x, y0: y, x1: x + 21, y1: y + 18 }); break;
       case "clock": drawClock(ctx, x + 6, y + 5); break;
-      case "fire": drawFire(ctx, { x0: x, y0: y - 28, x1: x + 32, y1: y }, T, false); break;
+      case "fire": drawFire(ctx, { x0: x, y0: y - FIRE.h, x1: x + FIRE.w, y1: y }, T, false); break;
       case "closet": drawCloset(ctx, { x0: x, y0: y }, false); break;
       case "settings": drawSwitchboard(ctx, { x0: x, y0: y }, {}, false); break;
       case "pair": drawPair(ctx, pt, true, T, false); break;
@@ -1615,11 +1624,12 @@ function startRoom(cv, app) {
     for (let j = y + 1; j < y + h - 1; j += 2) { ctx.fillRect(x - 1, j, 1, 1); ctx.fillRect(x + w, j, 1, 1); }
   }
   const MAT = { hi: "#4d5866", top: "#394449", d: "#2b3238", k: SP.F };
-  // a little mat rolled out on the floor for a nap, a pillow at its head
+  // a little mat rolled out on the floor for a nap: a thin flat one, 32 x 16, nothing more
   function drawMat(ctx, m) {
-    slab(ctx, m.x - 11, m.y - 23, 22, 20, 2, MAT);
-    for (let y = m.y - 15; y < m.y - 5; y += 4) rect(ctx, m.x - 10, y, 20, 1, MAT.d);
-    rect(ctx, m.x - 7, m.y - 22, 14, 5, MAT.k); rect(ctx, m.x - 6, m.y - 22, 12, 3, C.steel3); rect(ctx, m.x - 6, m.y - 19, 12, 1, C.steel2);
+    rect(ctx, m.x - 16, m.y - 17, 32, 16, MAT.k);
+    rect(ctx, m.x - 15, m.y - 16, 30, 14, MAT.top);
+    rect(ctx, m.x - 15, m.y - 16, 30, 1, MAT.hi);
+    rect(ctx, m.x - 15, m.y - 3, 30, 1, MAT.d);
   }
   // the bench the sessions that are over sit on: a wooden slat bench with a back rail, on legs
   function drawBench(ctx, bn) {
@@ -1762,7 +1772,7 @@ function startRoom(cv, app) {
       moving.at = clampAt(moving.key, at, moving.u);         // on the grid of dots while it moves, as pair: it steps
     }
     if (held) {
-      held.x = Math.max(0, Math.min(W, pointer.x)); held.y = Math.max(WALL, Math.min(H, pointer.y + 24)); held.dir = -1;
+      held.x = Math.max(0, Math.min(W, pointer.x)); held.y = Math.max(WALL, Math.min(FLOORY - 4, pointer.y + 24)); held.dir = -1;   // it hangs under the pointer, but never past the floor's bottom edge
       app.carry(held.id, pointer.x >= W || pointer.x < 0 || pointer.y < 0 || pointer.y >= H ? e.clientX : null, e.clientY);
     }
     draw();
@@ -1787,6 +1797,7 @@ function startRoom(cv, app) {
       // dropped at its door: it waits there to be stopped; carried out of the room, onto the pane,
       // its session opens there; anywhere else it goes back to what it did
       const out = pointer && (pointer.x >= W || pointer.x < 0 || pointer.y < 0 || pointer.y >= H), bot = f.b && !f.b.human, runs = bot && !f.b.over;
+      if (!out && lastL) { f.x = Math.max(lastL.floor.x0, Math.min(lastL.floor.x1, f.x)); f.y = Math.max(lastL.floor.y0, Math.min(lastL.floor.y1, f.y)); }   // let go in the room: on the floor, never past its bottom edge (it hung under the pointer)
       const back = () => resume(f);
       if (out) { f.act = back(); if (bot) app.carried(f.id, e.clientX, e.clientY); }
       else if (bot && pointer && dropAt(lastL, f) === "door") f.act = { kind: "doom", where: "door", left: 5 };
@@ -1800,6 +1811,11 @@ function startRoom(cv, app) {
       }
       f.legs = "stand";
     } else if (press && press.action && press.action.kind === "undo") { const f = world().folk.get(press.action.id); if (f && f.act.kind === "doom") f.act = resume(f); }
+    else if (press && press.action && press.action.kind === "sit") {       // you take the armchair; a bot sitting in it gets up
+      const w = world(), you = w.folk.get("you");
+      for (const g of w.folk.values()) if (g !== you && g.act.kind === "chair" && g.act.at === press.action.key) end(g);
+      if (you && !you.held) { end(you); you.act = { kind: "chair", at: press.action.key, left: rnd(180, 360), chosen: true }; }
+    }
     else if (press && press.action) { if (press.action.kind === "report") world().print = performance.now(); app.act({ ...press.action, shift: press.shift }); }
     // a plain click on the floor or the wall, on nothing: what is open on the right goes away
     else if (press && !press.bot && !press.piece && pointer && Math.hypot(pointer.x - press.x, pointer.y - press.y) <= 1) {

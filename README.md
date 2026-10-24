@@ -68,6 +68,7 @@ beside the robot whose session is open, or under the screen when your own termin
 - **the printer** prints the office report: who is there, and the statistics of the shift
 - **the whiteboard** opens large and you draw on it; the host of a meeting draws on it too
 - **the window** looks outside: the sky by the hour, the sun or the moon, stars at night
+- **the armchair**: click it and you go and sit there a while, reading (a robot in it gets up)
 - **chess and ping-pong** are games against an idle robot, drawn by lot
 - **a pair room** ([pair](https://github.com/rdaems/pair-prompting)) is a table with a speakerphone, one
   room a table: click it to open a new room (you are in it, with your name and face) or to link one you

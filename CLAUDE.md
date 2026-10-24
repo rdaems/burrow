@@ -694,6 +694,32 @@ used for the pair room"; "One pair room table represents one pair room".
 - Not done: the colour. pair gives every human a colour by join order and nothing can set it; here you stay
   terracotta.
 
+## Five small things (2026-10-24, afternoon)
+
+He: "I should not be able to walk below the bottom edge"; "When I click the sofa, I will go sit on it";
+the nap "too much like a piece of furniture now", wanted "a simple mat with the bot lying on it"; the
+fireplace ~50% bigger; the focused pane's gold "should match the highlight (more orange color) on the
+floor. I'd like something inbetween the two, slightly more towards the gold color".
+- **The bottom edge**: a click on the floor was already clamped to the floor (`L.floor.y1`); what went past
+  it was a *carried* figure: it hangs 24 dots under the pointer and followed it down to `H`, and let go
+  near the bottom it stood there, below the floor. Now a held figure never hangs past `FLOORY - 4`, and
+  one let go inside the room is clamped into the floor before the drop targets are looked at (the door
+  rule, `y < WALL + 16`, still holds at `floor.y0`).
+- **The armchair** (his "sofa") is in `CLICK`, tip "have a seat"; its hot action `sit` is handled inside
+  room.js's pointerup (not sent to the page): you get the `chair` act with `chosen: true`, a bot sitting
+  there gets up. The open-session logic (`with`, `screen`) leaves a `chosen` act alone, so you can sit
+  while a session is open; the bubble comes to you there.
+- **The nap**: `drawMat` is a flat mat, 32 x 16, outline and two thin rows (no slab bevel, no pillow);
+  `drawSleeper` is the standing sprite turned a quarter left (head left, feet right, lying on its back),
+  the z's at the head; `MATR` 34 x 19 for the clearance; the beam, bubble and visitor offsets for a lying
+  figure follow.
+- **The fire**: `FIRE = { w: 48, h: 42, S: 1.5 }`; `drawFire` draws its 32 x 28 original through `X(v) =
+  round(v * S)` (ring, stones, pit, logs, embers, a flame tongue a dot with the same height profile,
+  sparks, the toss and sink of what burns, its clip to the pit's floor at `y0 + X(23)`), so a later size
+  is one number. Its default place moved to `W - 92` to clear the armchair.
+- **The band**: `--f-gold` dithers #f0be8c into #ecab78 = 60% of the pastel gold (#ffeeaf/#f8cd8e) and 40%
+  of the room's terracotta (#d97757); `--pale1`/`--pale0` the same, for the bevel.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a
