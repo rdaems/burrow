@@ -373,7 +373,10 @@ def parse_agents(out, jobs={}):
     to it, so it is left out, as agent view does). `state` is the session's (working, blocked, done,
     failed, stopped), `status` its process's (busy, waiting, idle) while that runs:
       needs    blocked, or a prompt open (status waiting): it waits for you, whatever its process does
-      busy     a turn runs
+      busy     state working, as agent view groups it (a background command left running keeps a session
+               `working` after its turn; `status: busy` alone does not count: a done session's process
+               reports busy while such a command runs, and agent view files it under Completed). The
+               process's status decides only for a row that carries no state at all
       idle     done, or nothing to do, its process still there
       over     done, failed or stopped and its process gone: agent view's Completed group (only --all
                lists them); `over` says which, `endedAt` when (its record's last write), `detail` is
@@ -389,7 +392,7 @@ def parse_agents(out, jobs={}):
         over = "pid" not in x and state in ("done", "failed", "stopped")
         bots.append({
             "id": x["id"], "name": x.get("name") or x["id"], "cwd": x.get("cwd") or "",
-            "busy": not over and not needs and (status == "busy" or state == "working"),
+            "busy": not over and not needs and (state == "working" if state else status == "busy"),
             "waiting": not over and needs, "alive": "pid" in x, "state": state or "",
             "over": state if over else "", "endedAt": when(j.get("updatedAt")) if over else 0, "detail": j.get("detail") or "",
             "started": x.get("startedAt") or 0, "pid": x.get("pid") or 0, "session": x.get("sessionId") or "",

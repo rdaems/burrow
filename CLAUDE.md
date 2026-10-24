@@ -720,6 +720,18 @@ floor. I'd like something inbetween the two, slightly more towards the gold colo
 - **The band**: `--f-gold` dithers #f0be8c into #ecab78 = 60% of the pastel gold (#ffeeaf/#f8cd8e) and 40%
   of the room's terracotta (#d97757); `--pale1`/`--pale0` the same, for the bevel.
 
+## Busy is the state, not the process (2026-10-24, afternoon)
+
+He opened my session (clever-cleo) and found it `done 1:38 PM · 1 shell still running` while the room had
+me typing. The shell was a headless `claude agents` capture of mine from the morning that never exited (the
+TUI ignores SIGTERM), carried as an in-flight `local_bash` task. Measured on myself: a background command
+still running after the turn keeps `claude agents --json` at `state: working, status: busy` (the record's
+`tempo: idle` is the only trace that nothing happens, and it is not in the JSON); between turns this morning
+my state was `done` with the task in flight, and the process's `status` stays `busy` while a task runs. The
+room counted a bot busy on `status busy` *or* `state working`, so a done session with a forgotten background
+command typed away while agent view listed it under Completed. Now `busy` is `state == "working"`, and
+`status` decides only for a row without a state (`parse_agents`); `status: waiting` still means needs input.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a
