@@ -240,23 +240,24 @@ function startRoom(cv, app) {
       meet: [W / 2, WALL + 34], pong: [60, 62], chess: [70, FLOORY - 32], mat0: [104, FLOORY - 30], mat1: [132, FLOORY - 30], mat2: [160, FLOORY - 30],
       coffee: [3, FLOORY], cooler: [36, FLOORY - 1], printer: [W / 2 + 4, FLOORY], armchair: [W - 32, FLOORY],
       plant0: [W - 8, FLOORY], plant1: [W - 12, 64], board: [W / 2 + 46, WALL + 34], window: [W - 40, 4], clock: [W - 15, 5], fire: [W - 74, FLOORY],
-      closet: [W - 72, 2],
+      closet: [W - 72, 2], settings0: [W - 92, 5],
     };
   }
   // The furniture is what the server lists (room.json `furniture`): keys, a kind and maybe a number
-  // (plant0, window1). The closet adds a piece, the fireplace burns one; the fire and the closet stay
+  // (plant0, window1). The closet adds a piece, the fireplace burns one; the fire, the closet and the
+  // switchboard (burrow's settings) stay
   const KIND = (key) => key.replace(/\d+$/, "");
-  const FIXED = new Set(["fire", "closet"]);
-  const CLICK = new Set(["add", "closet", "chess", "pong", "printer", "pair", "board", "coffee", "cooler", "window", "bench"]);   // a click does something there
+  const FIXED = new Set(["fire", "closet", "settings"]);
+  const CLICK = new Set(["add", "closet", "chess", "pong", "printer", "pair", "board", "coffee", "cooler", "window", "bench", "settings"]);   // a click does something there
   const NAMES = { meet: "meeting table", pong: "ping-pong table", chess: "chess table", coffee: "coffee machine", cooler: "water cooler",
-    printer: "printer", armchair: "armchair", plant: "plant", board: "whiteboard", window: "window", clock: "clock", add: "project cabinet", pair: "pair room", bench: "bench" };
+    printer: "printer", armchair: "armchair", plant: "plant", board: "whiteboard", window: "window", clock: "clock", add: "project cabinet", pair: "pair room", bench: "bench", settings: "switchboard" };
   // the bench seats three sessions that are over, side by side (its ends are the bench's own: a click
   // there lists them all)
   const BENCH_SEATS = 3, benchSeat = (bn, k) => ({ x: bn.x - 14 + k * 14, y: bn.y });
   const benchEnd = (bn) => ({ x: bn.x + 36 <= W - 8 ? bn.x + 36 : bn.x - 36, y: bn.y });   // standing room at its end (the left one at the room's edge)
   // the default places for desks: columns of them, as many as the room is wide
   const SLOTS = () => [104, 150, 196, 242, 288, 334].flatMap((y) => [...Array(Math.max(1, Math.floor((W - 10) / 124)))].map((_, i) => [10 + i * 124, y]));
-  const ON_WALL = new Set(["closet", "window", "clock"]), WALL_Y = { closet: 2, window: 4, clock: 5 };
+  const ON_WALL = new Set(["closet", "window", "clock", "settings"]), WALL_Y = { closet: 2, window: 4, clock: 5, settings: 5 };
   const onWall = (key) => ON_WALL.has(KIND(key));
   // what each piece covers, from where it stands
   function foot(key, [x, y], u) {
@@ -275,6 +276,7 @@ function startRoom(cv, app) {
       case "clock": return [x, y, x + 12, y + 10];
       case "fire": return [x, y - 28, x + 32, y + 1];
       case "closet": return [x, y, x + 22, y + 24];
+      case "settings": return [x, y, x + 14, y + 14];
       case "pair": return [x - 13, y - 20, x + 13, y + 1];
       case "bench": return [x - 29, y - 18, x + 29, y + 2];
       default: return [x - 8, y - 31, x + 8, y + 1];     // a plant
@@ -337,12 +339,13 @@ function startRoom(cv, app) {
       return { key: u.key, ...u.d, label: u.label, trees: u.trees, x0: x, w: u.w, cab: u.cab, y, color: projectColor(u.d.unit),
         seats: mine.map((b, k) => [b.id, seat(k), b.tree]), empty: mine.length ? null : seat(0), at: u.at, u };
     });
-    const b0 = one("board"), c0 = one("clock"), f0 = one("fire"), cl = one("closet"), a0 = one("add");
+    const b0 = one("board"), c0 = one("clock"), f0 = one("fire"), cl = one("closet"), a0 = one("add"), sw = one("settings");
     const L = {
       desks, add: a0 && { key: a0.key, x0: a0.x, y0: a0.y - 15, x1: a0.x + ADD_W, y1: a0.y },
       floorY: FLOORY, board: b0 && { key: b0.key, x: b0.x, y: b0.y, x0: b0.x - 16, y0: b0.y - 26, x1: b0.x + 16, y1: b0.y }, clock: c0 && { key: c0.key, x0: c0.x, y0: c0.y },
       windows: all("window").map((p) => ({ key: p.key, x0: p.x, y0: p.y, x1: p.x + 21, y1: p.y + 18 })),
       fire: f0 && { key: f0.key, x0: f0.x, y0: f0.y - 28, x1: f0.x + 32, y1: f0.y }, closet: cl && { key: cl.key, x0: cl.x, y0: cl.y, x1: cl.x + 22, y1: cl.y + 24 },
+      settings: sw && { key: sw.key, x0: sw.x, y0: sw.y, x1: sw.x + 14, y1: sw.y + 14 },
       meet: one("meet"), pong: one("pong"), chess: one("chess"), pairs: all("pair"), benches: all("bench"),
       cooler: one("cooler"), plants: all("plant"), printer: one("printer"), chairs: all("armchair"),
       coffeeAt: one("coffee"), floor: { x0: 14, y0: WALL + 8, x1: W - 14, y1: FLOORY - 4 }, placed,
@@ -972,6 +975,12 @@ function startRoom(cv, app) {
       outlined(ctx, [c.x0, c.y0, c.x1, c.y1], h, (x) => drawCloset(x, c, app.view() === "closet"));
       if (h) tip = { text: "furniture", x: c.x0 + 11, y: c.y0 + 4 };
     }
+    if (L.settings) {
+      // the switchboard on the wall: burrow's own settings, a switch each; a click opens them
+      const b = L.settings, h = hot(b.x0, b.y0, b.x1, b.y1, { kind: "settings" });
+      outlined(ctx, [b.x0, b.y0, b.x1, b.y1], h, (x) => drawSwitchboard(x, b, app.settings(), app.view() === "settings"));
+      if (h) tip = { text: "settings", x: b.x0 + 7, y: b.y0 + 4 };
+    }
     // a bot and its seat at its project's desk are one thing: where the bot is only says what it
     // does. The pointer on either lights up both (and its session), and a click on either opens it
     if (hoverId) hl.add(hoverId);
@@ -1187,6 +1196,7 @@ function startRoom(cv, app) {
       ctx.restore();
     }
     if (b.over && !f.held) { const led = b.over === "done" ? SP.g : b.over === "failed" ? SP.r : null; if (led) rect(ctx, f.dir < 0 ? x : x - 2, y0 + 19, 2, 1, led); }   // how it ended, on its chest
+    if (b.rc && !b.over && !f.held && Math.floor(T) % 2 === 0) rect(ctx, f.dir < 0 ? x - 1 : x, y0 + 3, 1, 1, C.steel4);   // in the Claude app too: a signal light over its antenna, blinking slowly
     if (f.act.kind === "sleep" && f.act.there) zzz(ctx, f, x + 2, y0 + 4);
     if (f.act.kind === "plant" && f.act.water && Math.floor(T * 6) % 2) { rect(ctx, x + 10 * f.dir, y0 + 21, 1, 1, C.blue3); rect(ctx, x + 11 * f.dir, y0 + 24, 1, 1, C.blue3); }
     if (!f.leaving && !f.held && over(x0 + 4, y0, x0 + 18, y + 1)) hovered = { b, x, y: y0 };
@@ -1513,6 +1523,7 @@ function startRoom(cv, app) {
       case "clock": drawClock(ctx, x + 6, y + 5); break;
       case "fire": drawFire(ctx, { x0: x, y0: y - 28, x1: x + 32, y1: y }, T, false); break;
       case "closet": drawCloset(ctx, { x0: x, y0: y }, false); break;
+      case "settings": drawSwitchboard(ctx, { x0: x, y0: y }, {}, false); break;
       case "pair": drawPair(ctx, pt, true, T, false); break;
       case "add": drawAdd(ctx, { x0: x, y0: y - 15, x1: x + ADD_W, y1: y }, false); break;
       case "bench": drawBench(ctx, pt); break;
@@ -1540,6 +1551,24 @@ function startRoom(cv, app) {
     return carrying.at;
   }
   function placeKind(kind, cx, cy) { const at = carryKind(kind, cx, cy); carrying = null; draw(); return at; }
+  // burrow's own settings: a steel switchboard on the wall, a toggle a setting, its lever up and its
+  // lamp lit while the setting is on (the first: new bots in the Claude app too); the lid stands open
+  // while the panel is
+  const SWITCHES = ["rc"];
+  function drawSwitchboard(ctx, b, cfg, open) {
+    const { x0, y0 } = b;
+    if (open) { rect(ctx, x0, y0 - 3, 14, 4, SP.F); rect(ctx, x0 + 1, y0 - 2, 12, 2, SP.C); }   // the lid, flipped up
+    rect(ctx, x0, y0, 14, 14, SP.F);
+    rect(ctx, x0 + 1, y0 + 1, 12, 12, SP.D);
+    rect(ctx, x0 + 1, y0 + 1, 12, 1, SP.C); rect(ctx, x0 + 1, y0 + 1, 1, 12, SP.C);
+    rect(ctx, x0 + 3, y0 + 3, 8, 8, SP.E);
+    SWITCHES.forEach((k, i) => {
+      const on = !!cfg[k], y = y0 + 4 + i * 5;
+      rect(ctx, x0 + 4, y, 2, 4, SP.F); rect(ctx, x0 + 4, on ? y : y + 2, 2, 2, on ? SP.B : SP.D);   // the lever: up when on
+      rect(ctx, x0 + 8, y + 1, 2, 2, on ? SP.g : SP.F);                                              // its lamp
+    });
+    rect(ctx, x0 + 2, y0 + 12, 1, 1, SP.F); rect(ctx, x0 + 11, y0 + 12, 1, 1, SP.F);                 // the screws
+  }
   function drawDoor(ctx, x, p, ajar, boarded, lit) {
     if (lit) rect(ctx, x - 1, WALL - 21, 18, 21, C.steel3);
     put(ctx, sprites.swap(ajar ? "doorOpen" : "door", { h: p.hi, w: p.top, d: p.d, k: p.k }), x, WALL - 20);

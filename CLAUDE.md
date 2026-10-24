@@ -642,6 +642,32 @@ His decisions:
 - A brief tip on a sitter: "NAME - done - click to resume" (failed, stopped the same).
 - The report says "On the bench" or "Out of the room" for the over sessions, by whether there is a bench.
 
+## The switchboard, and bots in the app too (2026-10-24, afternoon)
+
+He: "I like 'the other' direction. Let's do that. We're going to need some settings for things like this.
+Let's remove the top bar with 'BURROW' and add a settings furniture thing!"
+- **No header.** The room's wall reaches the top of the window; the wordmark is gone (`header`, `.top`,
+  `.mark` removed). `size()` only ever looked at the room's parent, so nothing else moved.
+- **The switchboard** (`settings` kind, key `settings0`, `FIXED` like the fire and the closet, `ON_WALL`,
+  14 x 14, default left of the closet; `furnish` v 5 adds it to older rooms): a steel box on the wall, a
+  toggle a setting with its lever up and its lamp lit while on (`drawSwitchboard`, `SWITCHES` in room.js
+  names the keys drawn), its lid flipped up while its panel is open. A click: the SETTINGS view
+  (`#vSettings`, `fillSettings`, `OPTIONS` in index.html: key, name, what it does), a steel ON/OFF button a
+  line, ON in the pastel gold. Kept in room.json `settings`; `OPTIONS` in server.py has the keys and the
+  defaults, `options(room)` the merge, `/api/settings {key: bool}` sets one and pushes the state (the
+  panel and the lamp follow the push). The piece cannot be burnt and is not in the closet.
+- **The first setting, `rc`, on by default**: `/api/spawn` runs `claude --bg --remote-control -n <name>`,
+  so the session is in the Claude app and at claude.ai/code as well (tested in the previous round). The
+  job's record carries `bridgeSessionId` (`cse_…`); the JOBS grep takes it along with updatedAt and
+  detail, the bot has it as `rc`. A bot with `rc`: a white 1-dot light over its antenna, blinking slowly
+  (1 s on, 1 s off; not while over or held), and its tile's band an APP button on the right
+  (`appLink` in showWho) that opens `https://claude.ai/code/session_<id without cse_>` in a new tab. A
+  session in which he types `/remote-control` himself gets the same (the record gets the id). A reaped
+  session keeps the flag: `respawnFlags` has `--remote-control`, so a restart on attach is in the app again.
+- The demo gives every other running bot an `rc`.
+- Not decided: the app's own chats on odyssey (the `claude remote-control` service's children, interactive
+  rows) stay out of the room, as before.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

@@ -39,8 +39,9 @@ PEERS = r'''find ~/.claude/projects -maxdepth 2 -name '*.jsonl' -mmin -1 2>/dev/
 
 # each background session's record (~/.claude/jobs/<id>/state.json): when it was last written (for a session
 # that is over: when it ended) and agent view's one-line summary of it; one grep, a `<path>:"<key>": "<value>"`
-# a line
-JOBS = r'''grep -o -E '"(updatedAt|detail)": *"([^"\\]|\\.)*"' ~/.claude/jobs/*/state.json 2>/dev/null || true'''
+# a line. And its Remote Control session (bridgeSessionId, cse_…) when it was started with --remote-control:
+# the same session is then in the Claude app and at claude.ai/code/session_<id>
+JOBS = r'''grep -o -E '"(updatedAt|detail|bridgeSessionId)": *"([^"\\]|\\.)*"' ~/.claude/jobs/*/state.json 2>/dev/null || true'''
 
 
 def sq(s):
@@ -159,10 +160,19 @@ def split_unit(u):
 
 # The furniture: what stands in the room, as keys; a key is its kind and a number (plant0, mat2;
 # the first room's pieces have no number). There can be any number of a kind. The closet in the
-# room adds a piece, the fireplace burns one; the fire and the closet themselves stay.
+# room adds a piece, the fireplace burns one; the fire, the closet and the switchboard themselves stay.
 FURNITURE = ["meet", "pong", "chess", "coffee", "cooler", "printer", "armchair",
-             "plant0", "plant1", "board", "window", "clock", "fire", "closet", "add", "bench0"]
-FIXED = {"fire", "closet"}
+             "plant0", "plant1", "board", "window", "clock", "fire", "closet", "add", "bench0", "settings0"]
+FIXED = {"fire", "closet", "settings"}
+
+# Burrow's own settings: the switchboard on the wall, a switch each; kept in room.json `settings`
+OPTIONS = {
+    "rc": True,     # a bot started here gets --remote-control: the same session is in the Claude app and at claude.ai/code
+}
+
+
+def options(room):
+    return {**OPTIONS, **{k: bool(v) for k, v in (room.get("settings") or {}).items() if k in OPTIONS}}
 KINDS = {"meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "clock", "add", "pair", "bench"}
 
 
@@ -209,7 +219,7 @@ def furnish(room):
     """a room from before the furniture list gets the default pieces; the project cabinet (add) became
     furniture, and the whiteboard came off the wall (its place on the wall is dropped: it gets one on the
     floor); a room from before the bench gets one (the sessions that are over sit on it); the charging
-    mats are gone (a bot rolls out its own to sleep on)"""
+    mats are gone (a bot rolls out its own to sleep on); a room from before the switchboard gets one"""
     room.setdefault("furniture", list(FURNITURE))
     room["layout"].pop("mats", None)
     if room.get("v", 1) < 2:
@@ -228,6 +238,10 @@ def furnish(room):
         for k in [k for k in room["layout"] if kind_of(k) == "mat"]:
             room["layout"].pop(k)
         room["v"] = 4
+    if room["v"] < 5:
+        if not any(kind_of(k) == "settings" for k in room["furniture"]):
+            room["furniture"].append("settings0")
+        room["v"] = 5
     return room
 
 
@@ -306,6 +320,7 @@ def parse_agents(out, jobs={}):
             "waiting": not over and needs, "alive": "pid" in x, "state": state or "",
             "over": state if over else "", "endedAt": when(j.get("updatedAt")) if over else 0, "detail": j.get("detail") or "",
             "started": x.get("startedAt") or 0, "pid": x.get("pid") or 0, "session": x.get("sessionId") or "",
+            "rc": j.get("bridgeSessionId") or "",      # its Remote Control session (cse_…): in the Claude app and at claude.ai/code too
         })
     bots.sort(key=lambda b: b["started"])
     return bots
@@ -320,10 +335,10 @@ def when(iso):
 
 
 def parse_jobs(out):
-    """{id: {updatedAt, detail}} from the records' lines"""
+    """{id: {updatedAt, detail, bridgeSessionId}} from the records' lines"""
     jobs = {}
     for line in out.splitlines():
-        m = re.match(r'(?:.*/)?([^/:]+)/state\.json:"(updatedAt|detail)": *"(.*)"$', line)
+        m = re.match(r'(?:.*/)?([^/:]+)/state\.json:"(updatedAt|detail|bridgeSessionId)": *"(.*)"$', line)
         if not m:
             continue
         try:
@@ -443,6 +458,7 @@ class Hub:
                                  for mid, m in self.machines.items()],
                     "desks": self.desks(bots), "bots": bots, "layout": self.room["layout"], "furniture": self.room["furniture"], "pair": self.room.get("pair", {}),
                     "usage": self.usage, "chess": self.chess_view(), "demo": DEMO, "width": self.room.get("width"), "shells": self.shells_view(),
+                    "settings": options(self.room),
                     "you": {"name": USER, **(self.room.get("you") or {})}}
 
     def keep(self, u, on):
@@ -578,7 +594,7 @@ class Hub:
         now = int(time.time() * 1000)
         bots = [{"id": f"demo{i}{k:03}", "name": n, "cwd": f"{HOME}/projects/{d}" if d else HOME, "busy": k % 3 == 0, "waiting": k % 5 == 1,
                  "alive": True, "state": "working" if k % 3 == 0 else "blocked" if k % 5 == 1 else "done", "over": "", "endedAt": 0, "detail": "",
-                 "started": now - 3600000 * (k + 1), "pid": 1000 + k, "session": f"demo{k}"}
+                 "started": now - 3600000 * (k + 1), "pid": 1000 + k, "session": f"demo{k}", "rc": "cse_demo" if k % 2 == 0 else ""}
                 for k, (d, n) in enumerate(bots)]
         bots[-1].update(alive=False, busy=True, state="working", pid=0)      # a /loop between runs: its process is off
         # and some that are over: done, failed, stopped, as agent view's Completed group
@@ -587,7 +603,7 @@ class Hub:
         if i == 1:
             over = [("train", "nimble-ned", "done", "eval run 12 scored, the report in out/"), ("train", "witty-wes", "failed", "CUDA out of memory on the big batch")]
         bots += [{"id": f"demo{i}over{k}", "name": n, "cwd": f"{HOME}/projects/{d}", "busy": False, "waiting": False, "alive": False, "state": st,
-                  "over": st, "endedAt": now - 1800000 * (k + 1), "detail": det, "started": now - 1800000 * (k + 3), "pid": 0, "session": f"demo{i}o{k}"}
+                  "over": st, "endedAt": now - 1800000 * (k + 1), "detail": det, "started": now - 1800000 * (k + 3), "pid": 0, "session": f"demo{i}o{k}", "rc": ""}
                  for k, (d, n, st, det) in enumerate(over)]
         m = self.machines[mid]
         self.fold(mid, m, bots)
@@ -1138,6 +1154,14 @@ class Handler(BaseHTTPRequestHandler):
             save_room(hub.room)
             hub.push("state", hub.state())
             return {}
+        if path == "/api/settings":          # the switchboard: {key: true/false} for the options there are
+            st = hub.room.setdefault("settings", {})
+            for k in OPTIONS:
+                if k in b:
+                    st[k] = bool(b[k])
+            save_room(hub.room)
+            hub.push("state", hub.state())
+            return {}
         if path == "/api/forget":            # a desk taken away (carried to the door)
             if any(x["unit"] == b["unit"] and not x["over"] for x in hub.bots()):
                 raise RuntimeError("bots work at that desk")
@@ -1170,7 +1194,8 @@ class Handler(BaseHTTPRequestHandler):
             if not name:
                 taken = {x["name"] for x in hub.feeds.get(mid, {}).get("bots", [])}
                 name = random.choice([n for n in BOT_NAMES if n not in taken] or BOT_NAMES)
-            out = run(m, f"cd {sq(b['dir'])} && claude --bg -n {sq(name)} 2>&1")
+            flags = "--remote-control " if options(hub.room)["rc"] else ""    # in the Claude app and at claude.ai/code as well
+            out = run(m, f"cd {sq(b['dir'])} && claude --bg {flags}-n {sq(name)} 2>&1")
             # "backgrounded · 7ebbc505 · name (idle — …)" or, unnamed, "backgrounded · 7ebbc505 (idle — …)",
             # maybe after "Starting background service…"
             mm = re.search(r"^\s*backgrounded · (\S+?)(?=[\s·]|$)", out, re.M)

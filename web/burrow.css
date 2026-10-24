@@ -23,10 +23,8 @@ button, input, select { font:inherit; color:inherit; }
 .x { cursor:pointer; background:none; border:1px solid transparent; border-radius:4px; color:var(--dim); padding:0 4px; font:inherit; }
 .x:hover { color:var(--me); border-color:var(--line); }
 
-/* the header, as pair's: the wordmark (room-wide things go here later) */
-header { flex:none; background:var(--ink); padding:4px 16px; }
-.top { display:flex; align-items:center; gap:10px; min-height:20px; }
-.mark { font:16px/16px "Burrow Pixel", monospace; color:var(--gold); text-shadow:2px 2px 0 #b86a1e; letter-spacing:1px; }
+/* no header: the room's wall reaches the top of the window (room-wide things are furniture: the
+   switchboard holds the settings) */
 /* the room keeps its width (room.js: two pixels a dot); what is open takes the rest: tiles (tiles.js),
    each a border with a thicker band on top for its name and buttons, the stars between them */
 #app { flex:1; min-height:0; display:flex; }
@@ -121,6 +119,15 @@ header { flex:none; background:var(--ink); padding:4px 16px; }
 .lim .num { color:var(--steel3); }
 #vLimits .more { margin:12px 0 0; padding:8px 10px; background:var(--ink); color:var(--steel3); text-shadow:none; font:12px/1.5 var(--mono); -webkit-font-smoothing:auto; white-space:pre-wrap; border:2px solid var(--ink); box-shadow:inset 2px 2px 0 var(--steel0); max-height:40vh; overflow:auto; }
 #vLimits p { margin:0; }
+/* the switchboard's settings: a steel switch a line, ON in gold; what it does under its name */
+.settings .opt { display:flex; gap:14px; align-items:flex-start; padding:10px 0; }
+.settings .opt + .opt { border-top:2px solid var(--ink); }
+.settings .sw { flex:none; min-width:54px; text-align:center; }
+#view .settings .sw.on { background:var(--f-gold); }
+.settings .nm { color:var(--gold2); }
+.settings .what { color:var(--steel3); margin-top:4px; }
+.settings .what code { font:13px/1 var(--mono); -webkit-font-smoothing:auto; text-shadow:none; color:var(--white); }
+.tbar .tapp { margin-left:auto; }
 /* the closet: every kind of furniture as it stands in the room (two pixels a dot, as the room), to drag in */
 .closet { display:flex; flex-wrap:wrap; gap:14px 18px; align-items:flex-end; }
 /* the completed list: a row a session, as agent view's Completed group */

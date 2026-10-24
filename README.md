@@ -74,6 +74,9 @@ beside the robot whose session is open, or under the screen when your own termin
 - **furniture**: drag it where you want it; the closet on the wall holds more; drop yourself or a robot on a
   piece and it is used; the fire burns a piece, a desk or a robot
 - **your face**: a click on your own figure
+- **settings**: the switchboard on the wall, a switch a setting, its lamp lit while it is on. The first:
+  new sessions get `--remote-control`, so the same session is in the Claude app and at claude.ai/code
+  too (its tile has an APP button, its robot a blinking light over the antenna)
 
 <p><img src="docs/closet.png" width="49%" alt="the closet"> <img src="docs/limits.png" width="49%" alt="the limits"></p>
 
@@ -83,7 +86,7 @@ beside the robot whose session is open, or under the screen when your own termin
 |----------------------------------|-----------------------------------------------------------------------|
 | who is there and what they do    | `claude agents --json --all`, every 3 s (15 s while burrow is in the background) |
 | open a session                   | `claude attach <id>` in a pty                                         |
-| start one                        | `cd <dir> && claude --bg -n <name>`                                   |
+| start one                        | `cd <dir> && claude --bg --remote-control -n <name>` (the flag is a switch) |
 | stop one, delete one             | `claude stop <id>`, then `claude rm <id>`                             |
 | a message between sessions       | read from the transcripts written in the last minute                  |
 | a dropped file                   | `scp` to `~/.cache/burrow/drop/`, then its path typed into the prompt |
@@ -93,7 +96,7 @@ Remote machines are reached with your own `ssh`, so `~/.ssh/config`, agents and 
 work; one multiplexed connection per machine is shared. A `claude` you run in some other terminal belongs
 to that terminal and cannot be attached to, so it is not in the room, as Claude Code's agent view leaves
 it out too. burrow keeps only what Claude Code has no notion of: the desks, the furniture and where it
-stands, your face and the pair rooms' links, in `~/.config/burrow/room.json`.
+stands, your face, the pair rooms' links and the switchboard's settings, in `~/.config/burrow/room.json`.
 
 ## Running it
 

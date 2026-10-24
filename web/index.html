@@ -16,11 +16,6 @@
 <link rel="stylesheet" href="/burrow.css">
 </head>
 <body>
-<header>
-  <div class="top">
-    <span class="mark">BURROW</span>
-  </div>
-</header>
 <main id="app">
   <div id="roomwrap"><canvas id="room"></canvas></div>
   <div id="divider" title="drag: the room's width"></div>
@@ -47,6 +42,7 @@
         <div id="vCloset" class="closet" hidden></div>
         <div id="vReport" class="print" hidden><img class="machine" alt=""><div class="sheet"><pre></pre></div></div>
         <div id="vLimits" hidden></div>
+        <div id="vSettings" class="settings" hidden></div>
         <div id="vDone" class="done" hidden></div>
         <div id="vOutside" hidden><canvas class="outside" width="130" height="70"></canvas></div>
         <div id="vBoard" hidden><canvas class="board" width="130" height="55"></canvas><div class="row"><button type="button" class="btn" id="wipe">wipe</button></div></div>
@@ -102,6 +98,7 @@ const room = startRoom($("#room"), {
   chess: () => (viewKind === "chess" && state && state.chess && !state.chess.result ? state.chess : null),
   pong: () => (viewKind === "pong" ? pongUI.playing() : null),
   view: () => viewKind,
+  settings: () => (state && state.settings) || {},
   away: () => (blurAt ? (performance.now() - blurAt) / 1000 : 0),
   hl: () => (hoverTile && hoverTile.kind === "bot" ? hoverTile.id : null),
   hover: (id) => { for (const t of botTiles()) t.el.classList.toggle("hl", t.id === id); },
@@ -125,6 +122,7 @@ async function act(a) {
   else if (a.kind === "report") { openView("report"); fillReport(); }
   else if (a.kind === "board") openBoard();
   else if (a.kind === "limits") { openView("limits"); fillLimits(); }
+  else if (a.kind === "settings") { openView("settings"); fillSettings(); }
   else if (a.kind === "completed") { openView("completed"); fillDone(); }
   else if (a.kind === "outside") openOutside();
   else if (a.kind === "pairOpen") openPair(a.key);
@@ -159,6 +157,7 @@ es.addEventListener("state", (e) => {
   if (viewKind === "chess") showChess();
   if (viewKind === "closet") fillCloset();
   if (viewKind === "limits") fillLimits();
+  if (viewKind === "settings") fillSettings();
   if (viewKind === "completed") fillDone();
   // a bot that gets work, or a question for you, leaves the ping-pong table
   const pp = viewKind === "pong" && pongUI.playing();
@@ -186,8 +185,8 @@ addEventListener("focus", focus); addEventListener("blur", focus); document.addE
 }
 
 // ---- the view: one thing at a time on the right, in place of the tiles, framed like one
-const PANELS = { dir: "#vDir", machine: "#vMachine", you: "#vYou", closet: "#vCloset", chess: "#chess", pong: "#pong", report: "#vReport", pair: "#vPair", board: "#vBoard", limits: "#vLimits", outside: "#vOutside", completed: "#vDone" };
-const TITLES = { dir: "A PROJECT", machine: "A MACHINE", you: "YOUR FACE", closet: "THE CLOSET", chess: "CHESS", pong: "PING-PONG", report: "REPORT", pair: "PAIR ROOM", board: "WHITEBOARD", limits: "LIMITS", outside: "OUTSIDE", completed: "COMPLETED" };
+const PANELS = { dir: "#vDir", machine: "#vMachine", you: "#vYou", closet: "#vCloset", chess: "#chess", pong: "#pong", report: "#vReport", pair: "#vPair", board: "#vBoard", limits: "#vLimits", outside: "#vOutside", completed: "#vDone", settings: "#vSettings" };
+const TITLES = { dir: "A PROJECT", machine: "A MACHINE", you: "YOUR FACE", closet: "THE CLOSET", chess: "CHESS", pong: "PING-PONG", report: "REPORT", pair: "PAIR ROOM", board: "WHITEBOARD", limits: "LIMITS", outside: "OUTSIDE", completed: "COMPLETED", settings: "SETTINGS" };
 function openView(kind) {
   if (viewKind && viewKind !== kind) closeView(true);
   for (const t of tiles.all()) closeTile(t);
@@ -398,6 +397,17 @@ function fillLimits() {
     : `<p>Not known yet: Claude Code's /usage is asked every five minutes.</p>`)
     + (u.text ? `<pre class="more">${esc(u.text)}</pre>` : "");
 }
+// ---- the switchboard: burrow's own settings, a switch a line (kept in room.json `settings`; the
+// server knows the keys, OPTIONS there)
+const OPTIONS = [
+  { key: "rc", name: "New bots are in the Claude app too",
+    what: "Started with <code>claude --bg --remote-control</code>: the same session can be continued on your phone or at claude.ai/code, and is in the app's list of sessions. Its tile gets an APP button, its antenna a blinking light." },
+];
+function fillSettings() {
+  const cfg = (state && state.settings) || {}, el = $("#vSettings");
+  el.innerHTML = OPTIONS.map((o) => `<div class="opt"><button type="button" class="btn sw${cfg[o.key] ? " on" : ""}" data-key="${o.key}" title="${cfg[o.key] ? "on: click to switch it off" : "off: click to switch it on"}">${cfg[o.key] ? "ON" : "OFF"}</button><div><div class="nm">${o.name}</div><div class="what">${o.what}</div></div></div>`).join("");
+  for (const bt of el.querySelectorAll(".sw")) bt.onclick = () => api("/api/settings", { [bt.dataset.key]: !cfg[bt.dataset.key] });
+}
 // ---- the sessions that are over, as agent view's Completed group: how each ended, its name, where, when
 // and how long it ran, its last line; the newest first. A click opens one (Claude Code restarts it), its ✕
 // deletes it from the list (asked twice, as agent view's Ctrl+X)
@@ -559,8 +569,16 @@ const enc = new TextEncoder(), dec = new TextDecoder();
 function showWho(t) {
   const m = machine(t.m), on = m ? "on " + m.name : "";
   if (t.kind === "shell") t.name(t.dir.replace(/\/+$/, "").split("/").pop() || t.dir, on);
-  else { const b = byId(t.id); t.name(b ? b.name : t.id, on); }
+  else { const b = byId(t.id); t.name(b ? b.name : t.id, on); appLink(t, b && b.rc); }
   t.term.options.theme = m && m.light ? LIGHT : DARK;
+}
+// a session with Remote Control (started with --remote-control, or /remote-control typed in it): an
+// APP button on its band opens the same session at claude.ai/code (the Claude app lists it as well)
+function appLink(t, rc) {
+  let bt = t.bar.querySelector(".tapp");
+  if (!rc) { if (bt) bt.remove(); return; }
+  if (!bt) { bt = document.createElement("button"); bt.className = "tapp"; bt.textContent = "APP"; bt.title = "the same session on your phone, or at claude.ai/code"; t.bar.appendChild(bt); }
+  bt.onclick = (e) => { e.stopPropagation(); window.open("https://claude.ai/code/session_" + rc.replace(/^cse_/, ""), "_blank", "noopener"); };
 }
 // open a bot's session: in the focused tile's place (see makeRoom), or `at` a previewed spot when
 // it was carried over from the room
