@@ -27,6 +27,7 @@
   s.setProperty("--f-window", dither(P.blue1, P.blue0));
   s.setProperty("--f-button", dither(P.steel4, P.steel3, 30));
   s.setProperty("--f-hot", dither(P.gold2, P.gold1, 30));
+  s.setProperty("--f-gold", dither(P.gold1, P.gold0, 30));   // burrow: the focused tile's band, a dimmer gold
   s.setProperty("--f-green", dither(P.scrub2, P.scrub1, 30));
   s.setProperty("--stars", stars);
 })();

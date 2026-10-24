@@ -35,15 +35,15 @@ header { flex:none; background:var(--ink); padding:4px 16px; }
 #divider { flex:none; width:6px; margin:0 -3px; cursor:col-resize; z-index:4; }
 #pane { flex:1; min-width:0; position:relative; overflow:hidden; }
 /* a tile, as a 16-bit window like the popups (pair's door panels): an ink ring with a steel bevel,
-   clipped corners, a band on top in the pixel font (a dithered blue band; gold for the focused one, and
+   clipped corners, a band on top in the pixel font (a dithered blue band; a dim gold for the focused one, and
    for the one whose bot the pointer is on or a file is over) with its ✕ on the left; inside, the terminal */
 .tile { position:absolute; display:flex; flex-direction:column; background:var(--box); border:2px solid var(--ink); padding:4px; overflow:hidden;
   clip-path:polygon(2px 0,calc(100% - 2px) 0,100% 2px,100% calc(100% - 2px),calc(100% - 2px) 100%,2px 100%,0 calc(100% - 2px),0 2px);
   box-shadow: inset 2px 2px 0 var(--steel3), inset -2px -2px 0 var(--steel1), inset 0 0 0 4px var(--ink); }
-.tile.focus, .tile.hl, .tile.drop { box-shadow: inset 2px 2px 0 var(--gold2), inset -2px -2px 0 var(--gold0), inset 0 0 0 4px var(--ink); }
+.tile.focus, .tile.hl, .tile.drop { box-shadow: inset 2px 2px 0 var(--gold1), inset -2px -2px 0 var(--gold0), inset 0 0 0 4px var(--ink); }
 .tile.lift { opacity:.6; }
 .tbar { flex:none; display:flex; align-items:center; gap:8px; height:28px; padding:0 8px 0 4px; background:var(--f-window); font:16px/28px var(--pixel); -webkit-font-smoothing:none; color:var(--steel4); text-shadow:2px 2px 0 var(--ink); cursor:grab; user-select:none; }
-.tile.focus .tbar, .tile.hl .tbar, .tile.drop .tbar { background:var(--f-hot); color:var(--ink); text-shadow:none; }
+.tile.focus .tbar, .tile.hl .tbar, .tile.drop .tbar { background:var(--f-gold); color:var(--ink); text-shadow:none; }
 .tbar button { flex:none; cursor:pointer; padding:0 6px; color:var(--ink); background:var(--f-button); border:2px solid var(--ink); font:inherit; line-height:18px; text-shadow:none;
   clip-path:polygon(2px 0,calc(100% - 2px) 0,100% 2px,100% calc(100% - 2px),calc(100% - 2px) 100%,2px 100%,0 calc(100% - 2px),0 2px);
   box-shadow: inset 2px 2px 0 var(--white), inset -2px -2px 0 var(--steel1); }
@@ -55,7 +55,7 @@ header { flex:none; background:var(--ink); padding:4px 16px; }
 .tgap { position:absolute; z-index:2; }
 .tgap.row { cursor:col-resize; }
 .tgap.col { cursor:row-resize; }
-.term { flex:1; min-height:0; padding:8px 0 0 10px; }
+.term { flex:1; min-height:0; padding:10px 12px 8px 12px; }   /* the text keeps off the ring (the fit addon takes the padding off) */
 .term .xterm-viewport { background:transparent !important; }
 .term .xterm-viewport::-webkit-scrollbar { width:8px; }
 .term .xterm-viewport::-webkit-scrollbar-thumb { background:var(--ink2); }

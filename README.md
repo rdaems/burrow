@@ -21,7 +21,7 @@ so you are using Claude Code itself. Shift-click adds a tile beside the open one
 onto another to arrange them. Close one (✕, or click the floor) and the bot keeps working. Close burrow
 altogether and every bot keeps working too. To stop a session, carry its bot to its machine's door or onto
 the fire, or type `exit` in its terminal: the bot goes to its door, a sign over it counts five seconds
-down, and a click on the sign is the undo. A bot started from burrow gets a name the way pair names its
+down, and a click on the sign, or carrying the bot away, is the undo. A bot started from burrow gets a name the way pair names its
 agents (`dapper-dan`, `merry-moe`).
 
 Everything else happens in the room as well, and what needs more than the room opens as a 16-bit panel

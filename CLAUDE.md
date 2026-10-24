@@ -466,6 +466,22 @@ fixed to a dragged desk, and the danger highlight belongs on the dragged object,
 - Plants sway through four positions at 8 Hz (they did move, at two positions, which read as a jump).
 - look.mjs: `{drag: …, hold: true}` then `{release: [x, y]}` for a mid-drag look; arrow keys in `press`.
 
+## Round of 2026-10-24: the band dimmer, margins in the pane, the fire's warning, rescue by dragging
+
+He: the gold on the active pane "a little bit too much, dim it a bit"; the text touched the pane's edges;
+"a clear feedback when I drag something above the fire, the object I drag should get a red overlay or
+something"; cancelling a burning robot by dragging it away from the fire.
+- The focused (or hovered) tile's band is `--f-gold` (gold1 dithering into gold0, one line added to
+  pixel.js), its bevel gold1/gold0; the bright `--f-hot` stays for buttons and the limits' bars.
+- `.term` has 10/12/8/12 px padding; the fit addon takes it off the parent's size, so nothing is cut.
+- Danger (`dangerNow`): what is held over the fire, or a bot held at its own door, is washed in red
+  (`tinted`, source-atop) flashing five times a second (`flashA`) besides its red outline, and the sign
+  says what the drop does ("burn the plant", "stop NAME"). Those signs had been set but never drawn: the
+  tip was skipped while anything was held. A desk with bots is not in danger (it will not burn).
+- A bot waiting to be stopped (`doom`) is hoverable again: its sign lights up, a click on the bot is the
+  undo (not "open"), and picking it up cancels the stop (pointermove) so dragging it away rescues it;
+  dropping it back on the fire or the door starts a fresh five seconds.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

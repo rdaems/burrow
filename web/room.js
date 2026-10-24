@@ -762,10 +762,14 @@ function startRoom(cv, app) {
     const hp = !moving && !held && !carrying ? pieceAt(pointer) : null;
     lastHp = hp;
     const on = (key) => !!hp && hp.key === key, lit = (key) => on(key) && CLICK.has(KIND(key));
-    // what is being dragged over the fire (a desk, a piece, a bot) is about to burn: it is outlined red
+    // what is being dragged over the fire (a desk without bots, a piece, a bot) is about to burn, a bot
+    // held at its door is about to be stopped: it is outlined red and washed in red, flashing (tinted)
     const fireRect = L.fire && [L.fire.x0, L.fire.y0, L.fire.x1, L.fire.y1];
-    dangerNow = !!(L.fire && ((moving && inFire(L, moving.key, moving.at, moving.u)) || (held && held.b && !held.b.human && pointer && inRect(pointer, fireRect))));
-    const danger = (key) => dangerNow && !!moving && moving.key === key;
+    const heldBot = held && held.b && !held.b.human && pointer ? held : null;
+    const movingDesk = moving && L.desks.find((d) => d.key === moving.key);
+    const atDoor = !!heldBot && Math.abs(pointer.x - doorX(heldBot.b.m)) < 11 && pointer.y < WALL + 14;
+    dangerNow = atDoor || !!(L.fire && ((moving && !(movingDesk && movingDesk.seats.length) && inFire(L, moving.key, moving.at, moving.u)) || (heldBot && inRect(pointer, fireRect))));
+    const danger = (key) => dangerNow && !!moving && moving.key === key, tintOf = (key) => (danger(key) ? flashA(w.T) : 0);
     // a desk being dragged takes its seated bots along, this very frame
     if (moving && moving.key.startsWith("u:")) {
       const d = L.desks.find((d) => d.key === moving.key);
@@ -857,11 +861,11 @@ function startRoom(cv, app) {
     const items = [];
     for (const f of w.folk.values()) if (!f.lying && !f.held) items.push([f.y, () => drawFigure(ctx, f, f.b, T, hl)]);
     for (const d of L.desks) {
-      items.push([d.y - 1, () => outlined(ctx, foot(d.key, d.at, d.u), danger(d.key), (c) => drawDesk(c, d, w, T, hl), RED)]);
+      items.push([d.y - 1, () => outlined(ctx, foot(d.key, d.at, d.u), danger(d.key), (c) => drawDesk(c, d, w, T, hl), RED, tintOf(d.key))]);
       for (const [id, x] of d.seats) items.push([d.y - 0.5, () => drawChair(ctx, x, d.y, hl.has(id))]);
     }
     // every piece: outlined under the pointer, like a desk's chairs; what it does, on top of that
-    const piece = (p, kind, fn) => items.push([p.y - 0.5, () => outlined(ctx, foot(kind, [p.x, p.y]), lit(p.key) || danger(p.key), fn, danger(p.key) ? RED : TERRACOTTA)]);
+    const piece = (p, kind, fn) => items.push([p.y - 0.5, () => outlined(ctx, foot(kind, [p.x, p.y]), lit(p.key) || danger(p.key), fn, danger(p.key) ? RED : TERRACOTTA, tintOf(p.key))]);
     if (L.meet) piece(L.meet, "meet", (c) => { drawTable(c, L.meet); for (const i of [0, 1]) drawStool(c, L.meetSeat(i)); });
     if (L.chess) {
       const c = L.chess, g = s.chess && !s.chess.result ? s.chess : null, top = [c.x - 10, c.y - 17, c.x + 10, c.y - 5];
@@ -904,6 +908,8 @@ function startRoom(cv, app) {
       else if (feeding && moving) tip = { text: "burn the " + (NAMES[KIND(moving.key)] || KIND(moving.key)), x: tx, y: ty };
       else if (feeding) tip = { text: "stop " + held.b.name, x: tx, y: ty };
     }
+    // a bot held at its door: let go and it stops there
+    if (atDoor) tip = { text: "stop " + heldBot.b.name, x: doorX(heldBot.b.m), y: WALL + 10 };
     L.plants.forEach((pl) => piece(pl, "plant", (c) => drawPlant(c, pl, +(pl.key.match(/\d+$/) || [0])[0] % 2, on(pl.key), T)));
     for (const pr of L.pairs) {
       // a pair room (a chat of people and agents, pair.daems.me): a click opens the chat; a bot
@@ -958,21 +964,24 @@ function startRoom(cv, app) {
       for (let i = 0; i < 3; i++) if ((Math.floor(f.chat * 4) + i) % 3) rect(ctx, bx + 2 + i * 2, by + 2, 1, 1, INK);
     }
     // about to be stopped (put at its door, or into the fire): a sign over it counts the seconds
-    // down; a click on it is the undo
+    // down; a click on it (or on the bot) is the undo, and so is carrying the bot away
     for (const f of w.folk.values()) if (f.act.kind === "doom" && f.b && !f.gone) {
-      const text = f.b.name + " stops - undo", tw = tinyW(text), lx = Math.round(Math.max(2, Math.min(W - tw - 2, f.x - tw / 2))), ly = Math.round(f.y) - 36;
-      const h = hot(lx - 2, ly - 2, lx + tw + 2, ly + 9, { kind: "undo", id: f.id });
+      const text = f.b.name + " stops - undo", tw = tinyW(text), lx = Math.round(Math.max(2, Math.min(W - tw - 2, f.x - tw / 2)));
+      const ly = f.y - 36 < 2 ? Math.round(f.y) + 3 : Math.round(f.y) - 36;     // under its feet in the doorway, where there is no room above
+      const h = hot(lx - 2, ly - 2, lx + tw + 2, ly + 9, { kind: "undo", id: f.id }) || (!!hovered && hovered.b.id === f.id);
       box(ctx, lx - 2, ly - 2, tw + 4, 11, h ? TERRACOTTA : INK2);
       tiny(ctx, text, lx, ly, h ? INK : C.steel4);
       rect(ctx, lx, ly + 7, Math.round(tw * Math.max(0, f.act.left) / 5), 1, h ? INK : RED);
     }
     // the bot under the pointer: its name over its head, and a click opens it
+    // (one about to be stopped has its sign instead of a name, and a click on it is the undo)
     if (hovered && !moving) {
-      const { b, x, y } = hovered;
-      tip = { text: b.human ? b.name : b.name + (b.waiting ? " - needs input" : b.alive === false ? " - stopped, opens again" : ""), x, y: y - 2 };
-      hots.push({ x0: -1e9, y0: -1e9, x1: 1e9, y1: 1e9, action: b.human ? { kind: "you" } : { kind: "open", id: b.id } });
+      const { b, x, y } = hovered, hf = w.folk.get(b.id), doomed = !!hf && hf.act.kind === "doom";
+      if (!doomed) tip = { text: b.human ? b.name : b.name + (b.waiting ? " - needs input" : b.alive === false ? " - stopped, opens again" : ""), x, y: y - 2 };
+      hots.push({ x0: -1e9, y0: -1e9, x1: 1e9, y1: 1e9, action: b.human ? { kind: "you" } : doomed ? { kind: "undo", id: b.id } : { kind: "open", id: b.id } });
     }
-    if (tip && !held && !moving) {
+    // (while something is dragged, the only tips are the fire's, the door's and the pair table's: what the drop does)
+    if (tip) {
       const t = tip.text, tw = tinyW(t), lx = Math.round(Math.max(2, Math.min(W - tw - 2, tip.x - tw / 2))), ly = Math.round(Math.max(WALL + 2, tip.y - 8));
       box(ctx, lx - 2, ly - 2, tw + 4, 9, INK2);
       tiny(ctx, t, lx, ly, C.steel4);
@@ -1006,20 +1015,22 @@ function startRoom(cv, app) {
     const x = Math.round(f.x), y = Math.round(f.y), x0 = x - 11, y0 = y - 27;
     if (!f.held) rect(ctx, x - 5, y, 10, 1, "rgba(0,0,0,0.4)");
     const im = body(seedOf(b), colorOf(b), f.held ? "up" : f.arms, f.held ? "walk1" : f.legs, b.human);
-    // its outline: terracotta while the pointer is on it or on its session, faint while its session is open
+    // its outline: terracotta while the pointer is on it or on its session, faint while its session is open;
+    // held over the fire or at its door (let go and it stops): a red outline and a red flashing wash
     const lit = hl.has(f.id) || (hovered && hovered.b.id === f.id) || (!hovered && over(x0 + 4, y0, x0 + 18, y + 1));
-    const ring = f.leaving ? null : f.held && dangerNow ? RED : lit ? TERRACOTTA : app.opens().includes(f.id) ? OPEN : null;
+    const doomed = f.held && dangerNow;
+    const ring = f.leaving ? null : doomed ? RED : lit ? TERRACOTTA : app.opens().includes(f.id) ? OPEN : null;
     if (im) {
       ctx.save();
       if (f.dir < 0) { ctx.translate(x0 + SW, 0); ctx.scale(-1, 1); }
       const dx = f.dir < 0 ? 0 : x0;
       if (ring) ctx.drawImage(halo(im, ring), dx, y0);
-      ctx.drawImage(im, dx, y0);
+      ctx.drawImage(doomed ? tinted(im, RED, flashA(T)) : im, dx, y0);
       ctx.restore();
     }
     if (f.act.kind === "sleep" && f.act.there) zzz(ctx, f, x + 2, y0 + 4);
     if (f.act.kind === "plant" && f.act.water && Math.floor(T * 6) % 2) { rect(ctx, x + 10 * f.dir, y0 + 21, 1, 1, C.blue3); rect(ctx, x + 11 * f.dir, y0 + 24, 1, 1, C.blue3); }
-    if (!f.leaving && !f.held && f.act.kind !== "doom" && over(x0 + 4, y0, x0 + 18, y + 1)) hovered = { b, x, y: y0 };
+    if (!f.leaving && !f.held && over(x0 + 4, y0, x0 + 18, y + 1)) hovered = { b, x, y: y0 };
   }
   function drawSleeper(ctx, f, b, T, hl) {  // seen from above: the head on the pillow, a blanket, a plug
     if (!b) return;
@@ -1248,12 +1259,23 @@ function startRoom(cv, app) {
     fn(o);
     return c;
   }
-  // a piece put with an outline around it (the pointer is on it, or it is in danger), or drawn straight
-  function outlined(ctx, r, on, fn, col = TERRACOTTA) {
+  // a piece put with an outline around it (the pointer is on it, or it is in danger), or drawn straight;
+  // `tint` (0..1) washes it in the outline's colour as well: red, flashing, for what is about to burn
+  function outlined(ctx, r, on, fn, col = TERRACOTTA, tint = 0) {
     if (!on) { fn(ctx); return; }
     const pad = 2, c = snapshot(r, fn, pad);
-    ctx.drawImage(halo(c, col), r[0] - pad, r[1] - pad); ctx.drawImage(c, r[0] - pad, r[1] - pad);
+    ctx.drawImage(halo(c, col), r[0] - pad, r[1] - pad); ctx.drawImage(tint ? tinted(c, col, tint) : c, r[0] - pad, r[1] - pad);
   }
+  // a picture washed in a colour, its own pixels only (the danger's red over what is held over the fire)
+  function tinted(im, col, a) {
+    const c = document.createElement("canvas"); c.width = im.width; c.height = im.height;
+    const x = c.getContext("2d");
+    x.drawImage(im, 0, 0);
+    x.globalCompositeOperation = "source-atop"; x.globalAlpha = a; x.fillStyle = col; x.fillRect(0, 0, c.width, c.height);
+    return c;
+  }
+  // the danger's flash: the wash goes between two strengths, five times a second
+  function flashA(T) { return Math.floor(T * 5) % 2 ? 0.5 : 0.3; }
   // something goes into the fire: a picture of it, to be tossed in and sink (drawFire)
   function toFire(r, img) { world().burning.push({ img, x: r[0] - 2, y: r[1] - 2, w: img.width, h: img.height, t0: performance.now() }); world().flare = performance.now(); }
   // any kind of furniture drawn at a spot, at rest: for the closet's pictures and for the ghost of
@@ -1466,7 +1488,10 @@ function startRoom(cv, app) {
     pointer = dots(e);
     if (press && !moving && !held && Math.hypot(pointer.x - press.x, pointer.y - press.y) > 1) {
       const f = press.bot && world().folk.get(press.bot);
-      if (f && f.b && !f.lying && f.act.kind !== "doom") { held = f; f.held = true; f.sat = false; f.lying = false; }
+      if (f && f.b && !f.lying) {                      // picked up; one about to be stopped is rescued by that
+        if (f.act.kind === "doom") f.act = f.work ? { kind: "desk" } : rest();
+        held = f; f.held = true; f.sat = false; f.lying = false;
+      }
       else if (press.piece && !(press.bot && !f)) moving = { key: press.piece.key, from: press.piece.at, u: press.piece.u, at: press.piece.at };
     }
     if (moving) {
