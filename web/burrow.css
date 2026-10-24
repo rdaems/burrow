@@ -83,6 +83,7 @@ button, input, select { font:inherit; color:inherit; }
   box-shadow: inset 2px 2px 0 var(--white), inset -2px -2px 0 var(--steel1); }
 #view .btn:hover, #view .btn:focus-visible { background:var(--f-hot); box-shadow: inset 2px 2px 0 var(--white), inset -2px -2px 0 var(--gold0); outline:none; }
 #view .btn:active { background:var(--steel2); box-shadow: inset 2px 2px 0 var(--steel1), inset -2px -2px 0 var(--white); padding:7px 11px 3px 13px; }
+#view .btn.on { background:var(--f-gold); box-shadow: inset 2px 2px 0 var(--steel1), inset -2px -2px 0 var(--white); }   /* the choice that holds: pressed in, gold */
 #view .btn.small { padding:1px 8px; }
 #view .btn.small:active { padding:3px 7px 0 9px; }
 #view .field { display:block; width:100%; margin-top:8px; padding:6px 8px; border:2px solid var(--ink); border-radius:0; background:var(--steel4); color:var(--ink);
@@ -148,7 +149,8 @@ button, input, select { font:inherit; color:inherit; }
 .done .detail { grid-column:1 / -1; color:var(--steel3); font:12px/1.4 var(--mono); -webkit-font-smoothing:auto; text-shadow:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .done .rm { grid-column:4; grid-row:1; }
 .done p { margin:0; }
-.awake p { margin:0 0 4px; } .awake .row { flex-wrap:wrap; } .awake .note { margin-top:12px; color:var(--steel3); }
+.awake p { margin:0 0 4px; } .awake .row { flex-wrap:wrap; }
+.vform .machines { margin:0 0 4px; flex-wrap:wrap; }
 .item { display:flex; flex-direction:column; align-items:center; gap:8px; padding:4px 2px; cursor:grab; user-select:none; touch-action:none; }
 .item:hover small { color:var(--gold2); }
 .item img { image-rendering:pixelated; display:block; pointer-events:none; }

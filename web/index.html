@@ -26,10 +26,11 @@
       <div class="vbody">
         <form id="vDir" class="vform" hidden>
           <p>A working directory<span class="on"> on <b class="machine"></b></span>. Its bots will sit at one desk.</p>
-          <select class="field" name="m"></select>
+          <div class="row machines"></div>
           <input class="field" name="dir" placeholder="~/projects/something" autocomplete="off" spellcheck="false">
           <ul class="suggest" id="dirs" hidden></ul>
           <div class="err"></div>
+          <input type="hidden" name="m">
         </form>
         <form id="vMachine" class="vform" hidden>
           <p>Reached over ssh, as <code>ssh</code> would (your <code>~/.ssh/config</code> applies). It goes into Claude Code's own list,
@@ -48,7 +49,7 @@
         <div id="vLimits" hidden></div>
         <div id="vSettings" class="settings" hidden></div>
         <div id="vDone" class="done" hidden></div>
-        <div id="vClock" class="awake" hidden><p>Keeps this computer awake, the way Amphetamine does: while bots work, or for a while.</p><div class="row"></div><div class="note"></div></div>
+        <div id="vClock" class="awake" hidden><p>Keep this computer awake</p><div class="row"></div></div>
         <div id="vOutside" hidden><canvas class="outside" width="130" height="70"></canvas></div>
         <div id="vBoard" hidden><canvas class="board" width="130" height="55"></canvas><div class="row"><button type="button" class="btn" id="wipe">wipe</button></div></div>
         <div id="vPair" hidden>
@@ -228,16 +229,19 @@ function ask(kind) {
   openView(kind);
   const d = $(PANELS[kind]);
   d.querySelector(".err").textContent = "";
-  const sel = d.querySelector("select");
-  if (sel && state) {                      // which machine: a choice only when there is one
-    const ms = state.machines;
-    sel.innerHTML = ms.map((m) => `<option value="${m.id}">${m.name}</option>`).join("");
-    sel.hidden = ms.length < 2;
+  d.querySelectorAll("input").forEach((i) => (i.value = ""));
+  const row = d.querySelector(".machines");
+  if (row && state) {                      // which machine: a steel button each, shown only when there is a choice
+    const ms = state.machines, hid = d.querySelector("input[name=m]");
+    const pickM = (id) => { hid.value = id; for (const b of row.children) b.classList.toggle("on", b.dataset.id === id); };
+    row.innerHTML = ms.map((m) => `<button type="button" class="btn" data-id="${m.id}">${m.name}</button>`).join("");
+    for (const b of row.children) b.onclick = () => { pickM(b.dataset.id); d.querySelector("input.field").focus(); };
+    row.hidden = ms.length < 2;
     d.querySelector(".on").hidden = ms.length > 1;
     d.querySelector(".machine").textContent = ms[0] ? ms[0].name : "";
+    pickM(ms[0] ? ms[0].id : "");
   }
-  d.querySelectorAll("input").forEach((i) => (i.value = ""));
-  const inp = d.querySelector("input");
+  const inp = d.querySelector("input.field");
   inp.focus();
   inp.dispatchEvent(new Event("focus"));   // its completions open at once (a window without the focus gets no focus event)
 }
@@ -284,7 +288,7 @@ function completes(inp, list, choices) {
   inp.form.addEventListener("submit", () => { items = []; show(); });
 }
 completes($("#vDir input"), $("#dirs"), async (dir) => {         // the directories there that start as typed
-  const r = await api("/api/complete", { m: $("#vDir select").value || "", dir });
+  const r = await api("/api/complete", { m: $("#vDir input[name=m]").value || "", dir });
   return r.dirs || [];
 });
 completes($("#vMachine input"), $("#hosts"), async (text) => {   // the hosts of ~/.ssh/config without a door yet
@@ -484,15 +488,15 @@ function fillDone() {
     };
   }
 }
-// ---- the clock: this computer kept awake (caffeinate), as Amphetamine does: while bots work, for a
-// while, or not. The server runs the inhibitor; the choice shows on the clock's light and here
+// ---- the clock: this computer kept awake (caffeinate): while bots work, for a while, or not. The server
+// runs the inhibitor; the buttons show the choice, the clock's light and tip show what it does
 const AWAKE = [["off", "off", 0], ["work", "while bots work", 0], ["for", "1 h", 60], ["for", "3 h", 180], ["for", "8 h", 480]];
 function fillClock() {
-  const a = (state && state.awake) || { mode: "off" }, row = $("#vClock .row");
-  row.innerHTML = AWAKE.map(([m, label, n]) => `<button type="button" class="btn${a.mode === m && m !== "for" ? " on" : ""}" data-mode="${m}" data-min="${n}">${label}</button>`).join("");
+  const a = (state && state.awake) || { mode: "off" }, row = $("#vClock .row"), left = a.mode === "for" ? Math.max(0, a.until - Date.now()) : 0;
+  const chosen = AWAKE.find(([m, , n]) => m === "for" && n * 60000 >= left);   // the duration that was picked: the shortest that still covers what is left
+  const on = ([m, , n]) => a.mode === m && (m !== "for" || (chosen && chosen[2] === n));
+  row.innerHTML = AWAKE.map((o) => `<button type="button" class="btn${on(o) ? " on" : ""}" data-mode="${o[0]}" data-min="${o[2]}">${o[1]}</button>`).join("");
   for (const btn of row.querySelectorAll("button")) btn.onclick = async () => { const r = await api("/api/awake", { mode: btn.dataset.mode, minutes: +btn.dataset.min }); if (r.error) note(r.error); };
-  const left = a.mode === "for" ? Math.max(0, a.until - Date.now()) : 0, h = Math.floor(left / 3600000), m = Math.round((left % 3600000) / 60000);
-  $("#vClock .note").textContent = a.mode === "for" ? `awake for ${h ? h + " h " : ""}${m} min more` : a.mode === "work" ? (a.on ? "awake: bots are at work" : "bots idle: it may sleep") : "it sleeps as it likes";
 }
 // ---- the printer's report: the office's statistics since this page opened, with the staff list and
 // the limits, printed row by row on a sheet that comes out of the printer

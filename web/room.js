@@ -967,7 +967,7 @@ function startRoom(cv, app) {
       const ck = L.clock, a = s.awake || { mode: "off" }, h = hot(ck.x0, ck.y0, ck.x0 + 12, ck.y0 + 10, { kind: "clock" });
       outlined(ctx, foot("clock", [ck.x0, ck.y0]), h, (c) => drawClock(c, ck.x0 + 6, ck.y0 + 5, a.on));
       if (h) {
-        const left = Math.max(0, a.until - Date.now()), hh = Math.floor(left / 3600000), mm = Math.round((left % 3600000) / 60000);
+        const tm = Math.round(Math.max(0, a.until - Date.now()) / 60000), hh = Math.floor(tm / 60), mm = tm % 60;
         tip = { text: a.mode === "for" ? `awake ${hh ? hh + "h " : ""}${mm}m more` : a.mode === "work" ? (a.on ? "awake, bots at work" : "awake while bots work") : "clock", x: ck.x0 + 6, y: WALL + 10 };
       }
     }
