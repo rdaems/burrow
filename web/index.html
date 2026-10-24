@@ -452,7 +452,10 @@ function fillReport() {
     lines.push(`  ${b.name.padEnd(16).slice(0, 16)} ${m.name.padEnd(8).slice(0, 8)} ${(b.waiting ? "needs input" : b.busy ? "working" : b.alive === false ? "asleep" : "idle").padEnd(12)} ${when(b.started).padEnd(12)} ${proj(b)}`);
   if (!bots.length) lines.push("  nobody. The plants are thriving.");
   const done = over.filter((b) => b.over === "done").length, failed = over.filter((b) => b.over === "failed").length, stopped = over.length - done - failed;
-  lines.push(over.length ? `  On the bench: ${over.length} session${over.length === 1 ? "" : "s"} over (${done} done, ${failed} failed, ${stopped} stopped). Switched off, not forgotten.` : "  The bench is empty. Nothing is ever finished here.");
+  const bench = (state.furniture || []).some((k) => k.replace(/\d+$/, "") === "bench");   // without one the over sessions are not in the room
+  const tally = `${over.length} over (${done} done, ${failed} failed, ${stopped} stopped)`;   // the sheet is 80 columns wide
+  lines.push(over.length ? (bench ? `  Bench: ${tally}. Switched off, not forgotten.` : `  No bench, so ${tally} stay out of the room.`)
+    : bench ? "  The bench is empty. Nothing is ever finished here." : "  No bench, nothing over. Nothing is ever finished here.");
   lines.push("");
   // the break room
   const coffee = sum("coffee"), cooler = sum("cooler"), prints = sum("print"), plants = sum("plant"), naps = sum("sleep"), windows = sum("window"), chairs = sum("chair");

@@ -20,7 +20,7 @@
 //   over (done, failed  switched off on the bench, the oldest at its left, the newest at its right end
 //   or stopped)         (agent view's Completed group; a click on the bench lists them all); a click on
 //                       one restarts it: it gets up and goes to its desk. A bot you stop sits down there.
-//                       With no bench in the room they wander about, switched off (the closet has one)
+//                       With no bench in the room they are not shown at all (the closet has one)
 //   deleted             gone from the list (the fire, `claude rm`): up in flames
 // Free, two idle bots play ping-pong or chess; one alone at the chess board waits for an opponent.
 // You are in the room too, as pair draws its people: beside the bot whose session is open, a bubble
@@ -773,10 +773,10 @@ function startRoom(cv, app) {
       case "bench": {
         // stopped (from here, or elsewhere): switched off, it goes to sit at the free end of the last
         // bench; once Claude Code lists it as over and it sits, the bench draws it with the others.
-        // With no bench it stands where it is until Claude Code lists it as over, then wanders about
-        // with the others. A stop that does not take in half a minute gets it up again
+        // With no bench it stands where it is until Claude Code lists it as over, then it walks out
+        // through its door (draw() marks it leaving). A stop that does not take in half a minute gets it up again
         const b = f.b, bn = L.benches.at(-1), took = performance.now() - act.since > 30000;
-        if (!bn) { if ((b && b.over) || took) { f.benched = false; end(f); } break; }
+        if (!bn) { if (took && !(b && b.over)) { f.benched = false; end(f); } break; }
         const k = w.benchFill || 0, sits = k < BENCH_SEATS, spot = sits ? benchSeat(bn, k) : benchEnd(bn);
         act.there = sits ? sitAt(f, spot, v, dt) : walk(f, spot, v, dt);
         if (act.there) { f.dir = -1; f.legs = sits ? "sit" : "stand"; f.arms = "down"; }
@@ -897,8 +897,10 @@ function startRoom(cv, app) {
     s.layout = { ...(s.layout || {}), ...L.placed };
 
     // keep a figure per bot; one that turns up later comes in through its machine's door, one that
-    // is stopped walks out of it
-    const ids = new Set(all.map((b) => b.id)), you = { id: "you", name: (s.you && s.you.name) || "you", seed: s.you && s.you.seed, color: s.you && s.you.color, human: true, m: "" };
+    // is stopped walks out of it. With no bench in the room the sessions that are over are not in it
+    // either: not among `ids`, so the figure of one that goes over walks out too
+    const benched = L.benches.length > 0;
+    const ids = new Set((benched ? all : bots).map((b) => b.id)), you = { id: "you", name: (s.you && s.you.name) || "you", seed: s.you && s.you.seed, color: s.you && s.you.color, human: true, m: "" };
     ids.add("you");
     for (const f of w.folk.values()) if (!ids.has(f.id) && !f.leaving) { f.leaving = true; f.held = false; f.lying = false; f.sat = false; f.legs = "stand"; }
     for (const [id, t] of w.stopped) if (!ids.has(id) || performance.now() - t > 30000) w.stopped.delete(id);
@@ -916,18 +918,12 @@ function startRoom(cv, app) {
     }
     // a session that is over: with a bench in the room, its figure (if it has one: just stopped, or
     // being carried) goes to sit there, and once it sits the bench draws it with the others. With no
-    // bench it is a figure like the others, switched off, wandering about the room (the closet has a
-    // bench for them; or the room is kept that way, and the fire tidies up)
-    const benched = L.benches.length > 0;
+    // bench the over sessions are not shown: no figure comes in for them, and the figure of one that
+    // goes over is leaving (see `ids`), switched off. The closet has a bench; `claude --resume` and
+    // `claude attach` know them all the same
     for (const b of ended) {
       if (w.stopped.has(b.id)) continue;
-      let f = w.folk.get(b.id);
-      if (!f && !benched) {
-        const at = w.benchAt.get(b.id) || (late ? { x: doorX(b.m), y: WALL + 3 } : { x: rnd(L.floor.x0 + 10, L.floor.x1 - 10), y: rnd(L.floor.y0 + 10, L.floor.y1) });   // off the bench that was just burnt, in by the door, or about the room at the start
-        f = { id: b.id, x: at.x, y: at.y, dir: -1, arms: "down", legs: "stand", step: 0, sat: false, act: rest(), carry: null, lying: false,
-          busy: false, waiting: false, work: false, human: false, idleSince: performance.now() / 1000, chat: 0, z: Math.random() * 2 };
-        w.folk.set(b.id, f);
-      }
+      const f = w.folk.get(b.id);
       if (!f) continue;
       f.b = b;
       if (benched && !f.benched && !f.held) { end(f); f.benched = true; f.sat = false; f.lying = false; f.legs = "stand"; f.act = { kind: "bench", since: performance.now() }; }
@@ -1136,7 +1132,7 @@ function startRoom(cv, app) {
     // (one about to be stopped has its sign instead of a name, and a click on it is the undo)
     if (hovered && !moving) {
       const { b, x, y } = hovered, hf = w.folk.get(b.id), doomed = !!hf && hf.act.kind === "doom";
-      if (!doomed) tip = { text: b.human ? b.name : b.name + (b.over ? " - " + b.over : b.waiting ? " - needs input" : b.alive === false ? " - process off, opens again" : ""), x, y: y - 2 };
+      if (!doomed) tip = { text: b.human ? b.name : b.name + (b.over ? " - " + b.over + " - click to resume" : b.waiting ? " - needs input" : b.alive === false ? " - process off, opens again" : ""), x, y: y - 2 };
       hots.push({ x0: -1e9, y0: -1e9, x1: 1e9, y1: 1e9, action: b.human ? { kind: "you" } : doomed ? { kind: "undo", id: b.id } : { kind: "open", id: b.id } });
     }
     // (while something is dragged, the only tips are the fire's, the door's and the pair table's: what the drop does)

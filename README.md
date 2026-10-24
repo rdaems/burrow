@@ -41,8 +41,10 @@ whatever you drag into it.
 - **process off** (Claude Code stops an idle session's process after an hour; a `/loop` between runs):
   asleep on a mat; opening it starts it again
 - **talking**: a message to another session is a beam, antenna to antenna
-- **over** (done, failed or stopped, as agent view's *Completed*): switched off, with a light on its chest
-  for how it ended, on the bench if the room has one and about the room if not; a click starts it again
+- **over** (done, failed or stopped, as agent view's *Completed*; Claude Code stops a finished session's
+  process after an hour unattended and lists it as completed): switched off on the bench, a light on its
+  chest for how it ended; a click resumes it. With no bench in the room the over sessions are not shown
+  at all (the closet has a bench; `claude --resume` knows them)
 
 Sessions started in the same directory share a desk, named after the folder. A session in a git worktree
 sits at its repository's desk, the worktree a laptop beside the big screen. You are in the room too:

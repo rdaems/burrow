@@ -521,10 +521,9 @@ transcript stays for `claude --resume`). So:
   then `claude rm` (`/api/stop {rm: true}`), running or over; the sign says "NAME is deleted - undo".
 - The demo has over bots, bots that finish and come back, and `demo_stop` for the flows.
 - His two decisions after it (2026-10-24): `exit` typed in a session only detaches, as in Claude Code (the
-  tile closes, nothing else; `room.exit` is gone), stopping is the bench, the door and the fire. **No bench
-  in the room: the over bots wander about** as figures, switched off (grey, the chest light), on breaks
-  like the others but never charging on a mat; "the user is encouraged to put a bench" (the closet has
-  one), or to keep it that way and tidy up with the fire. Tooltips to teach this may come later.
+  tile closes, nothing else; `room.exit` is gone), stopping is the bench, the door and the fire. No bench
+  in the room: the over bots wandered about as figures, switched off (superseded the same day, see
+  "The bench is optional").
 
 ## Idle bots wander (2026-10-24)
 
@@ -619,6 +618,27 @@ one room for all machines, an office). The pictures in `docs/` come from the dem
 1280x820 (the window the hero shows); demo bots cannot be attached to, so the hero's tile is the burrow desk's
 shell with `claude` started in it and quit again; `room.png` is a crop of the desks at device pixels, the
 panels are crops too. Redo them the same way when the room changes much.
+
+## The bench is optional (2026-10-24, afternoon)
+
+He came back to a bot he had set to work sitting on the bench: "I don't like that. When I would do the same
+in orca, the session would still be there. Does this deviate from the claude agents idea?" Checked against
+the docs (agent-view.md) and `claude agents --json` here: it does not. `done` is "ready for your next
+prompt, whether or not its process is still alive"; the supervisor stops a finished session's process after
+about an hour unattached, to free resources (`Ctrl+T` in agent view pins one; nothing outside agent view
+can); done with no process is listed only with `--all`, "completed background sessions": agent view's
+Completed group, i.e. the bench. Orca kept an interactive `claude` alive in a terminal: no supervisor, no
+done state. Attaching restarts a completed session from its saved conversation, so it is there either way.
+His decisions:
+- **The bench is opt-in.** With a bench the over sessions sit on it as before. **With no bench they are
+  not shown at all** (no wandering grey figures). The figure of a session that goes over while the room
+  is watched walks out through its machine's door, switched off: in `draw()`, `ids` leaves the over bots
+  out when there is no bench, so they leave like a session gone from the feed; the `bench` act with no
+  bench just waits for `over`. "Many people (me included) would rather restart an old chat using
+  `/resume`": `claude --resume`, `claude attach <id>` and agent view's `/resume` picker know them all.
+  A new room still gets `bench0` (`FURNITURE`); burn it to opt out.
+- A brief tip on a sitter: "NAME - done - click to resume" (failed, stopped the same).
+- The report says "On the bench" or "Out of the room" for the over sessions, by whether there is a bench.
 
 ## Next
 
