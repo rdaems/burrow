@@ -133,10 +133,10 @@ def split_unit(u):
 # The furniture: what stands in the room, as keys; a key is its kind and a number (plant0, mat2;
 # the first room's pieces have no number). There can be any number of a kind. The closet in the
 # room adds a piece, the fireplace burns one; the fire and the closet themselves stay.
-FURNITURE = ["meet", "pong", "chess", "mat0", "mat1", "mat2", "coffee", "cooler", "printer", "armchair",
+FURNITURE = ["meet", "pong", "chess", "coffee", "cooler", "printer", "armchair",
              "plant0", "plant1", "board", "window", "clock", "fire", "closet", "add", "bench0"]
 FIXED = {"fire", "closet"}
-KINDS = {"meet", "pong", "chess", "mat", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "clock", "add", "pair", "bench"}
+KINDS = {"meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "clock", "add", "pair", "bench"}
 
 
 # A pair room (rdaems/pair-prompting, e.g. pair.daems.me): a chat where people and agents talk. The
@@ -179,15 +179,12 @@ BOT_NAMES = [f"{a}-{n}" for adj, names in BOT_WORDS.values() for a in adj.split(
 
 
 def furnish(room):
-    """a room from before the furniture list gets the default pieces; its row of three mats became
-    three; the project cabinet (add) became furniture, and the whiteboard came off the wall (its
-    place on the wall is dropped: it gets one on the floor); a room from before the bench gets one (the
-    sessions that are over sit on it)"""
+    """a room from before the furniture list gets the default pieces; the project cabinet (add) became
+    furniture, and the whiteboard came off the wall (its place on the wall is dropped: it gets one on the
+    floor); a room from before the bench gets one (the sessions that are over sit on it); the charging
+    mats are gone (a bot rolls out its own to sleep on)"""
     room.setdefault("furniture", list(FURNITURE))
-    at = room["layout"].pop("mats", None)
-    if at:
-        for i, d in enumerate((-28, 0, 28)):
-            room["layout"].setdefault(f"mat{i}", [at[0] + d, at[1]])
+    room["layout"].pop("mats", None)
     if room.get("v", 1) < 2:
         if "add" not in room["furniture"]:
             room["furniture"].append("add")
@@ -199,6 +196,11 @@ def furnish(room):
         if not any(kind_of(k) == "bench" for k in room["furniture"]):
             room["furniture"].append("bench0")
         room["v"] = 3
+    if room["v"] < 4:
+        room["furniture"] = [k for k in room["furniture"] if kind_of(k) != "mat"]
+        for k in [k for k in room["layout"] if kind_of(k) == "mat"]:
+            room["layout"].pop(k)
+        room["v"] = 4
     return room
 
 

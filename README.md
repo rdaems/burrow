@@ -8,7 +8,7 @@ place in the room tells you what it is doing; there are no notifications, badges
 - **busy**: it sits at its desk and types, and its screen scrolls in its project's colour
 - **idle**: it gets up and takes a break: coffee, the printer, the cooler, ping-pong, chess, the plants, the
   window, the armchair, a meeting at the whiteboard
-- **asleep**: a session whose process Claude Code has stopped charges on a mat; opening it wakes it
+- **asleep**: a session whose process Claude Code has stopped sleeps on a little mat it rolled out near its desk; opening it wakes it
 - **needs input**: it sits at its desk with its hand up (a question for you, a permission prompt)
 - **talking**: a bot that sends another one a message beams it across the room, antenna to antenna
 - **over** (done, failed or stopped, its process gone: agent view's *Completed*): it sits switched off on
@@ -53,7 +53,7 @@ beside it, never a dialog:
 - a pair room ([pair](https://github.com/rdaems/pair-prompting), e.g. pair.daems.me) is a table with a
   speakerphone: give it the link of your own page in the room, click it for the chat, drop a bot on it and
   the bot joins the chat as an agent
-- drop yourself or a bot on a piece of furniture and it uses it: the armchair, a mat, the window, the
+- drop yourself or a bot on a piece of furniture and it uses it: the armchair, the window, the
   coffee machine, a plant, the printer, a table
 - a click on your own figure picks your face
 

@@ -280,7 +280,7 @@ function askYou() {
 
 // ---- the closet: the furniture there is, drawn as it stands in the room; drag a piece into the
 // room to put it there, as many as you like. The fireplace takes a piece back out (it burns)
-const CATALOGUE = ["plant", "armchair", "mat", "window", "clock", "board", "meet", "chess", "pong", "coffee", "cooler", "printer", "add", "pair"];
+const CATALOGUE = ["plant", "armchair", "window", "clock", "board", "meet", "chess", "pong", "coffee", "cooler", "printer", "add", "pair"];
 function fillCloset() {
   const el = $("#vCloset");
   el.innerHTML = "";
@@ -449,7 +449,7 @@ function fillReport() {
   lines.push(prints ? `  Printed: ${prints} page${prints === 1 ? "" : "s"} by the bots, plus this one. Paper jams: 0 (we are the printer).` : "  Printed: only this. The printer appreciates the attention.");
   lines.push(plants ? `  Plants watered ${plants} time${plants === 1 ? "" : "s"}. They did not ask.` : "  Plants: not watered. They are plastic, probably.");
   const nap = top("asleep");
-  lines.push(naps ? `  Naps on the mats: ${naps}. Longest sleeper: ${name(nap.b.id)} (${mins(nap.n)}).` : "  Naps: none. Nobody charged. Batteries are a state of mind.");
+  lines.push(naps ? `  Naps: ${naps}, on mats rolled out wherever. Longest sleeper: ${name(nap.b.id)} (${mins(nap.n)}).` : "  Naps: none. Nobody rolled out a mat. Batteries are a state of mind.");
   lines.push(windows ? `  Window: looked out of ${windows} time${windows === 1 ? "" : "s"}. It is ${t.getHours() >= 7 && t.getHours() < 20 ? "day" : "night"}. Nothing happened.` : "  Window: ignored. The outside can wait.");
   lines.push(chairs ? `  Armchair: ${chairs} reading session${chairs === 1 ? "" : "s"}. Nobody finished the book.` : "  Armchair: empty. The book is still on page 1.");
   lines.push("");

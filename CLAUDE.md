@@ -559,6 +559,27 @@ project inside it: "simply ignore that"; "that terminal is stored if you click i
   open tile's own output). The bots' bars keep the rows above. Hover a shell's tile and its screen lights
   up; hover the screen and the tile does.
 
+## Mats gone, more breaks, a click on the floor (2026-10-24)
+
+He: "I think we can remove the sleeping mats, we have the bench now. Or rather, I'd like idle bots to
+interact with the environment more, do funny stuff, play chess with each other, and they can roll out a
+little mat wherever and go to sleep if they want. So remove the explicit charging mats from the system,
+the idle bots will do that on their own"; and "when i click somewhere on the empty floor, my avatar moves
+there".
+- The `mat` kind is gone (closet, `CATALOGUE`, `KINDS`, `FURNITURE`; `furnish` drops `mat*` from older
+  rooms, `v: 4`). A nap is an act: the figure takes a rolled-up mat along (`roll` arms), rolls it out on
+  a clear bit of floor near where it is (`napSpot`: rings outwards from it, clear of every piece's
+  footprint with a margin, of the other mats, inside the floor), lies down (the old sleeper drawing;
+  `drawMat` is the mat without the charger), and when it gets up rolls it up and carries it a moment
+  (`wake`). Forced, with no `left`, while a bot's process is off or while you are away; a break with a
+  `left` for an idle bot. A piece put down on a sleeper wakes it.
+- New breaks in `pickBreak`: the nap; hands at the fire (`warm`, one bot a side); watching a game of
+  chess or ping-pong from behind the table (`watch`: turns with the play, arms up at a move); a stretch
+  (`stretch`, arms up and down); a coffee for a busy colleague (`serve`: fetched at the machine, put on
+  its desk by the keyboard, `w.mugs`, drawn by `drawDesk` for 90 s; kept if the colleague got up). A bot
+  waiting at the chess board draws the next idle one more often (0.7).
+- A click on bare floor still closes the tiles, and sends you there (`loiter`, 20–45 s, then breaks).
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a
