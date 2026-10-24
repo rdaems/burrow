@@ -668,6 +668,32 @@ Let's remove the top bar with 'BURROW' and add a settings furniture thing!"
 - Not decided: the app's own chats on odyssey (the `claude remote-control` service's children, interactive
   rows) stay out of the room, as before.
 
+## You, and a pair table as one room (2026-10-24, afternoon)
+
+He: the `you` popup "should shrink horizontally"; "Where did you get my name? This should also be a field in
+this interface"; "When setting up a pair room table, allow a button to start a new one"; "My avatar will be
+used for the pair room"; "One pair room table represents one pair room".
+- The view's width is its kind's (`data-kind` on `#view`): YOU is as narrow as its face (`width:auto`). Under
+  the face a name field; empty = the login name (`getpass.getuser()`, the only source before; it shows greyed
+  as the placeholder). `state.you` is `{name, seed, login}` from `you_of()`; `/api/you` merges name, seed,
+  colour (empty removes one) and answers with `you_of`.
+- The face's seed is in pair's form, `<start>-<i>` (pair's `clean_avatar` keeps `[A-Za-z0-9-]`, 24 at most;
+  burrow's `name:i` would have come out as another face there): `v: 6` rewrites `rembert:15` to `rembert-15`
+  (v 5 is the other session's switchboard, landed meanwhile), so the face changed once. A first face is
+  still the seed of the name.
+- A pair table is one room. Unlinked, its panel opens a new room at `PAIR` (`BURROW_PAIR`, default
+  https://pair.daems.me; `state.pairAt`) with pair's `POST /api/rooms {room, name, avatar}`: you are in it as
+  the room draws you (the prose shows the small face and the name); or links a room by your own page (/h/) or
+  its invite (/r/: pair's `POST /r/<invite> {name, avatar}` joins). Linking a page puts your name and face on
+  that seat (`POST /h/<token>/me`); if pair refuses (the name is taken there) the link is kept and the reason
+  goes on the wall (`warn`). A change of name or face here reaches every linked room a second later
+  (`pair_me_all`: one round for a burst of clicks, `_me_round`).
+- Tested against a local copy of pair's server (rdaems/pair-prompting `app/`, `PAIR_DATA`, `PORT`), not
+  pair.daems.me: a room there is for good (pair has no delete). :7781 for a worktree's demo got killed by
+  another session's test; :7783 was used.
+- Not done: the colour. pair gives every human a colour by join order and nothing can set it; here you stay
+  terracotta.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

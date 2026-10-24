@@ -69,11 +69,13 @@ beside the robot whose session is open, or under the screen when your own termin
 - **the whiteboard** opens large and you draw on it; the host of a meeting draws on it too
 - **the window** looks outside: the sky by the hour, the sun or the moon, stars at night
 - **chess and ping-pong** are games against an idle robot, drawn by lot
-- **a pair room** ([pair](https://github.com/rdaems/pair-prompting)) is a table with a speakerphone: click
-  it for the chat, drop a robot on it and the robot joins the chat as an agent
+- **a pair room** ([pair](https://github.com/rdaems/pair-prompting)) is a table with a speakerphone, one
+  room a table: click it to open a new room (you are in it, with your name and face) or to link one you
+  are in, then for the chat; drop a robot on it and the robot joins the chat as an agent
 - **furniture**: drag it where you want it; the closet on the wall holds more; drop yourself or a robot on a
   piece and it is used; the fire burns a piece, a desk or a robot
-- **your face**: a click on your own figure
+- **you**: a click on your own figure: your face and your name (the login name unless you type one);
+  the pair rooms see you by them
 - **settings**: the switchboard on the wall, a switch a setting, its lamp lit while it is on. The first:
   new sessions get `--remote-control`, so the same session is in the Claude app and at claude.ai/code
   too (its tile has an APP button, its robot a blinking light over the antenna)
@@ -96,7 +98,7 @@ Remote machines are reached with your own `ssh`, so `~/.ssh/config`, agents and 
 work; one multiplexed connection per machine is shared. A `claude` you run in some other terminal belongs
 to that terminal and cannot be attached to, so it is not in the room, as Claude Code's agent view leaves
 it out too. burrow keeps only what Claude Code has no notion of: the desks, the furniture and where it
-stands, your face, the pair rooms' links and the switchboard's settings, in `~/.config/burrow/room.json`.
+stands, your name and face, the pair rooms' links and the switchboard's settings, in `~/.config/burrow/room.json`.
 
 ## Running it
 

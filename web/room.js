@@ -1060,7 +1060,7 @@ function startRoom(cv, app) {
       const info = (s.pair || {})[pr.key], h = hot(pr.x - 13, pr.y - 20, pr.x + 13, pr.y + 1, { kind: "pairOpen", key: pr.key });
       const over_ = !!heldBot && inRect(spot(heldBot), foot("pair", [pr.x, pr.y]));
       piece(pr, "pair", (c) => drawPair(c, pr, !!info, T, over_));
-      if (h) tip = { text: info ? info.room || "pair" : "pair: link a room", x: pr.x, y: pr.y - 22 };
+      if (h) tip = { text: info ? info.room || "pair" : "pair: open a room", x: pr.x, y: pr.y - 22 };
       else if (over_) tip = { text: info ? held.b.name + " joins " + (info.room || "the room") : "no room linked yet", x: pr.x, y: pr.y - 22 };
     }
     if (L.pong) {

@@ -26,7 +26,8 @@ CACHE = os.path.join(HOME, ".cache/burrow")
 DEMO = bool(os.environ.get("BURROW_DEMO"))
 PORT = int(os.environ.get("BURROW_PORT", "7777"))
 HOSTNAME = subprocess.run(["hostname", "-s"], capture_output=True, text=True).stdout.strip() or "here"
-USER = getpass.getuser()                       # you, in the room
+USER = getpass.getuser()                       # you, in the room: the name unless room.json has one
+PAIR = os.environ.get("BURROW_PAIR", "https://pair.daems.me").rstrip("/")   # where a pair table opens a new room
 
 # a non-login shell over ssh has a bare PATH; claude lives here
 PATH = 'PATH="$HOME/.local/bin:$HOME/.claude/local:/opt/homebrew/bin:/usr/local/bin:$PATH"; export PATH; export COLORTERM=truecolor; '
@@ -176,24 +177,91 @@ def options(room):
 KINDS = {"meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "clock", "add", "pair", "bench"}
 
 
-# A pair room (rdaems/pair-prompting, e.g. pair.daems.me): a chat where people and agents talk. The
-# piece holds your own page's link there (/h/<token>, the bookmark that is your login); its `state`
-# gives the room's name and your "bring" link, which makes a new agent of whatever chat it is pasted
-# into. A bot dropped on the piece gets that link typed into its session, and joins.
-def pair_state(url):
-    u = urlparse(url)
-    if u.scheme not in ("http", "https") or not re.fullmatch(r"/h/[A-Za-z0-9_-]+/?", u.path or ""):
-        raise RuntimeError("that is not your page in a pair room (…/h/<token>)")
-    base = f"{u.scheme}://{u.netloc}{u.path.rstrip('/')}"
+# A pair room (rdaems/pair-prompting, e.g. pair.daems.me): a chat where people and agents talk. One
+# table is one room: the piece holds your own page's link there (/h/<token>, the bookmark that is your
+# login); its `state` gives the room's name and your "bring" link, which makes a new agent of whatever
+# chat it is pasted into. A bot dropped on the piece gets that link typed into its session, and joins.
+# The person at the table is you, as the room draws you: a room opened from here (pair's POST
+# /api/rooms) or joined by its invite (/r/<invite>) gets your name and face, and so does the seat of a
+# page you link; a change of either here is sent to every linked room (pair's /h/<token>/me).
+def pair_seed(s):
+    """a face's seed as pair keeps it (its clean_avatar): letters, digits and dashes, 24 at most"""
+    return re.sub(r"[^A-Za-z0-9-]", "", str(s or ""))[:24]
+
+
+def you_of(room):
+    """your name and face: room.json's, the login name and a face from it when none is picked"""
+    you = room.get("you") or {}
+    name = (you.get("name") or "").strip() or USER
+    return {"name": name, "seed": pair_seed(you.get("seed")) or pair_seed(name) or "you"}
+
+
+def pair_fetch(url, body=None):
+    """one call to pair: its JSON, or its error as a RuntimeError in its words"""
+    req = urllib.request.Request(url, data=json.dumps(body).encode() if body is not None else None, headers={"Accept": "application/json"})
     try:
-        with urllib.request.urlopen(urllib.request.Request(base + "/state?since=0", headers={"Accept": "application/json"}), timeout=15) as r:
-            st = json.loads(r.read().decode())
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return json.loads(r.read().decode())
     except urllib.error.HTTPError as e:
-        raise RuntimeError("pair does not know that page" if e.code == 404 else f"pair answered {e.code}")
+        try:
+            err = json.loads(e.read().decode()).get("error")
+        except Exception:
+            err = None
+        raise RuntimeError(err or ("pair does not know that page" if e.code == 404 else f"pair answered {e.code}"))
     except (urllib.error.URLError, OSError, ValueError) as e:
         raise RuntimeError(f"pair is out of reach: {str(e)[:80]}")
-    return {"url": base, "room": st.get("room") or "", "bring": st.get("bring") or "", "invite": st.get("invite") or "",
-            "people": [p.get("name") for p in st.get("people") or []]}
+
+
+def pair_page(url):
+    """the link of your page in a room, or the room's invite: joined with your name and face, it gives the page"""
+    u = urlparse(url)
+    if u.scheme not in ("http", "https") or not re.fullmatch(r"/[hr]/[A-Za-z0-9_-]+/?", u.path or ""):
+        raise RuntimeError("that is not a pair room: your page there (…/h/…) or its invite (…/r/…)")
+    base = f"{u.scheme}://{u.netloc}{u.path.rstrip('/')}"
+    if u.path.startswith("/r/"):
+        you = you_of(hub.room)
+        base = f"{u.scheme}://{u.netloc}" + pair_fetch(base, {"name": you["name"], "avatar": you["seed"]})["url"]
+    return base
+
+
+def pair_new(name):
+    """a new room at PAIR, opened by you: your page in it"""
+    you = you_of(hub.room)
+    return PAIR + pair_fetch(PAIR + "/api/rooms", {"room": name, "name": you["name"], "avatar": you["seed"]})["url"]
+
+
+def pair_state(url):
+    st = pair_fetch(url + "/state?since=0")
+    return {"url": url, "room": st.get("room") or "", "bring": st.get("bring") or "", "invite": st.get("invite") or "",
+            "name": st.get("name") or "", "people": [p.get("name") for p in st.get("people") or []]}
+
+
+def pair_me(url):
+    """your name and face at the table, put on your seat in that room"""
+    you = you_of(hub.room)
+    pair_fetch(url + "/me", {"name": you["name"], "avatar": you["seed"]})
+
+
+_me_round = [0]
+
+
+def pair_me_all(room, delay=1.0):
+    """you changed: every linked room hears, a moment later (one round for a burst of clicks)"""
+    _me_round[0] += 1
+    mine = _me_round[0]
+    urls = [p["url"] for p in (room.get("pair") or {}).values() if p.get("url")]
+
+    def go():
+        time.sleep(delay)
+        if mine != _me_round[0]:
+            return
+        for u in urls:
+            try:
+                pair_me(u)
+            except RuntimeError as e:
+                print(f"pair {u}: {e}", flush=True)
+    if urls:
+        threading.Thread(target=go, daemon=True).start()
 
 
 def kind_of(key):
@@ -242,6 +310,11 @@ def furnish(room):
         if not any(kind_of(k) == "settings" for k in room["furniture"]):
             room["furniture"].append("settings0")
         room["v"] = 5
+    if room["v"] < 6:                        # your face's seed in pair's form (name:7 was burrow's own): the same face there
+        seed = (room.get("you") or {}).get("seed")
+        if seed and pair_seed(seed) != seed:
+            room["you"]["seed"] = pair_seed(re.sub(r"[^A-Za-z0-9-]+", "-", seed))
+        room["v"] = 6
     return room
 
 
@@ -459,7 +532,7 @@ class Hub:
                     "desks": self.desks(bots), "bots": bots, "layout": self.room["layout"], "furniture": self.room["furniture"], "pair": self.room.get("pair", {}),
                     "usage": self.usage, "chess": self.chess_view(), "demo": DEMO, "width": self.room.get("width"), "shells": self.shells_view(),
                     "settings": options(self.room),
-                    "you": {"name": USER, **(self.room.get("you") or {})}}
+                    "you": {**(self.room.get("you") or {}), **you_of(self.room), "login": USER}, "pairAt": PAIR}
 
     def keep(self, u, on):
         """a desk added (by you), or taken away: gone with its place, until a session runs there again"""
@@ -1130,30 +1203,54 @@ class Handler(BaseHTTPRequestHandler):
                 save_room(hub.room)
             hub.push("state", hub.state())
             return {"key": key}
-        if path == "/api/pair":              # a pair piece: its link set ({key, url}), or looked up ({key}): the room and the bring link
-            key = b.get("key") or ""
+        if path == "/api/pair":              # a pair table: a new room opened ({key, new: name}), a room linked ({key, url}: your page
+            key = b.get("key") or ""         # or an invite), or looked up ({key}): the room and the bring link
             if kind_of(key) != "pair":
                 raise RuntimeError("not a pair piece")
             with hub.lock:
                 have = hub.room.setdefault("pair", {}).get(key)
-            url = (b.get("url") or "").strip() or (have or {}).get("url")
+            fresh, url = True, None
+            if (b.get("new") or "").strip():
+                url = pair_new(b["new"].strip()[:80])
+            elif (b.get("url") or "").strip():
+                url = pair_page(b["url"].strip())
+            else:
+                fresh, url = False, (have or {}).get("url")
             if not url:
                 raise RuntimeError("no room linked yet")
+            warn = ""
+            if fresh:                        # the seat is yours: your name and face on it (a new room has them already)
+                try:
+                    pair_me(url)
+                except RuntimeError as e:
+                    warn = f"pair: {e}"
             st = pair_state(url)
             with hub.lock:
                 hub.room["pair"][key] = {"url": st["url"], "room": st["room"]}
                 save_room(hub.room)
             hub.push("state", hub.state())
-            return st
+            return {**st, "warn": warn}
         if path == "/api/room":              # the room's width in dots (the divider, dragged)
             hub.room["width"] = max(200, min(1200, int(b.get("width") or 256)))
             save_room(hub.room)
             return {}
-        if path == "/api/you":               # how you look: the face's seed, your colour
-            hub.room["you"] = {k: str(b[k])[:40] for k in ("seed", "color") if b.get(k)}
-            save_room(hub.room)
+        if path == "/api/you":               # who you are: your name (empty: the login name), the face's seed, your colour
+            with hub.lock:
+                you = dict(hub.room.get("you") or {})
+                for k in ("name", "seed", "color"):
+                    if k in b:
+                        v = re.sub(r"\s+", " ", str(b[k] or "")).strip()[:40]
+                        if k == "seed":
+                            v = pair_seed(v)
+                        if v:
+                            you[k] = v
+                        else:
+                            you.pop(k, None)
+                hub.room["you"] = you
+                save_room(hub.room)
             hub.push("state", hub.state())
-            return {}
+            pair_me_all(hub.room)
+            return you_of(hub.room)
         if path == "/api/settings":          # the switchboard: {key: true/false} for the options there are
             st = hub.room.setdefault("settings", {})
             for k in OPTIONS:

@@ -216,8 +216,16 @@ img.sm { width:20px; height:20px; }
 .pg-hint { color:var(--faint); font-size:12px; margin-top:8px; text-align:center; }
 .pg-hint[hidden] { display:none; }
 
-/* you: your face, as pair's door picks it */
+/* you: your face, as pair's door picks it, and your name under it; the panel no wider than that */
+#view[data-kind="you"] { width:auto; min-width:0; max-width:min(640px, calc(100% - 48px)); }
+.you .faces { justify-content:center; }
+.you .field { margin-top:12px; }
+.you .err { min-height:0; margin-top:0; }
+.you .err:not(:empty) { margin-top:8px; }
 .faces { display:flex; align-items:center; gap:8px; }
 .faces[hidden] { display:none; }
+/* a pair table: you, as the room will see you */
+.who img { width:24px; height:24px; image-rendering:pixelated; vertical-align:-7px; margin:0 3px 0 2px; }
+.pair-setup form + form { margin-top:18px; }
 .face { padding:2px; background:var(--ink); border:2px solid var(--ink); box-shadow:inset 2px 2px 0 var(--steel1); line-height:0; }
 .face img { width:80px; height:80px; image-rendering:pixelated; display:block; }

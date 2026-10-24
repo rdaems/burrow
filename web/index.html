@@ -38,7 +38,11 @@
           <ul class="suggest" id="hosts" hidden></ul>
           <div class="err"></div>
         </form>
-        <div id="vYou" class="faces" hidden><button type="button" class="btn" id="youPrev" title="previous face">←</button><span class="face"><img id="youFace" alt="your face"></span><button type="button" class="btn" id="youNext" title="another face">→</button></div>
+        <form id="vYou" class="vform you" hidden>
+          <div class="faces"><button type="button" class="btn" id="youPrev" title="previous face">←</button><span class="face"><img id="youFace" alt="your face"></span><button type="button" class="btn" id="youNext" title="another face">→</button></div>
+          <input class="field" name="name" maxlength="40" autocomplete="nickname" spellcheck="false" title="your name (empty: the login name)">
+          <div class="err"></div>
+        </form>
         <div id="vCloset" class="closet" hidden></div>
         <div id="vReport" class="print" hidden><img class="machine" alt=""><div class="sheet"><pre></pre></div></div>
         <div id="vLimits" hidden></div>
@@ -47,11 +51,18 @@
         <div id="vOutside" hidden><canvas class="outside" width="130" height="70"></canvas></div>
         <div id="vBoard" hidden><canvas class="board" width="130" height="55"></canvas><div class="row"><button type="button" class="btn" id="wipe">wipe</button></div></div>
         <div id="vPair" hidden>
-          <form class="vform pair-link">
-            <p>A pair room (<a href="https://pair.daems.me" target="_blank" rel="noopener">pair.daems.me</a>): the link of <b>your own page</b> in it (…/h/…), the one you bookmarked.</p>
-            <input class="field" name="url" placeholder="https://pair.daems.me/h/…" autocomplete="off" spellcheck="false">
-            <div class="err"></div>
-          </form>
+          <div class="pair-setup">
+            <form class="vform pair-new">
+              <p>This table is one <a href="https://pair.daems.me" target="_blank" rel="noopener">pair room</a>: a chat where people and their agents talk. Open a new one; you are in it as <span class="who"><img alt=""><b></b></span>.</p>
+              <input class="field" name="room" maxlength="80" placeholder="What is it about?" autocomplete="off" spellcheck="false">
+              <div class="row"><button class="btn">OPEN ROOM →</button></div>
+            </form>
+            <form class="vform pair-link">
+              <p>Or a room that is there already: the link of <b>your own page</b> in it (…/h/…), or its invite (…/r/…).</p>
+              <input class="field" name="url" placeholder="https://pair.daems.me/h/…" autocomplete="off" spellcheck="false">
+              <div class="err"></div>
+            </form>
+          </div>
           <iframe class="pair-room" hidden title="the pair room"></iframe>
         </div>
         <div id="chess" class="chess" hidden></div>
@@ -186,11 +197,12 @@ addEventListener("focus", focus); addEventListener("blur", focus); document.addE
 
 // ---- the view: one thing at a time on the right, in place of the tiles, framed like one
 const PANELS = { dir: "#vDir", machine: "#vMachine", you: "#vYou", closet: "#vCloset", chess: "#chess", pong: "#pong", report: "#vReport", pair: "#vPair", board: "#vBoard", limits: "#vLimits", outside: "#vOutside", completed: "#vDone", settings: "#vSettings" };
-const TITLES = { dir: "A PROJECT", machine: "A MACHINE", you: "YOUR FACE", closet: "THE CLOSET", chess: "CHESS", pong: "PING-PONG", report: "REPORT", pair: "PAIR ROOM", board: "WHITEBOARD", limits: "LIMITS", outside: "OUTSIDE", completed: "COMPLETED", settings: "SETTINGS" };
+const TITLES = { dir: "A PROJECT", machine: "A MACHINE", you: "YOU", closet: "THE CLOSET", chess: "CHESS", pong: "PING-PONG", report: "REPORT", pair: "PAIR ROOM", board: "WHITEBOARD", limits: "LIMITS", outside: "OUTSIDE", completed: "COMPLETED", settings: "SETTINGS" };
 function openView(kind) {
   if (viewKind && viewKind !== kind) closeView(true);
   for (const t of tiles.all()) closeTile(t);
   viewKind = kind;
+  view.dataset.kind = kind;                // the panel's width is the kind's (you: as narrow as its face)
   for (const [k, sel] of Object.entries(PANELS)) $(sel).hidden = k !== kind;
   view.querySelector(".tname").textContent = TITLES[kind]; view.querySelector(".tas").textContent = "";
   view.hidden = false;
@@ -277,17 +289,33 @@ completes($("#vMachine input"), $("#hosts"), async (text) => {   // the hosts of
   return (r.hosts || []).filter((h) => h.toLowerCase().startsWith(text.toLowerCase()));
 });
 
-// ---- you: your face, picked as at pair's door (← another face →), kept in room.json
+// ---- you: your face, picked as at pair's door (← another face →: pair's row of seeds "<start>-<i>",
+// so the pair rooms draw the same one), and your name (empty: the login name, greyed); both kept in
+// room.json and put on your seat in every linked pair room
 function askYou() {
-  const name = state.you.name;
-  let i = +(/:(-?\d+)$/.exec(state.you.seed || "") || [0, 0])[1];
-  const seed = () => `${name}:${i}`;
+  const you = state.you, f = $("#vYou"), inp = f.querySelector("input");
+  const m = /^(.*)-(-?\d+)$/.exec(you.seed || ""), start = m ? m[1] : you.seed || "you";
+  let i = m ? +m[2] : 0;
+  const seed = () => (!m && !i ? start : `${start}-${i}`);   // a first face (the seed of the name) stays as it is
   const show = () => { $("#youFace").src = pixelAvatar(seed(), "human", "#d97757"); };
   const save = () => { show(); api("/api/you", { seed: seed() }); };
   $("#youPrev").onclick = () => { i--; save(); };
   $("#youNext").onclick = () => { i++; save(); };
   show();
+  inp.placeholder = you.login || "your name";
+  inp.value = you.name === you.login ? "" : you.name;
+  let named = inp.value;
+  const saveName = async () => {
+    const name = inp.value.trim();
+    if (name === named) return;
+    named = name;
+    const r = await api("/api/you", { name });
+    f.querySelector(".err").textContent = r.error || "";
+  };
+  inp.onchange = saveName;
+  f.onsubmit = (e) => { e.preventDefault(); saveName(); };
   openView("you");
+  inp.focus();
 }
 
 // ---- the closet: the furniture there is, drawn as it stands in the room; drag a piece into the
@@ -305,27 +333,41 @@ function fillCloset() {
     el.appendChild(it);
   }
 }
-// ---- a pair room (rdaems/pair-prompting): the piece holds the link of your own page in the room;
-// a click shows the chat itself in the view; a bot dropped on the piece gets the room's "bring"
-// link typed into its session, and joins the chat as a new agent (pair gives it a name of its own)
+// ---- a pair room (rdaems/pair-prompting): one table is one room. The piece holds the link of your
+// own page in it: a room opened from here (with your name and face, as pair's door does it), or one
+// linked by that page or by its invite. A click shows the chat itself in the view; a bot dropped on
+// the piece gets the room's "bring" link typed into its session, and joins the chat as a new agent
+// (pair gives it a name of its own)
 let pairKey = null;
 function openPair(key) {
   pairKey = key;
   openView("pair");
-  const info = (state && state.pair || {})[key], form = $("#vPair form"), fr = $("#vPair iframe");
-  form.querySelector(".err").textContent = "";
-  form.hidden = !!info; fr.hidden = !info;
+  const info = (state && state.pair || {})[key], setup = $("#vPair .pair-setup"), fr = $("#vPair iframe");
+  $("#vPair .err").textContent = "";
+  setup.hidden = !!info; fr.hidden = !info;
   if (info) { view.querySelector(".tas").textContent = info.room || ""; if (fr.src !== info.url) fr.src = info.url; }
-  else { fr.removeAttribute("src"); form.querySelector("input").value = ""; form.querySelector("input").focus(); }
+  else {
+    fr.removeAttribute("src");
+    const at = state.pairAt || "https://pair.daems.me", a = setup.querySelector("a"), who = setup.querySelector(".who");
+    a.href = at;
+    who.querySelector("img").src = pixelAvatar(state.you.seed, "human", "#d97757");
+    who.querySelector("b").textContent = state.you.name;
+    setup.querySelector("input[name=url]").placeholder = at + "/h/…";
+    for (const i of setup.querySelectorAll("input")) i.value = "";
+    setup.querySelector("input").focus();
+  }
 }
-$("#vPair form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const err = $("#vPair .err"), url = $("#vPair input").value.trim();
+async function linkPair(body) {
+  const err = $("#vPair .err");
   err.textContent = "…";
-  const r = await api("/api/pair", { key: pairKey, url });
+  const r = await api("/api/pair", { key: pairKey, ...body });
   if (r.error) { err.textContent = r.error; return; }
+  if (r.warn) note(r.warn);
+  (state.pair = state.pair || {})[pairKey] = { url: r.url, room: r.room };   // before the state comes round
   openPair(pairKey);
-});
+}
+$("#vPair .pair-new").addEventListener("submit", (e) => { e.preventDefault(); const name = e.target.room.value.trim(); if (name) linkPair({ new: name }); });
+$("#vPair .pair-link").addEventListener("submit", (e) => { e.preventDefault(); const url = e.target.url.value.trim(); if (url) linkPair({ url }); });
 async function joinPair(key, b) {
   const r = await api("/api/pair", { key });
   if (r.error) { if (/no room linked/.test(r.error)) openPair(key); else note(r.error); return; }
