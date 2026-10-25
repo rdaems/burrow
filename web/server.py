@@ -170,6 +170,7 @@ FIXED = {"fire", "closet", "settings"}
 # Burrow's own settings: the switchboard on the wall, a switch each; kept in room.json `settings`
 OPTIONS = {
     "rc": True,     # a bot started here gets --remote-control: the same session is in the Claude app and at claude.ai/code
+    "yolo": False,  # a bot started here gets --dangerously-skip-permissions: it never asks, it just does
 }
 
 
@@ -1345,7 +1346,8 @@ class Handler(BaseHTTPRequestHandler):
             if not name:
                 taken = {x["name"] for x in hub.feeds.get(mid, {}).get("bots", [])}
                 name = random.choice([n for n in BOT_NAMES if n not in taken] or BOT_NAMES)
-            flags = "--remote-control " if options(hub.room)["rc"] else ""    # in the Claude app and at claude.ai/code as well
+            o = options(hub.room)
+            flags = ("--remote-control " if o["rc"] else "") + ("--dangerously-skip-permissions " if o["yolo"] else "")   # in the app as well; yolo: never asks
             out = run(m, f"cd {sq(b['dir'])} && claude --bg {flags}-n {sq(name)} 2>&1")
             # "backgrounded · 7ebbc505 · name (idle — …)" or, unnamed, "backgrounded · 7ebbc505 (idle — …)",
             # maybe after "Starting background service…"

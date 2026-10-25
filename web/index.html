@@ -451,6 +451,8 @@ function fillLimits() {
 const OPTIONS = [
   { key: "rc", name: "New bots are in the Claude app too",
     what: "Started with <code>claude --bg --remote-control</code>: the same session can be continued on your phone or at claude.ai/code, and is in the app's list of sessions. Its tile gets an APP button, its antenna a blinking light." },
+  { key: "yolo", name: "New bots skip permissions (yolo)",
+    what: "Started with <code>--dangerously-skip-permissions</code>: the bot never waits for an answer, it runs every command and edit. Bots already running keep their mode." },
 ];
 function fillSettings() {
   const cfg = (state && state.settings) || {}, el = $("#vSettings");

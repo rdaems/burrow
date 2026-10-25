@@ -1608,7 +1608,7 @@ function startRoom(cv, app) {
   // burrow's own settings: a steel switchboard on the wall, a toggle a setting, its lever up and its
   // lamp lit while the setting is on (the first: new bots in the Claude app too); the lid stands open
   // while the panel is
-  const SWITCHES = ["rc"];
+  const SWITCHES = ["rc", "yolo"];
   function drawSwitchboard(ctx, b, cfg, open) {
     const { x0, y0 } = b;
     if (open) { rect(ctx, x0, y0 - 3, 14, 4, SP.F); rect(ctx, x0 + 1, y0 - 2, 12, 2, SP.C); }   // the lid, flipped up
@@ -1617,7 +1617,7 @@ function startRoom(cv, app) {
     rect(ctx, x0 + 1, y0 + 1, 12, 1, SP.C); rect(ctx, x0 + 1, y0 + 1, 1, 12, SP.C);
     rect(ctx, x0 + 3, y0 + 3, 8, 8, SP.E);
     SWITCHES.forEach((k, i) => {
-      const on = !!cfg[k], y = y0 + 4 + i * 5;
+      const on = !!cfg[k], y = y0 + 3 + i * 4;   // a lever every four dots: two fit the panel
       rect(ctx, x0 + 4, y, 2, 4, SP.F); rect(ctx, x0 + 4, on ? y : y + 2, 2, 2, on ? SP.B : SP.D);   // the lever: up when on
       rect(ctx, x0 + 8, y + 1, 2, 2, on ? SP.g : SP.F);                                              // its lamp
     });

@@ -765,6 +765,9 @@ after two movements; a bigger plus; the clock "a control like amphetamine".
   "report"]` is frameless, no band, closed by the floor or Esc); the printer sprite at 16 px a dot
   (`room.icon(kind, S, pad)`, pad 1) stands at the bottom, the fanfold sheet (480 px) is anchored in its
   slot (`bottom` set from the image's height) and grows upward as the lines print, so the paper moves up.
+- **A second switch, `yolo`**, off by default: `/api/spawn` adds `--dangerously-skip-permissions`, so a
+  bot started from the room never waits for a permission answer (`OPTIONS` in server.py and index.html,
+  `SWITCHES` in room.js draws its lever on the switchboard).
 - **The Rust app** stays the earlier version (his "2." to port / freeze / webview): its crates are the
   newest, its features are Oct 21's; it builds. Not to be ported while the room changes daily.
 - **The clock** is Amphetamine (`/api/awake {mode: off|work|for, minutes}`, `Hub.awake`, `awake_tick` on
