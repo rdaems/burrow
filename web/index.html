@@ -521,13 +521,13 @@ function fillReport() {
   const two = (a, b) => padTo(a + " ", wide - px(b)) + b;     // the right end flush with the margin
   const L = [two("BURROW OFFICE REPORT", `${pad(t.getDate())}/${pad(t.getMonth() + 1)} ${hm(t)}`), `since ${shift < 2 ? "a moment" : shift + " min"} ago, approximate`, ""];
   const working = bots.filter((b) => b.busy).length, waiting = bots.filter((b) => b.waiting).length;
-  L.push(`STAFF  ${n(bots.length, "session")}: ${working} working, ${waiting} waiting for you`);
+  L.push(`STAFF  ${n(bots.length, "session")}, ${working} working, ${waiting} waiting`);
   for (const m of state.machines) for (const b of bots.filter((b) => (b.m || "") === m.id))
     L.push(row(`  ${b.name.slice(0, 16)}`, m.name.slice(0, 10), b.waiting ? "needs you" : b.busy ? "working" : b.alive === false ? "off" : "idle"));
   if (!bots.length) L.push("  nobody. the plants are thriving");
   const done = over.filter((b) => b.over === "done").length, failed = over.filter((b) => b.over === "failed").length, stopped = over.length - done - failed;
   const bench = (state.furniture || []).some((k) => k.replace(/\d+$/, "") === "bench");   // without one the over sessions are not in the room
-  if (over.length) L.push(`  ${bench ? "bench" : "no bench, out of the room"}: ${over.length} over (${done} done, ${failed} failed, ${stopped} stopped)`);
+  if (over.length) L.push(`  ${bench ? "bench" : "out of the room"}: ${done} done, ${failed} failed, ${stopped} stopped`);
   const coffee = sum("coffee"), cooler = sum("cooler"), naps = sum("sleep"), nap = top("asleep"), prints = sum("print");
   L.push("", "BREAK ROOM");
   L.push(coffee ? `  coffee: ${n(coffee, "cup")}, the pot at ${left(u.session)}` : `  coffee: none fetched, the pot at ${left(u.session)}`);
@@ -535,24 +535,26 @@ function fillReport() {
   L.push(naps ? `  naps: ${naps}${nap ? `, longest ${name(nap.b.id)} (${mins(nap.n)})` : ""}` : "  naps: none, batteries are a state of mind");
   L.push(prints ? `  printed: ${n(prints, "page")} by the bots, plus this one` : "  printed: this page only");
   const pong = sum("pong"), chess = sum("chess"), beams = sum("sent"), talker = top("sent"), worker = top("busy"), present = top("present");
-  L.push("", `GAMES  ping-pong ${pong}, chess ${chess}${pong + chess ? "" : ", the balls sat still"}`);
+  L.push("", `GAMES  ping-pong ${pong}, chess ${chess}`);
   L.push(`MEETINGS  ${st.meetings ? `${st.meetings} held${present ? ", " + name(present.b.id) + " at the board" : ""}` : "none"}, board ${Math.round(st.inked * 100)}% inked`);
   L.push(`MESSAGES  ${beams ? `${beams} beamed${talker ? ", most by " + name(talker.b.id) : ""}` : "none, everyone minds their desk"}`);
   if (worker && worker.n > 30) L.push("", `EMPLOYEE OF THE SHIFT  ${name(worker.b.id)}, ${mins(worker.n)} at the keys`);
   L.push("", `LIMITS  5h ${left(u.session)} left, week ${left(u.week)} left`, "", "recycled pixels, keep away from the fire");
   const lines = L.map(cut);
-  // the sheet comes out row by row, every row letter by letter, as a line printer
-  const img = $("#vReport .machine"), job = ++printing;
-  if (!img.src) img.src = room.icon("printer", 6);
+  // the printer stands at the bottom, big; the sheet comes out of its top, upwards, row by row, every
+  // row letter by letter, as a line printer: its bottom sits in the printer's slot and it grows up
+  const img = $("#vReport .machine"), sheet = $("#vReport .sheet"), job = ++printing, DOT = 20;   // pixels a dot of the printer
+  const seat = () => { sheet.style.bottom = 12 + img.offsetHeight - 3 * DOT + "px"; };
+  if (!img.src) { img.onload = seat; img.src = room.icon("printer", DOT, 1); } else seat();
   out.textContent = "";
-  $("#vReport .sheet").style.height = "0px";
+  sheet.style.height = "0px";
   let i = 0, j = 0;
   const tick = () => {
     if (job !== printing || viewKind !== "report") return;
     if (i >= lines.length) return;
     const line = lines[i];
     out.textContent = lines.slice(0, i).join("\n") + (i ? "\n" : "") + line.slice(0, j);
-    $("#vReport .sheet").style.height = out.offsetHeight + 30 + "px";
+    sheet.style.height = out.offsetHeight + "px";
     if (j < line.length) { j += 2; setTimeout(tick, 12); } else { i++; j = 0; setTimeout(tick, 90); }
   };
   tick();

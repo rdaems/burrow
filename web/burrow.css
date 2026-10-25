@@ -108,17 +108,22 @@ button, input, select { font:inherit; color:inherit; }
 .board { display:block; width:520px; max-width:100%; aspect-ratio:130/55; background:#efebe8; border:2px solid var(--ink); image-rendering:pixelated; touch-action:none; cursor:crosshair; }
 .row { display:flex; gap:8px; margin-top:10px; }
 /* the printer: big, the sheet coming out of its front, printed row by row */
-.print { display:flex; flex-direction:column; align-items:center; }
-.print .machine { display:block; image-rendering:pixelated; position:relative; z-index:1; }
+/* the report has no panel: the printer itself stands at the bottom of the pane and the paper comes out
+   of its top, upwards, a line at a time (the sheet is anchored at the printer's slot and grows up) */
+#view[data-kind="report"] { background:none; box-shadow:none; border:0; clip-path:none; padding:0; top:0; height:100%; max-height:100%; transform:translateX(-50%); }
+#view[data-kind="report"] .vhead { display:none; }
+#view[data-kind="report"] .vbody { flex:1 1 auto; overflow:hidden; }
+.print { position:relative; height:100%; }
+.print .machine { position:absolute; left:50%; bottom:12px; transform:translateX(-50%); image-rendering:pixelated; z-index:1; }
 /* the report's paper: fanfold, a strip of sprocket holes down each side behind a perforation, the
    text in the pixel font as a line printer sets it, a margin inside the strips (the lines are cut to it) */
-.print .sheet { position:relative; width:100%; margin-top:-30px; background:#f6f1e3; border:2px solid var(--ink); box-shadow:inset -2px -2px 0 var(--steel2); overflow:hidden; height:0; }
+.print .sheet { position:absolute; left:50%; bottom:0; transform:translateX(-50%); width:min(520px, 100%); background:#f6f1e3; border:2px solid var(--ink); box-shadow:inset -2px -2px 0 var(--steel2); overflow:hidden; height:0; }
 .print .sheet::before, .print .sheet::after { content:""; position:absolute; top:0; bottom:0; width:22px;
   background:repeating-linear-gradient(to bottom, transparent 0 8px, var(--ink) 8px 16px, transparent 16px 24px) 7px 0 / 8px 100% no-repeat; }
 .print .sheet::before { left:0; border-right:2px dashed #cfc4aa; }
 .print .ruler { position:absolute; visibility:hidden; white-space:pre; left:0; top:0; }
 .print .sheet::after { right:0; border-left:2px dashed #cfc4aa; }
-.print pre { margin:0; padding:30px 40px 14px; color:#140f1e; font:16px/22px var(--pixel); -webkit-font-smoothing:none; white-space:pre; text-shadow:none; overflow:hidden; }
+.print pre { margin:0; padding:14px 40px 24px; color:#140f1e; font:16px/22px var(--pixel); -webkit-font-smoothing:none; white-space:pre; text-shadow:none; overflow:hidden; }
 /* the limits: a bar a limit, steel in an ink ring, gold for what is used */
 .lim { margin:4px 0 12px; }
 .lim .lab { color:var(--gold2); }

@@ -761,6 +761,12 @@ after two movements; a bigger plus; the clock "a control like amphetamine".
   hidden `.ruler` span in the paper's font measures: lines cut to the paper's width (`cut`), staff columns
   padded to pixel stops (`row`, `padTo`), the date flush right (`two`). Shorter: staff, bench tally, break
   room, games, meetings, messages, the employee of the shift, limits.
+- **The printer prints into the pane** (the next morning): no panel for the report (`#view[data-kind=
+  "report"]` is frameless, no band, closed by the floor or Esc); the printer sprite at 16 px a dot
+  (`room.icon(kind, S, pad)`, pad 1) stands at the bottom, the fanfold sheet (480 px) is anchored in its
+  slot (`bottom` set from the image's height) and grows upward as the lines print, so the paper moves up.
+- **The Rust app** stays the earlier version (his "2." to port / freeze / webview): its crates are the
+  newest, its features are Oct 21's; it builds. Not to be ported while the room changes daily.
 - **The clock** is Amphetamine (`/api/awake {mode: off|work|for, minutes}`, `Hub.awake`, `awake_tick` on
   every poll, `inhibitor()`: `caffeinate -i -s -w <server pid>`, else `systemd-inhibit`): off, while bots
   work (any bot busy, anywhere; kept in room.json `awake`), or 1/3/8 h (not kept). The CLOCK panel

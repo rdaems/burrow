@@ -1584,8 +1584,8 @@ function startRoom(cv, app) {
     }
   }
   // a picture of a kind of furniture, for the closet: a canvas, two pixels a dot as the room
-  function icon(kind, S = K) {
-    const r = foot(kind, [0, 0]), pad = 4, c = document.createElement("canvas");
+  function icon(kind, S = K, pad = 4) {
+    const r = foot(kind, [0, 0]), c = document.createElement("canvas");
     c.width = (r[2] - r[0] + 2 * pad) * S; c.height = (r[3] - r[1] + 2 * pad) * S;
     const ctx = c.getContext("2d");
     ctx.imageSmoothingEnabled = false;
