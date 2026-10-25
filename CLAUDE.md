@@ -784,8 +784,9 @@ after two movements; a bigger plus; the clock "a control like amphetamine".
 - **The Rust app** stays the earlier version (his "2." to port / freeze / webview): its crates are the
   newest, its features are Oct 21's; it builds. Not to be ported while the room changes daily.
 - **The clock** is Amphetamine (`/api/awake {mode: off|work|for, minutes}`, `Hub.awake`, `awake_tick` on
-  every poll, `inhibitor()`: `caffeinate -i -s -w <server pid>`, else `systemd-inhibit`): off, while bots
-  work (any bot busy, anywhere; kept in room.json `awake`), or 1/3/8 h (not kept). The CLOCK panel
+  every poll, `inhibitor()`: `caffeinate -i -s -w <server pid>`, else `systemd-inhibit`): off, when local
+  bots work (a busy bot on this machine; remote ones go on without it; kept in room.json `awake`), or
+  1/3/8 h (not kept). The CLOCK panel
   (`#vClock`, `fillClock`, `AWAKE`), the clock's light (`SP.Y` dot) while the inhibitor runs, the tip says
   "awake 2h 13m more" / "awake, bots at work". The state carries `awake: {mode, until, on}`.
 

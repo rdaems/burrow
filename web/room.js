@@ -968,7 +968,7 @@ function startRoom(cv, app) {
       outlined(ctx, foot("clock", [ck.x0, ck.y0]), h, (c) => drawClock(c, ck.x0 + 6, ck.y0 + 5, a.on));
       if (h) {
         const tm = Math.round(Math.max(0, a.until - Date.now()) / 60000), hh = Math.floor(tm / 60), mm = tm % 60;
-        tip = { text: a.mode === "for" ? `awake ${hh ? hh + "h " : ""}${mm}m more` : a.mode === "work" ? (a.on ? "awake, bots at work" : "awake while bots work") : "clock", x: ck.x0 + 6, y: WALL + 10 };
+        tip = { text: a.mode === "for" ? `awake ${hh ? hh + "h " : ""}${mm}m more` : a.mode === "work" ? (a.on ? "awake, local bots at work" : "awake when local bots work") : "clock", x: ck.x0 + 6, y: WALL + 10 };
       }
     }
     if (L.closet) {

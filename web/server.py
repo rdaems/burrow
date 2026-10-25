@@ -737,8 +737,8 @@ class Hub:
                 else:
                     b.update(over="stopped", busy=False, waiting=False, alive=False, state="stopped", pid=0, endedAt=int(time.time() * 1000))
 
-    # ---- the clock keeps this computer awake, as Amphetamine does: while bots work (anywhere in the
-    # room), or for some time, or not at all. `caffeinate` on a Mac (tied to this server's life with
+    # ---- the clock keeps this computer awake, as Amphetamine does: when local bots work (the sessions
+    # this computer runs; a remote machine's go on without it), or for some time, or not at all. `caffeinate` on a Mac (tied to this server's life with
     # -w), `systemd-inhibit` elsewhere. The "while bots work" choice is kept in room.json; a duration is
     # not (a restart of the server sleeps as usual)
     def awake_view(self):
@@ -757,7 +757,7 @@ class Hub:
         a = self.awake
         if a["mode"] == "for" and time.time() * 1000 > a["until"]:
             a["mode"], a["until"] = "off", 0
-        want = a["mode"] == "for" or (a["mode"] == "work" and any(b["busy"] for f in self.feeds.values() for b in f.get("bots", [])))
+        want = a["mode"] == "for" or (a["mode"] == "work" and any(b["busy"] for b in self.feeds.get("", {}).get("bots", [])))   # local bots: the ones this computer runs
         on = self.caff is not None and self.caff.poll() is None
         if want and not on:
             cmd = inhibitor()
