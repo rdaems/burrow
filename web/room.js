@@ -686,7 +686,7 @@ function startRoom(cv, app) {
         if (!w.meeting || w.meeting.host !== f.id || !L.board) { f.act = rest(); break; }
         if (walk(f, { x: L.board.x0 - 6, y: L.board.y + 1 }, v, dt)) {
           f.dir = 1; f.arms = Math.floor(w.T * 2) % 3 ? "reach" : "down";
-          if ((act.wait += dt) > 0.6 && w.strokes < 40) { act.wait = 0; stroke(w, colorOf(f.b)); }
+          if ((act.wait += dt) > 0.6 && w.strokes < 40) { act.wait = 0; stroke(w, INK); }   // a black marker, as yours
           if (Math.random() < dt * 0.3) f.chat = 1;
         }
         break;
@@ -1162,7 +1162,7 @@ function startRoom(cv, app) {
       hots.push({ x0: -1e9, y0: -1e9, x1: 1e9, y1: 1e9, action: b.human ? { kind: "you" } : doomed ? { kind: "undo", id: b.id } : { kind: "open", id: b.id } });
     }
     // (while something is dragged, the only tips are the fire's, the door's and the pair table's: what the drop does)
-    if (tip) {
+    if (tip && !carrying) {                  // no tips under a piece carried in from the closet
       const t = tip.text, tw = tinyW(t), lx = Math.round(Math.max(2, Math.min(W - tw - 2, tip.x - tw / 2))), ly = Math.round(Math.max(WALL + 2, tip.y - 8));
       box(ctx, lx - 2, ly - 2, tw + 4, 9, INK2);
       tiny(ctx, t, lx, ly, C.steel4);
@@ -1313,7 +1313,10 @@ function startRoom(cv, app) {
     // lights up the bots working there. The desk is handled at its screen: a + beside it starts a
     // bot here, a click on the screen (or a laptop) opens your terminal there
     const gw = 22 + d.trees.length * LAP, { sx, sy } = screenAt(d);
-    const where = (dir) => (d.m ? machineName(d.m) + ":" : "") + dir.replace(/^\/(Users|home)\/[^/]+/, "~");
+    // the path as a shell prompt shortens it (fish, starship): every directory but the last to its first
+    // letter (two for a dotted one), the home to ~
+    const abbrev = (p) => { const s = p.split("/"); return s.map((x, i) => (i < s.length - 1 && x.length > 1 && x !== "~" ? x.slice(0, x.startsWith(".") ? 2 : 1) : x)).join("/"); };
+    const where = (dir) => (d.m ? machineName(d.m) + ":" : "") + abbrev(dir.replace(/^\/(Users|home)\/[^/]+/, "~"));
     const onScreen = hot(sx, sy, sx + 22, sy + 18, { kind: "shell", m: d.m || "", dir: d.dir });
     if (onScreen) { for (const [id] of d.seats) hl.add(id); tip = { text: where(d.dir), x: sx + 11, y: sy - 1 }; screenHover = { m: d.m || "", dir: d.dir }; }
     {
@@ -1583,6 +1586,19 @@ function startRoom(cv, app) {
       case "bench": drawBench(ctx, pt); break;
     }
   }
+  // the printer the report comes out of, in the pane: a wide-carriage line printer drawn to the paper's
+  // width (`paper` pixels) plus three dots a side, `S` pixels a dot: its slot (row 1, dark, one dot wider
+  // than the paper each side) is where the sheet rises from; the body, a front opening, a lamp, a stand
+  // (the page shows its top rows, the rest crosses the pane's bottom edge)
+  function printerPicture(paper, S) {
+    const w = Math.ceil(paper / S) + 6, f = (a, mid, b) => a + mid.repeat(w - a.length - b.length) + b;
+    const rows = [f(".", "F", "."), f("FB", "x", "BF"), f("F", "B", "F"), f("F", "C", "F"), f("F", "C", "gCF"), f("F", "C", "F"), f("FC", "x", "CF"), f("F", "C", "F"), f("F", "D", "F"), f(".", "F", "."),
+      f(".", "d", "."), f("d", "h", "d"), f("k", "d", "k"), f("k", "d", "k"), f("k", "k", "k"), f(".", "s", ".")];
+    const c = document.createElement("canvas"); c.width = w * S; c.height = rows.length * S;
+    const x = c.getContext("2d");
+    rows.forEach((row, j) => [...row].forEach((ch, i) => { if (SP[ch]) { x.fillStyle = SP[ch]; x.fillRect(i * S, j * S, S, S); } }));
+    return { src: c.toDataURL(), rows: rows.length, w };
+  }
   // a picture of a kind of furniture, for the closet: a canvas, two pixels a dot as the room
   function icon(kind, S = K, pad = 4) {
     const r = foot(kind, [0, 0]), c = document.createElement("canvas");
@@ -1600,11 +1616,28 @@ function startRoom(cv, app) {
     if (!kind) { carrying = null; draw(); return null; }
     const b = cv.getBoundingClientRect(), x = (cx - b.left) / K, y = (cy - b.top) / K;
     const inside = x >= 0 && x < W && y >= 0 && y < H;
+    pointer = inside ? { x, y } : null;      // the room's pointer follows the carried piece (the canvas gets no events: the closet holds the pointer)
     carrying = { kind, at: inside ? clampAt(kind, [Math.round(x), Math.round(y)]) : null };
     draw();
     return carrying.at;
   }
-  function placeKind(kind, cx, cy) { const at = carryKind(kind, cx, cy); carrying = null; draw(); return at; }
+  function placeKind(kind, cx, cy) { const at = carryKind(kind, cx, cy); carrying = null; draw(); return at && settle(lastL, "new", at, undefined, kind); }
+  // a piece put down settles on clear floor: the nearest spot around `at` (rings outward, two dots a
+  // step, up to sixty) whose footprint meets no other piece's, inside the room; a wall piece slides along
+  // the wall. One rule for a piece moved, a desk moved and a piece out of the closet, so nothing ever
+  // lands behind something else (where it could neither be seen nor picked up)
+  function settle(L, key, at, u, kind = key) {
+    if (!L) return at;
+    const fits = (spot) => { const r = foot(kind, spot, u); return !L.pieces.some((p) => p.key !== key && meets(r, p.r)); };
+    const wall = onWall(kind);
+    for (let d = 0; d <= 60; d += 2) {
+      const ring = [];
+      for (let dx = -d; dx <= d; dx += 2) for (let dy = wall ? 0 : -d; dy <= (wall ? 0 : d); dy += 2) if (Math.max(Math.abs(dx), Math.abs(dy)) === d) ring.push([dx, dy]);
+      ring.sort((a, b) => Math.hypot(...a) - Math.hypot(...b));
+      for (const [dx, dy] of ring) { const spot = clampAt(kind, [at[0] + dx, at[1] + dy], u); if (fits(spot)) return spot; }
+    }
+    return clampAt(kind, at, u);
+  }
   // burrow's own settings: a steel switchboard on the wall, a toggle a setting, its lever up and its
   // lamp lit while the setting is on (the first: new bots in the Claude app too); the lid stands open
   // while the panel is
@@ -1837,7 +1870,7 @@ function startRoom(cv, app) {
         toFire(r, snapshot(r, (c) => (d ? drawDesk(c, d, w, w.T, new Set()) : drawKind(c, KIND(moving.key), moving.at, w, w.T))));
         app.act(d ? { kind: "forget", unit: d.unit } : { kind: "burn", key: moving.key });
       } else {
-        const at = clampAt(moving.key, moving.at, moving.u);       // put down on the grid of dots
+        const at = settle(lastL, moving.key, clampAt(moving.key, moving.at, moving.u), moving.u);       // put down on the grid of dots, on clear floor
         dropped.set(moving.key, { at, t: performance.now() });
         s.layout = { ...(s.layout || {}), [moving.key]: at };
         app.act({ kind: "layout", layout: s.layout });
@@ -1928,5 +1961,5 @@ function startRoom(cv, app) {
   const at = (id) => { const f = world().folk.get(id), b = cv.getBoundingClientRect(); return f ? [b.left + f.x * K, b.top + (f.y - 12) * K] : null; };
   // the whiteboard's ink, for the view: the canvas itself, a line on it (in ink pixels), a wipe
   const board = { ink: () => ink(world()), line: (x0, y0, x1, y1, col) => inkLine(world(), x0, y0, x1, y1, col), wipe: () => wipe(world()), version: () => world().inkV || 0 };
-  return { talk, typed, size, draw, width, color: projectColor, icon, carry: carryKind, place: placeKind, names: NAMES, at, board, stats, hovered: () => hovered && { id: hovered.b.id, seat: !!hovered.seat } };
+  return { talk, typed, size, draw, width, color: projectColor, icon, printer: printerPicture, carry: carryKind, place: placeKind, names: NAMES, at, board, stats, hovered: () => hovered && { id: hovered.b.id, seat: !!hovered.seat } };
 }

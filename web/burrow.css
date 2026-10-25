@@ -114,10 +114,10 @@ button, input, select { font:inherit; color:inherit; }
 #view[data-kind="report"] .vhead { display:none; }
 #view[data-kind="report"] .vbody { flex:1 1 auto; overflow:hidden; }
 .print { position:relative; height:100%; }
-.print .machine { position:absolute; left:50%; bottom:12px; transform:translateX(-50%); image-rendering:pixelated; z-index:1; }
+.print .machine { position:absolute; left:50%; transform:translateX(-50%); image-rendering:pixelated; z-index:1; }   /* its bottom is set by the page: the lower rows cross the pane's edge */
 /* the report's paper: fanfold, a strip of sprocket holes down each side behind a perforation, the
    text in the pixel font as a line printer sets it, a margin inside the strips (the lines are cut to it) */
-.print .sheet { position:absolute; left:50%; bottom:0; transform:translateX(-50%); width:min(520px, 100%); background:#f6f1e3; border:2px solid var(--ink); box-shadow:inset -2px -2px 0 var(--steel2); overflow:hidden; height:0; }
+.print .sheet { position:absolute; left:50%; bottom:0; transform:translateX(-50%); background:#f6f1e3; border:2px solid var(--ink); box-shadow:inset -2px -2px 0 var(--steel2); overflow:hidden; height:0; }
 .print .sheet::before, .print .sheet::after { content:""; position:absolute; top:0; bottom:0; width:22px;
   background:repeating-linear-gradient(to bottom, transparent 0 8px, var(--ink) 8px 16px, transparent 16px 24px) 7px 0 / 8px 100% no-repeat; }
 .print .sheet::before { left:0; border-right:2px dashed #cfc4aa; }

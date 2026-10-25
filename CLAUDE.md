@@ -765,6 +765,19 @@ after two movements; a bigger plus; the clock "a control like amphetamine".
   "report"]` is frameless, no band, closed by the floor or Esc); the printer sprite at 16 px a dot
   (`room.icon(kind, S, pad)`, pad 1) stands at the bottom, the fanfold sheet (480 px) is anchored in its
   slot (`bottom` set from the image's height) and grows upward as the lines print, so the paper moves up.
+- **Drops settle on clear floor** (`settle(L, key, at, u, kind)`): he dragged a new armchair out of the
+  closet onto the whiteboard and it "got stuck": it landed behind the board (pieces draw and hit-test in
+  one order, so the board covered it and took the pointer). One rule for every drop now, a moved piece,
+  a moved desk, a piece out of the closet: the nearest spot (rings outward, two dots a step, up to sixty)
+  whose footprint meets no other piece's; a wall piece slides along the wall. While a piece is carried
+  in from the closet the room's `pointer` follows it (the canvas gets no events then) and no tips show.
+- **The desk's path** on hover as a shell prompt shortens it (`abbrev`: fish, starship): `~/p/burrow`.
+- **The whiteboard** is drawn on in black, by you and by the bots.
+- **The printer in the pane** is a wide-carriage one drawn to the paper's width (`printerPicture(paper,
+  S)`: 8 px a dot, three dots a side wider than the paper, the slot in row 1 one dot wider than the
+  paper each side, a lamp, a front opening, a stand); it stands across the pane's bottom edge with its top
+  twelve rows showing (`SHOW`), the sheet (520 px at most, set before the lines are measured) rises out
+  of the slot. The room's small printer sprite is no longer scaled up for it.
 - **A second switch, `yolo`**, off by default: `/api/spawn` adds `--dangerously-skip-permissions`, so a
   bot started from the room never waits for a permission answer (`OPTIONS` in server.py and index.html,
   `SWITCHES` in room.js draws its lever on the switchboard).

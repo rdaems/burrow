@@ -431,7 +431,7 @@ function openBoard() {
 {
   let last = null;
   const at = (e) => { const r = bcv.getBoundingClientRect(); return [Math.floor((e.clientX - r.left) * bcv.width / r.width), Math.floor((e.clientY - r.top) * bcv.height / r.height)]; };
-  const col = () => (state && state.you && state.you.color) || "#d97757";
+  const col = () => "#140f1e";             // a black marker
   bcv.addEventListener("pointerdown", (e) => { if (e.button !== 0) return; e.preventDefault(); try { bcv.setPointerCapture(e.pointerId); } catch {} last = at(e); room.board.line(...last, ...last, col()); });
   bcv.addEventListener("pointermove", (e) => { if (!last) return; const p = at(e); room.board.line(...last, ...p, col()); last = p; });
   bcv.addEventListener("pointerup", () => { last = null; });
@@ -514,7 +514,9 @@ function fillReport() {
   const shift = Math.round((performance.now() - st.since) / 60000), n = (k, one) => `${k} ${one}${k === 1 ? "" : "s"}`;
   // the pixel font is proportional, so the paper is measured in pixels: every line is cut to its width
   // (nothing runs off the sheet), columns are padded with spaces up to a pixel stop
-  const out = $("#vReport pre"), ruler = $("#vReport .ruler");   // a hidden span in the paper's own font (a canvas would measure a fallback font)
+  const out = $("#vReport pre"), ruler = $("#vReport .ruler"), sheet = $("#vReport .sheet");   // a hidden span in the paper's own font (a canvas would measure a fallback font)
+  const paper = Math.max(320, Math.min(520, $("#vReport").clientWidth - 48));   // the paper's width: set before the lines are measured against it
+  sheet.style.width = paper + "px";
   ruler.style.font = getComputedStyle(out).font;
   const px = (s) => { ruler.textContent = s; return ruler.getBoundingClientRect().width; }, wide = Math.max(240, out.clientWidth - 80), sp = px(" ");
   const cut = (s) => { if (px(s) <= wide) return s; while (s.length && px(s + "-") > wide) s = s.slice(0, -1); return s + "-"; };
@@ -543,11 +545,11 @@ function fillReport() {
   if (worker && worker.n > 30) L.push("", `EMPLOYEE OF THE SHIFT  ${name(worker.b.id)}, ${mins(worker.n)} at the keys`);
   L.push("", `LIMITS  5h ${left(u.session)} left, week ${left(u.week)} left`, "", "recycled pixels, keep away from the fire");
   const lines = L.map(cut);
-  // the printer stands at the bottom, big; the sheet comes out of its top, upwards, row by row, every
-  // row letter by letter, as a line printer: its bottom sits in the printer's slot and it grows up
-  const img = $("#vReport .machine"), sheet = $("#vReport .sheet"), job = ++printing, DOT = 20;   // pixels a dot of the printer
-  const seat = () => { sheet.style.bottom = 12 + img.offsetHeight - 3 * DOT + "px"; };
-  if (!img.src) { img.onload = seat; img.src = room.icon("printer", DOT, 1); } else seat();
+  // a wide-carriage printer as wide as the paper stands across the pane's bottom edge, its top rows
+  // showing; the sheet rises out of its slot, row by row, every row letter by letter, as a line printer
+  const img = $("#vReport .machine"), job = ++printing, DOT = 8, SHOW = 12;   // pixels a dot; rows of the printer above the edge
+  if (img.dataset.paper !== String(paper)) { const p = room.printer(paper, DOT); img.src = p.src; img.dataset.paper = paper; img.style.bottom = -(p.rows - SHOW) * DOT + "px"; }
+  sheet.style.bottom = (SHOW - 3) * DOT + "px";
   out.textContent = "";
   sheet.style.height = "0px";
   let i = 0, j = 0;
