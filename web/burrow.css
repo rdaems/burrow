@@ -104,6 +104,11 @@ button, input, select { font:inherit; color:inherit; }
 .vform code { color:var(--gold2); font:14px/1 var(--mono); -webkit-font-smoothing:auto; text-shadow:none; }   /* paths, flags, keys: the terminal's font, as the fields (the pixel font has no ~) */
 .vform a { color:var(--gold2); }
 .pair-room { display:block; width:100%; height:calc(100vh - 180px); border:2px solid var(--ink); background:var(--night); }
+/* a linked pair room has no panel: the chat itself on the pane's stars (pair's page brings its own), full height */
+#view[data-kind="pair"]:has(.pair-room:not([hidden])) { background:none; box-shadow:none; border:0; clip-path:none; padding:0; top:0; height:100%; max-height:100%; width:100%; transform:translateX(-50%); }
+#view[data-kind="pair"]:has(.pair-room:not([hidden])) .vhead { display:none; }
+#view[data-kind="pair"]:has(.pair-room:not([hidden])) .vbody, #view[data-kind="pair"]:has(.pair-room:not([hidden])) #vPair { flex:1 1 auto; height:100%; overflow:hidden; }
+#view[data-kind="pair"]:has(.pair-room:not([hidden])) .pair-room { height:100%; border:0; }
 /* the whiteboard, big: four pixels an ink pixel, pair's paper white */
 .board { display:block; width:520px; max-width:100%; aspect-ratio:130/55; background:#efebe8; border:2px solid var(--ink); image-rendering:pixelated; touch-action:none; cursor:crosshair; }
 .row { display:flex; gap:8px; margin-top:10px; }

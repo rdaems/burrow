@@ -790,6 +790,40 @@ after two movements; a bigger plus; the clock "a control like amphetamine".
   (`#vClock`, `fillClock`, `AWAKE`), the clock's light (`SP.Y` dot) while the inhibitor runs, the tip says
   "awake 2h 13m more" / "awake, bots at work". The state carries `awake: {mode, until, on}`.
 
+## Games for real, and the kickabout (2026-10-25)
+
+He: "When I click a plant, my avatar walks there and waters the plant. Idle robots also water plants, start
+playing football on the floor, playing other games, playing chess with each other, or pong. If I click those
+games while the robots are playing, I can watch. They are really playing." Also: the pair room without the
+blue panel ("we have the stars background already"), and a burnt desk "cropped at the right and left".
+- **Water**: `plant` is in `CLICK`, a hot `water` on its footprint; the click gives you the `plant` act
+  (`chosen`, so an open session does not pull you away), the can in hand, three seconds of watering.
+- **Football** (`football(w, L, team)`, `footballPitch`, `pitchSpot`, `kickabout`, act `football`): two or
+  three idle bots (a break at 0.44, after pong) stand round a clear patch of floor near the one who starts
+  (rings outward, nine points checked with `L.free`), the ball (`w.ball`, 3 x 3 with a hop) flies from one
+  to another in 0.7 s, waits a moment at the feet, the kicker's arms go forward; a player that gets work
+  leaves, with one left the game is over. Drawn among the figures by its y.
+- **Chess between bots is a real game**, played by the server for both sides (`/api/chess {bots: [a, b]}`:
+  `chess_later` schedules the next move after each, 2 to 4.5 s; `{leave: id}` ends it, the other wins;
+  `chess_check` ends it when either stops being idle). The room's make-believe board (`w.chess`,
+  `chessMove`) is gone: the table shows the server's position, START with no game. White is the left
+  seat; once both sit, white asks (`chessBots` act, once per 4 s). The act keeps `gameId`, the id of the
+  game that started for the pair (an older finished game in the state is not theirs, which once made them
+  get up after three seconds); they get up three seconds after its result, and a break that runs out
+  mid-game is a `chessLeave`. The mover reaches out on each new ply (`w.chessAt`, `moved`), yours too.
+- **Watching**: a click on the chess table while the bots' game runs opens the board as a spectator
+  (`openGame`: chessboard.js shows a game you are not in without moves; the band says "A vs B"); Esc or
+  the floor closes it without resigning (only your own game resigns). A click on the ping-pong table while
+  two bots are at it (`room.playing("pong")`: both `there`) opens pong.js in `watch(a, b)`: both paddles
+  machines (`mach0`, `machine0` mirrors `machine`), no pointer or keys, the hint hidden; `playing()` has
+  `ids` and `watch`, the room's "the bot you play" ignores a watched game; a watched bot that gets work
+  ends it (`left(id)`).
+- **The pair room has no panel** once linked: `#view[data-kind="pair"]:has(.pair-room:not([hidden]))` is
+  frameless and full height, pair's page (its own stars) fills the pane; the link form keeps the panel.
+- **The fire**: what is wider than the pit shrinks to fit it as it flies in (`fit`), so a desk is no
+  longer cropped by the pit's clip while it sinks.
+- Test hooks on `window.__room`: `game(kind, a, b)` seats two bots at chess or pong, `football(ids)`.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

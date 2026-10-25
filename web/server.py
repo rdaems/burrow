@@ -789,16 +789,29 @@ class Hub:
                      and not b["busy"] and not b.get("waiting") and not b.get("over")), None)
 
     def chess_check(self):
+        """a player that is no longer idle (work, a question, over) has left the table: the other wins"""
         g = self.game
-        if g and not g.get("result") and not self.idle_bot(g["bot"]):
-            self.chess_end("1-0" if g["white"]["id"] == "you" else "0-1", "left")
+        if not g or g.get("result"):
+            return
+        gone = next((x for x in (g.get("bots") or [g["bot"]]) if not self.idle_bot(x)), None)
+        if gone:
+            self.chess_end("0-1" if g["white"]["id"] == gone else "1-0", "left")
 
     def chess_end(self, result, why):
         self.game["result"], self.game["why"] = result, why
 
     def chess(self, b):
         g = self.game
-        if b.get("challenge"):
+        if b.get("bots"):                    # two bots sat down at the board: a game between them, both sides played here
+            if g and not g.get("result"):
+                raise RuntimeError("a game is going on")
+            a, c = (self.idle_bot(x) for x in b["bots"][:2])
+            if not a or not c:
+                raise RuntimeError("both have to be idle to play")
+            white, black = ({"id": a["id"], "name": a["name"], "kind": "agent"}, {"id": c["id"], "name": c["name"], "kind": "agent"})
+            self.game = g = {"id": (g["id"] + 1) if g else 1, "white": white, "black": black, "bots": [a["id"], c["id"]], "bot": None, "game": chess.Game()}
+            self.chess_later(g)
+        elif b.get("challenge"):
             bot = self.idle_bot(b["challenge"])
             if not bot:
                 raise RuntimeError("that bot is busy: only an idle one can play")
@@ -809,6 +822,9 @@ class Hub:
                 self.chess_later(g)
         elif not g or g.get("result"):
             raise RuntimeError("there is no game going on")
+        elif b.get("leave"):                 # a bot leaves the bots' game (its break is over): the other wins
+            if g.get("bots") and b["leave"] in g["bots"]:
+                self.chess_end("0-1" if g["white"]["id"] == b["leave"] else "1-0", "left")
         elif b.get("resign"):
             self.chess_end("0-1" if g["white"]["id"] == "you" else "1-0", "resignation")
         elif b.get("draw"):
@@ -842,8 +858,10 @@ class Hub:
             over = game.over()
             if over:
                 self.chess_end(*over)
+            elif g.get("bots"):             # the bots' own game: the other side moves next
+                self.chess_later(g)
             self.push("state", self.state())
-        threading.Timer(random.uniform(1.2, 3.5), play).start()
+        threading.Timer(random.uniform(1.2, 3.5) if not g.get("bots") else random.uniform(2.0, 4.5), play).start()
 
 
 VALUE = {"p": 1, "n": 3, "b": 3, "r": 5, "q": 9, "k": 0}

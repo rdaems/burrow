@@ -81,8 +81,9 @@ function pongTable(el, room) {
     draw();
   }
   function step(dt) {
-    if (keys.up) myY -= 170 * dt;
-    if (keys.down) myY += 170 * dt;
+    if (watching && mach0 && !over) machine0(dt);
+    if (keys.up && !watching) myY -= 170 * dt;
+    if (keys.down && !watching) myY += 170 * dt;
     if (auto !== null && ball && (ball.vx < 0 ? 0 : 1) === side) myY = yAt(ball, contact(ball, side)) + auto;   // the test rig plays
     myY = clamp(myY, HALF, FH - HALF);
     const t = now();
@@ -239,16 +240,35 @@ function pongTable(el, room) {
     gameId = v.id; side = v.left.id === me() ? 0 : 1;
     players = [{ ...v.left, img: room.small(v.left) }, { ...v.right, img: room.small(v.right) }];
   }
-  let opp = null;                            // burrow: the bot you play
+  let opp = null, watching = false, mach0 = null;   // burrow: the bot you play; or two bots you watch (the left one a machine too)
   function machineGame(bot) {
     disconnect();
     if (bot) opp = bot;
+    watching = false; el.querySelector(".pg-hint").hidden = false;
     mode = "machine"; side = 0; gameId = null; over = null; score = [0, 0]; ball = null; judged = false; missAt = 0;
     const p = { id: me(), name: "You", color: "#d97757" };
     players = [{ ...p, img: "" }, { ...opp, img: room.small(opp) }];
     mach = { y: FH / 2, ball: null, err: 0 };
     serveBy = 0; serveAt = local() + 1;
     draw(); show();
+  }
+  function watchGame(a, b) {                 // burrow: a game between two bots; the left paddle is a machine as well
+    disconnect();
+    opp = b; watching = true; el.querySelector(".pg-hint").hidden = true;
+    mode = "machine"; side = 0; gameId = null; over = null; score = [0, 0]; ball = null; judged = false; missAt = 0;
+    players = [{ ...a, img: room.small(a) }, { ...b, img: room.small(b) }];
+    mach = { y: FH / 2, ball: null, err: 0 }; mach0 = { y: FH / 2, ball: null, err: 0 };
+    serveBy = 0; serveAt = local() + 1;
+    draw(); show();
+  }
+  function machine0(dt) {                    // the left machine, the mirror of machine(): after the ball when it comes its way
+    let target = FH / 2 + (mach.y - FH / 2) * 0.25;
+    if (ball && ball.vx < 0 && !judged) {
+      if (mach0.ball !== ball) { mach0.ball = ball; mach0.err = (Math.random() - 0.5) * (14 + Math.hypot(ball.vx, ball.vy) / 9); }
+      target = yAt(ball, contact(ball, 0)) + mach0.err;
+    }
+    mach0.y = clamp(mach0.y + clamp(target - mach0.y, -115 * dt, 115 * dt), HALF, FH - HALF);
+    myY = mach0.y;
   }
   function show() {
     const was = el.hidden;
@@ -263,7 +283,7 @@ function pongTable(el, room) {
       room.post(view.right.id === me() ? { answer: false } : { leave: true });
       dismissed = view.id;
     }
-    mode = null; over = null; ball = null;
+    mode = null; over = null; ball = null; watching = false;
     disconnect();
     el.hidden = true;
   }
@@ -286,8 +306,8 @@ function pongTable(el, room) {
     }
   });
   const toField = (e) => { const r = cv.getBoundingClientRect(); return (e.clientY - r.top) * cv.height / r.height - M; };
-  cv.addEventListener("pointermove", (e) => { myY = clamp(toField(e), HALF, FH - HALF); });
-  cv.addEventListener("pointerdown", (e) => { myY = clamp(toField(e), HALF, FH - HALF); cv.setPointerCapture(e.pointerId); e.preventDefault(); });
+  cv.addEventListener("pointermove", (e) => { if (!watching) myY = clamp(toField(e), HALF, FH - HALF); });
+  cv.addEventListener("pointerdown", (e) => { if (watching) return; myY = clamp(toField(e), HALF, FH - HALF); cv.setPointerCapture(e.pointerId); e.preventDefault(); });
   addEventListener("keydown", (e) => {
     if (!isOpen()) return;
     if (e.key === "Escape" && (!mode || over || mode === "machine")) return close();
@@ -312,10 +332,11 @@ function pongTable(el, room) {
     },
     open() { draw(); show(); },
     start: (bot) => machineGame(bot),         // burrow: a game against this bot, right away
+    watch: (a, b) => watchGame(a, b),         // burrow: two bots' game, to look on
     close,
-    // burrow: who you play right now, whether a ball is in the air; a bot that gets work leaves
-    playing: () => (mode === "machine" && !over && opp ? { id: opp.id, ball: !!ball } : null),
-    left() { if (mode === "machine" && !over) { over = { why: "left", winner: side }; ball = null; draw(); } },
+    // burrow: who you play right now (or the two you watch), whether a ball is in the air; a bot that gets work leaves
+    playing: () => (mode === "machine" && !over && opp ? { id: opp.id, ids: watching ? [players[0].id, players[1].id] : null, watch: watching, ball: !!ball } : null),
+    left(id) { if (mode === "machine" && !over) { over = { why: "left", winner: watching ? (players[0].id === id ? 1 : 0) : side }; ball = null; draw(); } },
     invited: () => !!(view && view.state === "invited" && view.right.id === me() && dismissed !== view.id),
   };
 }

@@ -146,6 +146,8 @@ async function act(a) {
   else if (a.kind === "shell") openShell(a.m, a.dir, a.shift);
   else if (a.kind === "dropShell") { const t = openShell(a.m, a.dir, a.shift); for (const f of a.files) await hand(f, t); }
   else if (a.kind === "chess" || a.kind === "pong") openGame(a.kind);
+  else if (a.kind === "chessBots") { const r = await api("/api/chess", { bots: [a.a, a.b] }); if (r.error) note(r.error); }   // two bots sat down: a game between them
+  else if (a.kind === "chessLeave") await api("/api/chess", { leave: a.id });
   else if (a.kind === "forget") { const r = await api("/api/forget", { unit: a.unit }); if (r.error) note(r.error); }
   else if (a.kind === "layout") await api("/api/layout", { layout: a.layout });
   else if (a.kind === "stop" && b) stopBot(b.m, b.id, a.rm);
@@ -175,8 +177,8 @@ es.addEventListener("state", (e) => {
   if (viewKind === "completed") fillDone();
   if (viewKind === "clock") fillClock();
   // a bot that gets work, or a question for you, leaves the ping-pong table
-  const pp = viewKind === "pong" && pongUI.playing();
-  if (pp && !state.bots.some((b) => b.id === pp.id && !b.busy && !b.waiting)) pongUI.left();
+  const pp = viewKind === "pong" && pongUI.playing(), idle = (id) => state.bots.some((b) => b.id === id && !b.busy && !b.waiting && !b.over);
+  if (pp) { const gone = (pp.ids || [pp.id]).find((id) => !idle(id)); if (gone) pongUI.left(gone); }
   room.draw();
 });
 es.addEventListener("talk", (e) => { const t = JSON.parse(e.data); room.talk(t.from, t.to); });
@@ -217,7 +219,7 @@ function closeView(keep) {                 // keep: another view takes its place
   if (!viewKind) return;
   const was = viewKind;
   viewKind = null;
-  if (was === "chess" && state && state.chess && !state.chess.result) api("/api/chess", { resign: true });
+  if (was === "chess" && state && state.chess && !state.chess.result && [state.chess.white.id, state.chess.black.id].includes("you")) api("/api/chess", { resign: true });   // your game; the bots' goes on
   if (was === "pong") pongUI.close();
   if (!keep) { view.hidden = true; $("#pane").classList.toggle("empty", !tiles.all().length); room.draw(); }
 }
@@ -734,8 +736,19 @@ const pongUI = pongTable($("#pong"), {
   small: (p) => `<img class="sm" src="${pixelAvatar(p.id, "agent", p.color)}" alt="">`,
   post: async () => ({}), api: () => "",
 });
+// a game in the view: yours against an idle bot drawn by lot, or, while two bots are at that table,
+// theirs to watch: the chess game the server plays for both, the ping-pong with both sides machines
 async function openGame(kind) {
   if (viewKind === kind) return;
+  const v = state && state.chess, botsChess = kind === "chess" && v && !v.result && v.white.id !== "you" && v.black.id !== "you";
+  if (botsChess) { openView("chess"); view.querySelector(".tas").textContent = `${v.white.name} vs ${v.black.name}`; showChess(); room.draw(); return; }
+  const at = kind === "pong" ? room.playing("pong") : [];
+  if (at.length === 2) {
+    const [a, b] = at.map((id) => { const x = byId(id) || {}; return { id, name: x.name || id, color: projectColor(x.unit || "") }; });
+    openView("pong"); view.querySelector(".tas").textContent = `${a.name} vs ${b.name}`;
+    $("#pong").hidden = true;
+    pongUI.watch(a, b); room.draw(); return;
+  }
   const who = idleBots();
   if (!who.length) return note("no idle bot to play with");
   const it = who[Math.floor(Math.random() * who.length)];
@@ -753,9 +766,7 @@ async function openGame(kind) {
 }
 function showChess() {
   const v = state.chess;
-  const it = v && (v.white.id === "you" ? v.black : v.white);
-  if (it) { it.color = projectColor((byId(it.id) || {}).unit || ""); }
-  if (v) v.white.color = v.white.color || "#d97757", v.black.color = v.black.color || "#d97757";
+  if (v) for (const p of [v.white, v.black]) p.color = p.id === "you" ? "#d97757" : projectColor((byId(p.id) || {}).unit || "");
   chessUI.update(v);
 }
 // ping-pong's own ✕ hides its card: then the game is over here too
