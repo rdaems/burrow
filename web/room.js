@@ -1067,7 +1067,7 @@ function startRoom(cv, app) {
     if (L.chess) {
       const c = L.chess, g = s.chess && !s.chess.result ? s.chess : null, top = [c.x - 10, c.y - 17, c.x + 10, c.y - 5];
       const h = hot(...top, { kind: "chess" });
-      if (h) tip = { text: g ? "chess with " + (g.white.id === "you" ? g.black.name : g.white.name) : "chess", x: c.x, y: c.y - 18 };
+      if (h) tip = { text: !g ? "chess" : [g.white.id, g.black.id].includes("you") ? "chess with " + (g.white.id === "you" ? g.black.name : g.white.name) : g.white.name + " vs " + g.black.name, x: c.x, y: c.y - 18 };   // yours, or theirs to watch
       items.push([c.y - 0.5, () => { for (const i of [0, 1]) drawStool(ctx, L.chessSeat(i)); outlined(ctx, top, h, (x) => drawChess(x, c, g ? g.board : START)); }]);
     }
     if (L.coffeeAt) {
