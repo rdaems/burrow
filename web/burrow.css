@@ -55,6 +55,9 @@ button, input, select { font:inherit; color:inherit; }
 .tgap { position:absolute; z-index:2; }
 .tgap.row { cursor:col-resize; }
 .tgap.col { cursor:row-resize; }
+.resizing-row, .resizing-row * { cursor:col-resize !important; }   /* a gap being dragged: the cursor stays, the terminals under it are left alone */
+.resizing-col, .resizing-col * { cursor:row-resize !important; }
+.resizing-row .tile, .resizing-col .tile { pointer-events:none; user-select:none; }
 .term { flex:1; min-height:0; padding:10px 12px 8px 12px; }   /* the text keeps off the ring (the fit addon takes the padding off) */
 .term .xterm-viewport { background:transparent !important; }
 .term .xterm-viewport::-webkit-scrollbar { width:8px; }
@@ -100,6 +103,16 @@ button, input, select { font:inherit; color:inherit; }
 .suggest li:hover { background:var(--steel3); }
 .suggest li small { float:right; margin-left:16px; font:inherit; opacity:.6; }
 .suggest li.on { background:var(--f-hot); }
+/* the new desk's folders: always there under the path, as a file dialog's list */
+.suggest.browse { margin-top:6px; border-top:2px solid var(--ink); height:min(300px, 40vh); max-height:none; }
+.suggest.browse li.recent { color:var(--steel0); }
+.suggest.browse li.recent + li:not(.recent) { border-top:2px solid var(--steel3); }
+/* a desk's panel */
+.vform.desk .where { margin:10px 0 6px; }
+.vform.desk .sessions { list-style:none; margin:0 0 8px; padding:0; }
+.vform.desk .sessions li { padding:3px 0; cursor:pointer; }
+.vform.desk .sessions li:hover b { text-decoration:underline; }
+.vform.desk .sessions small { color:var(--steel3); }
 /* the outside, four pixels a dot */
 .outside { display:block; width:520px; max-width:100%; aspect-ratio:130/70; border:2px solid var(--ink); image-rendering:pixelated; }
 .vform p { margin:0 0 10px; color:var(--white); }

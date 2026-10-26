@@ -1372,6 +1372,50 @@ the gun etc."
   so you walked to its desk while she fetched the gun. Now, while the bot you are with is condemned, queued, in the
   booth or being walked there, you stand where you are and watch it.
 
+## Round of 2026-10-27: typing is typing, desks named, folders picked, tiles to the edge
+
+He: the bubble over you while killing a bot ("It really should only do that literally when I'm typing"); terminal
+colour schemes of ssh sessions ("How do we handle that? Can we override them?"); the switchboard "smaller, and
+it's just one big lever"; "I can click on a desk's name, that opens a UI pane about the desk, where I can change
+it's name"; the new desk's path "really not user-friendly. Check how other tools do that, like vs code ... Do not
+show a hint"; tiles: "when I have two vertical tiles, and I drag one of them down, the hint should be the full
+horizontal bottom ... check how other tools do this, like wayland or orca", "dragging to make them wider doesn't
+work"; "The floor should not have such a wide horizontal lower bound"; "A bot was standing right behind a desk. I
+clicked the desk's monitor ... it acted on the bot".
+- **Typing**: xterm's `onData` carries the terminal's own reports too, which Claude Code turns on: focus in/out
+  (mode 1004: a press in the room blurs the tile, `\e[O`), mouse reports (SGR, X10), colour and cursor answers.
+  Those were counted as typing (the bubble). `REPORT` in index.html filters them; only keys and pastes count.
+- **Themes**, looked at: each session draws itself with its own machine's Claude Code `theme` (this Mac `dark`,
+  arthroid and odyssey `auto`). `claude --settings '{"theme":"light"}' attach <id>` changes nothing (tested: the
+  same colours). `auto` asks the terminal for its background (OSC 11, seen in the attach's output) and xterm.js
+  answers with its theme's, so burrow's dark terminal makes the `auto` machines dark. Burrow gives a machine whose
+  theme starts with `light` a light terminal, the rest dark. The only real override is the machine's own setting
+  (`theme` in its ~/.claude/settings.json, what `/theme` writes), which changes Claude Code there for every terminal;
+  not done, his call.
+- **The switchboard** is a small steel box (10 x 14) with one big lever, its red knob up; pulled down while the
+  settings' panel is open. `SWITCHES` is gone (the panel lists the settings).
+- **A desk's panel** (`#vDesk`, `openDesk`; a click on its name plate, `{kind: "desk", unit}`, the plate lit gold
+  under the pointer, the tip its whole name): its name (empty = its folder's; room.json `names`, `/api/desk {unit,
+  name}`, `hub.rename`; dropped with the desk), its path and machine, its sessions (a click opens one), RENAME,
+  TERMINAL. A given name shows up to 14 letters on the plate (a folder's 8), in the notes too (`deskName`).
+- **The new desk's folder** (`browse` in index.html, the NEW DESK view): as VS Code's own folder dialog (Remote-SSH's
+  "Open Folder"), a path field over a list that is always there: "..", then the folders in that folder (`/api/complete`,
+  the machine's `ls -d dir*/`, 300 at most; cached per folder while the form is open); in the starting folder (home)
+  first where Claude Code ran lately, the ones with sessions not in the room on top with how many. A click goes in,
+  typing narrows, ↑ ↓ and Enter/Tab go in, Tab with one match goes in, Enter with nothing picked or ADD DESK adds the
+  folder in the field, a double click adds the one clicked. No prose, no placeholder.
+- **Tiles to the edge**, as Sway does at a workspace's edge: within 30 px (or 8%) of the pane's own edge the zone is
+  that whole side of the pane (`splitOuter`: the tile beside everything else, along the whole side; one more along it
+  if the pane is split that way already); elsewhere a tile's side or middle as before. Works for a bot carried in
+  from the room too. **Resizing** was broken: every move laid the tiles out again, which removed the gap being
+  dragged (and its pointer capture) after one step; it is followed on the window now (`resizing-row/-col` on the pane
+  keeps the cursor and keeps the terminals from taking the pointer).
+- **The floor** reaches the room's edges (`L.floor`: 11 dots from the sides, a figure's half width; 2 from the bottom),
+  a held figure too.
+- **What is in front takes the pointer**: a figure under the pointer is dropped as the one under it when something
+  solid is drawn over it there (items carry what of them is solid: a desk its screen, cabinet and desktop; a piece
+  its footprint; a reception its panel and counter). A bot behind a desk's screen: the click is the screen's.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

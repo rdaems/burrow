@@ -79,7 +79,7 @@ function startRoom(cv, app) {
   const machineName = (id) => { const m = id && app.state().machines.find((x) => x.id === id); return m ? m.name : ""; };
   // a desk's name: its project's, cut to eight letters like a name in a 16-bit game (its machine is
   // its paint, the whole path is on its screen under the pointer)
-  const deskLabel = (d) => [...projectLabel(d.dir)].slice(0, NAME).join("").replace(/(.)[-_. ]+$/, "$1");
+  const deskLabel = (d) => [...(d.name ? d.name.toUpperCase() : projectLabel(d.dir))].slice(0, d.name ? 14 : NAME).join("").replace(/(.)[-_. ]+$/, "$1");   // its own name, or its folder's
   // a machine's door: the first is this one's; its bots come in and go out at its middle, wherever it was
   // slid along the wall. Its paint (and its desks'): the one picked in the doors' panel (room.json `paint`,
   // -1 the wood), else this machine wood and the others PAINT in their order
@@ -407,7 +407,7 @@ function startRoom(cv, app) {
       settings: sw && { key: sw.key, x0: sw.x, y0: sw.y, x1: sw.x + SB_W(), y1: sw.y + SB_H() },
       managers: all("manager"), meet: one("meet"), pong: one("pong"), chess: one("chess"), pairs: all("pair"), benches: all("bench"), booths: all("booth"), neuralyzers: all("neuralyzer"),
       cooler: one("cooler"), plants: all("plant"), printer: one("printer"), chairs: all("armchair"),
-      coffeeAt: one("coffee"), floor: { x0: 14, y0: WALL + 8, x1: W - 14, y1: FLOORY - 4 }, placed,
+      coffeeAt: one("coffee"), floor: { x0: 11, y0: WALL + 8, x1: W - 11, y1: H - 2 }, placed,   // (where a figure may stand: right up to the bottom edge, its body inside the side walls)
     };
     L.coffee = L.coffeeAt && { x: L.coffeeAt.x + 27, y: L.coffeeAt.y - 10 };
     L.doors = (s.machines || []).map((m, i) => ({ key: doorKeys[i], mid: m.id, m, x0: at0[doorKeys[i]][0], y0: at0[doorKeys[i]][1] }));
@@ -1386,14 +1386,16 @@ function startRoom(cv, app) {
     for (const d of L.desks) {
       const sc = screenAt(d);
       if (!moving && !held && over(sc.sx, sc.sy, sc.sx + 22, sc.sy + 18)) for (const b of bots) if (b.over && b.unit === d.unit) hl.add(b.id);   // its completed ones too (no chair)
-      items.push([danger(d.key) ? 1e9 : d.y - 1, () => outlined(ctx, foot(d.key, d.at, d.u), danger(d.key), (c) => drawDesk(c, d, w, T, hl), RED, tintOf(d.key))]);
+      const gw = 22 + d.trees.length * LAP;     // what of it is solid: its screen (and laptops), the cabinet, the desktop
+      items.push([danger(d.key) ? 1e9 : d.y - 1, () => outlined(ctx, foot(d.key, d.at, d.u), danger(d.key), (c) => drawDesk(c, d, w, T, hl), RED, tintOf(d.key)),
+        [[sc.sx, sc.sy, sc.sx + gw, sc.sy + 18], [d.x0, d.y - 15, d.x0 + d.cab, d.y + 1], [d.x0 + d.cab - 2, d.y - 12, d.x0 + d.w, d.y - 3]]]);
       for (const [id, x] of d.seats) items.push([d.y - 0.5, () => drawChair(ctx, x, d.y, hl.has(id))]);
     }
     // every piece: outlined under the pointer, like a desk's chairs; what it does, on top of that. Held over
     // the fire it is drawn over everything (the flames would hide it), washed red
     const piece = (p, kind, fn) => {
       pics.push({ key: p.key, kind, x: p.x, y: p.y, fn });
-      items.push([danger(p.key) ? 1e9 : p.y - 0.5, () => outlined(ctx, foot(kind, [p.x, p.y]), lit(p.key) || danger(p.key), fn, danger(p.key) ? RED : GOLD, tintOf(p.key))]);
+      items.push([danger(p.key) ? 1e9 : p.y - 0.5, () => outlined(ctx, foot(kind, [p.x, p.y]), lit(p.key) || danger(p.key), fn, danger(p.key) ? RED : GOLD, tintOf(p.key)), [foot(kind, [p.x, p.y])]]);
     };
     if (L.meet) piece(L.meet, "meet", (c) => { drawTable(c, L.meet); for (const i of [0, 1]) drawStool(c, L.meetSeat(i)); });
     if (L.chess) {
@@ -1423,8 +1425,8 @@ function startRoom(cv, app) {
         screen: M.session ? (M.busy ? "busy" : M.waiting ? "asks" : M.alive ? "on" : "off") : null, T };
       const h = hot(...r, { kind: "manager", key: mg.key }), both = (c) => { drawReception(c, mg, o, false); drawReception(c, mg, o, true); };
       pics.push({ key: mg.key, kind: "manager", x: mg.x, y: mg.y, fn: both });
-      items.push([danger(mg.key) ? 1e9 : mg.y - 20, () => outlined(ctx, r, h || hl.has("mgr:" + mg.key) || danger(mg.key), both, danger(mg.key) ? RED : GOLD, tintOf(mg.key))]);
-      if (!danger(mg.key)) items.push([mg.y - 0.5, () => drawReception(ctx, mg, o, true)]);
+      items.push([danger(mg.key) ? 1e9 : mg.y - 20, () => outlined(ctx, r, h || hl.has("mgr:" + mg.key) || danger(mg.key), both, danger(mg.key) ? RED : GOLD, tintOf(mg.key)), [[mg.x + 2, mg.y - 30, mg.x + 44, mg.y - 14]]]);
+      if (!danger(mg.key)) items.push([mg.y - 0.5, () => drawReception(ctx, mg, o, true), [[mg.x, mg.y - 16, mg.x + 46, mg.y + 1]]]);
       if (h) tip = { text: (M.name || "office manager") + (M.error ? " - " + M.error : M.style === "notes" ? " - notes" : M.session && !M.id ? " - on her way" : " - office manager"), x: mg.x + 23, y: mg.y - 30 };
     }
     for (const ch of L.chairs) {              // a click on one: you go and sit in it (a bot in it gets up)
@@ -1541,7 +1543,13 @@ function startRoom(cv, app) {
     hovered = null;
     for (const f of w.folk.values()) if (f.lying) drawSleeper(ctx, f, f.b, T, hl);
     items.sort((a, b) => a[0] - b[0]);
-    for (const [, d] of items) d();
+    // back to front; a figure under the pointer stops being the one under it when something solid is drawn over
+    // it there (a bot behind a desk: a click on the desk's screen is the screen's)
+    for (const [, d, cover] of items) {
+      const before = hovered;
+      d();
+      if (before && hovered === before && cover && cover.some((r) => over(...r))) hovered = null;
+    }
     // a bot being carried, over everything; a piece carried in from the closet, where it would stand
     for (const f of w.folk.values()) if (f.held) drawFigure(ctx, f, f.b, T, hl);
     if (carrying && carrying.at) { ctx.globalAlpha = 0.7; drawKind(ctx, carrying.kind, carrying.at, w, T); ctx.globalAlpha = 1; }
@@ -2000,10 +2008,13 @@ function startRoom(cv, app) {
       if (until < T || !f) { w.mugs.delete(id); continue; }
       rect(ctx, x - 13, y - 14, 3, 3, colorOf(f.b)); rect(ctx, x - 11, y - 13, 1, 1, INK);
     }
-    // the cabinet, the project's name on a plate
+    // the cabinet, the project's name on a plate; a click on the plate opens the desk's panel (its name)
     slab(ctx, x0, y - 15, cab, 4, 11, p);
-    const lx = Math.round(x0 + (cab - tinyW(d.label)) / 2);
-    plate(ctx, x0 + 2, y - 9, cab - 4, false, p); tiny(ctx, d.label, lx, y - 8, C.steel3);
+    const lx = Math.round(x0 + (cab - tinyW(d.label)) / 2), onPlate = hot(x0 + 2, y - 10, x0 + cab - 2, y - 2, { kind: "desk", unit: d.unit });
+    plate(ctx, x0 + 2, y - 9, cab - 4, false, p);
+    if (onPlate) rect(ctx, x0 + 3, y - 8, cab - 6, 5, GOLD);
+    tiny(ctx, d.label, lx, y - 8, onPlate ? INK : C.steel3);
+    if (onPlate) tip = { text: d.name || d.dir.replace(/\/+$/, "").split("/").pop() || d.dir, x: x0 + cab / 2, y: y - 12 };
     // on it the project's screen, and a laptop for each worktree, plugged in; the pointer on one
     // lights up the bots working there. The desk is handled at its screen: a + beside it starts a
     // bot here, a click on the screen (or a laptop) opens your terminal there
@@ -2398,24 +2409,18 @@ function startRoom(cv, app) {
     return carrying.at;
   }
   function placeKind(kind, cx, cy) { const at = carryKind(kind, cx, cy); carrying = null; draw(); return at; }
-  // burrow's own settings: a steel switchboard on the wall, a toggle a setting, its lever up and its
-  // lamp lit while the setting is on (the first: new bots in the Claude app too); the lid stands open
-  // while the panel is
-  // three levers a column, a column more when there are more (the board stays above the floor)
-  const SWITCHES = ["rc", "yolo", "cleanup", "hardcore"], SB_COLS = () => Math.ceil(SWITCHES.length / 3);
-  const SB_H = () => 6 + 4 * Math.min(3, SWITCHES.length), SB_W = () => 4 + 10 * SB_COLS();
+  // burrow's own settings: a small steel box on the wall with one big lever, its red knob up; pulled down
+  // while the settings' panel is open (a click on it opens them)
+  const SB_H = () => 14, SB_W = () => 10;
   function drawSwitchboard(ctx, b, cfg, open) {
     const { x0, y0 } = b, h = SB_H(), wd = SB_W();
-    if (open) { rect(ctx, x0, y0 - 3, wd, 4, SP.F); rect(ctx, x0 + 1, y0 - 2, wd - 2, 2, SP.C); }   // the lid, flipped up
     rect(ctx, x0, y0, wd, h, SP.F);
     rect(ctx, x0 + 1, y0 + 1, wd - 2, h - 2, SP.D);
     rect(ctx, x0 + 1, y0 + 1, wd - 2, 1, SP.C); rect(ctx, x0 + 1, y0 + 1, 1, h - 2, SP.C);
-    rect(ctx, x0 + 3, y0 + 3, wd - 6, h - 6, SP.E);
-    SWITCHES.forEach((k, i) => {
-      const on = !!cfg[k], x = x0 + 10 * Math.floor(i / 3), y = y0 + 3 + (i % 3) * 4;   // a lever every four dots
-      rect(ctx, x + 4, y, 2, 4, SP.F); rect(ctx, x + 4, on ? y : y + 2, 2, 2, on ? SP.B : SP.D);   // the lever: up when on
-      rect(ctx, x + 8, y + 1, 2, 2, on ? (k === "hardcore" ? SP.r : SP.g) : SP.F);                 // its lamp (red for hardcore)
-    });
+    rect(ctx, x0 + 4, y0 + 3, 2, h - 6, INK);                                                          // the slot
+    const ky = open ? y0 + h - 4 : y0 - 1;                                                            // the knob: up, or pulled down
+    rect(ctx, x0 + 4, Math.min(ky + 2, y0 + 7), 2, Math.abs(ky + 2 - (y0 + 7)), SP.B);                 // the handle, from the slot's middle
+    rect(ctx, x0 + 3, ky, 4, 4, INK); rect(ctx, x0 + 3, ky, 3, 3, SP.r); rect(ctx, x0 + 3, ky, 1, 1, "#ff9a8a");
     rect(ctx, x0 + 2, y0 + h - 2, 1, 1, SP.F); rect(ctx, x0 + wd - 3, y0 + h - 2, 1, 1, SP.F);       // the screws
   }
   // the reception: an office manager's booth, 46 dots wide. Behind: two posts and a panel. In front, the counter (a
@@ -2723,7 +2728,7 @@ function startRoom(cv, app) {
       moving.at = loose && lastL && inFire(lastL, moving.key, loose, moving.u) ? loose : clampAt(moving.key, at, moving.u);
     }
     if (held) {
-      held.x = Math.max(0, Math.min(W, pointer.x)); held.y = Math.max(WALL, Math.min(FLOORY - 4, pointer.y + 24)); held.dir = -1;   // it hangs under the pointer, but never past the floor's bottom edge
+      held.x = Math.max(0, Math.min(W, pointer.x)); held.y = Math.max(WALL, Math.min(H - 2, pointer.y + 24)); held.dir = -1;   // it hangs under the pointer, but never past the floor's bottom edge
       app.carry(held.id, pointer.x >= W || pointer.x < 0 || pointer.y < 0 || pointer.y >= H ? e.clientX : null, e.clientY);
     }
     draw();

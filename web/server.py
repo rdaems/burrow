@@ -837,8 +837,21 @@ class Hub:
             mid, d = split_unit(u)
             if mid in self.machines and u not in seen:
                 seen.add(u)
-                out.append({"unit": u, "m": mid, "dir": d})
+                out.append({"unit": u, "m": mid, "dir": d, "name": (self.room.get("names") or {}).get(u, "")})
         return out
+
+    def rename(self, u, name):
+        """a desk's own name (its panel); empty: its folder's again"""
+        with self.lock:
+            if u not in self.room["desks"]:
+                raise RuntimeError("no such desk")
+            names = self.room.setdefault("names", {})
+            if name:
+                names[u] = name[:40]
+            else:
+                names.pop(u, None)
+            save_room(self.room)
+        self.push("state", self.state())
 
     def on_floor(self, bots):
         """the sessions at a desk (in its directory, or in a worktree of it): the rest are not in the room"""
@@ -1041,7 +1054,7 @@ class Hub:
         state = lambda b: "waiting for an answer" if b["waiting"] else "working" if b["busy"] else f"completed ({b['over']})" if b["over"] else "idle"
         return {"you": you_of(self.room)["name"], "room": f"http://localhost:{PORT}",
                 "machines": [{"id": m["id"], "name": m["name"], "ssh": m.get("ssh") or None, "error": feeds.get(m["id"], {}).get("error")} for m in ms],
-                "desks": [{"m": split_unit(u)[0], "dir": split_unit(u)[1]} for u in self.room["desks"] if split_unit(u)[0] in self.machines],
+                "desks": [{"m": split_unit(u)[0], "dir": split_unit(u)[1], "name": (self.room.get("names") or {}).get(u) or None} for u in self.room["desks"] if split_unit(u)[0] in self.machines],
                 "sessions": [{"id": b["id"], "name": b["name"], "m": b["m"], "cwd": b["cwd"], "desk": split_unit(b["unit"])[1] if b["unit"] in desks else None,
                               "state": state(b), "process": "running" if b["alive"] else "off", "started": iso(b["started"]), "ended": iso(b["endedAt"]),
                               "summary": b["detail"], "sessionId": b["session"]} for b in self.bots()],
@@ -1110,6 +1123,7 @@ class Hub:
             self.room["desks"] = ds + [u] if on else ds
             if not on:
                 self.room["layout"].pop("u:" + u, None)
+                (self.room.get("names") or {}).pop(u, None)
             save_room(self.room)
         self.push("state", self.state())
 
@@ -2314,6 +2328,9 @@ class Handler(BaseHTTPRequestHandler):
             return hub.answer(b.get("id") or "", b.get("question") or "", text[:4000])
         if path == "/api/digest":            # the notes opened: the sessions that moved since are written up again
             return {"queued": hub.digest_refresh() if hub.notes_on() else 0}
+        if path == "/api/desk":              # a desk renamed (its panel): {unit, name}, empty for its folder's name
+            hub.rename(b.get("unit") or "", (b.get("name") or "").strip())
+            return {}
         if path == "/api/forget":            # a desk burnt (its bots went first, through the booth or your gun)
             hub.kill_shells(b["unit"])
             hub.keep(b["unit"], False)
@@ -2327,7 +2344,7 @@ class Handler(BaseHTTPRequestHandler):
             if m.get("ssh") == "@demo":
                 base, _, part = d.rpartition("/")
                 return {"dirs": [f"{base}/{x}/" for x in ("alpha", "beta", "gamma") if x.startswith(part)]}
-            out = run(m, f"ls -d {sq(d)}*/ 2>/dev/null | head -40", timeout=15)
+            out = run(m, f"ls -d {sq(d)}*/ 2>/dev/null | head -300", timeout=15)   # (the new desk's folder list: all of a folder's folders)
             return {"dirs": [x for x in out.splitlines() if x]}
         if path == "/api/recent":            # the working directories there without a desk (the cabinet's form)
             if m.get("ssh") == "@demo":

@@ -55,12 +55,15 @@ have sent it something; then you stand behind its desk), or under the screen whe
 ## What you do
 
 - **open a session**: click its robot. It opens as a tile beside the room, a terminal running `claude attach`.
-  Shift-click adds a tile next to the open ones; drag a tile by its band onto another to arrange them.
+  Shift-click adds a tile next to the open ones; drag a tile by its band onto another to arrange them, or
+  to an edge of the pane to put it along that whole side; drag the gap between two to resize them.
   ✕, a click on the floor or `exit` closes a tile, and the session runs on
 - **start a session**: the `+` beside a desk's screen
-- **a desk**: the project cabinet puts one down; its list has the directories with sessions that are not
-  in the room yet, then where Claude Code ran lately. Burn a desk and its sessions are deleted with it: they
-  walk into the booth one by one (in hardcore they are shot); rescue one and the desk stays
+- **a desk**: the project cabinet puts one down: pick its folder as in a file dialog (the folders where Claude
+  Code ran lately first, those with sessions not in the room yet on top). A click on a desk's name plate
+  opens its panel: its name (yours to give), its folder, its sessions, its terminal. Burn a desk and its
+  sessions are deleted with it: they walk into the booth one by one (in hardcore they are shot); rescue one
+  and the desk stays
 - **a fresh start**: drop an idle robot by the neuralyzer: `/clear`, a new conversation in the same session
 - **delete a session gently**: carry its robot into the booth, or ✕ twice in the bench's list. A sign counts
   five seconds down (click it, or carry the robot out, to undo), then `claude stop` and `claude rm`
@@ -111,7 +114,7 @@ have sent it something; then you stand behind its desk), or under the screen whe
   dropped at the fire only warms its hands
 - **you**: a click on your own figure: your face and your name (the login name unless you type one);
   the pair rooms see you by them
-- **settings**: the switchboard on the wall, a switch a setting, its lamp lit while it is on. The first:
+- **settings**: the lever on the wall opens them, a switch a setting. The first:
   new sessions get `--remote-control`, so the same session is in the Claude app and at claude.ai/code
   too (its tile has an APP button, its robot a blinking light over the antenna)
 

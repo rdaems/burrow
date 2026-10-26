@@ -28,11 +28,10 @@
       <div class="vhead"><span class="tname"></span><span class="tas"></span><button type="button" class="btn small tx" title="close">✕</button></div>
       <div class="vbody">
         <form id="vDir" class="vform" hidden>
-          <p>A desk for a working directory<span class="on"> on <b class="machine"></b></span>: its sessions come into the room, those in its worktrees too.</p>
           <div class="row machines"></div>
-          <input class="field" name="dir" placeholder="~/projects/something" autocomplete="off" spellcheck="false">
-          <ul class="suggest" id="dirs" hidden></ul>
-          <div class="row"><button class="btn">ADD →</button></div>
+          <input class="field" name="dir" autocomplete="off" spellcheck="false">
+          <ul class="suggest browse" id="dirs"></ul>
+          <div class="row"><button class="btn">ADD DESK →</button></div>
           <div class="err"></div>
           <input type="hidden" name="m">
         </form>
@@ -55,6 +54,13 @@
         <div id="vSettings" class="settings" hidden></div>
         <div id="vDoors" class="settings doors" hidden></div>
         <div id="vDone" class="done" hidden></div>
+        <form id="vDesk" class="vform desk" hidden>
+          <input class="field" name="name" maxlength="40" autocomplete="off" spellcheck="false">
+          <p class="where"><code class="path"></code> <span class="on"></span></p>
+          <ul class="sessions"></ul>
+          <div class="row"><button class="btn">RENAME</button><button type="button" class="btn shell">TERMINAL</button></div>
+          <div class="err"></div>
+        </form>
         <div id="vManager" class="managers" hidden><p>Who sits at the reception? Pick one; burn her booth to let her go.</p><div class="styles"></div></div>
         <div id="vClock" class="awake" hidden><p>Keep this computer awake</p><div class="row"></div></div>
         <div id="vOutside" hidden><canvas class="outside" width="130" height="70"></canvas></div>
@@ -169,6 +175,7 @@ async function act(a) {
   else if (a.kind === "clock") { openView("clock"); fillClock(); }
   else if (a.kind === "notes") openNotes(a.shift);
   else if (a.kind === "manager") openManager(a.key, a.shift);
+  else if (a.kind === "desk") openDesk(a.unit);
   else if (a.kind === "kept") api("/api/office", { kept: a.id });   // one she was seeing out, kept: her session is told
   else if (a.kind === "outside") openOutside();
   else if (a.kind === "pairOpen") openPair(a.key);
@@ -238,8 +245,8 @@ addEventListener("focus", focus); addEventListener("blur", focus); document.addE
 }
 
 // ---- the view: one thing at a time on the right, in place of the tiles, framed like one
-const PANELS = { dir: "#vDir", machine: "#vMachine", you: "#vYou", closet: "#vCloset", chess: "#chess", pong: "#pong", report: "#vReport", pair: "#vPair", board: "#vBoard", limits: "#vLimits", outside: "#vOutside", completed: "#vDone", settings: "#vSettings", clock: "#vClock", doors: "#vDoors", manager: "#vManager" };
-const TITLES = { dir: "A PROJECT", machine: "A MACHINE", you: "YOU", closet: "THE CLOSET", chess: "CHESS", pong: "PING-PONG", report: "REPORT", pair: "PAIR ROOM", board: "WHITEBOARD", limits: "LIMITS", outside: "OUTSIDE", completed: "COMPLETED", settings: "SETTINGS", clock: "CLOCK", doors: "DOORS", manager: "OFFICE MANAGER" };
+const PANELS = { dir: "#vDir", machine: "#vMachine", you: "#vYou", closet: "#vCloset", chess: "#chess", pong: "#pong", report: "#vReport", pair: "#vPair", board: "#vBoard", limits: "#vLimits", outside: "#vOutside", completed: "#vDone", settings: "#vSettings", clock: "#vClock", doors: "#vDoors", manager: "#vManager", desk: "#vDesk" };
+const TITLES = { dir: "NEW DESK", machine: "A MACHINE", you: "YOU", closet: "THE CLOSET", chess: "CHESS", pong: "PING-PONG", report: "REPORT", pair: "PAIR ROOM", board: "WHITEBOARD", limits: "LIMITS", outside: "OUTSIDE", completed: "COMPLETED", settings: "SETTINGS", clock: "CLOCK", doors: "DOORS", manager: "OFFICE MANAGER", desk: "DESK" };
 function openView(kind) {
   if (viewKind && viewKind !== kind) closeView(true);
   for (const t of tiles.all()) closeTile(t);
@@ -267,24 +274,21 @@ view.querySelector(".tx").onclick = () => closeView();
 // the host from the Host entries of ~/.ssh/config
 function ask(kind) {
   openView(kind);
-  offFloor.m = null;                       // the directories without a desk, asked again
   const d = $(PANELS[kind]);
   d.querySelector(".err").textContent = "";
   d.querySelectorAll("input").forEach((i) => (i.value = ""));
   const row = d.querySelector(".machines");
   if (row && state) {                      // which machine: a steel button each, shown only when there is a choice
     const ms = state.machines, hid = d.querySelector("input[name=m]");
-    const pickM = (id) => { hid.value = id; for (const b of row.children) b.classList.toggle("on", b.dataset.id === id); };
+    const pickM = (id) => { hid.value = id; for (const b of row.children) b.classList.toggle("on", b.dataset.id === id); if (kind === "dir") browse.open(id); };
     row.innerHTML = ms.map((m) => `<button type="button" class="btn" data-id="${m.id}">${m.name}</button>`).join("");
     for (const b of row.children) b.onclick = () => { pickM(b.dataset.id); d.querySelector("input.field").focus(); };
     row.hidden = ms.length < 2;
-    d.querySelector(".on").hidden = ms.length > 1;
-    d.querySelector(".machine").textContent = ms[0] ? ms[0].name : "";
     pickM(ms[0] ? ms[0].id : "");
   }
   const inp = d.querySelector("input.field");
   inp.focus();
-  inp.dispatchEvent(new Event("focus"));   // its completions open at once (a window without the focus gets no focus event)
+  if (kind !== "dir") inp.dispatchEvent(new Event("focus"));   // its completions open at once (a window without the focus gets no focus event)
 }
 let machineAt = null;                       // where the new machine's door was let go (from the closet)
 for (const d of [$("#vDir"), $("#vMachine")]) {
@@ -292,7 +296,7 @@ for (const d of [$("#vDir"), $("#vMachine")]) {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.target)), err = d.querySelector(".err");
     err.textContent = "…";
-    const r = d.id === "vDir" ? await api("/api/dir", { m: f.m || "", dir: f.dir }) : await api("/api/machine", { ...f, at: machineAt });
+    const r = d.id === "vDir" ? await api("/api/dir", { m: f.m || "", dir: f.dir.replace(/(.)\/+$/, "$1") }) : await api("/api/machine", { ...f, at: machineAt });
     if (r.error) { err.textContent = r.error; return; }
     if (d.id === "vMachine") { room.pend(machineAt, r.m); machineAt = null; }   // its door stays up until the state brings it
     closeView();
@@ -334,21 +338,101 @@ function completes(inp, list, choices) {
   list.addEventListener("dblclick", (e) => { if (e.target.closest("li")) inp.form.requestSubmit(); });
   inp.form.addEventListener("submit", () => { items = []; show(); });
 }
-// A desk is yours to put down: a session is in the room only while its directory has one. The form lists the
-// working directories there without a desk, those with sessions first (how many, and whether one waits for
-// you: they are not in the room), then where Claude Code ran lately; typed, the ones that match, then the
-// directories that start as typed
-let offFloor = { m: null, home: "", dirs: [] };      // asked once a form and machine
-completes($("#vDir input"), $("#dirs"), async (dir) => {
-  const m = $("#vDir input[name=m]").value || "";
-  if (offFloor.m !== m) { const r = await api("/api/recent", { m }); offFloor = { m, home: r.home || "", dirs: r.dirs || [] }; }
-  const h = offFloor.home, short = (d) => (h && (d === h || d.startsWith(h + "/")) ? "~" + d.slice(h.length) : d);
-  const t = dir.trim().toLowerCase(), bots = (n) => n + (n === 1 ? " bot" : " bots");
-  const known = offFloor.dirs.map((e) => ({ value: short(e.dir), note: e.bots ? bots(e.bots) + (e.waiting ? ", waits for you" : "") : "" }))
-    .filter((e) => !t || e.value.toLowerCase().includes(t));
-  if (!t) return known;
-  const r = await api("/api/complete", { m, dir });
-  return known.concat((r.dirs || []).filter((d) => !known.some((e) => e.value === d)));
+// A desk is yours to put down: a session is in the room only while its directory has one. Its folder is picked
+// as VS Code's own dialog picks one (Remote-SSH's "Open Folder"): the field is a path, the list under it the
+// folders in it, ".." first; in the folder it starts in (home), first where Claude Code ran lately, those with
+// sessions that are not in the room on top (how many, whether one waits for you). A click goes into a folder,
+// typing narrows the list, ↑ ↓ pick, Enter or Tab goes into the one picked (Enter with none picked adds the
+// folder in the field, as ADD DESK does), a double click adds the one clicked
+const browse = (() => {
+  const form = $("#vDir"), inp = form.querySelector("input.field"), list = $("#dirs");
+  let m = "", home = "", recent = [], items = [], pick = -1, seq = 0;
+  const kids = new Map();
+  const short = (d) => (home && (d === home || d.startsWith(home + "/")) ? "~" + d.slice(home.length) : d);
+  const start = () => (home ? "~/" : "/");
+  const up = (dir) => {                    // the folder a folder is in
+    const s = dir.replace(/\/+$/, "");
+    if (s === "~") return home ? short(home.replace(/\/[^/]*$/, "") || "/") + "/" : "/";
+    const i = s.lastIndexOf("/");
+    return i <= 0 ? "/" : s.slice(0, i + 1);
+  };
+  const children = (dir) => {
+    const key = m + "\u0000" + dir;
+    if (!kids.has(key)) kids.set(key, api("/api/complete", { m, dir }).then((r) => (r.dirs || []).map((d) => short(d.replace(/\/+$/, "")) + "/")));
+    return kids.get(key);
+  };
+  const noteOf = (path) => { const e = recent.find((x) => x.path + "/" === path); return e ? e.note : ""; };
+  async function refresh() {
+    const v = inp.value, n = ++seq, cut = v.lastIndexOf("/"), dir = v.slice(0, cut + 1), tail = v.slice(cut + 1).toLowerCase();
+    let out = [];
+    if (dir) {
+      if (dir !== "/") out.push({ label: "..", go: up(dir) });
+      const ks = await children(dir);
+      if (n !== seq) return;
+      out = out.concat(ks.filter((k) => k.slice(dir.length).toLowerCase().startsWith(tail)).map((k) => ({ label: k.slice(dir.length), go: k, note: noteOf(k) })));
+    }
+    if (v === start()) out = recent.map((e) => ({ label: e.path, go: e.path + "/", note: e.note, recent: true })).concat(out);
+    items = out; pick = -1; draw();
+  }
+  function draw() {
+    list.innerHTML = items.map((x, i) => `<li class="${i === pick ? "on " : ""}${x.recent ? "recent" : ""}">${esc(x.label)}${x.note ? `<small>${esc(x.note)}</small>` : ""}</li>`).join("");
+    const on = list.children[pick];
+    if (on) on.scrollIntoView({ block: "nearest" });
+  }
+  const go = (x) => { inp.value = x.go; inp.focus(); refresh(); };
+  async function open(id) {
+    m = id || ""; recent = []; home = "";
+    inp.value = ""; items = []; draw();
+    const r = await api("/api/recent", { m });
+    if ((form.querySelector("input[name=m]").value || "") !== m) return;
+    home = r.home || "";
+    const bots = (k) => k + (k === 1 ? " bot" : " bots");
+    recent = (r.dirs || []).map((e) => ({ path: short(e.dir), note: e.bots ? bots(e.bots) + (e.waiting ? ", waits for you" : "") : "" }));
+    inp.value = start();
+    refresh();
+  }
+  inp.addEventListener("input", refresh);
+  inp.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown" && items.length) { pick = (pick + 1) % items.length; draw(); e.preventDefault(); }
+    else if (e.key === "ArrowUp" && items.length) { pick = (pick - 1 + items.length) % items.length; draw(); e.preventDefault(); }
+    else if ((e.key === "Enter" || e.key === "Tab") && pick >= 0) { go(items[pick]); e.preventDefault(); }
+    else if (e.key === "Tab") {             // one folder left that matches: into it, as a shell completes
+      const only = items.filter((x) => x.label !== ".." && !x.recent);
+      if (only.length === 1) go(only[0]);
+      e.preventDefault();
+    }
+  });
+  list.addEventListener("pointerdown", (e) => { const li = e.target.closest("li"); if (!li) return; e.preventDefault(); go(items[[...list.children].indexOf(li)]); });
+  list.addEventListener("dblclick", (e) => { if (e.target.closest("li")) form.requestSubmit(); });
+  return { open };
+})();
+
+// ---- a desk's panel (a click on its name): its name (empty: its folder's), where it is, the sessions at it
+let deskUnit = null;
+function openDesk(unit) {
+  const d = state && state.desks.find((x) => x.unit === unit);
+  if (!d) return;
+  deskUnit = unit;
+  openView("desk");
+  const el = $("#vDesk"), m = machine(d.m), folder = d.dir.replace(/\/+$/, "").split("/").pop() || d.dir;
+  view.querySelector(".tas").textContent = "";
+  el.querySelector(".err").textContent = "";
+  const inp = el.querySelector("input[name=name]");
+  inp.value = d.name || ""; inp.placeholder = folder;
+  el.querySelector(".path").textContent = d.dir;
+  el.querySelector(".on").textContent = m && m.id ? "on " + m.name : "";
+  const bots = state.bots.filter((b) => b.unit === unit), ul = el.querySelector(".sessions");
+  ul.innerHTML = bots.map((b) => `<li data-id="${esc(b.id)}"><b>${esc(b.name)}</b> <small>${b.waiting ? "waits for you" : b.busy ? "working" : b.over ? b.over : "idle"}</small></li>`).join("");
+  ul.hidden = !bots.length;
+  for (const li of ul.children) li.onclick = () => { const b = byId(li.dataset.id); if (b) openBot(b.m, b.id); };
+  el.querySelector(".shell").onclick = () => openShell(d.m || "", d.dir);
+  inp.focus(); inp.select();
+}
+$("#vDesk").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const el = $("#vDesk"), r = await api("/api/desk", { unit: deskUnit, name: el.querySelector("input[name=name]").value.trim() });
+  if (r.error) { el.querySelector(".err").textContent = r.error; return; }
+  closeView();
 });
 completes($("#vMachine input"), $("#hosts"), async (text) => {   // the hosts of ~/.ssh/config without a door yet
   const r = await api("/api/hosts", {});
@@ -836,7 +920,11 @@ function openTerminal(t, at) {
     readText: async () => "",
     writeText: async (_, text) => { try { await navigator.clipboard.writeText(text); } catch {} },
   }));
-  term.onData((d) => { if (t.ws && t.ws.readyState === 1) { t.ws.send(enc.encode(d)); room.typed(t.kind === "bot" ? asFolk(t.id) : null, d.includes("\r")); } });
+  // what goes to the session; only what you type (or paste) is typing in the room: not the terminal's own
+  // reports, which Claude Code asks for: focus in and out (a press in the room blurs the terminal), the mouse
+  // over it (SGR or X10), a colour or size answer
+  const REPORT = /^(?:\x1b\[[IO]|\x1b\[<[\d;]*[Mm]|\x1b\[M[\s\S]{3}|\x1b\][\d;]*[^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[\d;?]*[Rcn])+$/;
+  term.onData((d) => { if (t.ws && t.ws.readyState === 1) { t.ws.send(enc.encode(d)); if (!REPORT.test(d)) room.typed(t.kind === "bot" ? asFolk(t.id) : null, d.includes("\r")); } });
   // shift+enter is a new line, as in the Rust pane: ESC CR, which claude reads as meta+enter (xterm.js sends a bare CR)
   term.attachCustomKeyEventHandler((e) => {
     if (e.key !== "Enter" || !e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return true;
@@ -930,7 +1018,7 @@ const needsYou = (b) => b.waiting || b.tempo === "blocked";
 const STATE = (b) => needsYou(b) ? ["needs", "needs you"] : b.busy ? ["busy", "working"] : b.over ? [b.over, b.over] : b.alive === false ? ["off", "process off"] : ["idle", "idle"];
 const firstSentence = (t) => { const m = String(t || "").match(/^.*?[.!?](?=\s|$)/); return (m ? m[0] : String(t || "")).trim(); };
 const headline = (e) => (e && (e.headline || firstSentence(e.now))) || "";
-const deskName = (desk) => (desk ? desk.dir.replace(/\/+$/, "").split("/").pop() || "~" : "?");
+const deskName = (desk) => (desk ? desk.name || desk.dir.replace(/\/+$/, "").split("/").pop() || "~" : "?");
 const blocking = (b, q) => (q.blocking === undefined ? needsYou(b) : !!q.blocking);   // notes from before the flag: what a waiting session asks
 // deciding in the notes: an explainer of the decision (Claude, kept with the notes), an option picked into
 // the answer, the answer sent: typed into the session by the server (deliver), the decision then answered
