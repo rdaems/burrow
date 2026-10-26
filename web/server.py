@@ -298,6 +298,8 @@ OPTIONS = {
     "rc": True,     # a bot started here gets --remote-control: the same session is in the Claude app and at claude.ai/code
     "yolo": False,  # a bot started here gets --dangerously-skip-permissions: it never asks, it just does
     "digest": True,  # the office manager's notes are written by Claude (`claude -p`, tokens): off, she dozes and keeps what she has
+    "cleanup": False,   # she clears out finished sessions (completed, nothing open in her notes, an hour gone): to the booth
+    "hardcore": False,  # the booth is a gun closet: she clears them out with a shotgun, and a click on it gives you a crosshair
 }
 
 

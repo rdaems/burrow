@@ -177,6 +177,7 @@ function startRoom(cv, app) {
       case "fwd2": rect(4, 17, 2, 2, c1); rect(4, 19, 2, 1, skin); fwd(20); break;
       case "reach": back(); rect(14, 14, 2, 4, c1); rect(16, 13, 2, 2, c1); rect(18, 12, 2, 2, skin); break;
       case "mug": back(); fwd(19, 2); rect(17, 16, 3, 3, color); rect(19, 17, 1, 1, INK); break;
+      case "gun": back(); fwd(19, 1); rect(13, 18, 3, 2, "#7a4a2a"); rect(15, 17, 6, 1, "#a7aebb"); rect(15, 18, 5, 1, "#6c7380"); break;   // a shotgun, levelled
       case "paper": back(); fwd(19, 2); rect(16, 15, 4, 5, C.steel4); rect(17, 16, 2, 1, C.steel2); rect(17, 18, 2, 1, C.steel2); break;
       case "book": back(); fwd(19, 2); rect(16, 16, 3, 4, C.red1); rect(16, 16, 1, 4, C.red0); break;
       case "can": back(); fwd(19, 2); rect(16, 17, 4, 3, C.green0); rect(20, 17, 1, 1, C.green0); break;
@@ -302,7 +303,7 @@ function startRoom(cv, app) {
       case "clock": return [x, y, x + 12, y + 10];
       case "fire": return [x, y - FIRE.h, x + FIRE.w, y + 1];
       case "closet": return [x, y, x + 22, y + 24];
-      case "settings": return [x, y, x + 14, y + SB_H()];
+      case "settings": return [x, y, x + SB_W(), y + SB_H()];
       case "manager": return [x - 2, y - 17, x + 30, y + 2];
       case "pair": return [x - 13, y - 20, x + 13, y + 1];
       case "bench": return [x - 29, y - 18, x + 29, y + 2];
@@ -390,7 +391,7 @@ function startRoom(cv, app) {
       floorY: FLOORY, board: b0 && { key: b0.key, x: b0.x, y: b0.y, x0: b0.x - 16, y0: b0.y - 26, x1: b0.x + 16, y1: b0.y }, clock: c0 && { key: c0.key, x0: c0.x, y0: c0.y },
       windows: all("window").map((p) => ({ key: p.key, x0: p.x, y0: p.y, x1: p.x + 21, y1: p.y + 18 })),
       fire: f0 && { key: f0.key, x0: f0.x, y0: f0.y - FIRE.h, x1: f0.x + FIRE.w, y1: f0.y }, closet: cl && { key: cl.key, x0: cl.x, y0: cl.y, x1: cl.x + 22, y1: cl.y + 24 },
-      settings: sw && { key: sw.key, x0: sw.x, y0: sw.y, x1: sw.x + 14, y1: sw.y + SB_H() },
+      settings: sw && { key: sw.key, x0: sw.x, y0: sw.y, x1: sw.x + SB_W(), y1: sw.y + SB_H() },
       manager: one("manager"), meet: one("meet"), pong: one("pong"), chess: one("chess"), pairs: all("pair"), benches: all("bench"), booths: all("booth"), neuralyzers: all("neuralyzer"),
       cooler: one("cooler"), plants: all("plant"), printer: one("printer"), chairs: all("armchair"),
       coffeeAt: one("coffee"), floor: { x0: 14, y0: WALL + 8, x1: W - 14, y1: FLOORY - 4 }, placed,
@@ -417,7 +418,7 @@ function startRoom(cv, app) {
   // ---- everyone: what each bot is doing
   let everyone = null;
   function world() {
-    if (!everyone) everyone = { folk: new Map(), meeting: null, lastMeeting: -60, board: [], pong: { t: 0, from: 0 }, doorAt: {}, stopped: new Map(), flare: 0, sparks: 0, boothFlash: null, flash: null, print: 0, burning: [], strokes: 0, stats: new Map(), meetings: 0,
+    if (!everyone) everyone = { folk: new Map(), meeting: null, lastMeeting: -60, board: [], pong: { t: 0, from: 0 }, doorAt: {}, stopped: new Map(), flare: 0, sparks: 0, boothFlash: null, flash: null, shots: [], spared: new Set(), clean: null, cleanRest: 0, print: 0, burning: [], strokes: 0, stats: new Map(), meetings: 0,
       graves: new Map(), riseAt: new Map(), sway: new Map(), ball: null, mugs: new Map(),
       beams: [], T: 0, born: performance.now() };
     return everyone;
@@ -550,8 +551,71 @@ function startRoom(cv, app) {
   // notes switched off at the switchboard she dozes in her chair
   const MANAGER = { seed: "manager-16", color: "#f06b72" };   // a robot: one antenna, happy eyes; a pink bow and skirt (body's femme)
   const managerSeat = (L) => L.manager ? { x: L.manager.x + 24, y: L.manager.y } : { x: W / 2, y: H / 2 };
+  // clearing out (switchboard: cleanup): one finished session at a time (app.cleanup(): completed, nothing
+  // open in her notes, an hour gone; never one you rescued). She fetches it and walks it to the booth, a step
+  // behind her, where its five seconds run as for any bot put in. Hardcore: a shotgun from the gun closet,
+  // up to it, levelled, the shot (a gravestone, five seconds to undo), the next one, and the gun back. Taking
+  // one from her, or its undo, spares it for good. A pause between them, so it can be watched
+  function cleanStep(w, f, L, dt) {
+    const cu = app.cleanup(), bo = L.booths[0];
+    const next = () => cu.ids.find((id) => { const g = w.folk.get(id); return g && !w.spared.has(id) && !g.held && !["doom", "escort"].includes(g.act.kind); });
+    let c = w.clean;
+    const finish = (pause) => {
+      const g = c && w.folk.get(c.id);
+      if (g && g.act.kind === "escort") g.act = rest();
+      if (c && c.armed) f.carry = null;
+      w.clean = null; w.cleanRest = pause;
+      return false;
+    };
+    if (!cu.on || !bo || (c && c.hard !== cu.hardcore)) return c ? finish(5) : false;
+    if (!c) {
+      if ((w.cleanRest -= dt) > 0) return false;
+      const id = next();
+      if (!id) return false;
+      c = w.clean = { id, hard: cu.hardcore, phase: cu.hardcore ? "arm" : "fetch", t: 0 };
+      f.carry = null;                        // her notes stay at her desk
+    }
+    const g = w.folk.get(c.id), front = { x: bo.x + 14, y: bo.y };
+    f.sat = false; f.act = { kind: "clean" };
+    switch (c.phase) {
+      case "fetch":                          // to the bot
+        if (!g || g.held || !cu.ids.includes(c.id)) return finish(3);
+        if (walk(f, { x: g.x + 10, y: g.y }, 26, dt)) { f.dir = -1; g.act = { kind: "escort" }; c.phase = "walk"; }
+        return true;
+      case "walk":                           // to the booth, the bot behind her
+        if (!g || g.held || g.act.kind !== "escort") { w.spared.add(c.id); return finish(3); }
+        if (walk(f, front, 22, dt)) { f.dir = -1; f.legs = "stand"; g.act = { kind: "doom", at: bo.key, left: 5 }; c.phase = "booth"; }
+        return true;
+      case "booth":                          // beside it while its seconds run
+        f.legs = "stand"; f.dir = -1; f.arms = "down";
+        if (!g) return finish(8);
+        if (g.act.kind !== "doom") { w.spared.add(c.id); return finish(5); }
+        return true;
+      case "arm":                            // hardcore: a shotgun from the gun closet
+        if (walk(f, front, 30, dt)) { f.dir = -1; c.armed = true; f.carry = "gun"; c.phase = "hunt"; }
+        return true;
+      case "hunt":                           // up to the bot, to the right of it
+        if (!g || g.held || w.graves.has(c.id)) { const id = next(); if (id) c.id = id; else c.phase = "return"; return true; }
+        if (walk(f, { x: Math.min(L.floor.x1, g.x + 24), y: g.y }, 30, dt)) { f.legs = "stand"; c.phase = "aim"; c.t = 0; }
+        return true;
+      case "aim":                            // levelled a moment, then the shot (the flash at the barrel)
+        if (!g || g.held) { c.phase = "hunt"; return true; }
+        f.legs = "stand"; f.arms = "gun"; f.dir = g.x < f.x ? -1 : 1;
+        if ((c.t += dt) > 0.9) { w.shots.push({ x: Math.round(f.x) + 10 * f.dir, y: Math.round(f.y) - 9, t0: performance.now(), hit: false }); shoot(g); c.phase = "after"; c.t = 0; }
+        return true;
+      case "after":                          // the next one, or done
+        f.legs = "stand"; f.arms = "gun";
+        if ((c.t += dt) > 2.5) { const id = next(); if (id) { c.id = id; c.phase = "hunt"; } else c.phase = "return"; }
+        return true;
+      case "return":                         // the gun back in the closet
+        if (walk(f, front, 30, dt)) return finish(20);
+        return true;
+    }
+    return finish(5);
+  }
   function thinkManager(w, f, L, dt) {
     const dg = app.digest(), wr = dg && dg.on ? dg.writing || dg.explaining : null, v = 30;   // writing notes, or explaining a decision
+    if ((w.clean || !wr) && cleanStep(w, f, L, dt)) return;
     let to = null, look = null;
     if (wr && wr.startsWith("u:")) {
       const d = L.desks.find((x) => x.unit === wr.slice(2));
@@ -851,6 +915,12 @@ function startRoom(cv, app) {
         }
         break;
       }
+      case "escort": {                       // walked to the booth by the office manager, a step behind her
+        const m = folk.get("manager");
+        if (!m) { f.act = rest(); break; }
+        if (walk(f, { x: m.x - 9 * (m.dir || -1), y: m.y }, 24, dt)) { f.legs = "stand"; f.dir = m.dir || -1; f.arms = "down"; }
+        break;
+      }
       case "neuralyze": {
         // put to the neuralyzer: it steps up, the flash (`/clear` in its session: a new conversation), and
         // it stands there dazed a moment
@@ -986,6 +1056,8 @@ function startRoom(cv, app) {
 
   // ---- drawing, and what is under the pointer: hot spots are collected while drawing
   let pointer = null, hots = [], hovered = null, tip = null, lastL = null, moving = null, held = null, hoverId = null, lastHp = null, dangerNow = false;
+  let aiming = false;                       // hardcore: the gun taken from the gun closet, a crosshair for the pointer
+  const hardcore = () => !!app.settings().hardcore;
   let screenHover = null, hoverScreen = null;    // the screen (or laptop) under the pointer: {m, dir}; the one told to the page
   const over = (x0, y0, x1, y1) => !!pointer && pointer.x >= x0 && pointer.x < x1 && pointer.y >= y0 && pointer.y < y1;
   const hot = (x0, y0, x1, y1, action) => { hots.push({ x0, y0, x1, y1, action }); return over(x0, y0, x1, y1) && !moving && !held; };
@@ -1201,6 +1273,13 @@ function startRoom(cv, app) {
     // the booth: a bot let go over it goes in, and after five seconds out of the list for good; the
     // neuralyzer: a bot let go by it gets `/clear` (the drop is useAt's)
     for (const bo of L.booths) {
+      if (hardcore()) {                     // hardcore: a gun closet; a click takes a gun (the crosshair), again puts it back
+        const out = aiming || (w.clean && w.clean.armed), h = hot(bo.x - 9, bo.y - 32, bo.x + 9, bo.y + 2, { kind: "aim" });
+        items.push([bo.y - 3.5, () => outlined(ctx, foot("booth", [bo.x, bo.y]), h || danger(bo.key), (c) => drawGunCloset(c, bo, false, out), danger(bo.key) ? RED : GOLD, tintOf(bo.key))]);
+        items.push([bo.y - 2.5, () => drawGunCloset(ctx, bo, true, out)]);
+        if (h) tip = { text: aiming ? "put the gun back" : "gun closet: take a gun", x: bo.x, y: bo.y - 34 };
+        continue;
+      }
       const inside = [...w.folk.values()].some((f) => f.act.kind === "doom" && f.act.at === bo.key);
       const fl = w.boothFlash && w.boothFlash.key === bo.key ? (performance.now() - w.boothFlash.t0) / 1200 : -1, flagged = !!boothUnder && boothUnder.key === bo.key;
       items.push([bo.y - 3.5, () => outlined(ctx, foot("booth", [bo.x, bo.y]), danger(bo.key) || flagged, (c) => drawBooth(c, bo, false, inside || flagged, fl), RED, tintOf(bo.key))]);
@@ -1286,6 +1365,20 @@ function startRoom(cv, app) {
       for (let s = Math.ceil(tail); s <= head; s++) { const [x, y] = at(s); rect(ctx, x, y + 1, 1, 1, INK); rect(ctx, x, y, 1, 1, col); }
       if (head < total) { const [x, y] = at(head); rect(ctx, x - 1, y - 1, 3, 3, INK); rect(ctx, x - 1, y - 1, 2, 2, C.steel4); }
     }
+    // shots (hardcore): a flash where it hit (or at the barrel), a puff of smoke after; the crosshair while you
+    // hold the gun, red over a bot
+    if (aiming && !hardcore()) aiming = false;
+    w.shots = w.shots.filter((sh) => performance.now() - sh.t0 < 700);
+    for (const sh of w.shots) {
+      const t = (performance.now() - sh.t0) / 700;
+      if (t < 0.3) { const r = t < 0.15 ? 4 : 3; rect(ctx, sh.x - r, sh.y, 2 * r + 1, 1, "#fff6c0"); rect(ctx, sh.x, sh.y - r, 1, 2 * r + 1, "#fff6c0"); rect(ctx, sh.x - 1, sh.y - 1, 3, 3, "#ffe27a"); }
+      else { ctx.globalAlpha = 1 - t; rect(ctx, sh.x - 2, sh.y - 2 - Math.round(t * 6), 5, 3, "#c9ced8"); ctx.globalAlpha = 1; }
+    }
+    if (aiming && pointer) {
+      const x = Math.round(pointer.x), y = Math.round(pointer.y), col = hovered && !hovered.b.human && !hovered.b.staff ? RED : C.steel4;
+      for (const [dx, dy, wd, ht] of [[-6, 0, 4, 1], [3, 0, 4, 1], [0, -6, 1, 4], [0, 3, 1, 4]]) { rect(ctx, x + dx + 1, y + dy + 1, wd, ht, INK); rect(ctx, x + dx, y + dy, wd, ht, col); }
+      rect(ctx, x, y, 1, 1, col);
+    }
     // the neuralyzer's flash: the room goes white a moment, brightest at the flasher (only that glow with
     // reduced motion)
     if (w.flash) {
@@ -1324,7 +1417,9 @@ function startRoom(cv, app) {
     if (hovered && !moving) {
       const { b, x, y } = hovered, hf = w.folk.get(b.id), doomed = !!hf && hf.act.kind === "doom";
       const dg = app.digest(), wb = b.staff && dg && dg.on && dg.writing && !dg.writing.startsWith("u:") ? (all.find((x) => x.id === dg.writing) || {}).name : null;
-      if (b.staff) tip = { text: b.name + (dg && !dg.on ? " - off duty" : wb ? " - notes on " + wb : dg && dg.writing ? " - a project's notes" : " - notes"), x, y: y - 2 };
+      const cl = b.staff && w.clean && w.folk.get(w.clean.id);
+      if (cl) tip = { text: b.name + (w.clean.hard ? " - after " : " - seeing out ") + cl.b.name, x, y: y - 2 };
+      else if (b.staff) tip = { text: b.name + (dg && !dg.on ? " - off duty" : wb ? " - notes on " + wb : dg && dg.writing ? " - a project's notes" : " - notes"), x, y: y - 2 };
       else if (!doomed) tip = { text: b.name + (b.waiting ? " - needs input" : ""), x, y: y - 2 };
       hots.push({ x0: -1e9, y0: -1e9, x1: 1e9, y1: 1e9, action: b.staff ? { kind: "notes" } : b.human ? { kind: "you" } : doomed ? { kind: "undo", id: b.id } : { kind: "open", id: b.id } });
     }
@@ -1339,7 +1434,7 @@ function startRoom(cv, app) {
     const sk = screenHover && !held && !moving ? screenHover.m + ":" + screenHover.dir : null;
     if (sk !== hoverScreen) { hoverScreen = sk; app.hoverShell(sk); }
     const onHot = hots.some((h) => over(h.x0, h.y0, h.x1, h.y1));
-    cv.style.cursor = moving || held ? "grabbing" : onHot ? "pointer" : pieceAt(pointer) ? "grab" : "default";
+    cv.style.cursor = aiming ? "none" : moving || held ? "grabbing" : onHot ? "pointer" : pieceAt(pointer) ? "grab" : "default";
   }
 
   // the wall and the wooden floor, drawn once for the room's height: Pixel Agents' planks, three
@@ -1509,7 +1604,7 @@ function startRoom(cv, app) {
   function dropAt(L, f) {
     if (!L || !f.b) return null;
     if (L.fire && f.x >= L.fire.x0 && f.x < L.fire.x1 && f.y >= L.fire.y0 && f.y < L.fire.y1 + 6) return "fire";
-    return boothAt(L, f) ? "booth" : null;
+    return !hardcore() && boothAt(L, f) ? "booth" : null;      // the gun closet takes no one in
   }
   const boothAt = (L, f) => L.booths.find((bo) => inRect(spot(f), foot("booth", [bo.x, bo.y]))) || null;
   const ELL = (rx, ry, rows) => [...Array(rows)].map((_, j) => Math.round(rx * Math.sqrt(Math.max(0, 1 - ((j + 0.5 - rows / 2) / (rows / 2)) ** 2))));
@@ -1678,10 +1773,23 @@ function startRoom(cv, app) {
     w.graves.set(f.id, { b: f.b, x: spot[0], y: spot[1], t0: performance.now() });
     w.folk.delete(f.id);
   }
+  // a shot (hardcore: yours through the crosshair, or the office manager's shotgun): a flash where it hits,
+  // the bot down, a gravestone where it stood, five seconds to undo as in the fire, then `claude stop` and
+  // `claude rm` (the grave's own countdown)
+  function shoot(f) {
+    const w = world(), taken = [...w.graves.values()];
+    let x = Math.round(f.x);
+    const y = Math.max(WALL + 14, Math.round(f.y));
+    for (let k = 0; k < 8 && taken.some((g) => Math.abs(g.x - x) < 10 && Math.abs(g.y - y) < 12); k++) x += 11;
+    w.shots.push({ x: Math.round(f.x), y: Math.round(f.y) - 14, t0: performance.now(), hit: true });
+    w.graves.set(f.id, { b: f.b, x, y, t0: performance.now() });
+    w.folk.delete(f.id);
+  }
   function unbury(id) {
     const w = world(), g = w.graves.get(id);
     if (!g) return;
     w.graves.delete(id);
+    w.spared.add(id);                         // brought back: the office manager leaves it alone from now on
     w.riseAt.set(id, { x: g.x, y: g.y });
   }
   // the stone: nine dots wide, a cross on it; it crumbles with an ordered dither (fade 0..1)
@@ -1802,21 +1910,22 @@ function startRoom(cv, app) {
   // burrow's own settings: a steel switchboard on the wall, a toggle a setting, its lever up and its
   // lamp lit while the setting is on (the first: new bots in the Claude app too); the lid stands open
   // while the panel is
-  const SWITCHES = ["rc", "yolo", "digest"], SB_H = () => 6 + 4 * SWITCHES.length;   // 14 dots for two switches, 18 for three
+  // three levers a column, a column more when there are more (the board stays above the floor)
+  const SWITCHES = ["rc", "yolo", "digest", "cleanup", "hardcore"], SB_COLS = () => Math.ceil(SWITCHES.length / 3);
+  const SB_H = () => 6 + 4 * Math.min(3, SWITCHES.length), SB_W = () => 4 + 10 * SB_COLS();
   function drawSwitchboard(ctx, b, cfg, open) {
-    const { x0, y0 } = b;
-    if (open) { rect(ctx, x0, y0 - 3, 14, 4, SP.F); rect(ctx, x0 + 1, y0 - 2, 12, 2, SP.C); }   // the lid, flipped up
-    const h = SB_H();
-    rect(ctx, x0, y0, 14, h, SP.F);
-    rect(ctx, x0 + 1, y0 + 1, 12, h - 2, SP.D);
-    rect(ctx, x0 + 1, y0 + 1, 12, 1, SP.C); rect(ctx, x0 + 1, y0 + 1, 1, h - 2, SP.C);
-    rect(ctx, x0 + 3, y0 + 3, 8, h - 6, SP.E);
+    const { x0, y0 } = b, h = SB_H(), wd = SB_W();
+    if (open) { rect(ctx, x0, y0 - 3, wd, 4, SP.F); rect(ctx, x0 + 1, y0 - 2, wd - 2, 2, SP.C); }   // the lid, flipped up
+    rect(ctx, x0, y0, wd, h, SP.F);
+    rect(ctx, x0 + 1, y0 + 1, wd - 2, h - 2, SP.D);
+    rect(ctx, x0 + 1, y0 + 1, wd - 2, 1, SP.C); rect(ctx, x0 + 1, y0 + 1, 1, h - 2, SP.C);
+    rect(ctx, x0 + 3, y0 + 3, wd - 6, h - 6, SP.E);
     SWITCHES.forEach((k, i) => {
-      const on = !!cfg[k], y = y0 + 3 + i * 4;   // a lever every four dots: the board as tall as its switches need
-      rect(ctx, x0 + 4, y, 2, 4, SP.F); rect(ctx, x0 + 4, on ? y : y + 2, 2, 2, on ? SP.B : SP.D);   // the lever: up when on
-      rect(ctx, x0 + 8, y + 1, 2, 2, on ? SP.g : SP.F);                                              // its lamp
+      const on = !!cfg[k], x = x0 + 10 * Math.floor(i / 3), y = y0 + 3 + (i % 3) * 4;   // a lever every four dots
+      rect(ctx, x + 4, y, 2, 4, SP.F); rect(ctx, x + 4, on ? y : y + 2, 2, 2, on ? SP.B : SP.D);   // the lever: up when on
+      rect(ctx, x + 8, y + 1, 2, 2, on ? (k === "hardcore" ? SP.r : SP.g) : SP.F);                 // its lamp (red for hardcore)
     });
-    rect(ctx, x0 + 2, y0 + h - 2, 1, 1, SP.F); rect(ctx, x0 + 11, y0 + h - 2, 1, 1, SP.F);           // the screws
+    rect(ctx, x0 + 2, y0 + h - 2, 1, 1, SP.F); rect(ctx, x0 + wd - 3, y0 + h - 2, 1, 1, SP.F);       // the screws
   }
   // the office manager's desk: a small writing desk, a stack of notes on it as high as there are
   // sessions with notes (six sheets at most), a pen; her chair to the right, where she sits facing it
@@ -1932,6 +2041,26 @@ function startRoom(cv, app) {
   }
   // the neuralyzer (Men in Black's): a black pedestal, the silver flasher on it. A bot put to it is flashed:
   // `/clear` in its session, a new conversation; it stands there dazed a moment
+  // hardcore: the booth is a gun closet: an olive steel cabinet, two shotguns behind its glass doors (one
+  // gone while it is in someone's hands), a red lamp on top
+  function drawGunCloset(ctx, bo, front, out) {
+    const x0 = bo.x - 9, y = bo.y, top = y - 32, gy = top + 5, gh = y - 3 - gy;
+    if (!front) {
+      rect(ctx, x0 + 1, y, 16, 1, SHADOW);
+      rect(ctx, x0, top, 18, y - top, SP.F); rect(ctx, x0 + 1, top + 1, 16, 3, "#4f5844"); rect(ctx, x0 + 1, top + 1, 16, 1, "#6b7560");
+      rect(ctx, x0 + 6, top + 1, 6, 3, INK); rect(ctx, x0 + 7, top + 2, 4, 1, SP.r);                     // the lamp
+      rect(ctx, x0 + 1, gy, 16, gh, "#3c4434"); rect(ctx, x0 + 2, gy, 14, gh, "#1a1e16");                // the cabinet, inside
+      for (const [k, gx] of [[0, x0 + 5], [1, x0 + 12]]) if (!(out && k === 1)) {
+        rect(ctx, gx, gy + 2, 1, 13, "#a7aebb"); rect(ctx, gx + 1, gy + 2, 1, 13, "#6c7380");               // a barrel
+        rect(ctx, gx - 1, gy + 14, 3, 7, "#7a4a2a"); rect(ctx, gx - 1, gy + 14, 1, 7, "#9a6a3a");           // its stock
+      }
+      rect(ctx, x0, y - 3, 18, 3, SP.F); rect(ctx, x0 + 1, y - 3, 16, 1, "#6b7560"); rect(ctx, x0 + 1, y - 2, 16, 1, "#4f5844");   // the plinth
+      return;
+    }
+    ctx.globalAlpha = 0.18; rect(ctx, x0 + 2, gy, 14, gh, "#bfe3ff"); ctx.globalAlpha = 1;                // the glass
+    for (let k = 0; k < 4; k++) rect(ctx, x0 + 3 + k, gy + 3 + k, 1, 1, "rgba(255,255,255,0.45)");
+    rect(ctx, x0 + 8, gy, 2, gh, SP.F); rect(ctx, x0 + 7, gy + 10, 1, 3, SP.B); rect(ctx, x0 + 10, gy + 10, 1, 3, SP.B);   // where the doors meet, the handles
+  }
   function drawNeuralyzer(ctx, n, lit) {
     const x = n.x, y = n.y;
     rect(ctx, x - 5, y, 10, 1, SHADOW);
@@ -2056,6 +2185,16 @@ function startRoom(cv, app) {
     if (e.button !== 0) return;
     pointer = dots(e); draw();
     const h = [...hots].reverse().find((h) => over(h.x0, h.y0, h.x1, h.y1));
+    if (aiming) {                           // the gun in hand: a click shoots (a bot, or the floor); on the closet, it goes back
+      if (h && h.action && h.action.kind === "aim") aiming = false;
+      else if (h && h.action && h.action.kind === "unbury") unbury(h.action.id);      // a gravestone still undoes, gun or not
+      else {
+        const f = hovered && !hovered.b.human && !hovered.b.staff && world().folk.get(hovered.b.id);
+        if (f && !f.held) shoot(f); else world().shots.push({ x: Math.round(pointer.x), y: Math.round(pointer.y), t0: performance.now(), hit: false });
+      }
+      draw();
+      return;
+    }
     press = { x: pointer.x, y: pointer.y, action: h && h.action, bot: hovered && !hovered.seat && !hovered.b.staff && hovered.b.id, piece: pieceAt(pointer), shift: e.shiftKey };
     cv.setPointerCapture(e.pointerId);
   });
@@ -2128,6 +2267,7 @@ function startRoom(cv, app) {
       f.legs = "stand";
     } else if (press && press.action && press.action.kind === "undo") { const f = world().folk.get(press.action.id); if (f && f.act.kind === "doom") f.act = resume(f); }
     else if (press && press.action && press.action.kind === "unbury") unbury(press.action.id);
+    else if (press && press.action && press.action.kind === "aim") aiming = true;     // a gun from the gun closet
     else if (press && press.action && press.action.kind === "water") {     // you go and water the plant
       const you = world().folk.get("you");
       if (you && !you.held) { end(you); you.act = { kind: "plant", at: press.action.key, wait: 0, chosen: true }; }
@@ -2151,6 +2291,7 @@ function startRoom(cv, app) {
     draw();
   });
   cv.addEventListener("pointerleave", () => { if (!press) { pointer = null; draw(); } });
+  addEventListener("keydown", (e) => { if (e.key === "Escape" && aiming) { aiming = false; draw(); } });   // Esc puts the gun back
 
   // a file dropped on a bot goes into its session
   cv.addEventListener("dragover", (e) => { e.preventDefault(); pointer = dots(e); draw(); });

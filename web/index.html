@@ -119,6 +119,17 @@ const room = startRoom($("#room"), {
   view: () => viewKind,
   settings: () => (state && state.settings) || {},
   digest: () => digest,
+  // the office manager clearing out (switchboard: cleanup): the sessions she would let go, oldest first:
+  // completed, her notes on them have nothing open (no decision left to you, nothing next), ended over an hour ago
+  cleanup: () => {
+    const cfg = (state && state.settings) || {}, ss = (digest && digest.sessions) || {};
+    const ids = cfg.cleanup && state ? state.bots.filter((b) => {
+      const e = ss[b.id];
+      if (!b.over || !e || !b.endedAt || Date.now() - b.endedAt < 3600e3) return false;
+      return !(e.decisions || []).some((q) => !(e.answered || {})[q.question]) && !(e.next || "").trim();
+    }).sort((a, b) => a.endedAt - b.endedAt).map((b) => b.id) : [];
+    return { on: !!cfg.cleanup, hardcore: !!cfg.hardcore, ids };
+  },
   away: () => (blurAt ? (performance.now() - blurAt) / 1000 : 0),
   hl: () => (hoverTile && hoverTile.kind === "bot" ? hoverTile.id : hoverTile && hoverTile.kind === "notes" ? "manager" : null),   // the notes are the office manager's
   hover: (id) => { for (const t of botTiles()) t.el.classList.toggle("hl", t.id === id); for (const t of notesTiles()) t.el.classList.toggle("hl", id === "manager"); },
@@ -499,6 +510,10 @@ const OPTIONS = [
     what: "Started with <code>--dangerously-skip-permissions</code>: the bot never waits for an answer, it runs every command and edit. Bots already running keep their mode." },
   { key: "digest", name: "Claude writes the notes",
     what: "The office manager's notes on each session (what it is doing, the decisions left to you, what it built) are written by <code>claude -p</code> on this computer when a session finishes a turn, asks you something, or the notes are opened. It costs tokens; off, she dozes and keeps the notes she has." },
+  { key: "cleanup", name: "The office manager clears out finished sessions",
+    what: "A session that is completed, has nothing open in her notes (no decision left to you, nothing next) and ended over an hour ago: she walks it to the booth, one at a time. The booth's five seconds still let you take it out; one you rescue she leaves alone. Gone means <code>claude rm</code>: off Claude Code's list, its conversation still there for <code>claude --resume</code>." },
+  { key: "hardcore", name: "Hardcore",
+    what: "The booth is a gun closet. The office manager clears sessions out with a shotgun, and a click on the closet gives you a crosshair to do it yourself (Esc puts it away). A shot bot leaves a gravestone: click it within five seconds to undo." },
 ];
 function fillSettings() {
   const cfg = (state && state.settings) || {}, el = $("#vSettings");

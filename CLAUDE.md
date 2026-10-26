@@ -1071,6 +1071,33 @@ footprints apart, so the chair rested 1 dot inside that margin. Picked up and sl
 footprint is (an edge touching does not count); and a piece or desk held over the fire is drawn over
 everything (depth 1e9), so its red wash shows instead of being hidden behind the flames.
 
+## The office manager clears out; hardcore (2026-10-26)
+
+He: "I have to accept that the old bots should simply get cleaned up ... I would like to have an option to
+have the office manager make a decision on it, she checks all the bots, and goes around with a shotgun killing
+off all the ones we don't want around anymore. That's the hardcore setting (add this in settings), the normal
+version is the suicide booth, she gently walks the bots towards it. So, in hardcore mode the booth is a gun
+closet. If I click it, I get a cross hair and i can shoot bots."
+- Two switches (server `OPTIONS`, the page's `OPTIONS`, room.js `SWITCHES`), both off by default: `cleanup`
+  and `hardcore`. Five levers do not fit one column above the floor: three a column (`SB_COLS`, `SB_W`).
+- **Her decision** (`app.cleanup()` in index.html): a session is let go when it is completed (`over`), her notes
+  on it have no open decision (answered ones do not count) and nothing `next`, and it ended over an hour ago;
+  oldest first. Rules over her notes, no extra Claude call. No notes on it, no decision.
+- **Her round** (`cleanStep`, before her notes in `thinkManager`; `w.clean`, `w.cleanRest` the pause between):
+  normal: `fetch` (to the bot) → `walk` (it follows a step behind her: `escort` act) → `booth` (it stands in the
+  booth, `doom`, its five seconds; she waits beside it). Hardcore: `arm` (a shotgun from the gun closet:
+  `carry: "gun"`, the `gun` arms) → `hunt` → `aim` (0.9 s levelled) → the shot (`shoot`: a flash at the barrel,
+  the bot down, a gravestone where it stood, the grave's five seconds then `claude stop` + `claude rm`) → `after`
+  → the next, then `return` (the gun back). Taking a bot from her, the booth's undo, or a click on its stone puts
+  it in `w.spared`: she leaves it alone for the rest of the page's life. Her tip says whom she is seeing out.
+- **Hardcore** (`hardcore()`): the booth is drawn as a gun closet (`drawGunCloset`: olive steel, a red lamp, two
+  shotguns behind glass, one gone while in someone's hands) and takes no bot in. A click on it takes a gun
+  (`aiming`): the cursor is a pixel crosshair (red over a bot); a click shoots (a bot: `shoot`; the floor: a
+  puff), a click on a gravestone still undoes, a click on the closet or Esc puts the gun back.
+- Tested in the demo with notes faked for its completed bots (its made-up notes always have a `next`):
+  her normal round (fetched, walked, five seconds, gone), her hardcore round (armed, hunted across the room,
+  shot, the next), and the crosshair (shot, the stone clicked: back and spared).
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a
