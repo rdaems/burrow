@@ -70,7 +70,9 @@ beside the robot whose session is open, or under the screen when your own termin
   sheet and writes; otherwise she sits at her desk behind a stack of them. A click on her or her desk opens the
   notes beside the room, in a readable tile: on the left what needs you (every open decision, the ones a
   session waits on first) and every session in a line; on the right, for what you click, the goal, where it
-  stands, the decisions with their options, what it built and committed, what is next. Claude writes
+  stands, the decisions with their options, what it built and committed, what is next. A decision can be explained
+  (what is at stake, each option's upside and cost, a recommendation) and answered right there: the answer is
+  typed into the session for you. Claude writes
   them (`claude -p`, on this computer) when a session finishes a turn or asks you something, and when the
   notes open; a switch on the switchboard turns that off (she dozes)
 - **the whiteboard** opens large and you draw on it; the host of a meeting draws on it too

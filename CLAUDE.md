@@ -939,6 +939,23 @@ screen's resolution (system sans 15 px, headings, lists), only the band in the r
   picked lit up and scrolled to. Both panes scroll on their own and keep their place when notes come in; a narrow
   tile stacks them (`@container`). The notes got `headline` (twelve words: where it stands, what it waits on)
   and per decision `blocking`, most important first, five at most; notes without a headline are written again.
+- Deciding in the notes (asked: "when there is something for me to decide ... I want to be able to decide right
+  there. Give me an option to get an explainer about the decision to be made and to make the decision"). Under
+  each open decision: **Explain this decision** (`/api/explain`, `Hub.explain`: `claude -p` with the decision, the
+  notes and the transcript's story; `EXPLAIN_SCHEMA` what, why, options with means/pro/con, recommendation; kept in
+  the notes' `explained` by question; the manager walks to the bot meanwhile, `digest.explaining`); the options as
+  buttons that fill the answer; a text box; **Send to NAME** (`/api/answer`, `Hub.answer`): the answer is typed into
+  the session as "About your question “…”: …". Claude Code has no command to message a background session, so
+  `deliver()` attaches in a pty of its own (`claude attach`, 120x40), waits for the screen to settle (an attach
+  restarts a process that was off), pastes the text (bracketed paste: new lines stay in it), Enter, reads a moment,
+  lets go (SIGHUP; the session goes on). Tested on a throwaway session: asked APPLE or PEAR, got the answer as a
+  plain user message, answered PEAR. A session with a prompt open (`status: waiting`, the bot's `dialog`) is not
+  typed to: the notes send you to its session. Answered decisions leave Needs you and are listed as answered
+  (`answered` in the notes; both `explained` and `answered` survive a rewrite). Drafts, a picked option, the focus
+  and the caret survive the notes being redrawn.
+  Merged onto "Tempo, not state" (Rembert's round): `waiting` there means a dialog is open, so `dialog` is that; in
+  the notes a session needs you when a dialog is open or its tempo is `blocked` (`needsYou` in index.html), and the
+  prompt for its notes says which.
 
 ## Tempo, not state; the completed ones roam (2026-10-26)
 

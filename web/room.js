@@ -551,7 +551,7 @@ function startRoom(cv, app) {
   const MANAGER = { seed: "manager-16", color: "#f06b72" };   // a robot: one antenna, happy eyes; a pink bow and skirt (body's femme)
   const managerSeat = (L) => L.manager ? { x: L.manager.x + 24, y: L.manager.y } : { x: W / 2, y: H / 2 };
   function thinkManager(w, f, L, dt) {
-    const dg = app.digest(), wr = dg && dg.on ? dg.writing : null, v = 30;
+    const dg = app.digest(), wr = dg && dg.on ? dg.writing || dg.explaining : null, v = 30;   // writing notes, or explaining a decision
     let to = null, look = null;
     if (wr && wr.startsWith("u:")) {
       const d = L.desks.find((x) => x.unit === wr.slice(2));

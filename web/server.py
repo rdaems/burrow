@@ -81,6 +81,21 @@ SESSION_SCHEMA = {"type": "object", "additionalProperties": False, "required": [
         "question": {"type": "string"}, "context": {"type": "string"}, "options": {"type": "array", "items": {"type": "string"}},
         "blocking": {"type": "boolean"}}}}}}
 
+EXPLAIN = """A Claude Code session left a decision to a person who has not followed the session. On stdin: the \
+decision, the notes on the session, and the newest part of its transcript. Explain it so that the person can decide \
+without reading the transcript:
+- what: what exactly is being decided, in two or three plain sentences; explain the terms a newcomer would not know.
+- why: why it matters, and what happens if nobody decides.
+- options: each option the session laid out, and an obvious one it left out if there is one: what it means in \
+practice (what the session will then do), its upside, and its cost or risk.
+- recommendation: the option you would pick and why, in one or two sentences; say so if the session recommended one.
+Plain and specific, no filler."""
+
+EXPLAIN_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["what", "why", "options", "recommendation"], "properties": {
+    "what": {"type": "string"}, "why": {"type": "string"}, "recommendation": {"type": "string"},
+    "options": {"type": "array", "items": {"type": "object", "additionalProperties": False, "required": ["option", "means", "pro", "con"], "properties": {
+        "option": {"type": "string"}, "means": {"type": "string"}, "pro": {"type": "string"}, "con": {"type": "string"}}}}}}
+
 DESK_NOTES = """Below are your notes on each Claude Code session working in one project. Write one short paragraph, three \
 to five sentences, on where the project stands as a whole: what it is heading for, what landed recently, what is \
 blocked or waits on the person. Plain and specific, no filler."""
@@ -542,6 +557,7 @@ def parse_agents(out, jobs={}):
             "id": x["id"], "name": x.get("name") or x["id"], "cwd": x.get("cwd") or "",
             "busy": alive and not waiting and tempo == "active", "waiting": waiting, "alive": alive,
             "state": state or "", "tempo": tempo,
+            "dialog": waiting,               # a prompt open in its session: nothing can be typed to it (the notes send you there)
             "over": state if over else "", "endedAt": when(j.get("updatedAt")) if over else 0, "detail": j.get("detail") or "",
             "updated": when(j.get("updatedAt")),       # its record's last write: the notes on it are older, or not
             "started": x.get("startedAt") or 0, "pid": x.get("pid") or 0, "session": x.get("sessionId") or "",
@@ -640,6 +656,7 @@ class Hub:
         self.dq = []                # the sessions waiting to be written up, in turn
         self.dcv = threading.Condition()
         self.writing = None         # what is being written up now: a session's id, or "u:<unit>" for a desk
+        self.explaining = None      # the session a decision of which is being explained
         self.seen = {}              # id → (busy, waiting, over) at the last poll: what changed
         threading.Thread(target=self.digest_worker, daemon=True).start()
 
@@ -769,7 +786,7 @@ class Hub:
     # ---- the office manager: notes on the sessions, written by Claude one at a time
     def digest_view(self):
         with self.lock:
-            return {"sessions": dict(self.digest["sessions"]), "desks": dict(self.digest["desks"]), "writing": self.writing, "on": options(self.room)["digest"]}
+            return {"sessions": dict(self.digest["sessions"]), "desks": dict(self.digest["desks"]), "writing": self.writing, "explaining": self.explaining, "on": options(self.room)["digest"]}
 
     def push_digest(self):
         self.push("digest", self.digest_view())
@@ -846,21 +863,86 @@ class Hub:
         m = re.search(r"\{.*\}", r.get("result") or "", re.S)
         return json.loads(m.group(0)) if m else {}
 
+    def slice(self, m, b, size=-1):
+        """(its record, its transcript's size, the transcript's tail unless it is still `size` long)"""
+        p = subprocess.run(argv(m, SLICE % {"id": sq(b["id"]), "sid": sq(b["session"] or "-"), "size": size, "tail": TAIL}, False),
+                           capture_output=True, timeout=60)
+        rec, _, rest = p.stdout.decode("utf-8", "replace").partition("@@burrow@@\n")
+        n, _, raw = rest.partition("\n")
+        try:
+            job = json.loads(rec.strip() or "{}")
+        except ValueError:
+            job = {}
+        return job, int(n.strip() or 0), raw
+
+    def explain(self, bid, question):
+        """a decision explained (what, why, the options, a recommendation), kept with the notes"""
+        b = next((x for x in self.bots() if x["id"] == bid), None)
+        e = self.digest["sessions"].get(bid)
+        if not b or not e:
+            raise RuntimeError("no notes on that session")
+        q = next((q for q in e.get("decisions") or [] if q.get("question") == question), None)
+        if not q:
+            raise RuntimeError("that decision is not open any more")
+        have = (e.get("explained") or {}).get(question)
+        if have:
+            return have
+        m = self.machine(b["m"])
+        self.explaining = bid
+        self.push_digest()
+        try:
+            if m.get("ssh") == "@demo":
+                time.sleep(1.5)
+                x = {"what": "Whether the finished sessions sit on a bench in the room or only show in a list.", "why": "The bench fills up; nothing breaks if it waits.",
+                     "options": [{"option": o, "means": "The room shows it that way.", "pro": "Simple.", "con": "Less to see."} for o in q.get("options") or ["Keep it"]],
+                     "recommendation": "Keep the bench: it shows how the sessions ended at a glance."}
+            else:
+                _, _, raw = self.slice(m, b)
+                notes = json.dumps({k: e.get(k) for k in NOTE_KEYS}, ensure_ascii=False)
+                x = self.summarize(EXPLAIN, f"THE DECISION:\n{json.dumps(q, ensure_ascii=False)}\n\nTHE NOTES ON SESSION {b['name']} ({b['cwd']}):\n{notes}\n\n"
+                                   f"TRANSCRIPT (the most recent part):\n{condense(raw)}", EXPLAIN_SCHEMA)
+        finally:
+            self.explaining = None
+        x["at"] = int(time.time() * 1000)
+        with self.lock:
+            e.setdefault("explained", {})[question] = x
+            self.save_digest()
+        self.push_digest()
+        return x
+
+    def answer(self, bid, question, text):
+        """your decision typed into the session (deliver), and kept with the notes as answered"""
+        b = next((x for x in self.bots() if x["id"] == bid), None)
+        if not b:
+            raise RuntimeError("no such session")
+        if b.get("dialog"):
+            raise RuntimeError("it has a prompt open in its session: answer it there")
+        m = self.machine(b["m"])
+        msg = f"About your question “{question}”: {text}" if question else text
+        if m.get("ssh") == "@demo":
+            for x in self.demo_bots.get(b["m"], []):
+                if x["id"] == bid:
+                    x.update(busy=True, waiting=False, state="working", over="", alive=True)
+        else:
+            deliver(m, bid, msg)
+        with self.lock:
+            e = self.digest["sessions"].get(bid)
+            if e is not None:
+                e.setdefault("answered", {})[question] = {"text": text, "at": int(time.time() * 1000)}
+                self.save_digest()
+        poke = self.pokes.get(b["m"])
+        if poke:
+            poke.set()
+        self.push_digest()
+        return {}
+
     def digest_one(self, b):
         """a session written up: True if its notes changed"""
         old = self.digest["sessions"].get(b["id"]) or {}
         m = self.machine(b["m"])
         if m.get("ssh") == "@demo":
             return self.demo_notes(b, old)
-        p = subprocess.run(argv(m, SLICE % {"id": sq(b["id"]), "sid": sq(b["session"] or "-"), "size": old.get("size", -1), "tail": TAIL}, False),
-                           capture_output=True, timeout=60)
-        rec, _, rest = p.stdout.decode("utf-8", "replace").partition("@@burrow@@\n")
-        size, _, raw = rest.partition("\n")
-        try:
-            job = json.loads(rec.strip() or "{}")
-        except ValueError:
-            job = {}
-        size = int(size.strip() or 0)
+        job, size, raw = self.slice(m, b, old.get("size", -1))
         if not size or (old and "headline" in old and size == old.get("size")):      # no transcript, or nothing new in it (notes from before the headline are written again)
             if old:
                 old["src"] = b.get("updated") or old.get("src", 0)
@@ -869,7 +951,8 @@ class Hub:
         if not story:
             return False
         out = job.get("output") if isinstance(job.get("output"), dict) else {}
-        state = "over (" + b["over"] + ")" if b["over"] else "waiting for the person" if b["waiting"] else "working" if b["busy"] else "idle, done with its turn"
+        state = ("over (" + b["over"] + ")" if b["over"] else "showing the person a prompt" if b["waiting"] else "working" if b["busy"]
+                 else "waiting for the person: its last message asks something" if b.get("tempo") == "blocked" else "idle, done with its turn")
         head = (f"SESSION {b['name']} in {b['cwd']} on {m['name']}, now {state}.\n"
                 f"Its own one-line summary: {job.get('detail') or b.get('detail') or '-'}\n"
                 f"Its last result: {str(out.get('result') or '-')[:2000]}\n")
@@ -879,7 +962,8 @@ class Hub:
         r = self.summarize(SESSION_NOTES, f"{head}\nYOUR NOTES LAST TIME:\n{prev}\n\nTRANSCRIPT (the most recent part):\n{story}", SESSION_SCHEMA)
         notes = {k: r.get(k) or ([] if k in ("decisions", "built") else "") for k in NOTE_KEYS}
         with self.lock:
-            self.digest["sessions"][b["id"]] = {**notes, "name": b["name"], "unit": b["unit"], "m": b["m"], "state": state,
+            self.digest["sessions"][b["id"]] = {**notes, "explained": old.get("explained") or {}, "answered": old.get("answered") or {},
+                                                "name": b["name"], "unit": b["unit"], "m": b["m"], "state": state,
                                                 "at": int(time.time() * 1000), "src": b.get("updated") or 0, "size": size,
                                                 "read": len(story), "whole": len(raw) < TAIL and len(story) < STORY}
             self.save_digest()
@@ -1359,6 +1443,62 @@ def terminal(sock, m, bot):
         threading.Thread(target=lambda: os.waitpid(pid, 0), daemon=True).start()
 
 
+def deliver(m, bot, text, timeout=60):
+    """an answer typed into a background session without a terminal: `claude attach` in a pty of its own,
+    the text pasted at its prompt once the screen has settled (a session whose process was off is
+    restarted by the attach, which takes longer), Enter, a moment for it to be taken, then the attach is
+    let go: the session goes on with it. Claude Code has no command to send a session a message"""
+    pid, fd = pty.fork()
+    if pid == 0:
+        os.environ.update(TERM="xterm-256color", COLORTERM="truecolor")
+        a = argv(m, f"exec claude attach {sq(bot)}", True)
+        try:
+            os.execvp(a[0], a)
+        finally:
+            os._exit(127)
+    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
+    seen, t0 = b"", time.time()
+
+    def read(quiet, until):
+        """what comes, until it has been quiet `quiet` seconds after something came, or `until` passed"""
+        nonlocal seen
+        got, last = False, time.time()
+        while time.time() < until:
+            r, _, _ = select.select([fd], [], [], 0.2)
+            if r:
+                try:
+                    b = os.read(fd, 65536)
+                except OSError:
+                    return False
+                if not b:
+                    return False
+                seen, got, last = seen + b, True, time.time()
+            elif got and time.time() - last > quiet:
+                return True
+        return got
+
+    try:
+        if not read(1.5, t0 + timeout):
+            raise RuntimeError("the session did not come up")
+        screen = re.sub(rb"\x1b\[[0-9;?]*[A-Za-z]", b"", seen).decode("utf-8", "replace")
+        if re.search(r"No job matching|describe a task for a new session", screen):
+            raise RuntimeError("could not attach to the session")
+        os.write(fd, b"\x1b[200~" + text.encode() + b"\x1b[201~")     # pasted: new lines stay in the message
+        time.sleep(0.5)
+        os.write(fd, b"\r")
+        read(1.0, time.time() + 4)
+    finally:
+        try:
+            os.kill(pid, signal.SIGHUP)
+        except OSError:
+            pass
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        threading.Thread(target=lambda: os.waitpid(pid, 0), daemon=True).start()
+
+
 # ---- your terminal at a project's screen: one login shell per directory (the project's, or a
 # worktree's laptop), ad hoc, for a quick look or a command (the bots do the work). It lives as long
 # as this server does: a tile only attaches to it, closing the tile leaves it running, `exit` ends it.
@@ -1709,6 +1849,13 @@ class Handler(BaseHTTPRequestHandler):
             hub.push("state", hub.state())
             hub.push_digest()
             return {}
+        if path == "/api/explain":           # a decision left to you, explained by Claude (kept with the notes)
+            return hub.explain(b.get("id") or "", b.get("question") or "")
+        if path == "/api/answer":            # your decision, typed into the session
+            text = (b.get("text") or "").strip()
+            if not text:
+                raise RuntimeError("an answer, first")
+            return hub.answer(b.get("id") or "", b.get("question") or "", text[:4000])
         if path == "/api/digest":            # the notes opened: the sessions that moved since are written up again
             return {"queued": hub.digest_refresh() if options(hub.room)["digest"] else 0}
         if path == "/api/forget":            # a desk taken away (carried to the door)
