@@ -969,6 +969,24 @@ will-check-back, result-marker, …); the job record (~/.claude/jobs/<id>/state.
 Superseded: "The bench: the sessions that are over", "The bench is optional", "Busy is the state, not the
 process", "Idle bots wander"'s process-off nap.
 
+## Links in the terminal; the fire carried (2026-10-26)
+
+He: "check the way we interact with the text, to make it consistent with a 'normal' terminal ... a link to an
+artifact with a copy icon in Claude's output is not clickable. I think any hyperlink should be clickable".
+xterm.js with no `linkHandler` answers a click on an OSC 8 link (how Claude Code prints its links) with a
+`confirm()` dialog, and plain URLs in the text are no links at all without the web-links addon. Now
+`linkHandler: {activate: openLink}` and `@xterm/addon-web-links@0.11.0`, both opening http(s) in a new tab on a
+click (Cmd+click too). Tested in the demo's shell tile with `window.open`/`confirm` patched: a plain URL and
+an OSC 8 link open on a click, with mouse tracking off and on (written into the terminal as Claude Code turns
+it on), no confirm. Checked and already as a terminal: paste (Cmd+V), the wheel (to Claude Code), Option+drag
+then Cmd+C, Claude Code's own drag-copy (OSC 52 handled since the morning).
+
+He: "Dragging the fire around is weird". Seen mid-drag in the demo: the bots warming their hands at it stayed
+put while it went (standing in the pit, or left in the open where it had been), and one stood in the flames
+where it was put down. Now picking the fire up ends the `warm` acts (and no new one starts while it is
+carried), and putting it down on a figure sends that one out below the pit (`loiter`). The pit still snaps to
+clear floor while carried, as everything does since the morning.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

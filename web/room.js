@@ -866,7 +866,7 @@ function startRoom(cv, app) {
     const game = ["chess", "pong"].find((k) => others.filter((g) => g.act.kind === k && g.act.there && (g.act.with || g.act.you)).length >= 2 && !others.some((g) => g.act.kind === "watch" && g.act.game === k));
     if (r < 0.6 && game) return { kind: "watch", game, left: rnd(10, 25) };
     if (r < 0.65 && mate) return { kind: "visit", to: mate.id, left: rnd(6, 12), wave: 0.8 };
-    if (r < 0.7 && L.fire) { const side = others.some((g) => g.act.kind === "warm" && !g.act.side) ? 1 : 0; if (!others.some((g) => g.act.kind === "warm" && g.act.side === side)) return { kind: "warm", side, left: rnd(8, 16) }; }
+    if (r < 0.7 && L.fire && !(moving && KIND(moving.key) === "fire")) { const side = others.some((g) => g.act.kind === "warm" && !g.act.side) ? 1 : 0; if (!others.some((g) => g.act.kind === "warm" && g.act.side === side)) return { kind: "warm", side, left: rnd(8, 16) }; }
     if (r < 0.74) return { kind: "stretch", left: rnd(4, 8) };
     if (r < 0.8 && !f.human) return { kind: "sleep", there: false, left: rnd(25, 50) };
     // one of a kind there can be many of, not in use: a plant to water, a window, an armchair
@@ -1940,7 +1940,11 @@ function startRoom(cv, app) {
         if (f.act.kind === "doom") f.act = resume(f);
         held = f; f.held = true; f.sat = false; f.lying = false;
       }
-      else if (press.piece && !(press.bot && !f)) moving = { key: press.piece.key, from: press.piece.at, u: press.piece.u, at: press.piece.at };
+      else if (press.piece && !(press.bot && !f)) {
+        moving = { key: press.piece.key, from: press.piece.at, u: press.piece.u, at: press.piece.at };
+        // the fire picked up: whoever warmed their hands at it steps away (they would stand in the pit as it went)
+        if (KIND(moving.key) === "fire") for (const g of world().folk.values()) if (g.act.kind === "warm") end(g);
+      }
     }
     if (moving) {
       const at = [moving.from[0] + pointer.x - press.x, moving.from[1] + pointer.y - press.y], r = foot(moving.key, at, moving.u);
@@ -1969,6 +1973,12 @@ function startRoom(cv, app) {
       } else {
         const at = settle(lastL, moving.key, clampAt(moving.key, moving.at, moving.u), moving.u);       // put down on the grid of dots, on clear floor
         dropped.set(moving.key, { at, t: performance.now() });
+        if (KIND(moving.key) === "fire") {        // put down where someone stands: they walk out of the flames
+          const r = foot(moving.key, at, moving.u);
+          for (const g of world().folk.values()) if (!g.held && g.x >= r[0] && g.x < r[2] && g.y >= r[1] + 10 && g.y < r[3] + 4) {
+            end(g); g.act = { kind: "loiter", x: g.x, y: Math.min(lastL.floor.y1, r[3] + 8), left: rnd(3, 6), v: 30 };
+          }
+        }
         s.layout = { ...(s.layout || {}), [moving.key]: at };
         app.act({ kind: "layout", layout: s.layout });
       }

@@ -13,6 +13,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-clipboard@0.1.0/lib/addon-clipboard.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/lib/addon-web-links.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css">
 <link rel="stylesheet" href="/burrow.css">
 </head>
@@ -671,10 +672,15 @@ function openShell(mid, dir, retain) {
 // the terminal in a tile (xterm.js), wired to its websocket
 function openTerminal(t, at) {
   t.ws = null; t.typed = []; t.tail = ""; t.active = 0;
+  // links open in a new tab on a click (Cmd+click too, as in other terminals): the ones a program marks
+  // (OSC 8, as Claude Code prints them; xterm.js would ask with a confirm() first) and plain URLs in the text
+  const openLink = (_, uri) => { if (/^https?:\/\//i.test(uri)) window.open(uri, "_blank", "noopener"); };
   const term = t.term = new Terminal({ fontFamily: '"Burrow Mono", "JetBrains Mono", Menlo, monospace', fontSize: 13, lineHeight: 1.15,
-    cursorBlink: true, allowProposedApi: true, theme: DARK, scrollback: 5000, macOptionIsMeta: true, macOptionClickForcesSelection: true });
+    cursorBlink: true, allowProposedApi: true, theme: DARK, scrollback: 5000, macOptionIsMeta: true, macOptionClickForcesSelection: true,
+    linkHandler: { activate: openLink } });
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
+  term.loadAddon(new WebLinksAddon.WebLinksAddon(openLink));
   // copying. An attached session captures the mouse: a drag selects inside Claude Code, which copies on
   // release with pbcopy here, or with an OSC 52 sequence from another machine (over ssh); that one is
   // put on the clipboard here. Writes only: what is on your clipboard is never told to the machine.
