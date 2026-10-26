@@ -522,7 +522,7 @@ const OPTIONS = [
   { key: "cleanup", name: "The office manager clears out finished sessions",
     what: "A session that is completed, has nothing open in her notes (no decision left to you, nothing next) and ended over an hour ago: she walks it to the booth, one at a time. The booth's five seconds still let you take it out; one you rescue she leaves alone. Gone means <code>claude rm</code>: off Claude Code's list, its conversation still there for <code>claude --resume</code>." },
   { key: "hardcore", name: "Hardcore",
-    what: "The booth is a gun closet. The office manager clears sessions out with a shotgun, and a click on the closet gives you a crosshair to do it yourself (Esc puts it away). A shot bot leaves a gravestone: click it within five seconds to undo." },
+    what: "The booth is a gun closet. The office manager clears sessions out with a shotgun, and a click on the closet gives you a crosshair to do it yourself (Esc puts it away). A shot bot goes to pieces: click them to put it back together, until the idle bots have cleared them away (then it is deleted)." },
 ];
 function fillSettings() {                  // rebuilt only when a setting changed (an update mid-click swallowed the click)
   const cfg = (state && state.settings) || {}, el = $("#vSettings"), key = JSON.stringify(cfg);

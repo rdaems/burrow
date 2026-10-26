@@ -1115,6 +1115,25 @@ Lesson for testing drags here: drag slowly (seconds, many steps) against a room 
 room.json through `BURROW_DEMO_ROOM`; look.mjs's `{cdp: "Input.setInterceptDrags", params: {enabled: true}}`
 reports a native browser drag if one starts.
 
+## Remains instead of gravestones (2026-10-26)
+
+He: "Add more gore when killing a bot, splash it's body in parts, with cog wheels etc. Idle bots come clean it up.
+The remains act as the gravestone mechanic, so no gravestone". For every kill (the crosshair, her shotgun, the
+fire) the gravestone code is gone (`GRAVE`, `drawGrave`, `w.graves`, `unbury`):
+- `scatter(f, at, charred)`: the bot's own body picture cut into head, chest, arms and legs (`drawImage` of a
+  part of it), plus cogs (`COG`, `COG7`), bolts and a spring; each with a velocity out and up. `stepRemains` (in
+  `think`): gravity, two bounces at most (in twelfth-of-a-second steps a small hop never dies out by itself: the
+  first version never let a piece land), then sliding to a stop. An oil puddle (`puddle`, shrinking as pieces go)
+  and ~90 drops and streaks, under everything (depth -1e9). A burnt bot: its picture into the flames as before,
+  six charred cogs and bolts beside the pit, no oil. Reduced motion: the pieces lie where they would land.
+- The undo: a click on any of it (`unshoot`, also with the gun in hand) flies the pieces back in (0.45 s) and the
+  bot stands up there, spared from the office manager. Her hunt skips what is in pieces (`w.remains`).
+- The clean-up: once the pieces had 1.5 s to land, idle bots on an ordinary break (`SWEEPERS`) are sent over, two
+  to a heap (`sweep` act): to the nearest landed piece, bent down 0.8 s, the piece gone with the oil round it.
+  The last piece gone: `gone()` = `claude stop` + `claude rm`. Nobody to clear it: it rusts away after 30 s
+  (`RUST`) and goes then. Tested in the demo: shot, landed within 2 s, two sweepers, cleared and deleted; the undo;
+  the fire.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

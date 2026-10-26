@@ -419,7 +419,7 @@ function startRoom(cv, app) {
   let everyone = null;
   function world() {
     if (!everyone) everyone = { folk: new Map(), meeting: null, lastMeeting: -60, board: [], pong: { t: 0, from: 0 }, doorAt: {}, stopped: new Map(), flare: 0, sparks: 0, boothFlash: null, flash: null, shots: [], spared: new Set(), clean: null, cleanRest: 0, print: 0, burning: [], strokes: 0, stats: new Map(), meetings: 0,
-      graves: new Map(), riseAt: new Map(), sway: new Map(), ball: null, mugs: new Map(),
+      remains: new Map(), riseAt: new Map(), sway: new Map(), ball: null, mugs: new Map(),
       beams: [], T: 0, born: performance.now() };
     return everyone;
   }
@@ -519,6 +519,16 @@ function startRoom(cv, app) {
         if (!work && f.act.kind === "desk") f.act = { kind: "stand", left: 0.5 + (fnv(b.id) % 20) / 10 };
       }
     }
+    // remains on the floor: idle bots come over and clear them away, two to a heap, once the pieces have
+    // had a moment to land (whoever is on an ordinary break; not one at work, in a game, asleep or held)
+    stepRemains(w, dt, L);
+    for (const [id, r] of w.remains) {
+      if (r.back || !r.parts.length || performance.now() - r.t0 < 1500) continue;
+      if ([...folk.values()].filter((g) => g.act.kind === "sweep" && g.act.at === id).length >= 2) continue;
+      const crew = [...folk.values()].filter((g) => g.b && !g.b.human && !g.b.staff && !g.work && !g.held && !g.lying && !g.open && SWEEPERS.has(g.act.kind))
+        .sort((a, b) => Math.hypot(a.x - r.x, a.y - r.y) - Math.hypot(b.x - r.x, b.y - r.y))[0];
+      if (crew) { end(crew); crew.act = { kind: "sweep", at: id, wait: 0 }; }
+    }
     if (w.meeting && (w.meeting.left -= dt) <= 0) {
       w.meeting = null;
       for (const f of folk.values()) if (f.act.kind === "meeting" || f.act.kind === "present") end(f);
@@ -554,7 +564,7 @@ function startRoom(cv, app) {
   // clearing out (switchboard: cleanup): one finished session at a time (app.cleanup(): completed, nothing
   // open in her notes, an hour gone; never one you rescued). She fetches it and walks it to the booth, a step
   // behind her, where its five seconds run as for any bot put in. Hardcore: a shotgun from the gun closet,
-  // up to it, levelled, the shot (a gravestone, five seconds to undo), the next one, and the gun back. Taking
+  // up to it, levelled, the shot (its remains, the undo until they are cleared), the next one, the gun back. Taking
   // one from her, or its undo, spares it for good. A pause between them, so it can be watched
   function cleanStep(w, f, L, dt) {
     const cu = app.cleanup(), bo = L.booths[0];
@@ -595,7 +605,7 @@ function startRoom(cv, app) {
         if (walk(f, front, 30, dt)) { f.dir = -1; c.armed = true; f.carry = "gun"; c.phase = "hunt"; }
         return true;
       case "hunt":                           // up to the bot, to the right of it
-        if (!g || g.held || w.graves.has(c.id)) { const id = next(); if (id) c.id = id; else c.phase = "return"; return true; }
+        if (!g || g.held || w.remains.has(c.id)) { const id = next(); if (id) c.id = id; else c.phase = "return"; return true; }
         if (walk(f, { x: Math.min(L.floor.x1, g.x + 24), y: g.y }, 30, dt)) { f.legs = "stand"; c.phase = "aim"; c.t = 0; }
         return true;
       case "aim":                            // levelled a moment, then the shot (the flash at the barrel)
@@ -904,7 +914,7 @@ function startRoom(cv, app) {
         // put in the booth: it stands inside, behind the glass; the sign over the booth counts down, a click
         // on it (or on the bot) is the undo, and so is carrying it out. Then the light, and it is gone:
         // `claude stop` and `claude rm` (its transcript stays, for `claude --resume`). The fire does the
-        // same at once, with a gravestone (bury)
+        // same at once, leaving charred remains (bury)
         const bo = L.booths.find((p) => p.key === act.at);
         if (!bo) { f.act = resume(f); break; }
         f.x = bo.x; f.y = bo.y - 3; f.dir = -1; f.arms = "down"; f.legs = "stand";
@@ -912,6 +922,22 @@ function startRoom(cv, app) {
           app.act({ kind: "stop", id: f.id, rm: true });
           w.stopped.set(f.id, performance.now()); w.boothFlash = { key: bo.key, t0: performance.now() };
           folk.delete(f.id);
+        }
+        break;
+      }
+      case "sweep": {                        // clearing away what is left of a bot: to the nearest piece that landed, bent down for it
+        const r = w.remains.get(act.at);
+        if (!r || r.back || !r.parts.length) { f.act = rest(); break; }
+        const p = r.parts.filter((q) => !q.z && !q.vx && !q.vy).sort((a, b) => Math.hypot(a.x - f.x, a.y - f.y) - Math.hypot(b.x - f.x, b.y - f.y))[0];
+        if (!p) { if (walk(f, { x: r.x + (f.x < r.x ? -12 : 12), y: r.y + 4 }, v, dt)) { f.legs = "stand"; f.arms = "down"; } break; }   // still flying: over to the mess meanwhile
+        if (walk(f, { x: p.x + (f.x < p.x ? -5 : 5), y: p.y + 1 }, v, dt)) {
+          f.legs = "stand"; f.dir = p.x < f.x ? -1 : 1; f.arms = Math.floor(w.T * 4) % 2 ? "reach" : "down";
+          if ((act.wait += dt) > 0.8) {
+            act.wait = 0;
+            r.parts.splice(r.parts.indexOf(p), 1);
+            r.drops = r.drops.filter((d) => Math.hypot(d.x - p.x, d.y - p.y) > 7);   // the oil there wiped up with it
+            if (!r.parts.length) { gone(w, act.at); f.act = rest(); }
+          }
         }
         break;
       }
@@ -1117,7 +1143,7 @@ function startRoom(cv, app) {
     for (const [id, t] of w.stopped) if (!ids.has(id) || performance.now() - t > 30000) w.stopped.delete(id);
     const late = performance.now() - w.born > 3000;
     for (const b of [...bots, you, ...(mgr ? [mgr] : [])]) {
-      if (w.stopped.has(b.id) || w.graves.has(b.id)) continue;      // stopped from here (the feed still lists it for a moment), or under a gravestone
+      if (w.stopped.has(b.id) || w.remains.has(b.id)) continue;      // stopped from here (the feed still lists it for a moment), or in pieces
       if (!w.folk.has(b.id)) {
         const at = b.staff && !late ? managerSeat(L) : late || b.human ? w.riseAt.get(b.id) || { x: doorX(b.m), y: WALL + 3 } : L.seat(b.id) || freeAt(L, b.id);   // back from its grave, or in by the door; at first, at its desk or anywhere
         w.riseAt.delete(b.id);
@@ -1313,12 +1339,22 @@ function startRoom(cv, app) {
       const bl = w.ball, bx = Math.round(bl.x), by = Math.round(bl.y), h = Math.round(bl.h);
       items.push([bl.y + 0.2, () => { rect(ctx, bx - 1, by, 3, 1, "rgba(0,0,0,0.3)"); rect(ctx, bx - 1, by - h - 3, 3, 3, INK); rect(ctx, bx, by - h - 2, 1, 1, C.white); }]);
     }
-    for (const [id, g] of w.graves) {
-      const age = (performance.now() - g.t0) / 1000;
-      if (age > GRAVE.life + GRAVE.fade) { w.graves.delete(id); w.stopped.set(id, performance.now()); app.act({ kind: "stop", id, rm: true }); continue; }
-      const r = [g.x - 5, g.y - 12, g.x + 5, g.y + 1], h = hot(...r, { kind: "unbury", id });
-      if (h) tip = { text: g.b.name + " - undo", x: g.x, y: g.y - 14 };
-      items.push([g.y - 0.5, () => outlined(ctx, r, h, (c) => drawGrave(c, g, Math.max(0, (age - GRAVE.life) / GRAVE.fade)))]);
+    // what is left of a killed bot: the oil under everything, each piece at its own depth; a click on any of
+    // it puts the bot back together, its name over it under the pointer
+    for (const [id, r] of w.remains) {
+      const age = (performance.now() - r.t0) / 1000, fade = age > RUST.after ? Math.min(1, (age - RUST.after) / RUST.fade) : 0;
+      items.push([-1e9, () => {
+        if (fade) ctx.globalAlpha = 1 - fade;
+        const rx = Math.round(r.puddle * r.parts.length / r.total);         // the puddle shrinks as it is mopped up
+        if (rx > 1) ELL(rx, 3, 5).forEach((hw, j) => { rect(ctx, r.x - hw, r.y - 2 + j, 2 * hw, 1, "#17151f"); if (j === 1 && hw > 2) rect(ctx, r.x - hw + 2, r.y - 1, 3, 1, "#4a4766"); });
+        for (const d of r.drops) rect(ctx, d.x, d.y, d.s, d.s, d.hi ? "#4a4766" : "#17151f");
+        ctx.globalAlpha = 1;
+      }]);
+      for (const p of r.parts) items.push([p.y, () => drawPart(ctx, p, fade)]);
+      if (!r.parts.length || r.back) continue;
+      const xs = r.parts.map((p) => p.x), ys = r.parts.map((p) => p.y);
+      const h = hot(Math.min(...xs) - 4, Math.min(...ys) - 10, Math.max(...xs) + 4, Math.max(...ys) + 3, { kind: "unshoot", id });
+      if (h) tip = { text: r.b.name + " - put back together", x: r.x, y: Math.min(...ys) - 12 };
     }
     if (L.pong) {
       piece(L.pong, "pong", (c) => drawPong(c, L.pong, w));
@@ -1757,51 +1793,94 @@ function startRoom(cv, app) {
     const pad = 2, c = snapshot(r, fn, pad);
     ctx.drawImage(halo(c, col), r[0] - pad, r[1] - pad); ctx.drawImage(tint ? tinted(c, col, tint) : c, r[0] - pad, r[1] - pad);
   }
-  // a bot dropped into the fire burns at once: its picture goes into the flames and a gravestone stands
-  // beside the pit for a few seconds, the bot's name on hover; a click on the stone brings the bot back
-  // (it rises where the stone stood); otherwise the stone crumbles away and the session is stopped and
-  // deleted from the list (`claude rm`). No bar: the stone's life is the undo
-  const GRAVE = { life: 5, fade: 1.5 };
-  function bury(f, L) {
-    const w = world(), F = L.fire, im = body(seedOf(f.b), colorOf(f.b), "up", "walk1", false);
+  // A killed bot (shot: your crosshair or the office manager's shotgun; or put in the fire) leaves remains,
+  // not a gravestone: its own picture cut into head, chest, arms and legs, cogs, bolts and a spring, flying
+  // apart with a hop and bouncing to a stop on a splash of oil (a burnt one: a few charred cogs and bolts by
+  // the pit). They are its undo: a click on any of it puts it back together (the pieces fly back in). Idle
+  // bots come over and clear them away, a piece at a time (`sweep`); with the last piece gone the session is
+  // stopped and deleted (`claude stop`, `claude rm`). With nobody to clear them they rust away after half a
+  // minute, and it goes then
+  const RUST = { after: 30, fade: 2 };
+  const SWEEPERS = new Set(["stand", "loiter", "plant", "window", "stretch", "warm", "watch", "visit", "chair", "bench", "coffee", "print"]);   // breaks a bot leaves to clear up
+  const COG = [".#.#.", "#####", "##.##", "#####", ".#.#."], COG7 = ["..#.#..", ".#####.", "###.###", "##...##", "###.###", ".#####.", "..#.#.."];
+  function scatter(f, at, charred) {
+    const w = world(), x = Math.round(at[0]), y = Math.max(WALL + 14, Math.round(at[1]));
+    const im = body(seedOf(f.b), colorOf(f.b), "down", "stand", false), cut = (sx, sy, sw, sh, kind) => ({ kind, img: im, sx, sy, sw, sh });
+    const kinds = (charred || !im ? [] : [cut(1, 1, 20, 17, "head"), cut(6, 18, 10, 5, "chest"), cut(4, 18, 3, 5, "arm"), cut(15, 18, 3, 5, "arm"), cut(7, 23, 4, 6, "leg"), cut(11, 23, 4, 6, "leg")])
+      .concat([{ kind: "cog", big: true }, { kind: "cog" }, { kind: "cog" }, { kind: "bolt" }, { kind: "bolt" }, { kind: "bolt" }], charred ? [] : [{ kind: "cog" }, { kind: "spring" }]);
+    const parts = kinds.map((p) => {
+      const a = Math.random() * Math.PI * 2, sp = charred ? 8 + Math.random() * 14 : 16 + Math.random() * 30;
+      return { ...p, char: !!charred, x: x + (Math.random() - 0.5) * 4, y: y - 1 + (Math.random() - 0.5) * 3, z: charred ? 6 : 8 + Math.random() * 10,
+        vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.55, vz: (charred ? 25 : 45) + Math.random() * 45, spin: Math.random() * 4 };
+    });
+    // the oil: a puddle where it stood, splashed all round, a few streaks flung out (none from a burnt one)
+    const drop = (r, s) => { const a = Math.random() * 6.28; return { x: Math.round(x + Math.cos(a) * r), y: Math.round(y + Math.sin(a) * r * 0.5), s, hi: Math.random() < 0.15 }; };
+    const drops = charred ? [] : [...Array(60)].map(() => drop(Math.random() ** 0.6 * 22, Math.random() < 0.35 ? 2 : 1))
+      .concat([...Array(5)].flatMap(() => { const a = Math.random() * 6.28; return [...Array(6)].map((_, k) => ({ x: Math.round(x + Math.cos(a) * (10 + k * 3)), y: Math.round(y + Math.sin(a) * (10 + k * 3) * 0.5), s: k < 3 ? 2 : 1 })); }));
+    if (still) for (const p of parts) { p.x += p.vx * 0.4; p.y += p.vy * 0.4; p.z = p.vx = p.vy = p.vz = 0; }
+    w.remains.set(f.id, { b: f.b, x, y, t0: performance.now(), parts, drops, puddle: charred ? 0 : 7 + Math.round(Math.random() * 3), total: parts.length, back: 0 });
+    w.folk.delete(f.id);
+  }
+  function bury(f, L) {                       // into the fire: its picture into the flames, charred bits beside the pit
+    const F = L.fire, im = body(seedOf(f.b), colorOf(f.b), "up", "walk1", false);
     if (im) toFire([Math.round(f.x) - 11 + 2, Math.round(f.y) - 27 + 2, 0, 0], im);
-    // the stone stands on a clear bit of floor beside the pit: left of it first, then right, then
-    // further out, and never where another stone stands
-    const taken = [...w.graves.values()];
-    const cands = [...Array(6)].flatMap((_, k) => [[F.x0 - 9 - k * 11, F.y1 - 4], [F.x1 + 9 + k * 11, F.y1 - 4], [F.x0 - 9 - k * 11, F.y1 - 24], [F.x1 + 9 + k * 11, F.y1 - 24]]);
-    const spot = cands.find(([x, y]) => x >= 6 && x <= W - 6 && y >= WALL + 14 && y < H && L.free(x, y - 6) && !taken.some((g) => Math.abs(g.x - x) < 10 && Math.abs(g.y - y) < 12)) || [F.x0 - 9, F.y1 - 4];
-    w.graves.set(f.id, { b: f.b, x: spot[0], y: spot[1], t0: performance.now() });
-    w.folk.delete(f.id);
+    scatter(f, [F.x1 > W - 30 ? F.x0 - 8 : F.x1 + 8, F.y1 - 4], true);
   }
-  // a shot (hardcore: yours through the crosshair, or the office manager's shotgun): a flash where it hits,
-  // the bot down, a gravestone where it stood, five seconds to undo as in the fire, then `claude stop` and
-  // `claude rm` (the grave's own countdown)
-  function shoot(f) {
-    const w = world(), taken = [...w.graves.values()];
-    let x = Math.round(f.x);
-    const y = Math.max(WALL + 14, Math.round(f.y));
-    for (let k = 0; k < 8 && taken.some((g) => Math.abs(g.x - x) < 10 && Math.abs(g.y - y) < 12); k++) x += 11;
-    w.shots.push({ x: Math.round(f.x), y: Math.round(f.y) - 14, t0: performance.now(), hit: true });
-    w.graves.set(f.id, { b: f.b, x, y, t0: performance.now() });
-    w.folk.delete(f.id);
+  function shoot(f) {                         // a flash where it hits, and the pieces
+    world().shots.push({ x: Math.round(f.x), y: Math.round(f.y) - 14, t0: performance.now(), hit: true });
+    scatter(f, [f.x, f.y], false);
   }
-  function unbury(id) {
-    const w = world(), g = w.graves.get(id);
-    if (!g) return;
-    w.graves.delete(id);
-    w.spared.add(id);                         // brought back: the office manager leaves it alone from now on
-    w.riseAt.set(id, { x: g.x, y: g.y });
+  function unshoot(id) {                      // put back together: the pieces fly in, and it stands up there
+    const r = world().remains.get(id);
+    if (!r || r.back) return;
+    r.back = performance.now();
+    for (const p of r.parts) { p.bx = p.x; p.by = p.y; p.bz = p.z; }
   }
-  // the stone: nine dots wide, a cross on it; it crumbles with an ordered dither (fade 0..1)
-  const BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
-  const STONE = ["..FFFFF..", ".FCCCCCF.", "FCCCECCCF", "FCCCECCCF", "FCCEEECCF", "FCCCECCCF", "FCCCECCCF", "FCCCCCCCF", "FDDDDDDDF", "FDDDDDDDF", ".FFFFFFF."];
-  function drawGrave(ctx, g, fade) {
-    const x0 = g.x - 4, y0 = g.y - 11;
-    STONE.forEach((row, j) => [...row].forEach((ch, i) => {
-      if (ch === "." || (fade > 0 && BAYER[j & 3][i & 3] / 16 < fade)) return;
-      rect(ctx, x0 + i, y0 + j, 1, 1, SP[ch]);
-    }));
-    if (fade <= 0) rect(ctx, x0, g.y, 9, 1, SHADOW);
+  // the remains move: flying pieces fall and bounce and slide to a stop; put back together, they fly in
+  function stepRemains(w, dt, L) {
+    const now = performance.now();
+    for (const [id, r] of w.remains) {
+      if (r.back) {
+        const t = (now - r.back) / 450;
+        if (t >= 1) { w.remains.delete(id); w.spared.add(id); w.riseAt.set(id, { x: r.x, y: r.y }); continue; }   // the office manager leaves it alone from now on
+        for (const p of r.parts) { p.x = p.bx + (r.x - p.bx) * t; p.y = p.by + (r.y - p.by) * t; p.z = p.bz + (12 - p.bz) * t; }
+        r.drops = r.drops.filter(() => Math.random() > dt * 4);
+        continue;
+      }
+      const age = (now - r.t0) / 1000;
+      if (age > RUST.after + RUST.fade) { gone(w, id); continue; }
+      for (const p of r.parts) {
+        if (p.z > 0 || p.vz > 0) {             // in the air
+          p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; p.vz -= 240 * dt; p.spin += dt * 10;
+          // down: two bounces at most (in steps of a twelfth of a second a small hop never dies out by itself)
+          if (p.z <= 0) { p.z = 0; p.hops = (p.hops || 0) + 1; if (p.hops <= 2 && p.vz < -40) { p.vz = -p.vz * 0.35; p.vx *= 0.6; p.vy *= 0.6; } else p.vz = 0; }
+        } else if (p.vx || p.vy) {             // sliding to a stop
+          p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= Math.max(0, 1 - 7 * dt); p.vy *= Math.max(0, 1 - 7 * dt);
+          if (Math.abs(p.vx) + Math.abs(p.vy) < 2) p.vx = p.vy = 0;
+        }
+        p.x = Math.max(4, Math.min(W - 4, p.x)); p.y = Math.max(WALL + 4, Math.min(L.floor.y1 + 4, p.y));
+      }
+    }
+  }
+  function gone(w, id) {                      // the last piece cleared away (or rusted): out of the list for good
+    w.remains.delete(id); w.stopped.set(id, performance.now()); app.act({ kind: "stop", id, rm: true });
+  }
+  function drawPart(ctx, p, fade) {
+    const x = Math.round(p.x), y = Math.round(p.y), z = Math.round(p.z);
+    if (fade) ctx.globalAlpha = 1 - fade;
+    if (z > 1) rect(ctx, x - 2, y, 4, 1, SHADOW);
+    if (p.img) {
+      const fl = Math.floor(p.spin) % 2 === 1;
+      ctx.save(); ctx.translate(x, y - z);
+      if (fl) ctx.scale(-1, 1);
+      ctx.drawImage(p.img, p.sx, p.sy, p.sw, p.sh, -Math.round(p.sw / 2), -p.sh, p.sw, p.sh);
+      ctx.restore();
+    } else if (p.kind === "cog") {
+      const g = p.big ? COG7 : COG, n = g.length, turn = Math.floor(p.spin) % 2;
+      g.forEach((row, j) => [...row].forEach((ch, i) => { if (ch === "#") rect(ctx, x - (n >> 1) + (turn ? n - 1 - i : i), y - z - n + j, 1, 1, i === (n >> 1) && j === (n >> 1) ? INK : p.char ? "#3a3438" : j < 2 ? C.steel3 : C.steel2); }));
+    } else if (p.kind === "bolt") { rect(ctx, x - 1, y - z - 3, 3, 1, C.steel3); rect(ctx, x, y - z - 2, 1, 2, C.steel2); }
+    else if (p.kind === "spring") for (let k = 0; k < 4; k++) rect(ctx, x - 1 + (k % 2), y - z - 4 + k, 2, 1, C.steel3);
+    ctx.globalAlpha = 1;
   }
   // a picture washed in a colour, its own pixels only (the danger's red over what is held over the fire)
   function tinted(im, col, a) {
@@ -2187,7 +2266,7 @@ function startRoom(cv, app) {
     const h = [...hots].reverse().find((h) => over(h.x0, h.y0, h.x1, h.y1));
     if (aiming) {                           // the gun in hand: a click shoots (a bot, or the floor); on the closet, it goes back
       if (h && h.action && h.action.kind === "aim") aiming = false;
-      else if (h && h.action && h.action.kind === "unbury") unbury(h.action.id);      // a gravestone still undoes, gun or not
+      else if (h && h.action && h.action.kind === "unshoot") unshoot(h.action.id);    // its remains still undo, gun or not
       else {
         const f = hovered && !hovered.b.human && !hovered.b.staff && world().folk.get(hovered.b.id);
         if (f && !f.held) shoot(f); else world().shots.push({ x: Math.round(pointer.x), y: Math.round(pointer.y), t0: performance.now(), hit: false });
@@ -2258,7 +2337,7 @@ function startRoom(cv, app) {
       const back = () => resume(f);
       if (out) { f.act = back(); if (bot) app.carried(f.id, e.clientX, e.clientY); }
       else if (bot && pointer && dropAt(lastL, f) === "booth") { end(f); f.act = { kind: "doom", at: boothAt(lastL, f).key, left: 5 }; }   // into the booth: five seconds, then gone
-      else if (bot && pointer && dropAt(lastL, f) === "fire") bury(f, lastL);   // at once: the flames, a gravestone for the undo
+      else if (bot && pointer && dropAt(lastL, f) === "fire") bury(f, lastL);   // at once: the flames, charred remains for the undo
       else {
         const p = pointer && pieceAt(spot(f));             // what it stands on, not what the pointer is on
         if (p && KIND(p.key) === "pair") { if (bot) app.act({ kind: "pair", key: p.key, id: f.id }); else app.act({ kind: "pairOpen", key: p.key }); f.act = back(); }
@@ -2266,7 +2345,7 @@ function startRoom(cv, app) {
       }
       f.legs = "stand";
     } else if (press && press.action && press.action.kind === "undo") { const f = world().folk.get(press.action.id); if (f && f.act.kind === "doom") f.act = resume(f); }
-    else if (press && press.action && press.action.kind === "unbury") unbury(press.action.id);
+    else if (press && press.action && press.action.kind === "unshoot") unshoot(press.action.id);
     else if (press && press.action && press.action.kind === "aim") aiming = true;     // a gun from the gun closet
     else if (press && press.action && press.action.kind === "water") {     // you go and water the plant
       const you = world().folk.get("you");
