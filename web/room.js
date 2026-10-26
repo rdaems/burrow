@@ -261,13 +261,15 @@ function startRoom(cv, app) {
   // The furniture is what the server lists (room.json `furniture`): keys, a kind and maybe a number
   // (plant0, window1). The closet adds a piece, the fireplace burns one; the fire, the closet and the
   // switchboard (burrow's settings) stay. A machine's door is a piece too (`door:<machine id>`, not in the
-  // list): it slides along the wall and never burns (it would take the machine out of Claude Code's settings)
+  // list): it hangs on the wall like the window, comes off it while carried, and in the fire it takes its
+  // machine out of Claude Code's sshConfigs (as the doors' panel does). A new one comes from the closet.
+  // This computer's door (`door:`) only slides along the wall
   const KIND = (key) => key.startsWith("door:") ? "door" : key.replace(/\d+$/, "");
-  const FIXED = new Set(["fire", "closet", "settings", "door"]);
-  const CLICK = new Set(["add", "closet", "chess", "pong", "printer", "pair", "board", "coffee", "cooler", "window", "bench", "armchair", "settings", "clock", "plant", "manager", "door", "frame"]);   // a click does something there
+  const FIXED = new Set(["fire", "closet", "settings"]), fixed = (key) => FIXED.has(KIND(key)) || key === "door:";
+  const CLICK = new Set(["add", "closet", "chess", "pong", "printer", "pair", "board", "coffee", "cooler", "window", "bench", "armchair", "settings", "clock", "plant", "manager", "door"]);   // a click does something there
   const NAMES = { meet: "meeting table", pong: "ping-pong table", chess: "chess table", coffee: "coffee machine", cooler: "water cooler",
     printer: "printer", armchair: "armchair", plant: "plant", board: "whiteboard", window: "window", clock: "clock", add: "project cabinet", pair: "pair room", bench: "bench", settings: "switchboard", manager: "office manager's desk",
-    booth: "booth", neuralyzer: "neuralyzer", frame: "door frame", door: "door" };
+    booth: "booth", neuralyzer: "neuralyzer", door: "door" };
   // the bench seats three, side by side, idle bots on a break (a click on it lists the completed sessions)
   const BENCH_SEATS = 3, benchSeat = (bn, k) => ({ x: bn.x - 14 + k * 14, y: bn.y });
   // a clear spot on the floor for a figure that has no chair when the page opens (spread by its id, the same each time)
@@ -284,7 +286,7 @@ function startRoom(cv, app) {
   const FIRE = { w: 48, h: 42, S: 1.5 };     // the fire pit's footprint, drawn to scale from its 32 x 28 original
   // the default places for desks: columns of them, as many as the room is wide
   const SLOTS = () => [104, 150, 196, 242, 288, 334].flatMap((y) => [...Array(Math.max(1, Math.floor((W - 10) / 124)))].map((_, i) => [10 + i * 124, y]));
-  const ON_WALL = new Set(["closet", "window", "clock", "settings", "door", "frame"]), WALL_Y = { closet: 2, window: 4, clock: 5, settings: 5, door: WALL - 20, frame: WALL - 20 };
+  const ON_WALL = new Set(["closet", "window", "clock", "settings", "door"]), WALL_Y = { closet: 2, window: 4, clock: 5, settings: 5, door: WALL - 20 };
   const onWall = (key) => ON_WALL.has(KIND(key));
   // what each piece covers, from where it stands
   function foot(key, [x, y], u) {
@@ -308,7 +310,7 @@ function startRoom(cv, app) {
       case "pair": return [x - 13, y - 20, x + 13, y + 1];
       case "bench": return [x - 29, y - 18, x + 29, y + 2];
       case "booth": return [x - 9, y - 32, x + 9, y + 2];
-      case "door": case "frame": return [x, y, x + 16, y + 20];
+      case "door": return [x, y, x + 16, y + 20];
       case "neuralyzer": return [x - 7, y - 19, x + 7, y + 2];
       default: return [x - 8, y - 31, x + 8, y + 1];     // a plant
     }
@@ -397,8 +399,7 @@ function startRoom(cv, app) {
       coffeeAt: one("coffee"), floor: { x0: 14, y0: WALL + 8, x1: W - 14, y1: FLOORY - 4 }, placed,
     };
     L.coffee = L.coffeeAt && { x: L.coffeeAt.x + 27, y: L.coffeeAt.y - 10 };
-    L.doors = (s.machines || []).map((m, i) => ({ key: doorKeys[i], mid: m.id, m, x0: at0[doorKeys[i]][0] }));
-    L.frames = all("frame");
+    L.doors = (s.machines || []).map((m, i) => ({ key: doorKeys[i], mid: m.id, m, x0: at0[doorKeys[i]][0], y0: at0[doorKeys[i]][1] }));
     // what can be picked up and moved, front to back
     L.pieces = [
       ...desks.map((d) => ({ key: d.key, at: d.at, u: d.u, r: foot(d.key, d.at, d.u) })),
@@ -1168,35 +1169,39 @@ function startRoom(cv, app) {
     const hl = new Set();
     if (app.hl()) hl.add(app.hl());
 
-    // the doors, one a machine, where they were slid along the wall; its name and its bots lit under the
+    // what hangs on the wall, outlined under the pointer; one being carried is drawn over everything
+    // else (it is in your hand), washed red over the fire
+    let aloft = null;
+    const onTheWall = (key, r, h, fn) => {
+      if (moving && moving.key === key) aloft = () => outlined(ctx, r, danger(key), fn, RED, tintOf(key));
+      else outlined(ctx, r, h, fn);
+    };
+    // the doors, one a machine, where they hang on the wall; its name and its bots lit under the
     // pointer, a click lists them all (names, paints). A door is ajar while someone goes in or out; boarded
-    // up while its machine is out of reach (why, under the pointer)
+    // up while its machine is out of reach (why, under the pointer). A new machine's door, dropped from the
+    // closet, hangs where it was let go while its form is open (`pending`)
     for (const dr of L.doors) {
-      const m = dr.m, x0 = dr.x0, h = hot(x0, WALL - 20, x0 + 16, WALL, { kind: "doors" }) && !moving;
+      const m = dr.m, x0 = dr.x0, y0 = dr.y0, h = hot(x0, y0, x0 + 16, y0 + 20, { kind: "doors" });
       const ajar = performance.now() - (w.doorAt[m.id] || 0) < 900 ||
         [...w.folk.values()].some((f) => f.b && (f.b.m || "") === m.id && f.leaving && f.y < WALL + 12);
-      drawDoor(ctx, x0, paintOf(m.id), ajar && !m.error, !!m.error, h || (moving && moving.key === dr.key));
+      onTheWall(dr.key, foot("door", [x0, y0]), h, (c) => drawDoor(c, x0, paintOf(m.id), ajar && !m.error, !!m.error, y0));
       if (h) { for (const b of bots) if ((b.m || "") === m.id) hl.add(b.id); tip = { text: clip(m.error ? m.name + ": " + m.error : m.name, W - 8), x: x0 + 8, y: 20 }; }
     }
-    // an empty door frame (a piece, from the closet): a click adds a machine, its door hangs in the wall
-    for (const fr of L.frames) {
-      const h = hot(fr.x, fr.y, fr.x + 16, fr.y + 20, { kind: "addMachine" });
-      outlined(ctx, foot(fr.key, [fr.x, fr.y]), danger(fr.key), (c) => drawFrame(c, fr.x, h, fr.y), RED, tintOf(fr.key));
-      if (h) tip = { text: "add a machine", x: fr.x + 8, y: fr.y + 14 };
-    }
+    if (pending && pending.mid != null && (s.machines.some((m) => m.id === pending.mid) || performance.now() - pending.t > 10000)) pending = null;
+    if (pending) drawKind(ctx, "door", pending.at, w, T);
     // trouble here goes on the wall, in red, instead of the whiteboard
     const here = s.machines.find((m) => !m.id), trouble = s.note || (here && here.error);
     if (trouble) { const nx = Math.max(24, ...L.doors.map((d) => d.x0 + 20)); tiny(ctx, clip(trouble, W - 24 - nx), nx, 18, RED); }   // past the last door
     for (const win of L.windows) {
       const h = hot(win.x0, win.y0, win.x1, win.y1, { kind: "outside" });
-      outlined(ctx, [win.x0, win.y0, win.x1, win.y1], h, (c) => drawWindow(c, win));
+      onTheWall(win.key, [win.x0, win.y0, win.x1, win.y1], h, (c) => drawWindow(c, win));
       if (h) tip = { text: "outside", x: (win.x0 + win.x1) / 2, y: win.y1 + 10 };
     }
     if (L.clock) {
       // the clock keeps this computer awake, as Amphetamine does: a click chooses (while bots work, for
       // a while, not at all); its face says which, yellowed (drawClock)
       const ck = L.clock, a = s.awake || { mode: "off" }, h = hot(ck.x0, ck.y0, ck.x0 + 12, ck.y0 + 10, { kind: "clock" });
-      outlined(ctx, foot("clock", [ck.x0, ck.y0]), h, (c) => drawClock(c, ck.x0 + 6, ck.y0 + 5, a));
+      onTheWall(ck.key, foot("clock", [ck.x0, ck.y0]), h, (c) => drawClock(c, ck.x0 + 6, ck.y0 + 5, a));
       if (h) {
         const tm = Math.round(Math.max(0, a.until - Date.now()) / 60000), hh = Math.floor(tm / 60), mm = tm % 60;
         tip = { text: a.mode === "for" ? `awake ${hh ? hh + "h " : ""}${mm}m more` : a.mode === "work" ? (a.on ? "awake, local bots at work" : "awake when local bots work") : "clock", x: ck.x0 + 6, y: WALL + 10 };
@@ -1232,6 +1237,7 @@ function startRoom(cv, app) {
 
     // everything that stands, back to front
     const items = [];
+    if (aloft) items.push([1e9, aloft]);
     for (const f of w.folk.values()) if (!f.lying && !f.held) items.push([f.y, () => drawFigure(ctx, f, f.b, T, hl)]);
     for (const d of L.desks) {
       const sc = screenAt(d);
@@ -1293,6 +1299,7 @@ function startRoom(cv, app) {
       items.push([F.y1, () => drawFire(ctx, F, T, !!feeding, burst, w.burning)]);
       const tx = F.x0 + 16, ty = F.y0 - 2;
       if (fd) tip = { text: fd.seats.length ? fd.label + " has bots" : "burn " + fd.label, x: tx, y: ty };
+      else if (feeding && moving && KIND(moving.key) === "door") { const m = s.machines.find((m) => "door:" + m.id === moving.key); tip = { text: "take out " + (m ? m.name : "the door"), x: tx, y: ty }; }
       else if (feeding && moving) tip = { text: "burn the " + (NAMES[KIND(moving.key)] || KIND(moving.key)), x: tx, y: ty };
       else if (feeding) tip = { text: "delete " + held.b.name, x: tx, y: ty };
     }
@@ -1628,7 +1635,7 @@ function startRoom(cv, app) {
   // what is carried is over the fire when its middle is: a piece only touching it at an edge (put down
   // beside the pit, and so picked up again) is not about to burn
   const inFire = (L, key, at, u) => {
-    if (!L.fire || !(key.startsWith("u:") || !FIXED.has(KIND(key)))) return false;
+    if (!L.fire || (!key.startsWith("u:") && fixed(key))) return false;
     const r = foot(key, at, u), cx = (r[0] + r[2]) / 2, cy = (r[1] + r[3]) / 2;
     return cx >= L.fire.x0 && cx < L.fire.x1 && cy >= L.fire.y0 && cy < L.fire.y1 + 4;
   };
@@ -1919,7 +1926,7 @@ function startRoom(cv, app) {
       case "bench": drawBench(ctx, pt); break;
       case "booth": drawBooth(ctx, pt, false, false, -1); drawBooth(ctx, pt, true, false, -1); break;
       case "neuralyzer": drawNeuralyzer(ctx, pt, false); break;
-      case "frame": drawFrame(ctx, x, false, y); break;
+      case "door": { const ms = (app.state() || {}).machines || []; drawDoor(ctx, x, PAINT[Math.max(0, ms.length - 1) % PAINT.length], false, false, y); break; }   // in the paint the next machine gets
     }
   }
   // the printer the report comes out of, in the pane: a wide-carriage line printer drawn to the paper's
@@ -1957,6 +1964,10 @@ function startRoom(cv, app) {
   // a piece carried in from the closet (client coordinates): its ghost follows the pointer while
   // it is over the room; put down, its place is returned (null outside the room)
   let carrying = null;
+  // a new machine's door, let go on the wall from the closet: it hangs there while its form is open
+  // (its machine added, until the state brings its door: `mid`)
+  let pending = null;
+  const pend = (at, mid) => { pending = at ? { at, mid, t: performance.now() } : null; draw(); };
   function carryKind(kind, cx, cy) {
     if (!kind) { carrying = null; draw(); return null; }
     const b = cv.getBoundingClientRect(), x = (cx - b.left) / K, y = (cy - b.top) / K;
@@ -2017,19 +2028,12 @@ function startRoom(cv, app) {
     rect(ctx, x + 13, y - 11, 5, 1, C.blue2); rect(ctx, x + 17, y - 11, 1, 1, INK);      // the pen
     drawChair(ctx, x + 24, y, lit);
   }
-  function drawDoor(ctx, x, p, ajar, boarded, lit) {
-    if (lit) rect(ctx, x - 1, WALL - 21, 18, 21, C.steel3);
-    put(ctx, sprites.swap(ajar ? "doorOpen" : "door", { h: p.hi, w: p.top, d: p.d, k: p.k }), x, WALL - 20);
-    if (boarded) for (const y of [WALL - 16, WALL - 9]) {       // two planks nailed across it
+  function drawDoor(ctx, x, p, ajar, boarded, y0 = WALL - 20) {
+    put(ctx, sprites.swap(ajar ? "doorOpen" : "door", { h: p.hi, w: p.top, d: p.d, k: p.k }), x, y0);
+    if (boarded) for (const y of [y0 + 4, y0 + 11]) {       // two planks nailed across it
       rect(ctx, x - 1, y, 18, 3, WOOD.k); rect(ctx, x, y + 1, 16, 1, WOOD.top); rect(ctx, x, y, 16, 1, WOOD.hi);
       rect(ctx, x + 1, y + 1, 1, 1, C.steel1); rect(ctx, x + 14, y + 1, 1, 1, C.steel1);
     }
-  }
-  function drawFrame(ctx, x, lit, y = WALL - 20) {   // where another door could go: its outline, a + in it
-    ctx.fillStyle = lit ? GOLD : "#3d4d66";
-    for (let i = 0; i < 16; i += 2) ctx.fillRect(x + i, y, 1, 1);
-    for (let j = 0; j < 18; j += 2) { ctx.fillRect(x, y + j, 1, 1); ctx.fillRect(x + 15, y + j, 1, 1); }
-    tiny(ctx, "+", x + 6, y + 6, lit ? GOLD : C.steel1);
   }
   // the clock's face: the sprite's light cells, found once
   let dial = null;
@@ -2296,7 +2300,7 @@ function startRoom(cv, app) {
       // on the grid of dots while it moves, as pair: it steps. It shows where it will land: on clear floor
       // (settle), or over the fire, to burn. A wall piece that can burn comes off the wall while it is
       // carried (to the fire, or back up: it is hung again where it is let go); a fixed one slides along it
-      const off = onWall(moving.key) && !FIXED.has(KIND(moving.key)), raw = off
+      const off = onWall(moving.key) && !fixed(moving.key), raw = off
         ? [Math.round(Math.max(2 - (r[0] - at[0]), Math.min(W - 2 - (r[2] - at[0]), at[0]))), Math.round(Math.max(0, Math.min(H - 1 - (r[3] - at[1]), at[1])))]
         : clampAt(moving.key, at, moving.u);
       moving.at = off || (lastL && inFire(lastL, moving.key, raw, moving.u)) ? raw : settle(lastL, moving.key, raw, moving.u);
@@ -2313,8 +2317,9 @@ function startRoom(cv, app) {
       const burn = lastL && inFire(lastL, moving.key, moving.at, moving.u);
       if (burn && (!d || !d.seats.length)) {   // into the fire: a picture of it goes in, the thing itself goes
         const w = world(), r = foot(moving.key, moving.at, moving.u);
-        toFire(r, snapshot(r, (c) => (d ? drawDesk(c, d, w, w.T, new Set()) : drawKind(c, KIND(moving.key), moving.at, w, w.T))));
-        app.act(d ? { kind: "forget", unit: d.unit } : { kind: "burn", key: moving.key });
+        const mid = KIND(moving.key) === "door" ? moving.key.slice(5) : null;      // a door: its machine goes out of the room (and of sshConfigs)
+        toFire(r, snapshot(r, (c) => (d ? drawDesk(c, d, w, w.T, new Set()) : mid !== null ? drawDoor(c, moving.at[0], paintOf(mid), false, false, moving.at[1]) : drawKind(c, KIND(moving.key), moving.at, w, w.T))));
+        app.act(d ? { kind: "forget", unit: d.unit } : mid !== null ? { kind: "unmachine", m: mid } : { kind: "burn", key: moving.key });
       } else {
         const at = settle(lastL, moving.key, clampAt(moving.key, moving.at, moving.u), moving.u);       // put down on the grid of dots, on clear floor
         dropped.set(moving.key, { at, t: performance.now() });
@@ -2423,5 +2428,5 @@ function startRoom(cv, app) {
   window.__room.game = (kind, a, b) => { const w = world(), fa = w.folk.get(a), fb = w.folk.get(b); if (!fa || !fb) return false; end(fa); end(fb); fa.act = { kind, side: 0, with: b, left: 90, there: false }; fb.act = { kind, side: 1, with: a, left: 90, there: false }; return true; };
   window.__room.football = (ids) => { const w = world(), team = ids.map((id) => w.folk.get(id)).filter(Boolean); return team.length >= 2 && !!football(w, lastL, team); };
   window.__room.clock = (a) => { const c = document.createElement("canvas"); c.width = 12; c.height = 10; drawClock(c.getContext("2d"), 6, 5, a); return c.toDataURL(); };   // the clock's face for an awake state
-  return { talk, typed, size, draw, width, color: projectColor, icon, door: doorPicture, paints: () => ({ wood: WOOD.top, list: PAINT.map((p) => p.top) }), paintOf: paintIdx, paint: paintOf, tiny, tinyW, printer: printerPicture, carry: carryKind, place: placeKind, playing: playingAt, names: NAMES, at, board, stats, hovered: () => hovered && { id: hovered.b.id, seat: !!hovered.seat } };
+  return { talk, typed, size, draw, width, color: projectColor, icon, door: doorPicture, paints: () => ({ wood: WOOD.top, list: PAINT.map((p) => p.top) }), paintOf: paintIdx, paint: paintOf, tiny, tinyW, printer: printerPicture, carry: carryKind, place: placeKind, pend, playing: playingAt, names: NAMES, at, board, stats, hovered: () => hovered && { id: hovered.b.id, seat: !!hovered.seat } };
 }

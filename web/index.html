@@ -148,8 +148,8 @@ const room = startRoom($("#room"), {
 
 async function act(a) {
   const b = a.id && byId(a.id);
-  if (a.kind === "addMachine") ask("machine");
-  else if (a.kind === "addDir") ask("dir");
+  if (a.kind === "addDir") ask("dir");
+  else if (a.kind === "unmachine") { const r = await api("/api/unmachine", { m: a.m }); if (r.error) note(r.error); }   // a door into the fire
   else if (a.kind === "you") askYou();
   else if (a.kind === "closet") { openView("closet"); fillCloset(); }
   else if (a.kind === "report") { openView("report"); fillReport(); }
@@ -247,6 +247,7 @@ function closeView(keep) {                 // keep: another view takes its place
   viewKind = null;
   if (was === "chess" && state && state.chess && !state.chess.result && [state.chess.white.id, state.chess.black.id].includes("you")) api("/api/chess", { resign: true });   // your game; the bots' goes on
   if (was === "pong") pongUI.close();
+  if (was === "machine" && machineAt) { machineAt = null; room.pend(null); }   // the new door goes back into the closet
   if (!keep) { view.hidden = true; $("#pane").classList.toggle("empty", !tiles.all().length); room.draw(); }
 }
 view.querySelector(".tx").onclick = () => closeView();
@@ -273,13 +274,15 @@ function ask(kind) {
   inp.focus();
   inp.dispatchEvent(new Event("focus"));   // its completions open at once (a window without the focus gets no focus event)
 }
+let machineAt = null;                       // where the new machine's door was let go (from the closet)
 for (const d of [$("#vDir"), $("#vMachine")]) {
   d.addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.target)), err = d.querySelector(".err");
     err.textContent = "…";
-    const r = d.id === "vDir" ? await api("/api/dir", { m: f.m || "", dir: f.dir }) : await api("/api/machine", f);
+    const r = d.id === "vDir" ? await api("/api/dir", { m: f.m || "", dir: f.dir }) : await api("/api/machine", { ...f, at: machineAt });
     if (r.error) { err.textContent = r.error; return; }
+    if (d.id === "vMachine") { room.pend(machineAt, r.m); machineAt = null; }   // its door stays up until the state brings it
     closeView();
   });
 }
@@ -358,7 +361,7 @@ function askYou() {
 
 // ---- the closet: the furniture there is, drawn as it stands in the room; drag a piece into the
 // room to put it there, as many as you like. The fireplace takes a piece back out (it burns)
-const CATALOGUE = ["plant", "armchair", "window", "clock", "board", "meet", "chess", "pong", "coffee", "cooler", "printer", "add", "pair", "bench", "manager", "booth", "neuralyzer", "frame"];
+const CATALOGUE = ["plant", "armchair", "window", "clock", "board", "meet", "chess", "pong", "coffee", "cooler", "printer", "add", "pair", "bench", "manager", "booth", "neuralyzer", "door"];
 // Built when it opens, and again on a state update only while its pictures were still loading: never while
 // something is being carried out of it. Rebuilding it on every update (each second or two in a room with
 // many bots) took the picture being held away mid-drag, and the piece never arrived
@@ -680,7 +683,8 @@ function carryOut(e, kind, it) {
     done();
     if (!on) return;
     const at = room.place(kind, ev.clientX, ev.clientY);
-    if (at) { const r = await api("/api/furniture", { add: kind, at }); if (r.error) note(r.error); }
+    if (at && kind === "door") { ask("machine"); machineAt = at; room.pend(at); }   // a door is a machine: which one, then it hangs there
+    else if (at) { const r = await api("/api/furniture", { add: kind, at }); if (r.error) note(r.error); }
   };
   it.onpointercancel = () => { done(); room.carry(null); };   // taken away by the browser: no ghost left behind
 }

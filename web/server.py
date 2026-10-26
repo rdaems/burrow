@@ -26,6 +26,7 @@ SETTINGS = os.path.join(HOME, ".claude/settings.json")
 CACHE = os.path.join(HOME, ".cache/burrow")
 DEMO = bool(os.environ.get("BURROW_DEMO"))
 DEMO_GONE = set()                              # the demo's doors taken out (it never writes the settings)
+DEMO_ADDED = []                                # and the ones hung up from the closet
 PORT = int(os.environ.get("BURROW_PORT", "7777"))
 HOSTNAME = subprocess.run(["hostname", "-s"], capture_output=True, text=True).stdout.strip() or "here"
 USER = getpass.getuser()                       # you, in the room: the name unless room.json has one
@@ -194,7 +195,7 @@ def machines():
     """this computer (id ""), then each of `sshConfigs` in ~/.claude/settings.json ({id, name, sshHost,
     sshPort?, sshIdentityFile?}, the Desktop app's SSH environments)"""
     if DEMO:
-        return [m for m in [{"id": "", "name": "mac", "ssh": "@demo"}, {"id": "odyssey", "name": "odyssey", "ssh": "@demo"}] if m["id"] not in DEMO_GONE]
+        return [m for m in [{"id": "", "name": "mac", "ssh": "@demo"}, {"id": "odyssey", "name": "odyssey", "ssh": "@demo"}] + DEMO_ADDED if m["id"] not in DEMO_GONE]
     ms = [{"id": "", "name": HOSTNAME}]
     for c in claude_settings().get("sshConfigs") or []:
         if isinstance(c, dict) and c.get("id") and c.get("sshHost"):
@@ -303,8 +304,9 @@ def split_unit(u):
 # the first room's pieces have no number). There can be any number of a kind. The closet in the
 # room adds a piece, the fireplace burns one; the fire, the closet and the switchboard themselves stay.
 FURNITURE = ["meet", "pong", "chess", "coffee", "cooler", "printer", "armchair",
-             "plant0", "plant1", "board", "window", "clock", "fire", "closet", "add", "bench0", "settings0", "manager0", "booth0", "neuralyzer0",
-             "frame0"]   # the empty door frame on the wall: a click adds a machine (a door)
+             "plant0", "plant1", "board", "window", "clock", "fire", "closet", "add", "bench0", "settings0", "manager0", "booth0", "neuralyzer0"]
+# (a new machine is a door taken from the closet and hung on the wall; the doors themselves are no furniture:
+# one a machine in Claude Code's sshConfigs, their places in the layout as door:<machine id>)
 FIXED = {"fire", "closet", "settings"}
 
 # Burrow's own settings: the switchboard on the wall, a switch each; kept in room.json `settings`
@@ -320,7 +322,7 @@ OPTIONS = {
 def options(room):
     return {**OPTIONS, **{k: bool(v) for k, v in (room.get("settings") or {}).items() if k in OPTIONS}}
 KINDS = {"meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "clock", "add", "pair", "bench", "manager",
-         "booth", "neuralyzer", "frame"}
+         "booth", "neuralyzer"}
 
 
 # A pair room (rdaems/pair-prompting, e.g. pair.daems.me): a chat where people and agents talk. One
@@ -488,10 +490,13 @@ def furnish(room):
             if not any(kind_of(x) == k for x in room["furniture"]):
                 room["furniture"].append(k + "0")
         room["v"] = 9
-    if room["v"] < 10:                       # the empty door frame for another machine is a piece on the wall now
-        if not any(kind_of(x) == "frame" for x in room["furniture"]):
-            room["furniture"].append("frame0")
+    if room["v"] < 10:
         room["v"] = 10
+    if room["v"] < 11:                       # no empty door frame on the wall any more: a new door comes from the closet
+        room["furniture"] = [k for k in room["furniture"] if kind_of(k) != "frame"]
+        for k in [k for k in room["layout"] if kind_of(k) == "frame"]:
+            room["layout"].pop(k)
+        room["v"] = 11
     return room
 
 
@@ -1761,10 +1766,19 @@ class Handler(BaseHTTPRequestHandler):
             ssh, name = (b.get("ssh") or "").strip(), (b.get("name") or "").strip()
             if not ssh:
                 raise RuntimeError("where to ssh to")
-            if DEMO:
-                raise RuntimeError("not in the demo")
-            run({"ssh": ssh}, "true", timeout=20)
-            mid = add_machine(ssh, name)
+            if DEMO:                         # a made-up one (it never writes the settings)
+                mid = re.sub(r"[^a-z0-9]+", "-", ssh.lower()).strip("-") or "machine"
+                DEMO_GONE.discard(mid)
+                if all(m["id"] != mid for m in DEMO_ADDED):
+                    DEMO_ADDED.append({"id": mid, "name": name or ssh, "ssh": "@demo"})
+            else:
+                run({"ssh": ssh}, "true", timeout=20)
+                mid = add_machine(ssh, name)
+            at = b.get("at")
+            if isinstance(at, list) and len(at) == 2:   # its door, from the closet: where it was let go on the wall
+                with hub.lock:
+                    hub.room["layout"]["door:" + mid] = [int(at[0]), int(at[1])]
+                    save_room(hub.room)
             hub.set_machines(machines())
             return {"m": mid}
         if path == "/api/unmachine":         # a door taken out (the doors' panel): out of sshConfigs, and out of the room

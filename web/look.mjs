@@ -43,6 +43,7 @@ for (const s of steps) {
     if (s.clickTo) { await mouse("mousePressed", at, 1); await mouse("mouseReleased", at); }
   }
   if (s.click) { await mouse("mouseMoved", s.click); await mouse("mousePressed", s.click); await mouse("mouseReleased", s.click); }
+  if (s.releaseTo) s.release = (await send("Runtime.evaluate", { expression: s.releaseTo, returnByValue: true })).result.result.value;   // the spot from the page
   if (s.release) { await mouse("mouseMoved", s.release, 1); await mouse("mouseReleased", s.release); }   // let go of a held drag, here
   if (s.dragTo) { const r = await send("Runtime.evaluate", { expression: s.dragTo, returnByValue: true }); s.drag = r.result.result.value; }   // the points from the page
   if (s.drag) {                              // press at the first point, move through the others, let go at the last (not with hold: true); alt: true holds Option

@@ -1146,6 +1146,26 @@ same, `DEMO_GONE` stands in for the settings there), your terminals there killed
 desks and their places dropped from room.json. Its figures walk out (through this computer's door: theirs is gone).
 Adding it again brings the door back; its desks come back as sessions are seen there.
 
+## Doors as wall pieces, no frame (2026-10-26)
+
+He: "Removing the door doesn't work, and I asked you before there should not be a ghost + door, it should be in
+furniture. Doors are entities that are equal to the other wall entities, I should be able to drag them wherever".
+Removing did work in the demo; his :7777 had not been restarted, so `/api/unmachine` was not there yet.
+- **No frame.** The `frame` kind is gone (`furnish` v 11 drops `frame*` from the furniture and the layout). The
+  closet has a **door** instead (`door` in `CATALOGUE`, drawn in the paint the next machine gets): let go on the
+  wall, it hangs there (`room.pend(at)`, drawn while its form is open) and the machine form opens; ADD posts
+  `/api/machine {ssh, at}` and the server puts `door:<id>` at `at` in the layout before the state goes out (the
+  pending door stays up until the state brings the real one, `pend(at, mid)`); ✕ or Esc puts it back.
+- **A door is like the window and the clock**: not `FIXED` (`fixed(key)` = the fixed kinds, or this computer's
+  `door:`), so it comes off the wall while carried and hangs again where it is let go (settled on clear wall).
+  Carried into the fire it takes its machine out: `act unmachine` → `/api/unmachine`, the same as the panel's
+  remove; the fire's tip says "take out NAME". This computer's door only slides along the wall and never burns.
+- A wall piece being carried (door, window, clock) is drawn over everything (`aloft`, in `items` at 1e9) and
+  washed red over the fire (`onTheWall`); before, a window over the fire was drawn under the flames, unwashed.
+  `drawDoor` takes a y; the doors' own hover (a steel frame behind) is the room's gold outline now.
+- The demo can add a machine (`DEMO_ADDED`, made-up bots). look.mjs: `releaseTo` (a JS expression) for a held
+  drag. A figure standing in front of a door takes the press (you, just in through it, at load).
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a
