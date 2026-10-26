@@ -8,17 +8,22 @@
 // remains, the sweepers, the undo); E on the pieces puts it back together, E on the gun closet puts the gun
 // back. Esc leaves; you stand in the room where you left off.
 //
+// Under the view Doom's status bar: your shells, health (what is left of the five-hour limit, the coffee pot's),
+// kills, your face, armor (what is left of the week, the cooler's bottle), the doors as keys (lit while their
+// machine answers), and the sessions as Doom's ammo table: at work, waiting for you, idle, done.
+//
 // startFps(room, done): room = { scene(), start(), move(x, y, a, walking), shoot(id), unshoot(id), alarm(x, y),
-// armed(), use(thing), label(thing), tiny(ctx, s, x, y, col), tinyW(s), hands() }. scene() is the room at
-// its last tick (twelve a second):
+// armed(), use(thing), label(thing), status(), face(), tiny(ctx, s, x, y, col), tinyW(s), hands() }. scene() is
+// the room at its last tick (twelve a second):
 //   { v, W, H, WALL, floor, wall, plain: canvases (the floor W x H, the wall W x WALL, a plain wall),
 //     boxes: [{x0, y0, x1, y1, z0, z1, front, back, side, top}]  a face: {c, sx, sy, sw, sh}, a crop of a canvas
-//     things: [{key, x, y, z, c, sx, sy, sw, sh, ax, ay, flip, bot, staff, rem, name, piece}]  a sprite standing
-//             at x, y (its column ax there), its row ay at height z; a bot to shoot, a remains' piece, a piece
+//     things: [{key, x, y, z, c, sx, sy, sw, sh, ax, ay, flip, bot, staff, rem, name, piece, face, views}]  a sprite
+//             standing at x, y (its column ax there), its row ay at height z; a bot to shoot, a remains' piece, a
+//             piece. A figure has `views` {front, back} besides its side (c), shown by the way it faces you
 //     solid: [[x0, y0, x1, y1]] }                   what you can't walk through
 // A canvas redrawn in place says so with its `v`.
 function startFps(room, done) {
-  const RH = 200, FOV = 66 * Math.PI / 180, EYE = 21, WALLH = 40, R = 4, TICK = 1000 / 12;
+  const RH = 200, BAR = 32, VIEW = RH - BAR, FOV = 66 * Math.PI / 180, EYE = 21, WALLH = 40, R = 4, TICK = 1000 / 12, SHELLS = 8;
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const cv = document.createElement("canvas");
   cv.id = "fps"; cv.tabIndex = -1;
@@ -29,6 +34,7 @@ function startFps(room, done) {
   function resize() {
     RW = Math.max(240, Math.min(440, Math.round(RH * innerWidth / Math.max(1, innerHeight))));
     cv.width = RW; cv.height = RH;
+    ctx.imageSmoothingEnabled = false;         // (resizing the canvas resets it: the bar's numbers would blur)
     img = ctx.createImageData(RW, RH); buf = new Uint32Array(img.data.buffer);
     zb = new Float32Array(RW * RH); idb = new Int32Array(RW * RH);
     focal = RW / 2 / Math.tan(FOV / 2);
@@ -65,8 +71,16 @@ function startFps(room, done) {
   // the light: what is far off sinks into the room's dusk (a dark navy), by distance; `k` 1 is full light
   const fogk = (d) => (d < 60 ? 1 : Math.max(0.42, 1 - (d - 60) / 620));
   const lit = (c, k) => {
+    if (k > 1) return 0xff000000 | Math.min(255, ((c >>> 16) & 255) * k) << 16 | Math.min(255, ((c >>> 8) & 255) * k) << 8 | Math.min(255, (c & 255) * k);
     const j = 1 - k;
     return 0xff000000 | (((c >>> 16) & 255) * k + 26 * j) << 16 | (((c >>> 8) & 255) * k + 16 * j) << 8 | ((c & 255) * k + 12 * j);
+  };
+  // the floor's light: brighter in a pool under each of the ceiling's lights (64 x 96 dots apart, as its tiles),
+  // darker along the walls
+  const floorLight = (x, y, W, H, WALL) => {
+    const dx = ((x % 64) + 64) % 64 - 32, dy = ((y % 96) + 96) % 96 - 48, q = 1 - (dx * dx / 900 + dy * dy / 576);
+    const e = Math.min(x, W - x, y - WALL, H - y);
+    return (q > 0 ? 1 + 0.22 * q * q : 1) * (e < 10 ? 0.72 + 0.028 * Math.max(0, e) : 1);
   };
   const rgb = (hex) => { const n = parseInt(hex.slice(1), 16); return 0xff000000 | (n & 255) << 16 | (n & 0xff00) | (n >> 16); };
 
@@ -138,7 +152,7 @@ function startFps(room, done) {
 
   // ---- you: where you stand, which way you look
   const me = room.start();
-  let a = me.a, pitch = 0, walking = false, bob = 0, shot = -1e9, used = -1e9;   // pitch: how far the horizon is pushed down (you look up) or up
+  let a = me.a, pitch = 0, walking = false, bob = 0, shot = -1e9, used = -1e9, shells = room.armed() ? SHELLS : 0, armedWas = room.armed(), kills0 = (room.status() || {}).kills || 0, grin = -1e9;   // pitch: how far the horizon is pushed down (you look up) or up
   const keys = new Set(), puffs = [];
   let sc = room.scene(), seen = new Map(), sv = -1;
   const blocked = (x, y) => x < R || x > sc.W - R || y < sc.WALL + R || y > sc.H - R ||
@@ -185,7 +199,7 @@ function startFps(room, done) {
     if (!locked) { dragging = [e.clientX, e.clientY]; lock(); }
   };
   const onUp = () => { dragging = null; };
-  const look = (dy) => { pitch = Math.max(-RH * 0.4, Math.min(RH * 0.4, pitch + dy)); };
+  const look = (dy) => { pitch = Math.max(-VIEW * 0.4, Math.min(VIEW * 0.4, pitch + dy)); };
   const onLock = () => {
     const now = document.pointerLockElement === cv;
     if (locked && !now) leave();               // Esc, as the browser takes it while the pointer is locked
@@ -208,9 +222,9 @@ function startFps(room, done) {
   function fire() {
     const now = performance.now();
     if (!room.armed()) return;
-    if (now - shot < COOL) return;
-    shot = now;
-    const cx = RW >> 1, cy = RH >> 1;
+    if (now - shot < COOL || !shells) return;   // (out of shells: the gun closet has more, E on it)
+    shot = now; shells--;
+    const cx = RW >> 1, cy = VIEW >> 1;
     let best = null, bd = Infinity;
     for (let y = cy - 6; y <= cy + 6; y++) for (let x = cx - 10; x <= cx + 10; x++) {
       const i = y * RW + x, n = idb[i], th = n && drawn[n - 1];
@@ -244,7 +258,7 @@ function startFps(room, done) {
     return best;
   }
   function under(r) {                         // the nearest thing round the crosshair
-    const cx = RW >> 1, cy = RH >> 1;
+    const cx = RW >> 1, cy = VIEW >> 1;
     let best = null, bd = Infinity;
     for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) {
       const i = y * RW + x, n = idb[i];
@@ -260,12 +274,12 @@ function startFps(room, done) {
     if (s !== sc) sc = s;
     const W = sc.W, H = sc.H, WALL = sc.WALL;
     const dx = Math.cos(a), dy = Math.sin(a), tf = Math.tan(FOV / 2), plx = -dy * tf, ply = dx * tf;
-    const eye = EYE + (walking && !still ? Math.sin(bob * 2) * 0.5 : 0), hor = RH / 2 + Math.round(pitch);
+    const eye = EYE + (walking && !still ? Math.sin(bob * 2) * 0.5 : 0), hor = VIEW / 2 + Math.round(pitch);
     const px = me.x, py = me.y;
     const fls = mips(tex(sc.floor)), wl = tex(sc.wall), pl = tex(sc.plain);
     // the floor and the ceiling, a row at a time; far off from the smaller copies, as many dots a pixel as
     // the row covers
-    for (let y = 0; y < RH; y++) {
+    for (let y = 0; y < VIEW; y++) {
       const below = y + 0.5 - hor, floorRow = below > 0, d = (floorRow ? eye : WALLH - eye) * focal / Math.abs(below), k = fogk(d);
       const sx = d * 2 * plx / RW, sy = d * 2 * ply / RW, fp = Math.max(Math.hypot(sx, sy), d / Math.abs(below));
       const lv = fp < 1.4 ? 0 : fp < 2.8 ? 1 : 2, m = 1 / (1 << lv), T = floorRow ? fls[lv] : ceils[lv], tw = T.w, th = T.h, tp = T.p;
@@ -273,9 +287,12 @@ function startFps(room, done) {
       const ux = sx * m, uy = sy * m;
       for (let x = 0; x < RW; x++, i++, wx += ux, wy += uy) {
         let c;
-        if (floorRow) { const tx = Math.floor(wx), ty = Math.floor(wy); c = tx >= 0 && ty >= 0 && tx < tw && ty < th ? tp[ty * tw + tx] : 0xff141018; }
-        else c = tp[(((Math.floor(wy) % th) + th) % th) * tw + (((Math.floor(wx) % tw) + tw) % tw)];
-        buf[i] = lit(c, k); zb[i] = d; idb[i] = 0;
+        if (floorRow) {
+          const tx = Math.floor(wx), ty = Math.floor(wy);
+          c = tx >= 0 && ty >= 0 && tx < tw && ty < th ? tp[ty * tw + tx] : 0xff141018;
+          buf[i] = lit(c, k * floorLight(wx / m, wy / m, W, H, WALL));
+        } else buf[i] = lit(tp[(((Math.floor(wy) % th) + th) % th) * tw + (((Math.floor(wx) % tw) + tw) % tw)], k);
+        zb[i] = d; idb[i] = 0;
       }
     }
     // the four walls: the far one is the room's own, with what hangs on it
@@ -287,9 +304,9 @@ function startFps(room, done) {
       else { t = tx; u = py + ry * t; T = pl; side = 0.78; if (rx < 0) u = H - u; }
       const col = T === wl ? Math.max(0, Math.min(T.w - 1, Math.floor(u))) : ((Math.floor(u) % T.w) + T.w) % T.w;
       const top = hor - (WALLH - eye) * focal / t, bot = hor + eye * focal / t, k = fogk(t) * side;
-      for (let y = Math.max(0, Math.ceil(top - 0.5)), y1 = Math.min(RH - 1, Math.floor(bot - 0.5)); y <= y1; y++) {
+      for (let y = Math.max(0, Math.ceil(top - 0.5)), y1 = Math.min(VIEW - 1, Math.floor(bot - 0.5)); y <= y1; y++) {
         const z = eye + (hor - y - 0.5) * t / focal, row = Math.max(0, Math.min(T.h - 1, Math.floor((WALLH - z) / WALLH * T.h))), i = y * RW + x;
-        buf[i] = lit(T.p[row * T.w + col], k); zb[i] = t; idb[i] = 0;
+        buf[i] = lit(T.p[row * T.w + col], k * (z < 4 ? 0.7 + z * 0.075 : 1)); zb[i] = t; idb[i] = 0;   // (a little darker where it meets the floor)
       }
     }
     // the desks: blocks, the face the ray meets first, and their tops while you look down on them
@@ -309,7 +326,7 @@ function startFps(room, done) {
     for (let n = 0; n < all.length; n++) {
       const th = all[n], o = th.key && seen.get(th.key), at = o ? place(o, now) : th;
       drawn.push(th);
-      sprite3(th, at, drawn.length, px, py, dx, dy, eye, hor);
+      sprite3(th, at, drawn.length, px, py, dx, dy, eye, hor, o);
     }
     ctx.putImageData(img, 0, 0);
     hud(now);
@@ -342,7 +359,7 @@ function startFps(room, done) {
       else { f = b.back; u = 1 - (hx - b.x0) / (b.x1 - b.x0); sh = 0.72; }
       u = Math.max(0, Math.min(0.999, u));
       const k = fogk(tn) * sh, top = hor - (b.z1 - eye) * focal / tn, bot = hor - (b.z0 - eye) * focal / tn;
-      for (let y = Math.max(0, Math.ceil(top - 0.5)), y1 = Math.min(RH - 1, Math.floor(bot - 0.5)); y <= y1; y++) {
+      for (let y = Math.max(0, Math.ceil(top - 0.5)), y1 = Math.min(VIEW - 1, Math.floor(bot - 0.5)); y <= y1; y++) {
         const i = y * RW + x;
         if (tn >= zb[i]) continue;
         const z = eye + (hor - y - 0.5) * tn / focal, c = face(f, u, Math.max(0, Math.min(0.999, (b.z1 - z) / (b.z1 - b.z0))));
@@ -351,7 +368,7 @@ function startFps(room, done) {
       }
       if (eye <= b.z1) continue;
       // its top, from the far edge to the near one
-      const h = eye - b.z1, ya = Math.max(0, Math.ceil(hor + h * focal / tx - 0.5)), yb = Math.min(RH - 1, Math.floor(hor + h * focal / tn - 0.5));
+      const h = eye - b.z1, ya = Math.max(0, Math.ceil(hor + h * focal / tx - 0.5)), yb = Math.min(VIEW - 1, Math.floor(hor + h * focal / tn - 0.5));
       for (let y = ya; y <= yb; y++) {
         const d = h * focal / (y + 0.5 - hor), i = y * RW + x;
         if (d < tn || d > tx || d >= zb[i]) continue;
@@ -361,16 +378,24 @@ function startFps(room, done) {
       }
     }
   }
-  function sprite3(th, at, n, px, py, dx, dy, eye, hor) {
+  function sprite3(th, at, n, px, py, dx, dy, eye, hor, o) {
     const rx = at.x - px, ry = at.y - py, d = rx * dx + ry * dy;
     if (d < 6) return;                        // right in your face (you walked into it): it would fill the view
-    const s = rx * -dy + ry * dx, k = focal / d, T = tex(th.c);
+    // which way it faces, as you see it: the way it walks (or, standing, the way it looks), against the way to
+    // you: its front, its back, or its side (the picture faces right, a figure facing the other way is flipped)
+    let pic = th.c, flip = th.face ? th.face * -dy < 0 : !!th.flip;
+    if (th.views) {
+      const mx = o ? o.tx - o.fx : 0, my = o ? o.ty - o.fy : 0, fa = !th.seated && Math.hypot(mx, my) > 0.4 ? Math.atan2(my, mx) : th.face < 0 ? Math.PI : 0;
+      const rel = Math.atan2(Math.sin(Math.atan2(-ry, -rx) - fa), Math.cos(Math.atan2(-ry, -rx) - fa));
+      if (Math.abs(rel) < Math.PI / 4) { pic = th.views.front; flip = false; }
+      else if (Math.abs(rel) > Math.PI * 3 / 4) { pic = th.views.back; flip = false; }
+      else flip = Math.cos(fa) * -dy + Math.sin(fa) * dx < 0;
+    }
+    const s = rx * -dy + ry * dx, k = focal / d, T = tex(pic);
     const left = RW / 2 + s * k - th.ax * k, top = hor - (at.z + th.ay - eye) * k;
     const x0 = Math.max(0, Math.floor(left)), x1 = Math.min(RW - 1, Math.ceil(left + th.sw * k) - 1);
-    const y0 = Math.max(0, Math.floor(top)), y1 = Math.min(RH - 1, Math.ceil(top + th.sh * k) - 1);
+    const y0 = Math.max(0, Math.floor(top)), y1 = Math.min(VIEW - 1, Math.ceil(top + th.sh * k) - 1);
     if (x0 > x1 || y0 > y1) return;
-    // which way it faces, as you see it: the picture faces right, a figure facing the other way is flipped
-    const flip = th.face ? th.face * -dy < 0 : !!th.flip;
     const L = fogk(d) * (th.dim || 1);
     for (let x = x0; x <= x1; x++) {
       const u = Math.floor((x + 0.5 - left) / k);
@@ -392,11 +417,13 @@ function startFps(room, done) {
   let t0 = performance.now();
   function hud(now) {
     const armed = room.armed();
-    const since = now - shot, cx = RW >> 1, cy = RH >> 1;
+    if (armed && !armedWas) shells = SHELLS;    // a gun from the gun closet: loaded
+    armedWas = armed;
+    const since = now - shot, cx = RW >> 1, cy = VIEW >> 1;
     const kick = since < 90 ? since / 90 : since < 320 ? 1 - (since - 90) / 230 : 0;
     const pumpY = since > 380 && since < 720 ? Math.sin((since - 380) / 340 * Math.PI) * 9 : 0;
     const bx = walking && !still ? Math.sin(bob) * 5 : 0, by = walking && !still ? Math.abs(Math.cos(bob)) * 4 : 0;
-    const gx = Math.round(cx - GX + bx), gy = Math.round(RH - GH + 8 + by + kick * 10);
+    const gx = Math.round(cx - GX + bx), gy = Math.round(VIEW - GH + 8 + by + kick * 10);
     if (armed && since < 70) {                 // the flash lights the room a moment
       ctx.fillStyle = "rgba(255,226,150,0.14)"; ctx.fillRect(0, 0, RW, RH);
       ctx.drawImage(flash, gx + GX - 20, gy - 24);
@@ -418,6 +445,65 @@ function startFps(room, done) {
     else if (what) tag(what, 18, "#e8e8ee");                                       // what a click would use
     if (!bot && rm) tag("E: put back together", 28, "#e8e8ee");
     if (now - t0 < 6000) tag(armed ? "wasd walk - mouse look - click shoot - e use - esc leave" : "wasd walk - mouse look - click use - esc leave", 6, "#c9ced8");
+    statusBar(now, armed);
+  }
+
+  // ---- Doom's status bar, the room's numbers in it: AMMO (shells), HEALTH (the five-hour limit), KILLS, your face,
+  // ARMOR (the week's limit), the doors as keys, and the sessions as the ammo table
+  const STONE = (() => {                     // its stone, a little rough
+    const c = document.createElement("canvas"); c.width = 64; c.height = BAR;
+    const x = c.getContext("2d"); x.fillStyle = "#4b4740"; x.fillRect(0, 0, 64, BAR);
+    let h = 7;
+    for (let i = 0; i < 64 * BAR; i++) { h = (h * 1103515245 + 12345) >>> 0; const v = h >>> 24; if (v < 40) { x.fillStyle = v < 14 ? "#3a3731" : "#58534a"; x.fillRect(i % 64, (i / 64) | 0, 1, 1); } }
+    x.fillStyle = "#6d685e"; x.fillRect(0, 0, 64, 1); x.fillStyle = "#2b2925"; x.fillRect(0, 1, 64, 1);
+    return c;
+  })();
+  const big = document.createElement("canvas"); big.width = 64; big.height = 6;
+  function digits(text, x, y, col) {         // the big red numbers: the room's 3x5 letters, three times as large
+    const bx = big.getContext("2d"), w = room.tinyW(text);
+    bx.clearRect(0, 0, 64, 6); room.tiny(bx, text, 0, 0, col);
+    ctx.drawImage(big, 0, 0, w, 5, x - w * 3, y, w * 3, 15);
+  }
+  function well(x, y, w, h) {                // a panel sunk into the stone
+    ctx.fillStyle = "#2b2925"; ctx.fillRect(x, y, w, 1); ctx.fillRect(x, y, 1, h);
+    ctx.fillStyle = "#6d685e"; ctx.fillRect(x, y + h - 1, w, 1); ctx.fillRect(x + w - 1, y, 1, h);
+  }
+  let faceImg = null, faceSrc = null;
+  function statusBar(now, armed) {
+    const st = room.status() || {}, y0 = VIEW, label = (t, x, w) => room.tiny(ctx, t, Math.round(x + (w - room.tinyW(t)) / 2), y0 + 25, "#d8d2c2");
+    for (let x = 0; x < RW; x += 64) ctx.drawImage(STONE, x, y0);
+    if ((st.kills || 0) > kills0) { kills0 = st.kills; grin = now; }
+    const red = "#d8341c", cells = [["AMMO", armed ? String(shells) : "-", 40], ["HEALTH", st.health == null ? "-" : st.health + "%", 54], ["KILLS", String(st.kills || 0), 38]];
+    const right = [["ARMOR", st.armor == null ? "-" : st.armor + "%", 54]];
+    const FW = 30, table = RW >= 300;
+    let x = Math.round(RW / 2 - FW / 2) - cells.reduce((a, c) => a + c[2], 0);
+    for (const [name, v, w] of cells) { well(x + 1, y0 + 3, w - 2, 21); digits(v, x + w - 4, y0 + 6, red); label(name, x, w); x += w; }
+    // your face, in the middle: looking about; after a kill it lights up a moment
+    const fx = x, src = room.face();
+    if (src && src !== faceSrc) { faceSrc = src; faceImg = new Image(); faceImg.src = src; }
+    well(fx + 1, y0 + 2, FW - 2, 28);
+    ctx.fillStyle = now - grin < 1300 ? "#7a2a18" : "#24211d"; ctx.fillRect(fx + 2, y0 + 3, FW - 4, 26);
+    if (faceImg && faceImg.complete) {
+      const look = Math.floor(now / 1100) % 4, sx = look === 1 ? -1 : look === 3 ? 1 : 0;
+      ctx.drawImage(faceImg, fx + 5 + sx, y0 + 6, 20, 20);
+    }
+    x += FW;
+    for (const [name, v, w] of right) { well(x + 1, y0 + 3, w - 2, 21); digits(v, x + w - 4, y0 + 6, red); label(name, x, w); x += w; }
+    // the doors as keys: one a machine, in its paint, dark while it does not answer
+    well(x + 1, y0 + 3, 12, 26);
+    (st.keys || []).slice(0, 3).forEach((k, i) => {
+      const ky = y0 + 5 + i * 8;
+      ctx.fillStyle = k.ok ? k.color : "#3a3731"; ctx.fillRect(x + 4, ky, 6, 6);
+      ctx.fillStyle = "#1a1626"; ctx.fillRect(x + 8, ky + 3, 1, 1);
+    });
+    x += 14;
+    if (table) {                             // the sessions as Doom's ammo table
+      well(x + 1, y0 + 3, RW - x - 3, 26);
+      [["WORK", st.working], ["WAIT", st.waiting], ["IDLE", st.idle], ["DONE", st.done]].forEach(([n, v], i) => {
+        const ty = y0 + 5 + i * 6;
+        room.tiny(ctx, n, x + 5, ty, "#d8d2c2"); room.tiny(ctx, String(v || 0), x + 29, ty, "#f2a531");
+      });
+    }
   }
 
   let raf = 0, last = performance.now(), ms = 0;   // ms: how long a frame takes to draw, smoothed

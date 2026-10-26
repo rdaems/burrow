@@ -112,8 +112,10 @@ let hoverTile = null;                      // the tile the pointer is on
 const view = $("#view");
 let viewKind = null;                       // what the view shows: closet, chess, pong, dir, machine, you; null when tiles do
 
-const herId = () => (state && state.manager && state.manager.id) || null;   // the office manager's own session (not a bot at a desk)
-const asFolk = (id) => (id && id === herId() ? "manager" : id);         // in the room she is "manager"
+// the office managers: their own sessions are no bots at a desk; in the room each is "mgr:<her booth>"
+const managerOf = (id) => (id && state && (state.managers || []).find((M) => M.id === id)) || null;
+const asFolk = (id) => { const M = managerOf(id); return M ? "mgr:" + M.key : id; };
+const lindaFolk = () => { const M = state && (state.managers || []).find((x) => x.style === "notes"); return M ? "mgr:" + M.key : null; };   // the notes are hers
 const room = startRoom($("#room"), {
   state: () => state,
   open: () => asFolk(focusedBot()),
@@ -130,8 +132,8 @@ const room = startRoom($("#room"), {
   cleanup: () => {
     const cfg = (state && state.settings) || {}, ss = (digest && digest.sessions) || {};
     const none = (t) => !(t || "").trim() || /^\s*(nothing|none|no further|no next)\b/i.test(t);
-    const asked = ((state && state.manager && state.manager.remove) || []).filter((id) => byId(id));
-    const ids = cfg.cleanup && state ? state.bots.filter((b) => {
+    const asked = ((state && state.removing) || []).filter((id) => byId(id));
+    const ids = cfg.cleanup && state && lindaFolk() ? state.bots.filter((b) => {   // (the rule reads Linda's notes)
       const e = ss[b.id];
       if (!b.over || !e || !b.endedAt || Date.now() - b.endedAt < 3600e3) return false;
       return !(e.decisions || []).some((q) => !(e.answered || {})[q.question]) && none(e.next);
@@ -139,8 +141,8 @@ const room = startRoom($("#room"), {
     return { on: !!cfg.cleanup || asked.length > 0, hardcore: !!cfg.hardcore, ids: [...asked, ...ids.filter((id) => !asked.includes(id))] };
   },
   away: () => (blurAt ? (performance.now() - blurAt) / 1000 : 0),
-  hl: () => (hoverTile && hoverTile.kind === "bot" ? asFolk(hoverTile.id) : hoverTile && hoverTile.kind === "notes" ? "manager" : null),   // the notes are the office manager's
-  hover: (id) => { for (const t of botTiles()) t.el.classList.toggle("hl", asFolk(t.id) === id); for (const t of notesTiles()) t.el.classList.toggle("hl", id === "manager"); },
+  hl: () => (hoverTile && hoverTile.kind === "bot" ? asFolk(hoverTile.id) : hoverTile && hoverTile.kind === "notes" ? lindaFolk() : null),
+  hover: (id) => { for (const t of botTiles()) t.el.classList.toggle("hl", asFolk(t.id) === id); for (const t of notesTiles()) t.el.classList.toggle("hl", !!id && id === lindaFolk()); },
   // your terminals: the one whose tile has the focus (you stand at its screen), every one the server
   // keeps (its screen shows a prompt; busy while output comes, from the server or the open tile)
   shell: focusedShell,
@@ -166,7 +168,7 @@ async function act(a) {
   else if (a.kind === "completed") { openView("completed"); fillDone(); }
   else if (a.kind === "clock") { openView("clock"); fillClock(); }
   else if (a.kind === "notes") openNotes(a.shift);
-  else if (a.kind === "manager") openManager(a.shift);
+  else if (a.kind === "manager") openManager(a.key, a.shift);
   else if (a.kind === "kept") api("/api/office", { kept: a.id });   // one she was seeing out, kept: her session is told
   else if (a.kind === "outside") openOutside();
   else if (a.kind === "pairOpen") openPair(a.key);
@@ -711,16 +713,17 @@ function carryOut(e, kind, it) {
   it.onpointercancel = () => { done(); room.carry(null); };   // taken away by the browser: no ghost left behind
 }
 
-// ---- the office manager: her styles (server.py MANAGERS), picked when her booth comes out of the closet; a click
-// on her or her booth is hers: Linda's notes, or the others' own session in a tile (started again if it is gone)
+// ---- the office managers: their styles (server.py MANAGERS), one picked when a reception comes out of the closet
+// (one of each); a click on her or her booth is hers: Linda's notes, or the others' own session in a tile (started
+// again if it is gone)
 let managerAt = null;                       // where her booth was let go
 async function askManager(at) {
   managerAt = at; room.pend(at, null, "manager");
   openView("manager");
   const el = $("#vManager .styles"), r = await api("/api/manager", {});
   if (viewKind !== "manager") return;
-  el.innerHTML = (r.styles || []).map((st) => `<button type="button" class="style" data-key="${st.key}"><img alt="" data-seed="${esc(st.seed)}" data-color="${st.color}">` +
-    `<span class="who"><b style="color:${st.color}">${esc(st.name.toUpperCase())}</b><span class="line">${esc(st.line)}</span><small>${esc(st.how)}</small></span></button>`).join("");
+  el.innerHTML = (r.styles || []).map((st) => `<button type="button" class="style" data-key="${st.key}"${st.here ? " disabled" : ""}><img alt="" data-seed="${esc(st.seed)}" data-color="${st.color}">` +
+    `<span class="who"><b style="color:${st.color}">${esc(st.name.toUpperCase())}</b><span class="line">${esc(st.line)}</span><small>${st.here ? "at a reception already" : esc(st.how)}</small></span></button>`).join("");
   const faces = () => { let left = 0; for (const im of el.querySelectorAll("img:not([src])")) { const u = room.figure(im.dataset.seed, im.dataset.color, 3); if (u) im.src = u; else left++; } if (left && viewKind === "manager") setTimeout(faces, 100); };
   faces();
   for (const b of el.querySelectorAll(".style")) b.onclick = async () => {
@@ -731,11 +734,11 @@ async function askManager(at) {
     closeView();
   };
 }
-async function openManager(retain) {
-  const M = state && state.manager;
+async function openManager(key, retain) {
+  const M = state && (state.managers || []).find((x) => x.key === key);
   if (!M) return;
   if (M.style === "notes") return openNotes(retain);
-  const r = await api("/api/manager", { open: true });
+  const r = await api("/api/manager", { open: key });
   if (!r.id) return note(r.error || M.name + " is not there yet");
   openBot("", r.id, retain);
 }
@@ -777,7 +780,7 @@ function showWho(t) {
   if (t.kind === "notes") return t.name("notes", digest && digest.writing ? "writing…" : digest && !digest.on ? "switched off" : "");
   const m = machine(t.m), on = m ? "on " + m.name : "";
   if (t.kind === "shell") t.name(t.dir.replace(/\/+$/, "").split("/").pop() || t.dir, on);
-  else if (t.id === herId()) { t.name(state.manager.name, "office manager"); appLink(t, state.manager.rc); }
+  else if (managerOf(t.id)) { const M = managerOf(t.id); t.name(M.name, "office manager"); appLink(t, M.rc); }
   else { const b = byId(t.id); t.name(b ? b.name : t.id, on); appLink(t, b && b.rc); }
   t.term.options.theme = m && m.light ? LIGHT : DARK;
 }
@@ -833,7 +836,7 @@ function openTerminal(t, at) {
     readText: async () => "",
     writeText: async (_, text) => { try { await navigator.clipboard.writeText(text); } catch {} },
   }));
-  term.onData((d) => { if (t.ws && t.ws.readyState === 1) { t.ws.send(enc.encode(d)); room.typed(); } });
+  term.onData((d) => { if (t.ws && t.ws.readyState === 1) { t.ws.send(enc.encode(d)); room.typed(t.kind === "bot" ? asFolk(t.id) : null, d.includes("\r")); } });
   // shift+enter is a new line, as in the Rust pane: ESC CR, which claude reads as meta+enter (xterm.js sends a bare CR)
   term.attachCustomKeyEventHandler((e) => {
     if (e.key !== "Enter" || !e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return true;

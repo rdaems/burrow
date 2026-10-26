@@ -1311,6 +1311,53 @@ And, the same evening:
   in pieces, in the booth or stopped gives up its chair at once (`gone` in `layout`), keeping its place in the row
   (`seatRows`): put back together it sits where it sat.
 
+## Several managers, shooting by hand, fear, Doom's bar (2026-10-26, night)
+
+He: "you should allow multiple office managers ofcourse! The canope is a bit over the top, remove that and put
+her name on the desk below"; "When i drag a bot for deletion on the booth, it should be the same mechanic as if I
+do it in hardcore mode, but then one of the office managers, or me, will go there, grab a gun, and kill the bot";
+"Remove the possibility to burn the bots, that's a bit cruel"; "In hardcore mode, add a mechanic where the other
+bots are increasingly frightened"; "The 3d mode, make it a little more detailed! Add a bottom bar like in doom";
+"3D: also check some inconsistencies, like the fire is floating. Test all the assets, and add 4 or 8 viewpoints
+to some of them, especially to the bots"; "When a bot is walking around (idle) and I open their chat, we should
+walk towards eachother ... Only when i've sent my message, the bot will go to their desk"; and "Both on the wall
+and on the floor, I want there to be overlap! It's the responsability of the user to declutter".
+- **Several office managers**: a reception each (room.json `managers: {booth key: {style, id, since}}`; the one
+  `manager` entry of the evening's version moves to the first booth; a booth without an entry is Linda). One of
+  each style (the popup greys the ones at a booth; the name would be one session's twice). Each session manager
+  has her own directory, `OFFICE/<name>` (Claude Code keys sessions by directory), and her manual names her
+  colleagues (`write_manuals` on every hire and fire). `state.managers` is a list, `state.removing` the removals
+  asked; in the room she is `mgr:<booth key>` (`boothOf`, `managerSeat(booth)`), the page maps a session id to
+  that (`asFolk`, `managerOf`). Her name is on a plate on the counter's front; no sign over her.
+- **One shooting mechanic** (hardcore): whoever is to go is condemned (hands up where it stands): a robot dropped
+  on the gun closet (it stands beside it; the closet goes red, "shoot NAME"), a burnt desk's robots, ✕✕ in the
+  list, what an office manager clears out or her session asks to remove. `huntStep` is per shooter (`f.hunt`):
+  an office manager if there is one in the room (each claims the nearest target at once, so two never go for the
+  same one), else you; gun, walk, aim, shot, the next, the gun back. The gun closet shows a gun gone for each one
+  out. In normal mode the booth is as it was; managers escort per manager (`f.clean`, the escort follows `act.by`).
+- **No burning robots**: `bury` and `pyre` are gone; a robot let go at the fire warms its hands (`useAt` fire); a
+  burnt desk's robots with no booth are deleted and walk out of their door.
+- **Fear** (`w.fear`, hardcore only: `FEAR.kill` 0.25 a kill, fading over `FEAR.fade` 240 s): above 0.2 they
+  tremble (the figure jitters a dot); above 0.45 a drop of sweat runs down; above 0.35 idle ones flee whoever holds
+  a gun (`scare`, reach grows with fear) and a shot is heard further (`alarm`); above 0.5 a break is likely spent
+  hiding (`hide` act, `hideSpot`: behind the piece furthest from the gun closet, eyes peeking over its top, which
+  `visTop` measures from the piece's picture; never a desk, too low); above 0.6 the ones at work glance over their
+  shoulder; fewer come to sweep. `__room.fear(v)` sets it for a look.
+- **Meeting halfway** (`meet` act): the focused tile's robot, idle and nothing sent yet, walks to a point halfway to
+  you; you stand 14 dots from it, facing it. `room.typed(id, sent)`: your bubble while typing, its dots when you
+  pause (`f.reply`); Enter (`sent`) and it goes to its desk, you behind the desk as before.
+- **Overlap**: `settle` is gone. A piece, a desk or a piece out of the closet lands exactly where it is let go,
+  over whatever is there (the front one takes the clicks); wall pieces still only slide along the wall.
+- **3d**: Doom's status bar (`statusBar` in fps.js, 32 rows under a 168-row view): AMMO (8 shells a gun; put it back in
+  the gun closet and take it again for more), HEALTH (five-hour limit left), KILLS (`w.kills`), your face (looks about, its frame lit a
+  moment after a kill), ARMOR (week left), the doors as keys (their paint, dark when out of reach), the sessions
+  as the ammo table (WORK, WAIT, IDLE, DONE). `room.status()`, `room.face()`. The floor has pools of light under
+  the ceiling's lights and darkens along the walls, walls darken where they meet it, every figure and piece casts
+  a shadow on it. The fire's pit is on the floor (`drawFire(…, part)`: "pit" onto the floor canvas, "flames" the
+  sprite), the ping-pong table a table (boxes faced with its sprite: top, edge, net, legs). Figures have three
+  pictures (`views`: front, back from `backOf`, side as the room draws it), picked by the way they walk or look
+  against the way to you. All pieces were looked at from the front in 3d (a contact sheet); the rest stand right.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

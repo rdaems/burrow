@@ -29,8 +29,8 @@ floor; a session is in the room while its directory has a desk. A remote machine
 painted its colour.
 
 **It is an office.** Idle robots take breaks: coffee, chess, a stretch, a nap on a mat they roll out, a
-meeting at the whiteboard. You arrange the furniture, the closet holds more of it, and the fire burns
-whatever you drag into it.
+meeting at the whiteboard. You arrange the furniture (wherever you like, over each other too), the closet
+holds more of it, and the fire burns the furniture you drag into it.
 
 ## The room
 
@@ -49,7 +49,8 @@ whatever you drag into it.
 
 Sessions started in the same directory share a desk, named after the folder. A session in a git worktree
 sits at its repository's desk, the worktree a laptop beside the big screen. You are in the room too:
-behind the desk of the robot whose session is open, or under the screen when your own terminal is.
+with the robot whose session is open (an idle one comes to meet you halfway and goes to its desk once you
+have sent it something; then you stand behind its desk), or under the screen when your own terminal is.
 
 ## What you do
 
@@ -59,17 +60,20 @@ behind the desk of the robot whose session is open, or under the screen when you
 - **start a session**: the `+` beside a desk's screen
 - **a desk**: the project cabinet puts one down; its list has the directories with sessions that are not
   in the room yet, then where Claude Code ran lately. Burn a desk and its sessions are deleted with it: they
-  walk into the booth one by one (in hardcore you take a gun and shoot them); rescue one and the desk stays
+  walk into the booth one by one (in hardcore they are shot); rescue one and the desk stays
 - **a fresh start**: drop an idle robot by the neuralyzer: `/clear`, a new conversation in the same session
 - **delete a session gently**: carry its robot into the booth, or ✕ twice in the bench's list. A sign counts
   five seconds down (click it, or carry the robot out, to undo), then `claude stop` and `claude rm`
-- **delete a session** (`claude rm`; the transcript stays for `claude --resume`): drop its robot in the fire
 - **3d**: click the goggles and the whole window is the office through your own eyes, as Wolf3D drew it: WASD
-  walks, the mouse looks, a click uses what is under the crosshair (a robot opens its session). Esc, and you
-  stand in the room where you walked to
-- **hardcore** (a switch on the switchboard): the booth is a gun closet. Click it (in the room, or in 3d) and
-  you hold a shotgun: a click shoots. A shot robot goes to pieces; E puts it back together until idle robots
-  have cleared the pieces away (then `claude stop` and `claude rm`). In 3d the gun closet takes the gun back
+  walks, the mouse looks, a click uses what is under the crosshair (a robot opens its session). Doom's status
+  bar under it: your shells, health (the five-hour limit), kills, your face, armor (the week), the doors as
+  keys, the sessions as the ammo table. Esc, and you stand in the room where you walked to
+- **hardcore** (a switch on the switchboard): the booth is a gun closet. A robot dropped on it is shot: it
+  stands there with its hands up while an office manager (you, if there is none) takes a gun and comes over.
+  Click the closet (in the room, or in 3d) and you hold a shotgun yourself: a click shoots. A shot robot goes to
+  pieces; E puts it back together until idle robots have cleared the pieces away (then `claude stop` and
+  `claude rm`). The others grow afraid with every kill: they tremble, sweat, keep away from whoever holds a
+  gun, hide behind the furniture and peek out; it wears off when nobody is shot for a few minutes
 - **your own terminal**: click a desk's screen. A login shell in that directory on that machine, one per
   desk, kept while burrow runs; the screen shows its prompt
 - **drop a file** on a robot or a tile and its path is typed into the session (copied over first for a
@@ -77,9 +81,9 @@ behind the desk of the robot whose session is open, or under the screen when you
 - **the limits**: the coffee pot is what is left of the five-hour session, the cooler's bottle what is left
   of the week; a click on either shows them all
 - **the printer** prints the office report: who is there, and the statistics of the shift
-- **the office manager** sits at the reception, a booth with her name over it. Take one out of the closet and
-  you pick who:
-  - **Susan** is a Claude Code session of her own (in `~/.config/burrow/office`, whose `CLAUDE.md` burrow
+- **the office managers** sit at receptions, their names on the counter. Take one out of the closet and you
+  pick who (one of each):
+  - **Susan** is a Claude Code session of her own (in `~/.config/burrow/office/susan`, whose `CLAUDE.md` burrow
     writes: the office, what she can do in it). A click on her opens her terminal: ask her what goes on at a
     desk, to start a bot on something, put up a desk, clear out old sessions, pass a message on. She does it
     through burrow (`/api/office`), so it happens in the room: she walks a robot to the booth herself (in
@@ -103,7 +107,8 @@ behind the desk of the robot whose session is open, or under the screen when you
   room a table: click it to open a new room (you are in it, with your name and face) or to link one you
   are in, then for the chat; drop a robot on it and the robot joins the chat as an agent
 - **furniture**: drag it where you want it; the closet on the wall holds more; drop yourself or a robot on a
-  piece and it is used; the fire burns a piece, a desk, a robot or a door (its machine out of `sshConfigs`)
+  piece and it is used; the fire burns a piece, a desk or a door (its machine out of `sshConfigs`); a robot
+  dropped at the fire only warms its hands
 - **you**: a click on your own figure: your face and your name (the login name unless you type one);
   the pair rooms see you by them
 - **settings**: the switchboard on the wall, a switch a setting, its lamp lit while it is on. The first:

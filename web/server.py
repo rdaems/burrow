@@ -370,7 +370,7 @@ in your terminal. A round:
 }
 MANUAL = """# The office
 
-You are %(name)s, the office manager in %(you)s's office. The office is burrow: a room drawn in pixels in
+You are %(name)s, an office manager in %(you)s's office. The office is burrow: a room drawn in pixels in
 %(you)s's browser (%(room)s) where %(you)s's Claude Code background sessions are bots. You are one of those
 sessions yourself, at the reception booth; %(you)s talks to you in your terminal there.
 
@@ -407,6 +407,8 @@ Rules:
 - Remove only what %(you)s asked for, or what your style allows. Say what you removed.
 - What is %(you)s's to decide, ask (AskUserQuestion): your hand goes up in the room.
 - Short answers. %(you)s looks at the room; the detail is in the sessions.
+
+Your colleagues at the other receptions: %(colleagues)s.
 
 ## Your style: %(name)s
 
@@ -590,6 +592,11 @@ def furnish(room):
         if not any(kind_of(x) == "goggles" for x in room["furniture"]):
             room["furniture"].append("goggles0")
         room["v"] = 12
+    if room.get("manager"):                  # one office manager (the first round of styles): the first booth's
+        booth = next((k for k in room["furniture"] if kind_of(k) == "manager"), None)
+        if booth:
+            room.setdefault("managers", {})[booth] = room["manager"]
+        room.pop("manager")
     return room
 
 
@@ -774,11 +781,11 @@ class Hub:
         self.writing = None         # what is being written up now: a session's id, or "u:<unit>" for a desk
         self.explaining = None      # the session a decision of which is being explained
         self.seen = {}              # id → (busy, waiting, over) at the last poll: what changed
-        self.mrow = None            # the office manager's own session, as `claude agents` lists it (not a bot in the room)
+        self.mrows = {}             # the office managers' own sessions, as `claude agents` lists them (not bots in the room)
         self.removing = {}          # id → when: sessions she asked to remove, walked to the booth by her in the room
         self.kept = []              # the ones you took out of the booth again (she is told, and leaves them be)
-        if REAL_OFFICE and (self.room.get("manager") or {}).get("id"):
-            threading.Thread(target=self.write_manual, args=(self.room["manager"].get("style"),), daemon=True).start()   # this burrow's port, its manual as it is now
+        if REAL_OFFICE and any(m.get("id") for m in (self.room.get("managers") or {}).values()):
+            threading.Thread(target=self.write_manuals, daemon=True).start()   # this burrow's port, their manuals as they are now
         if DEMO and REAL_OFFICE:
             threading.Thread(target=self.demo_manager, daemon=True).start()
         threading.Thread(target=self.digest_worker, daemon=True).start()
@@ -841,65 +848,77 @@ class Hub:
                 if unit(mid, d) not in desks and unit(mid, d) not in out and not re.search(r"/\.claude/worktrees/|/scratch-workspaces/|^(/private)?/tmp/|^/var/folders/", d)]   # not worktrees, the Desktop app's scratch chats, temporary dirs
         return first + rest
 
-    # ---- the office manager: her booth, her style, her session
-    def manager_style(self):
-        """her style while her booth is in the room (a room from before the styles: Linda, the notes)"""
-        if not any(kind_of(k) == "manager" for k in self.room["furniture"]):
-            return None
-        st = (self.room.get("manager") or {}).get("style")
-        return st if st in MANAGERS else "notes"
+    # ---- the office managers: one at each reception (a `manager` piece), her style, her session
+    def booths(self):
+        return [k for k in self.room["furniture"] if kind_of(k) == "manager"]
+
+    def manager(self, key):
+        """the one at that booth: room.json `managers[key]` (a booth from before the styles has Linda, the notes)"""
+        mg = (self.room.get("managers") or {}).get(key) or {}
+        return {**mg, "style": mg.get("style") if mg.get("style") in MANAGERS else "notes"}
 
     def notes_on(self):
-        return self.manager_style() == "notes"
+        return any(self.manager(k)["style"] == "notes" for k in self.booths())
 
-    def manager_view(self):
-        st = self.manager_style()
-        if not st:
-            return None
-        mg, M = self.room.get("manager") or {}, MANAGERS[st]
-        r = self.mrow if self.mrow and self.mrow["id"] == mg.get("id") else None
-        return {"style": st, "name": M["name"], "seed": M["seed"], "color": M["color"], "session": M["session"], "id": mg.get("id") or "",
-                "error": mg.get("error") or "", "busy": bool(r and r["busy"]), "waiting": bool(r and r["waiting"]), "alive": bool(r and r["alive"]),
-                "rc": (r or {}).get("rc") or "", "remove": list(self.removing)}
+    def managers_view(self):
+        out = []
+        for key in self.booths():
+            mg = self.manager(key)
+            M, r = MANAGERS[mg["style"]], self.mrows.get(mg.get("id"))
+            out.append({"key": key, "style": mg["style"], "name": M["name"], "seed": M["seed"], "color": M["color"], "session": M["session"],
+                        "id": mg.get("id") or "", "error": mg.get("error") or "", "busy": bool(r and r["busy"]), "waiting": bool(r and r["waiting"]),
+                        "alive": bool(r and r["alive"]), "rc": (r or {}).get("rc") or ""})
+        return out
 
-    def write_manual(self, style):
-        M = MANAGERS.get(style) or MANAGERS["ask"]
-        v = {"name": M["name"], "you": you_of(self.room)["name"], "port": PORT, "room": f"http://localhost:{PORT}"}
-        os.makedirs(OFFICE, exist_ok=True)
-        with open(os.path.join(OFFICE, "CLAUDE.md"), "w") as f:
-            f.write(MANUAL % {**v, "brief": M.get("brief", "") % v})
+    def desk_of(self, style):
+        """her own directory: her CLAUDE.md, her sessions (Claude Code keys them by directory)"""
+        return os.path.join(OFFICE, MANAGERS[style]["name"].lower())
+
+    def write_manuals(self):
+        """every session manager's CLAUDE.md, as the office is now (this port, her colleagues)"""
+        here = [self.manager(k)["style"] for k in self.booths()]
+        for style in here:
+            M = MANAGERS[style]
+            if not M["session"]:
+                continue
+            others = [MANAGERS[x]["name"] + " (" + MANAGERS[x]["how"] + ")" for x in here if x != style]
+            v = {"name": M["name"], "you": you_of(self.room)["name"], "port": PORT, "room": f"http://localhost:{PORT}"}
+            os.makedirs(self.desk_of(style), exist_ok=True)
+            with open(os.path.join(self.desk_of(style), "CLAUDE.md"), "w") as f:
+                f.write(MANUAL % {**v, "brief": M.get("brief", "") % v, "colleagues": ", ".join(others) or "none: you are the only one"})
 
     def hire(self, style, at=None):
-        """the booth out of the closet with the style picked (or another style for the booth there): the one
-        before goes (her session stopped and deleted), a new one comes (her session started, if she has one)"""
+        """a reception out of the closet with the style picked: a booth of its own, her session started (if she
+        has one). One of each: a second Susan would be the same session's name twice"""
         if style not in MANAGERS:
             raise RuntimeError("no such office manager")
         with self.lock:
-            fs, old = self.room["furniture"], dict(self.room.get("manager") or {})
-            key = next((k for k in fs if kind_of(k) == "manager"), None)
-            if not key:
-                key = next(f"manager{i}" for i in range(1000) if f"manager{i}" not in fs)
-                fs.append(key)
+            if any(self.manager(k)["style"] == style for k in self.booths()):
+                raise RuntimeError(MANAGERS[style]["name"] + " is at a booth already")
+            fs = self.room["furniture"]
+            key = next(f"manager{i}" for i in range(1000) if f"manager{i}" not in fs)
+            fs.append(key)
             if at:
                 self.room["layout"][key] = [int(at[0]), int(at[1])]
-            same = old.get("style") == style and old.get("id")
-            self.room["manager"] = old if same else {"style": style}
+            self.room.setdefault("managers", {})[key] = {"style": style}
             save_room(self.room)
-        if old.get("id") and not same:
-            threading.Thread(target=self.let_go, args=(old["id"],), daemon=True).start()
-        if MANAGERS[style]["session"] and not same:
-            threading.Thread(target=self.start_manager, args=(style,), daemon=True).start()
+        if REAL_OFFICE:
+            threading.Thread(target=self.write_manuals, daemon=True).start()   # her colleagues know of her
+        if MANAGERS[style]["session"]:
+            threading.Thread(target=self.start_manager, args=(key,), daemon=True).start()
         self.push("state", self.state())
         self.push_digest()
         return {"key": key}
 
-    def fire(self):
+    def fire(self, key):
         """her booth burnt: she walks out, her session is stopped and deleted"""
         with self.lock:
-            old = self.room.pop("manager", None) or {}
+            old = (self.room.get("managers") or {}).pop(key, None) or {}
             save_room(self.room)
         if old.get("id"):
             threading.Thread(target=self.let_go, args=(old["id"],), daemon=True).start()
+        if REAL_OFFICE:
+            threading.Thread(target=self.write_manuals, daemon=True).start()
         self.push_digest()
 
     def let_go(self, bid):
@@ -909,51 +928,58 @@ class Hub:
             except Exception:
                 pass
 
-    def start_manager(self, style):
-        """her own session, in OFFICE (its CLAUDE.md written first): the id goes into room.json"""
+    def start_manager(self, key):
+        """her own session, in her directory (its CLAUDE.md written first): the id goes into room.json"""
+        style = self.manager(key)["style"]
         M = MANAGERS[style]
         try:
             if REAL_OFFICE:
-                self.write_manual(style)
-                who = f"You are {M['name']}, the office manager. CLAUDE.md here is the office, what you can do in it and your style."
-                bid = self.spawn(LOCAL, OFFICE, M["name"], M.get("first", ""), f"--append-system-prompt {sq(who)} ")
+                self.write_manuals()
+                who = f"You are {M['name']}, an office manager. CLAUDE.md here is the office, what you can do in it and your style."
+                bid = self.spawn(LOCAL, self.desk_of(style), M["name"], M.get("first", ""), f"--append-system-prompt {sq(who)} ")
             else:
                 bid = "demo-" + style
             with self.lock:
-                mg = self.room.get("manager") or {}
-                if mg.get("style") == style and not mg.get("id"):
+                mg = (self.room.get("managers") or {}).get(key)
+                if mg and mg.get("style") == style and not mg.get("id"):
                     mg["id"], mg["error"], mg["since"] = bid, "", int(time.time())
                     save_room(self.room)
                     bid = None
-            if bid:                            # let go of meanwhile (another style, the booth burnt)
+            if bid:                            # let go of meanwhile (her booth burnt)
                 self.let_go(bid)
         except Exception as e:
             with self.lock:
-                mg = self.room.get("manager") or {}
-                if mg.get("style") == style:
+                mg = (self.room.get("managers") or {}).get(key)
+                if mg:
                     mg["error"] = str(e).strip()[:300]
         self.push("state", self.state())
 
-    def manager_open(self):
+    def manager_open(self, key):
         """her session for a terminal: started again if it is gone (deleted elsewhere) or never came"""
-        mg = dict(self.room.get("manager") or {})
-        st = self.manager_style()
-        if not st or not MANAGERS[st]["session"]:
+        if key not in self.booths():
+            raise RuntimeError("no one at that booth")
+        mg = self.manager(key)
+        if not MANAGERS[mg["style"]]["session"]:
             raise RuntimeError("no one to talk to at the booth")
         gone = (REAL_OFFICE and mg.get("id") and time.time() - mg.get("since", 0) > 30     # (the polls have seen her by then)
-                and (not self.mrow or self.mrow["id"] != mg["id"]))
+                and mg["id"] not in self.mrows)
         if not mg.get("id") or gone:
             with self.lock:
-                if self.room.get("manager"):
-                    self.room["manager"].pop("id", None)
-            self.start_manager(st)
-        return {"id": (self.room.get("manager") or {}).get("id") or "", "error": (self.room.get("manager") or {}).get("error") or ""}
+                self.room.setdefault("managers", {}).setdefault(key, {"style": mg["style"]}).pop("id", None)
+            self.start_manager(key)
+        mg = self.manager(key)
+        return {"id": mg.get("id") or "", "error": mg.get("error") or ""}
 
     def take_manager(self, bots):
-        """her row out of this computer's sessions: she is not a bot at a desk (nor any other session in her directory)"""
-        mid, home = (self.room.get("manager") or {}).get("id"), os.path.realpath(OFFICE)
-        self.mrow = next((b for b in bots if mid and b["id"] == mid), None)
-        return [b for b in bots if b["id"] != mid and os.path.realpath(b["cwd"] or "/") != home]
+        """their rows out of this computer's sessions: an office manager is not a bot at a desk (nor is any other
+        session in their directories)"""
+        ids, home = {m.get("id") for m in (self.room.get("managers") or {}).values() if m.get("id")}, os.path.realpath(OFFICE) + os.sep
+        self.mrows = {b["id"]: b for b in bots if b["id"] in ids}
+        return [b for b in bots if b["id"] not in ids and not (os.path.realpath(b["cwd"] or "/") + os.sep).startswith(home)]
+
+    def folk_of(self, bid):
+        """a session id as the room knows it: an office manager is mgr:<her booth>"""
+        return next(("mgr:" + k for k, m in (self.room.get("managers") or {}).items() if m.get("id") == bid), bid)
 
     def demo_manager(self):
         """the demo with a real office manager (BURROW_OFFICE): her row from this computer's `claude agents`"""
@@ -1013,7 +1039,7 @@ class Hub:
             if not bot:
                 raise RuntimeError("no such session: " + str(b.get("id")))
             booth = any(kind_of(k) == "booth" for k in self.room["furniture"]) and bot["unit"] in self.room["desks"]
-            if self.clients and booth and self.manager_style():    # someone has the room open: she walks it to the booth there
+            if self.clients and booth and self.booths():    # someone has the room open: an office manager walks it to the booth there
                 self.removing[bot["id"]] = time.time()
                 self.push("state", self.state())
                 you = you_of(self.room)["name"]
@@ -1054,7 +1080,7 @@ class Hub:
                                  for mid, m in self.machines.items()],
                     "desks": self.desks(), "bots": bots, "layout": self.room["layout"], "furniture": self.room["furniture"], "pair": self.room.get("pair", {}), "paint": self.room.get("paint", {}),
                     "usage": self.usage, "chess": self.chess_view(), "demo": DEMO, "awake": self.awake_view(), "width": self.room.get("width"), "shells": self.shells_view(),
-                    "settings": options(self.room), "manager": self.manager_view(),
+                    "settings": options(self.room), "managers": self.managers_view(), "removing": list(self.removing),
                     "you": {**(self.room.get("you") or {}), **you_of(self.room), "login": USER}, "pairAt": PAIR}
 
     def keep(self, u, on):
@@ -1402,8 +1428,8 @@ class Hub:
                     light = str(json.loads(settings.strip()).get("theme", "")).startswith("light")
                 except Exception:
                     light = False
-                talks = parse_peers(peers, bots + ([self.mrow] if self.mrow and not mid else []))
-                her = lambda i: "manager" if self.mrow and i == self.mrow["id"] else i
+                talks = parse_peers(peers, bots + (list(self.mrows.values()) if not mid else []))
+                her = self.folk_of
                 self.fold(mid, m, bots)
                 with self.lock:
                     self.feeds[mid] = {"bots": bots, "light": light, "error": None}
@@ -2057,7 +2083,7 @@ class Handler(BaseHTTPRequestHandler):
         """a websocket: a session attached (`claude attach`), or your terminal at a screen (Shell)"""
         key = self.headers.get("Sec-WebSocket-Key")
         m = hub.machines.get(q.get("m", ""))
-        if DEMO and REAL_OFFICE and q.get("id") and q["id"] == (hub.room.get("manager") or {}).get("id"):
+        if DEMO and REAL_OFFICE and q.get("id") and q["id"] in {m.get("id") for m in (hub.room.get("managers") or {}).values()}:
             m = LOCAL                          # the demo's office manager is real
         if not m:
             return self.reply(404, {"error": "no such machine"})
@@ -2170,8 +2196,8 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     raise RuntimeError("add or remove what?")
                 save_room(hub.room)
-            if b.get("remove") and kind_of(key) == "manager" and not any(kind_of(k) == "manager" for k in hub.room["furniture"]):
-                hub.fire()
+            if b.get("remove") and kind_of(key) == "manager":
+                hub.fire(key)
             hub.push("state", hub.state())
             return {"key": key}
         if path == "/api/pair":              # a pair table: a new room opened ({key, new: name}), a room linked ({key, url}: your page
@@ -2252,8 +2278,9 @@ class Handler(BaseHTTPRequestHandler):
             if b.get("hire"):
                 return hub.hire(b["hire"], b.get("at"))
             if b.get("open"):
-                return hub.manager_open()
-            return {"styles": [{"key": k, **{f: M[f] for f in ("name", "seed", "color", "line", "how", "session")}} for k, M in MANAGERS.items()]}
+                return hub.manager_open(b["open"])
+            here = {hub.manager(k)["style"] for k in hub.booths()}
+            return {"styles": [{"key": k, "here": k in here, **{f: M[f] for f in ("name", "seed", "color", "line", "how", "session")}} for k, M in MANAGERS.items()]}
         if path == "/api/office":            # what she does in the office: remove, desk, start, say (and, from the room, kept)
             return hub.office_do(b)
         if path == "/api/explain":           # a decision left to you, explained by Claude (kept with the notes)
