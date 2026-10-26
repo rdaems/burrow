@@ -1345,7 +1345,10 @@ and on the floor, I want there to be overlap! It's the responsability of the use
   shoulder; fewer come to sweep. `__room.fear(v)` sets it for a look.
 - **Meeting halfway** (`meet` act): the focused tile's robot, idle and nothing sent yet, walks to a point halfway to
   you; you stand 14 dots from it, facing it. `room.typed(id, sent)`: your bubble while typing, its dots when you
-  pause (`f.reply`); Enter (`sent`) and it goes to its desk, you behind the desk as before.
+  pause (`f.reply`); Enter (`sent`) and it goes to its desk, you behind the desk as before. Not a bot you have just
+  started (2026-10-27, he: "Not when I just created a bot, then I should walk to its desk, the bot will also walk
+  there"): the + marks it (`room.fresh(id)` before its tile opens), it goes to its desk and you behind it, until it
+  has had its first message or its tile closes.
 - **Overlap**: `settle` is gone. A piece, a desk or a piece out of the closet lands exactly where it is let go,
   over whatever is there (the front one takes the clicks); wall pieces still only slide along the wall.
 - **3d**: Doom's status bar (`statusBar` in fps.js, 32 rows under a 168-row view): AMMO (8 shells a gun; put it back in

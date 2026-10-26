@@ -485,6 +485,7 @@ function startRoom(cv, app) {
     w.beams.push({ from, to, t: 0 });
     f.chat = Math.max(f.chat, 1);
   }
+  const fresh = new Set();                    // bots you have just started (the + at a desk): to their desk, not to meet you
   // you typed to the open session (`id`, a bot's or an office manager's): a bubble over your head; the one you
   // talk to answers when you pause (dots in its bubble). `sent`: Enter, your message is off, it goes to work
   function typed(id, sent) {
@@ -529,8 +530,11 @@ function startRoom(cv, app) {
       f.open = opens.includes(b.id);
       if (!f.open || work) f.sent = false;
       // its session opened while it idles: it comes over to meet you halfway (the focused one), and goes to its desk
-      // once you have sent it something; one open beside it waits at its desk
-      const meet = f.open && !work && !f.sent && app.open() === b.id;
+      // once you have sent it something; one open beside it waits at its desk. One you have just started goes
+      // straight to its desk, and you with it, for its first message (until it has had one, or its tile closes)
+      if (fresh.has(b.id) && (work || (f.wasOpen && !f.open))) fresh.delete(b.id);
+      f.wasOpen = f.open;
+      const meet = f.open && !work && !f.sent && app.open() === b.id && !fresh.has(b.id);
       if (meet && f.act.kind !== "meet" && !DOOMED.has(f.act.kind)) { end(f); f.act = { kind: "meet" }; }
       else if (f.open && !work && !meet && f.act.kind !== "desk" && !DOOMED.has(f.act.kind)) { end(f); f.act = { kind: "desk" }; }
       if (!f.open && !work && ((f.act.kind === "desk" && f.sat) || f.act.kind === "meet")) f.act = { kind: "stand", left: 0.5 };
@@ -3072,5 +3076,5 @@ function startRoom(cv, app) {
     const x = c.getContext("2d"); x.imageSmoothingEnabled = false; x.drawImage(im, 0, 0, c.width, c.height);
     return c.toDataURL();
   };
-  return { talk, typed, size, draw, figure, width, color: projectColor, icon, door: doorPicture, paints: () => ({ wood: WOOD.top, list: PAINT.map((p) => p.top) }), paintOf: paintIdx, paint: paintOf, tiny, tinyW, printer: printerPicture, carry: carryKind, place: placeKind, pend, condemn: (ids) => condemn(ids), playing: playingAt, names: NAMES, at, board, stats, hovered: () => hovered && { id: hovered.b.id, seat: !!hovered.seat } };
+  return { talk, typed, size, draw, figure, fresh: (id) => fresh.add(id), width, color: projectColor, icon, door: doorPicture, paints: () => ({ wood: WOOD.top, list: PAINT.map((p) => p.top) }), paintOf: paintIdx, paint: paintOf, tiny, tinyW, printer: printerPicture, carry: carryKind, place: placeKind, pend, condemn: (ids) => condemn(ids), playing: playingAt, names: NAMES, at, board, stats, hovered: () => hovered && { id: hovered.b.id, seat: !!hovered.seat } };
 }

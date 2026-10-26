@@ -195,7 +195,7 @@ async function act(a) {
   else if (a.kind === "drop" && b) { const t = openBot(b.m, b.id, a.shift); for (const f of a.files) await hand(f, t); }
   else if (a.kind === "spawn") {
     const r = await api("/api/spawn", { m: a.m, dir: a.dir });
-    if (r.error) note(r.error); else openBot(a.m, r.id, a.shift);
+    if (r.error) note(r.error); else { room.fresh(r.id); openBot(a.m, r.id, a.shift); }   // just started: you both go to its desk
   }
 }
 function note(msg) {                       // trouble goes on the wall, in red
