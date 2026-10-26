@@ -62,21 +62,23 @@ them all. On stdin: one session's record, the notes you wrote on it last time (i
 transcript (USER = the person, MESSAGE = another session, CLAUDE = the session, EDITED = files it changed, $ = commands \
 that commit or push, ASKED = questions it put to the person, → = what came back). Write the notes anew, so that the \
 person understands in depth what happened without reading the transcript:
+- headline: one line, twelve words at most, for a list of all sessions: where it stands; if it waits on the person, what for (e.g. "Waits for a ticket number and an OK to push to main").
 - goal: what the person wants from this session overall, in one or two sentences (not only the last prompt).
 - now: two to five sentences: where it stands, what it is doing or where it stopped, and why.
 - decisions: every decision still open for the person: questions it asked that were not answered, choices it left to \
 them, things it flagged as undecided or risky. context: why it matters and what the session found; options: the options \
-as it laid them out (empty if none). Leave out what was decided.
+as it laid them out (empty if none); blocking: true if the session waits on this to go on, false if it can be answered any time. Most important first, five at most: fold the small ones together. Leave out what was decided.
 - built: concrete results, newest first: features and fixes, the main files changed, commits (hash, message, pushed or \
 not), tests run and how they went. Keep the items of the earlier notes that still hold; twelve at most.
 - next: what it said it would do next, or what is left; empty if nothing.
 Be plain and specific, no filler; use the session's own words where they are precise."""
 
-SESSION_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["goal", "now", "decisions", "built", "next"], "properties": {
-    "goal": {"type": "string"}, "now": {"type": "string"}, "next": {"type": "string"},
+SESSION_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["headline", "goal", "now", "decisions", "built", "next"], "properties": {
+    "headline": {"type": "string"}, "goal": {"type": "string"}, "now": {"type": "string"}, "next": {"type": "string"},
     "built": {"type": "array", "items": {"type": "string"}},
-    "decisions": {"type": "array", "items": {"type": "object", "additionalProperties": False, "required": ["question", "context", "options"], "properties": {
-        "question": {"type": "string"}, "context": {"type": "string"}, "options": {"type": "array", "items": {"type": "string"}}}}}}}
+    "decisions": {"type": "array", "items": {"type": "object", "additionalProperties": False, "required": ["question", "context", "options", "blocking"], "properties": {
+        "question": {"type": "string"}, "context": {"type": "string"}, "options": {"type": "array", "items": {"type": "string"}},
+        "blocking": {"type": "boolean"}}}}}}
 
 DESK_NOTES = """Below are your notes on each Claude Code session working in one project. Write one short paragraph, three \
 to five sentences, on where the project stands as a whole: what it is heading for, what landed recently, what is \
@@ -84,7 +86,7 @@ blocked or waits on the person. Plain and specific, no filler."""
 
 DESK_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["text"], "properties": {"text": {"type": "string"}}}
 
-NOTE_KEYS = ("goal", "now", "decisions", "built", "next")
+NOTE_KEYS = ("headline", "goal", "now", "decisions", "built", "next")
 TAGS = re.compile(r"<(system-reminder|command-[a-z-]+|local-command-[a-z-]+|task-notification)>.*?</\1>", re.S)
 
 
@@ -774,7 +776,7 @@ class Hub:
         cut = (time.time() - 3 * 86400) * 1000
         ss = self.digest["sessions"]
         todo = [b for b in self.bots() if (not b["over"] or b["endedAt"] > cut)
-                and (b["id"] not in ss or not b.get("updated") or b["updated"] > ss[b["id"]].get("src", 0))]
+                and (b["id"] not in ss or "headline" not in ss[b["id"]] or not b.get("updated") or b["updated"] > ss[b["id"]].get("src", 0))]
         todo.sort(key=lambda b: (not b["waiting"], -(b.get("updated") or b["started"])))
         self.digest_queue([b["id"] for b in todo])
         return len(todo)
@@ -845,7 +847,7 @@ class Hub:
         except ValueError:
             job = {}
         size = int(size.strip() or 0)
-        if not size or (old and size == old.get("size")):      # no transcript, or nothing new in it
+        if not size or (old and "headline" in old and size == old.get("size")):      # no transcript, or nothing new in it (notes from before the headline are written again)
             if old:
                 old["src"] = b.get("updated") or old.get("src", 0)
             return False
@@ -909,9 +911,11 @@ class Hub:
         self.push_digest()
         time.sleep(1.2)
         ask = [{"question": "Keep the bench, or show the finished sessions only in the list?", "context": "The bench fills up with more than six finished sessions; agent view folds them into “… N more”.",
-                "options": ["Keep the bench, three a seat", "Only the COMPLETED list"]}] if b["waiting"] else []
+                "options": ["Keep the bench, three a seat", "Only the COMPLETED list"], "blocking": True},
+               {"question": "Rename the demo machine to something friendlier?", "context": "It shows as “mac” on its door.", "options": [], "blocking": False}] if b["waiting"] else []
         with self.lock:
             self.digest["sessions"][b["id"]] = {
+                "headline": "Waits for your call on the bench" if b["waiting"] else "Running the tests on its change" if b["busy"] else "Change in and tested, not pushed",
                 "goal": f"Work on {b['cwd'].rsplit('/', 1)[-1] or 'home'}: {b['name']} was asked to tidy up and finish the open edges.",
                 "now": ("It is waiting for your answer before it goes on." if b["waiting"] else "It is in the middle of a change and running the tests." if b["busy"]
                         else "It finished its turn: the change is in and tested, nothing is pushed yet."),

@@ -931,6 +931,14 @@ screen's resolution (system sans 15 px, headings, lists), only the band in the r
   dozes (`doze`, the z's). A click on her or the desk: the notes tile; she cannot be picked up (`staff` is no
   `press.bot`); hovering the notes tile lights her (`app.hl` gives "manager") and her the tile. Burn the desk
   and she walks out of the door; the closet has it.
+- The view, after four tries shown as screenshots (needs-you list, project cards, list + detail, status board),
+  asked: "go with A combined with C". The tile is two panes (`renderNotes`): on the left **Needs you**, every
+  open decision a line (question, project, session), those a session waits on first (`blocking`), the rest under
+  "Also open, no hurry"; then Working, Waiting for your answer, Idle and done, a session a line with its
+  `headline`; on the right the notes of what was clicked (the project's paragraph folded at the top), the decision
+  picked lit up and scrolled to. Both panes scroll on their own and keep their place when notes come in; a narrow
+  tile stacks them (`@container`). The notes got `headline` (twelve words: where it stands, what it waits on)
+  and per decision `blocking`, most important first, five at most; notes without a headline are written again.
 
 ## Next
 

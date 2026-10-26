@@ -737,11 +737,12 @@ async function stopBot(mid, id, rm) {
   if (r.error) note(r.error);
 }
 
-// ---- the notes: what each session is doing, the decisions it leaves to you, what it built, by desk;
-// the office manager's (a click on her or her desk); written by Claude (server.py, digest), read here
-// in a tile beside the sessions, at the screen's own
-// resolution (the room is the overview, this is the depth). One tile at most; opening it asks the
-// server to write up the sessions that moved since. A click on a session's name opens it beside the notes
+// ---- the notes: the office manager's (a click on her or her desk), written by Claude (server.py, digest),
+// read here in a tile beside the sessions at the screen's own resolution: the room is the overview, this
+// is the depth. Two panes: on the left what needs you (every open decision, one line each, the ones a
+// session waits on first), then who works, then the rest, a session a line; on the right the notes of
+// whatever was clicked there, the decision picked lit up. One notes tile at most; opening it asks the
+// server to write up the sessions that moved since. A name opens the session beside the notes
 const notesTiles = () => tiles.all().filter((t) => t.kind === "notes");
 function openNotes(retain) {
   closeView();
@@ -758,48 +759,72 @@ function openNotes(retain) {
   showWho(t); renderNotes(t);
   t.notes.addEventListener("click", (e) => {
     const a = e.target.closest("[data-open]"), b = a && byId(a.dataset.open);
-    if (b) openBot(b.m, b.id, true);
+    if (b) return openBot(b.m, b.id, true);
+    const li = e.target.closest("[data-sel]");
+    if (!li) return;
+    t.sel = li.dataset.sel; t.dec = li.dataset.dec === undefined ? null : +li.dataset.dec;
+    t.jump = true;                           // the detail starts at its top, or at the decision picked
+    renderNotes(t, true);
   });
   api("/api/digest", { refresh: true });
   return t;
 }
 const STATE = (b) => b.waiting ? ["needs", "needs you"] : b.busy ? ["busy", "working"] : b.over ? [b.over, b.over] : b.alive === false ? ["off", "process off"] : ["idle", "idle"];
-function renderNotes(t) {
+const firstSentence = (t) => { const m = String(t || "").match(/^.*?[.!?](?=\s|$)/); return (m ? m[0] : String(t || "")).trim(); };
+const headline = (e) => (e && (e.headline || firstSentence(e.now))) || "";
+const deskName = (desk) => (desk ? desk.dir.replace(/\/+$/, "").split("/").pop() || "~" : "?");
+const blocking = (b, q) => (q.blocking === undefined ? !!b.waiting : !!q.blocking);   // notes from before the flag: what a waiting session asks
+function renderNotes(t, force) {
   if (!state) return;
-  const d = digest || { sessions: {}, desks: {} }, ss = d.sessions || {}, now = Date.now();
+  const d = digest || { sessions: {}, desks: {} }, ss = d.sessions || {};
   const rank = (b) => (b.waiting ? 0 : b.busy ? 1 : !b.over ? 2 : 3);
-  const groups = state.desks.map((desk) => {
-    const bots = state.bots.filter((b) => b.unit === desk.unit && (ss[b.id] || d.writing === b.id))
-      .sort((a, b) => rank(a) - rank(b) || ((ss[b.id] || {}).at || 0) - ((ss[a.id] || {}).at || 0));
-    return { desk, bots, needs: bots.some((b) => b.waiting), at: Math.max(0, ...bots.map((b) => (ss[b.id] || {}).at || 0)) };
-  }).filter((g) => g.bots.length).sort((a, b) => b.needs - a.needs || b.at - a.at);   // a desk that waits on you first, then the freshest
-  const li = (xs) => xs.map((x) => `<li>${esc(x)}</li>`).join("");
-  const sess = (b) => {
-    const e = ss[b.id], [cls, label] = STATE(b), m = machine(b.m || "");
-    const head = `<h3><a data-open="${esc(b.id)}" title="open the session">${esc(b.name)}</a><span class="st ${cls}">${label}</span>` +
-      (b.tree ? `<span class="tree">${esc(b.tree.split("/").pop())} (worktree)</span>` : "") +
-      `<span class="when">${d.writing === b.id ? `<i class="writing">writing…</i>` : e ? "written " + ago((now - e.at) / 1000) + " ago" : ""}</span></h3>`;
-    if (!e) return `<article class="nsess">${head}</article>`;
-    const dec = (e.decisions || []).map((q) => `<li><b>${esc(q.question)}</b>${q.context ? `<p>${esc(q.context)}</p>` : ""}${(q.options || []).length ? `<ul class="opts">${li(q.options)}</ul>` : ""}</li>`).join("");
-    return `<article class="nsess${b.waiting ? " needs" : ""}">${head}` +
-      (e.goal ? `<p class="goal">${esc(e.goal)}</p>` : "") +
-      (e.now ? `<h4>Now</h4><p>${esc(e.now)}</p>` : "") +
-      (dec ? `<h4 class="dec">Open decisions</h4><ul class="decs">${dec}</ul>` : "") +
-      ((e.built || []).length ? `<h4>Built</h4><ul class="built">${li(e.built)}</ul>` : "") +
-      (e.next ? `<h4>Next</h4><p>${esc(e.next)}</p>` : "") +
-      `<p class="src">from ${e.whole ? "the whole transcript" : "the newest " + Math.round((e.read || 0) / 1000) + "k characters of the transcript"}${m && state.machines.length > 1 ? " on " + esc(m.name) : ""}</p></article>`;
-  };
-  const html = groups.length ? groups.map(({ desk, bots }) => {
-    const dd = (d.desks || {})[desk.unit], m = machine(desk.m), name = desk.dir.replace(/\/+$/, "").split("/").pop() || "~";
-    const path = desk.dir.replace(/^\/(Users|home)\/[^/]+/, "~");
-    return `<section class="ndesk" style="--c:${projectColor(desk.unit)}"><h2>${esc(name)}<span class="path">${esc(path)}${m && desk.m ? " on " + esc(m.name) : ""}</span>` +
-      (d.writing === "u:" + desk.unit ? `<i class="writing">writing…</i>` : "") + `</h2>` +
-      (dd && dd.text ? `<p class="sum">${esc(dd.text)}</p>` : "") + bots.map(sess).join("") + `</section>`;
-  }).join("") : `<p class="empty">${d.on ? (d.writing ? "Writing the first notes…" : "No notes yet. Claude writes them when a session finishes a turn or asks you something, and when this opens.") : "Notes are switched off at the switchboard."}</p>`;
-  if (t.notes.dataset.html === html) return;     // unchanged: the scroll and any selection stay
-  const top = t.notes.scrollTop;
+  const items = state.bots.filter((b) => ss[b.id] || d.writing === b.id).map((b) => ({ b, e: ss[b.id], desk: state.desks.find((x) => x.unit === b.unit) }))
+    .sort((x, y) => rank(x.b) - rank(y.b) || ((y.e || {}).at || 0) - ((x.e || {}).at || 0));
+  let html;
+  if (!items.length) html = `<p class="empty">${d.on ? (d.writing ? "Writing the first notes…" : "No notes yet. They are written when a session finishes a turn or asks you something, and when this opens.") : "Notes are switched off at the switchboard."}</p>`;
+  else {
+    const decs = items.flatMap((it) => ((it.e && it.e.decisions) || []).map((q, i) => ({ it, q, i })));
+    const now = decs.filter((x) => blocking(x.it.b, x.q)), later = decs.filter((x) => !blocking(x.it.b, x.q));
+    const sel = items.find((it) => it.b.id === t.sel) || (now[0] || decs[0] || {}).it || items[0];
+    if (sel.b.id !== t.sel) { t.sel = sel.b.id; t.dec = now[0] && now[0].it === sel ? now[0].i : null; }
+    const proj = (it) => `<span class="proj" style="--c:${projectColor(it.b.unit)}">${esc(deskName(it.desk))}</span>`;
+    const writing = (id) => (d.writing === id ? `<i class="writing">writing…</i>` : "");
+    const decRow = ({ it, q, i }) => `<button type="button" class="li dq${it.b.id === t.sel && i === t.dec ? " on" : ""}" data-sel="${esc(it.b.id)}" data-dec="${i}">` +
+      `<span class="q">${esc(q.question)}</span><span class="meta">${proj(it)}<span>${esc(it.b.name)}</span>${writing(it.b.id)}</span></button>`;
+    const sesRow = (it) => `<button type="button" class="li ses${it.b.id === t.sel && t.dec === null ? " on" : ""}" data-sel="${esc(it.b.id)}">` +
+      `<span class="dot ${STATE(it.b)[0]}"></span><span class="nm">${esc(it.b.name)}</span>${proj(it)}${writing(it.b.id)}<span class="hl">${esc(headline(it.e))}</span></button>`;
+    const sec = (title, rows, cls = "") => (rows ? `<section class="sec ${cls}"><h2>${title}</h2>${rows}</section>` : "");
+    const nav = sec(`Needs you${now.length ? `<small>${now.length}</small>` : ""}`, now.map(decRow).join("") || (later.length ? "" : `<p class="none">Nothing waits on you.</p>`), "needs") +
+      (later.length ? `<section class="sec later"><h3 class="also">Also open, no hurry</h3>${later.map(decRow).join("")}</section>` : "") +
+      sec("Working", items.filter((it) => it.b.busy && !it.b.waiting).map(sesRow).join("")) +
+      sec("Waiting for your answer", items.filter((it) => it.b.waiting).map(sesRow).join("")) +
+      sec("Idle and done", items.filter((it) => !it.b.busy && !it.b.waiting).map(sesRow).join(""));
+    // the detail: the session's notes, its project's paragraph first, the decision picked lit up
+    const { b, e, desk } = sel, m = machine(b.m || ""), dd = (d.desks || {})[b.unit], li = (xs) => xs.map((x) => `<li>${esc(x)}</li>`).join("");
+    const [cls, label] = STATE(b);
+    const dec = e ? (e.decisions || []).map((q, i) => `<li id="dec-${i}" class="${i === t.dec ? "on" : ""}${blocking(b, q) ? " block" : ""}">${blocking(b, q) ? `<span class="wait">it waits on this</span>` : ""}<b>${esc(q.question)}</b>` +
+      `${q.context ? `<p>${esc(q.context)}</p>` : ""}${(q.options || []).length ? `<ul class="opts">${li(q.options)}</ul>` : ""}</li>`).join("") : "";
+    const detail = `<header><h2><a data-open="${esc(b.id)}" title="open the session">${esc(b.name)}</a><span class="st ${cls}">${label}</span>${writing(b.id)}</h2>` +
+      `<p class="path">${esc(deskName(desk))} · ${esc((desk ? desk.dir : b.cwd).replace(/^\/(Users|home)\/[^/]+/, "~"))}${m && state.machines.length > 1 ? " on " + esc(m.name) : ""}</p></header>` +
+      (dd && dd.text ? `<details class="project"><summary>The project: ${esc(firstSentence(dd.text))}</summary><p>${esc(dd.text)}</p></details>` : "") +
+      (!e ? `<p class="empty">${d.writing === b.id ? "Being written…" : "No notes yet."}</p>` :
+        (e.goal ? `<p class="goal">${esc(e.goal)}</p>` : "") + (e.now ? `<h4>Now</h4><p>${esc(e.now)}</p>` : "") +
+        (dec ? `<h4 class="dec">Open decisions</h4><ul class="decs">${dec}</ul>` : "") +
+        ((e.built || []).length ? `<h4>Built</h4><ul class="built">${li(e.built)}</ul>` : "") + (e.next ? `<h4>Next</h4><p>${esc(e.next)}</p>` : "") +
+        `<p class="src"><a data-open="${esc(b.id)}">open the session →</a> · written ${ago((Date.now() - e.at) / 1000)} ago from ${e.whole ? "the whole transcript" : "its newest " + Math.round((e.read || 0) / 1000) + "k characters"}</p>`);
+    html = `<div class="nv"><nav>${nav}</nav><article class="detail">${detail}</article></div>`;
+  }
+  if (!force && t.notes.dataset.html === html) return;     // unchanged: the scrolls, a selection, an open paragraph stay
+  const nav0 = t.notes.querySelector("nav"), det0 = t.notes.querySelector(".detail"), proj0 = t.notes.querySelector("details.project");
+  const keep = { top: t.notes.scrollTop, nav: nav0 ? nav0.scrollTop : 0, det: det0 ? det0.scrollTop : 0, proj: !!proj0 && proj0.open };
   t.notes.innerHTML = html; t.notes.dataset.html = html;
-  t.notes.scrollTop = top;
+  const nav = t.notes.querySelector("nav"), det = t.notes.querySelector(".detail"), proj = t.notes.querySelector("details.project");
+  t.notes.scrollTop = keep.top;
+  if (nav) nav.scrollTop = keep.nav;
+  if (det && !t.jump) det.scrollTop = keep.det;
+  if (proj && keep.proj && !t.jump) proj.open = true;
+  if (det && t.jump) { const q = t.dec !== null && det.querySelector("#dec-" + t.dec); det.scrollTop = q ? q.offsetTop - 12 : 0; }
+  t.jump = false;
 }
 
 // ---- a game in the view: pair's chess board or ping-pong against one of the idle bots, drawn
