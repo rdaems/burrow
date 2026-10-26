@@ -1031,6 +1031,18 @@ overview of all the doors where I can change colors and see the names."
   to whatever demo runs there, with an old room.js, and posts its own layout (it put the frame on the floor).
   The demo for this ran on 7785.
 
+## Outside the window: the other machines (2026-10-26)
+
+He: "When I look out the window, I can see the other venues (instances), make it cosy." Read as the other
+machines (each a door in the room; this one is the room itself). `drawOutside` (130 x 70, the view scales it):
+the sky, sun or moon, stars, clouds as before; the anonymous roofs are gone. Now pines, the meadow, and a
+cottage a machine (`state.machines` minus this one), spread evenly over the hills, in its door's paint
+(`room.paint(mid)`): both windows lit and a plume of smoke from the chimney while its bots work (or wait for
+you), one lamp while it has sessions idling, dark with none, planks across while it is out of reach; a warm
+glow round lit windows after dark, fireflies over the meadow. Its name under it in the room's 3x5 lettering
+(`room.tiny`, `room.tinyW`, cut to its share of the width). Looked at by day and at 22:15 (`getHours`
+patched) with three machines put into the page's state (working, idle, out of reach).
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a
