@@ -266,7 +266,7 @@ function startRoom(cv, app) {
   // machine out of Claude Code's sshConfigs (as the doors' panel does). A new one comes from the closet.
   // This computer's door (`door:`) only slides along the wall
   const KIND = (key) => key.startsWith("door:") ? "door" : key.replace(/\d+$/, "");
-  const FIXED = new Set(["fire", "closet", "settings"]), fixed = (key) => FIXED.has(KIND(key)) || key === "door:";
+  const FIXED = new Set(["fire", "closet", "settings", "clock"]), fixed = (key) => FIXED.has(KIND(key)) || key === "door:";
   const CLICK = new Set(["add", "closet", "chess", "pong", "printer", "pair", "board", "coffee", "cooler", "window", "bench", "armchair", "settings", "clock", "plant", "manager", "door"]);   // a click does something there
   const NAMES = { meet: "meeting table", pong: "ping-pong table", chess: "chess table", coffee: "coffee machine", cooler: "water cooler",
     printer: "printer", armchair: "armchair", plant: "plant", board: "whiteboard", window: "window", clock: "clock", add: "project cabinet", pair: "pair room", bench: "bench", settings: "switchboard", manager: "reception",
@@ -303,7 +303,7 @@ function startRoom(cv, app) {
       case "armchair": return [x - 6, y - 23, x + 18, y + 1];
       case "board": return [x - 16, y - 26, x + 16, y + 1];
       case "window": return [x, y, x + 21, y + 18];
-      case "clock": return [x, y, x + 12, y + 10];
+      case "clock": return [x, y, x + 17, y + 17];
       case "fire": return [x, y - FIRE.h, x + FIRE.w, y + 1];
       case "closet": return [x, y, x + 22, y + 24];
       case "settings": return [x, y, x + SB_W(), y + SB_H()];
@@ -1354,11 +1354,12 @@ function startRoom(cv, app) {
     if (L.clock) {
       // the clock keeps this computer awake, as Amphetamine does: a click chooses (while bots work, for
       // a while, not at all); its face says which, yellowed (drawClock)
-      const ck = L.clock, a = s.awake || { mode: "off" }, h = hot(ck.x0, ck.y0, ck.x0 + 12, ck.y0 + 10, { kind: "clock" });
-      onTheWall(ck.key, foot("clock", [ck.x0, ck.y0]), h, (c) => drawClock(c, ck.x0 + 6, ck.y0 + 5, a));
+      const ck = L.clock, a = s.awake || { mode: "off" }, h = hot(ck.x0, ck.y0, ck.x0 + 17, ck.y0 + 17, { kind: "clock" });
+      onTheWall(ck.key, foot("clock", [ck.x0, ck.y0]), h, (c) => drawClock(c, ck.x0, ck.y0, a));
       if (h) {
         const tm = Math.round(Math.max(0, a.until - Date.now()) / 60000), hh = Math.floor(tm / 60), mm = tm % 60;
-        tip = { text: a.mode === "for" ? `awake ${hh ? hh + "h " : ""}${mm}m more` : a.mode === "work" ? (a.on ? "awake, local bots at work" : "awake when local bots work") : "clock", x: ck.x0 + 6, y: WALL + 10 };
+        const now = new Date(), hm = String(now.getHours()).padStart(2, "0") + ":" + String(now.getMinutes()).padStart(2, "0");
+        tip = { text: hm + (a.mode === "for" ? ` - awake ${hh ? hh + "h " : ""}${mm}m more` : a.mode === "work" ? (a.on ? " - awake, local bots at work" : " - awake when local bots work") : ""), x: ck.x0 + 8, y: WALL + 10 };
       }
     }
     if (L.closet) {
@@ -2544,7 +2545,7 @@ function startRoom(cv, app) {
       case "meet": drawTable(ctx, pt); for (const d of [-23, 23]) drawStool(ctx, { x: x + d, y }); break;
       case "board": drawBoard(ctx, pt, { ink: null }); break;
       case "window": drawWindow(ctx, { x0: x, y0: y, x1: x + 21, y1: y + 18 }); break;
-      case "clock": drawClock(ctx, x + 6, y + 5); break;
+      case "clock": drawClock(ctx, x, y); break;
       case "fire": drawFire(ctx, { x0: x, y0: y - FIRE.h, x1: x + FIRE.w, y1: y }, T, false); break;
       case "closet": drawCloset(ctx, { x0: x, y0: y }, false); break;
       case "settings": drawSwitchboard(ctx, { x0: x, y0: y }, {}, false); break;
@@ -2666,41 +2667,48 @@ function startRoom(cv, app) {
       rect(ctx, x + 1, y + 1, 1, 1, C.steel1); rect(ctx, x + 14, y + 1, 1, 1, C.steel1);
     }
   }
-  // the clock's face: the sprite's light cells, found once
-  let dial = null;
-  function dialCells() {
-    if (dial) return dial;
-    const s = sprites.get("clock"), d = s.getContext("2d").getImageData(0, 0, s.width, s.height).data;
-    dial = [];
-    for (let j = 0; j < s.height; j++) for (let i = 0; i < s.width; i++) {
-      const k = (j * s.width + i) * 4;
-      if (d[k] === 0xed && d[k + 1] === 0xed && d[k + 2] === 0xed && d[k + 3] === 255) dial.push([i, j]);
+  // The clock, always on the wall (it can't be burnt), telling this computer's time: a round face 17 dots across in
+  // Pixel Agents' colours (its rim red above, slate below), the hours as dots, the quarters darker; the hour hand
+  // short and black, the minute hand long, the seconds' red one ticking. While it keeps the computer awake its face
+  // is yellowed: for a while, a wedge from the hour hand to the hour it ends (shrinking as the time runs out, as a
+  // kitchen timer); while local bots work, all of it; set to wait for them and none at work, hatched
+  const CLOCK = (() => {                    // its cells, by their distance from the middle (8, 8)
+    const face = [], rim = [];
+    for (let j = 0; j < 17; j++) for (let i = 0; i < 17; i++) {
+      const d = Math.hypot(i - 8, j - 8);
+      if (d <= 6.6) face.push([i, j]); else if (d <= 8.4) rim.push([i, j, d]);
     }
-    return dial;
-  }
-  // Pixel Agents' clock, telling this computer's time. While it keeps the computer awake its face is
-  // yellowed: for a while, a wedge from the hour hand to the hour it ends (shrinking as the time runs
-  // out, as a kitchen timer); while local bots work, all of it; set to wait for them and none at work,
-  // hatched
-  function drawClock(ctx, x, y, a) {
-    put(ctx, "clock", x - 6, y - 5);
-    const t = new Date(), hour = ((t.getHours() % 12) + t.getMinutes() / 60) / 12 * 2 * Math.PI;
+    return { face, rim };
+  })();
+  function drawClock(ctx, x0, y0, a) {
+    const cx = x0 + 8, cy = y0 + 8, t = new Date();
+    for (const [i, j, d] of CLOCK.rim) rect(ctx, x0 + i, y0 + j, 1, 1, j < 8 ? (d < 7.4 ? SP.r : SP.R) : d < 7.4 ? SP.D : SP.G);
+    for (const [i, j] of CLOCK.face) rect(ctx, x0 + i, y0 + j, 1, 1, "#ededed");
+    const hour = ((t.getHours() % 12) + t.getMinutes() / 60) / 12 * 2 * Math.PI;
     if (a && a.mode !== "off") {
       const left = a.mode === "for" ? a.until - Date.now() : 0;
       const span = left > 0 ? Math.max(Math.PI / 12, left / 432e5 * 2 * Math.PI) : 0;   // 12 h round; never under half an hour, or the hands hide it
       ctx.fillStyle = SP.Y;
-      for (const [i, j] of dialCells()) {
+      for (const [i, j] of CLOCK.face) {
         // a cell the wedge reaches at all (its half width in angle past the end), so the last minutes still show
-        const px = x - 6 + i, py = y - 5 + j, dx = px - (x - 1), dy = (y - py) / 0.75;
+        const dx = i - 8, dy = 8 - j;
         const on = a.mode === "for" ? span > 0 && (Math.atan2(dx, dy) - hour + 4 * Math.PI) % (2 * Math.PI) < span + Math.atan2(0.5, Math.hypot(dx, dy))
           : a.on || (i + j) % 3 === 0;
-        if (on) ctx.fillRect(px, py, 1, 1);
+        if (on) ctx.fillRect(x0 + i, y0 + j, 1, 1);
       }
     }
-    const hand = (ang, len) => { for (let i = 1; i <= len; i++) ctx.fillRect(Math.round(x - 1 + Math.sin(ang) * i), Math.round(y - Math.cos(ang) * i * 0.75), 1, 1); };
-    ctx.fillStyle = SP.G; hand(hour, 2);
-    ctx.fillStyle = SP.r; hand(t.getMinutes() / 60 * 2 * Math.PI, 3);
-    rect(ctx, x - 1, y, 1, 1, SP.F);
+    for (let k = 0; k < 12; k++) {          // the hours
+      const ang = k / 12 * 2 * Math.PI;
+      rect(ctx, Math.round(cx + Math.sin(ang) * 5.6), Math.round(cy - Math.cos(ang) * 5.6), 1, 1, k % 3 ? SP.C : SP.E);
+    }
+    const hand = (ang, len, col) => {       // a line from the middle, half a dot a step
+      ctx.fillStyle = col;
+      for (let r = 1; r <= len; r += 0.5) ctx.fillRect(Math.round(cx + Math.sin(ang) * r), Math.round(cy - Math.cos(ang) * r), 1, 1);
+    };
+    hand(t.getMinutes() / 60 * 2 * Math.PI + t.getSeconds() / 3600 * 2 * Math.PI, 5.5, SP.F);
+    hand(hour, 3.5, INK);
+    if (!still) hand(t.getSeconds() / 60 * 2 * Math.PI, 5, SP.r);
+    rect(ctx, cx, cy, 1, 1, SP.r);
   }
   function drawWindow(ctx, w) {              // day or night outside, by this computer's clock
     const hour = new Date().getHours(), day = hour >= 7 && hour < 20, gx = w.x0 + 3, gy = w.y0 + 2;
@@ -3055,7 +3063,7 @@ function startRoom(cv, app) {
   // for look.mjs: two bots sent to a game, a kickabout for some
   window.__room.game = (kind, a, b) => { const w = world(), fa = w.folk.get(a), fb = w.folk.get(b); if (!fa || !fb) return false; end(fa); end(fb); fa.act = { kind, side: 0, with: b, left: 90, there: false }; fb.act = { kind, side: 1, with: a, left: 90, there: false }; return true; };
   window.__room.football = (ids) => { const w = world(), team = ids.map((id) => w.folk.get(id)).filter(Boolean); return team.length >= 2 && !!football(w, lastL, team); };
-  window.__room.clock = (a) => { const c = document.createElement("canvas"); c.width = 12; c.height = 10; drawClock(c.getContext("2d"), 6, 5, a); return c.toDataURL(); };   // the clock's face for an awake state
+  window.__room.clock = (a) => { const c = document.createElement("canvas"); c.width = 17; c.height = 17; drawClock(c.getContext("2d"), 0, 0, a); return c.toDataURL(); };   // the clock's face for an awake state
   // a figure as the room draws it (the office managers' cards): a data URL, S pixels a dot; null until its face has loaded
   const figure = (seed, color, S = 4, femme = true) => {
     const im = body(seed, color, "down", "stand", false, femme);

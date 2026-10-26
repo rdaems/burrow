@@ -315,7 +315,7 @@ FURNITURE = ["meet", "pong", "chess", "coffee", "cooler", "printer", "armchair",
              "plant0", "plant1", "board", "window", "clock", "fire", "closet", "add", "bench0", "settings0", "manager0", "booth0", "neuralyzer0"]
 # (a new machine is a door taken from the closet and hung on the wall; the doors themselves are no furniture:
 # one a machine in Claude Code's sshConfigs, their places in the layout as door:<machine id>)
-FIXED = {"fire", "closet", "settings"}
+FIXED = {"fire", "closet", "settings", "clock"}
 
 # Burrow's own settings: the switchboard on the wall, a switch each; kept in room.json `settings`
 OPTIONS = {
@@ -328,7 +328,7 @@ OPTIONS = {
 
 def options(room):
     return {**OPTIONS, **{k: bool(v) for k, v in (room.get("settings") or {}).items() if k in OPTIONS}}
-KINDS = {"meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "clock", "add", "pair", "bench", "manager",
+KINDS = {"meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "add", "pair", "bench", "manager",
          "booth", "neuralyzer", "doghouse"}
 
 
@@ -608,6 +608,8 @@ def furnish(room):
         ms.pop(k)
     room["v"] = max(room["v"], 13)
     room["furniture"] = [k for k in room["furniture"] if kind_of(k) != "goggles"]   # the 3d goggles: the first person is the gun closet's only
+    if not any(kind_of(k) == "clock" for k in room["furniture"]):   # the clock is always there (it can't be burnt any more)
+        room["furniture"].append("clock")
     for k in [k for k in room["layout"] if kind_of(k) == "goggles"]:
         room["layout"].pop(k)
     return room

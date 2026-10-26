@@ -1436,6 +1436,18 @@ bot"; "the hover on the desk name is way too disruptive, should be more subtle".
   the earlier "keeps its one-seat length").
 - **The name plate** under the pointer: only its letters turn gold; no fill, no tip.
 
+## The clock is just there, and tells the time (2026-10-27)
+
+He: "the clock is not optional, it's just there. shouldn't be in the furniture catalog. And show the real time."
+- Fixed like the fire, the closet and the switchboard (`FIXED` in room.js and server.py: it slides along the wall,
+  never burns), out of the closet (`CATALOGUE`) and of the kinds that can be added (`KINDS`); `furnish` puts one back
+  in a room that burnt it.
+- It was Pixel Agents' 12 x 10 sprite with hands of two and three dots: no time could be read off it. Now it is drawn
+  (`drawClock(ctx, x0, y0, awake)`, `CLOCK` its cells): a round face 17 dots across, its rim red above and slate below,
+  the hours as dots (the quarters darker), the hour hand short and black, the minute hand long, a red seconds hand
+  ticking (not with reduced motion). The awake wedges and the hatching are on its face as before. The hover says the
+  time ("00:52"), then the awake state. `__room.clock(awake)` returns a 17 x 17 face.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a
