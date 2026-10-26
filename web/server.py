@@ -199,17 +199,22 @@ def you_of(room):
 
 
 def pair_fetch(url, body=None):
-    """one call to pair: its JSON, or its error as a RuntimeError in its words"""
-    req = urllib.request.Request(url, data=json.dumps(body).encode() if body is not None else None, headers={"Accept": "application/json"})
+    """one call to pair: its JSON, or its error as a RuntimeError in its words. With a user agent of its
+    own: pair.daems.me is behind Cloudflare, whose browser check answers Python's default one with a 403
+    (error code 1010); at home the name resolves past Cloudflare, so only others saw it"""
+    req = urllib.request.Request(url, data=json.dumps(body).encode() if body is not None else None,
+                                 headers={"Accept": "application/json", "User-Agent": "burrow (+https://github.com/rdaems/burrow)"})
     try:
         with urllib.request.urlopen(req, timeout=15) as r:
             return json.loads(r.read().decode())
     except urllib.error.HTTPError as e:
+        text = e.read().decode(errors="replace").strip()
         try:
-            err = json.loads(e.read().decode()).get("error")
+            err = json.loads(text).get("error")
         except Exception:
             err = None
-        raise RuntimeError(err or ("pair does not know that page" if e.code == 404 else f"pair answered {e.code}"))
+        said = f" ({text.splitlines()[0][:60]})" if text and not err else ""     # not pair's own words: whoever answered, as it said it
+        raise RuntimeError(err or ("pair does not know that page" if e.code == 404 else f"pair answered {e.code}{said}"))
     except (urllib.error.URLError, OSError, ValueError) as e:
         raise RuntimeError(f"pair is out of reach: {str(e)[:80]}")
 

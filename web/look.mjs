@@ -1,5 +1,5 @@
 // node web/look.mjs URL W H steps.json: drive headless Chrome over CDP (no packages) to look at the page.
-// steps: [{wait:ms} | {shot:"file.png"} | {js:"expr"} | {click:[x,y]} | {move:[x,y]} | {moveTo|clickTo:"js giving [x,y]"} | {drag:[[x,y],…]} | {dragTo:"js giving [[x,y],…]"} | {drag:…, hold:true} then {release:[x,y]} | {key:"text"} | {press:"Enter", shift:true}]
+// steps: [{wait:ms} | {shot:"file.png"} | {js:"expr"} | {click:[x,y]} | {move:[x,y]} | {moveTo|clickTo:"js giving [x,y]"} | {drag:[[x,y],…], alt:true?} | {dragTo:"js giving [[x,y],…]"} | {drag:…, hold:true} then {release:[x,y]} | {key:"text"} | {press:"Enter", shift:true}]
 import { spawn } from "node:child_process";
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -30,7 +30,7 @@ const send = (method, params = {}) => new Promise((r) => { const i = ++id; pendi
 await send("Runtime.enable");
 await send("Emulation.setDeviceMetricsOverride", { width: +w, height: +h, deviceScaleFactor: 2, mobile: false });
 await send("Page.navigate", { url });
-const mouse = async (type, [x, y], buttons = 0) => send("Input.dispatchMouseEvent", { type, x, y, button: "left", buttons, clickCount: 1, pointerType: "mouse" });
+const mouse = async (type, [x, y], buttons = 0, modifiers = 0) => send("Input.dispatchMouseEvent", { type, x, y, button: "left", buttons, clickCount: 1, pointerType: "mouse", modifiers });
 for (const s of steps) {
   if (s.wait) await sleep(s.wait);
   if (s.js) { const r = await send("Runtime.evaluate", { expression: s.js, returnByValue: true, awaitPromise: true }); console.log("js:", JSON.stringify(r.result?.result?.value ?? r.result?.exceptionDetails?.exception?.description)); }
@@ -43,10 +43,11 @@ for (const s of steps) {
   if (s.click) { await mouse("mouseMoved", s.click); await mouse("mousePressed", s.click); await mouse("mouseReleased", s.click); }
   if (s.release) { await mouse("mouseMoved", s.release, 1); await mouse("mouseReleased", s.release); }   // let go of a held drag, here
   if (s.dragTo) { const r = await send("Runtime.evaluate", { expression: s.dragTo, returnByValue: true }); s.drag = r.result.result.value; }   // the points from the page
-  if (s.drag) {                              // press at the first point, move through the others, let go at the last (not with hold: true)
-    await mouse("mouseMoved", s.drag[0]); await mouse("mousePressed", s.drag[0], 1);
-    for (const p of s.drag.slice(1)) { await mouse("mouseMoved", p, 1); await sleep(60); }
-    if (!s.hold) await mouse("mouseReleased", s.drag.at(-1));
+  if (s.drag) {                              // press at the first point, move through the others, let go at the last (not with hold: true); alt: true holds Option
+    const mod = s.alt ? 1 : 0;
+    await mouse("mouseMoved", s.drag[0], 0, mod); await mouse("mousePressed", s.drag[0], 1, mod);
+    for (const p of s.drag.slice(1)) { await mouse("mouseMoved", p, 1, mod); await sleep(60); }
+    if (!s.hold) await mouse("mouseReleased", s.drag.at(-1), 0, mod);
   }
   if (s.key) await send("Input.insertText", { text: s.key });
   if (s.press) {                             // one key with modifiers (shift, alt, ctrl, meta): named keys or a letter

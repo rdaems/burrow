@@ -869,6 +869,28 @@ sprite's #ededed, found once) in Pixel Agents' yellow (`SP.Y`) before the hands:
 At the room's size (12 x 10 dots) 1 h is three cells, 3 h a quarter, 8 h most of the face. The tip keeps the
 exact minutes. Test hook `__room.clock(awake)`: the face as a data URL, for looking at every state at once.
 
+## Copying out of a terminal; pair behind Cloudflare (2026-10-26)
+
+He: "I cannot copy paste text from the terminal." An attached session always renders fullscreen and captures
+the mouse (`claude` turns on modes 1000/1002/1003/1006, seen in a pty), so a drag selects inside Claude Code,
+which copies on release itself: `pbcopy` on a local session, an OSC 52 sequence over ssh (docs: fullscreen,
+"Keep native text selection"). xterm.js dropped the OSC 52 (no handler), so nothing from arthroid reached the
+clipboard; and the terminal's own selection needs Option+drag on a Mac, which xterm.js only does with
+`macOptionClickForcesSelection` (VS Code's terminal has the same setting). Now:
+- `@xterm/addon-clipboard@0.1.0` (6 kB, js-base64 inside) handles OSC 52 with a provider of our own that
+  writes only: a read request (`52;c;?`) gets an empty answer, never the clipboard.
+- `macOptionClickForcesSelection: true`: Option+drag selects in the terminal, Cmd+C copies it.
+Tested in the demo's shell tile (look.mjs `drag` takes `alt: true` now): with tracking on (written into the
+terminal) a plain drag selects nothing, Option+drag selects; a `printf '\e]52;c;…'` lands on the clipboard.
+Not tested: Claude Code's own copy in a real attached session (the demo's bots have none).
+
+Jonas (his own burrow): linking an existing pair room to a pair table said "pair answered 403". pair.daems.me
+is behind Cloudflare (public DNS), whose browser check answers Python's default user agent
+(`Python-urllib/…`) with 403, "error code: 1010"; at Rembert's home the name resolves to 192.168.1.4, past
+Cloudflare, so it never showed here. `pair_fetch` sends `User-Agent: burrow (+…)` now, and an error that
+is not pair's own JSON carries the first line of what answered. Tested by pinning the name to Cloudflare's
+address: main gave "pair answered 403", the fix reaches pair. Jonas needs to pull and restart his server.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a
