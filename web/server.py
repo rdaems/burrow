@@ -592,11 +592,23 @@ def furnish(room):
         if not any(kind_of(x) == "goggles" for x in room["furniture"]):
             room["furniture"].append("goggles0")
         room["v"] = 12
-    if room.get("manager"):                  # one office manager (the first round of styles): the first booth's
-        booth = next((k for k in room["furniture"] if kind_of(k) == "manager"), None)
-        if booth:
-            room.setdefault("managers", {})[booth] = room["manager"]
+    # the receptions: each has the office manager hired at it. One office manager of the first round of styles
+    # (`manager`) is the first booth's; a room from before the styles has Linda (the notes) at its booth. A booth
+    # with nobody hired (put down by a page from before hiring) was never anyone's: it goes
+    booths, ms = [k for k in room["furniture"] if kind_of(k) == "manager"], room.setdefault("managers", {})
+    if room.get("manager"):
+        if booths:
+            ms[booths[0]] = room["manager"]
         room.pop("manager")
+    elif booths and not ms and room["v"] < 13:
+        ms[booths[0]] = {"style": "notes"}
+    for k in booths:
+        if k not in ms:
+            room["furniture"].remove(k)
+            room["layout"].pop(k, None)
+    for k in [k for k in ms if k not in room["furniture"]]:
+        ms.pop(k)
+    room["v"] = max(room["v"], 13)
     return room
 
 
@@ -785,7 +797,7 @@ class Hub:
         self.removing = {}          # id → when: sessions she asked to remove, walked to the booth by her in the room
         self.kept = []              # the ones you took out of the booth again (she is told, and leaves them be)
         if REAL_OFFICE and any(m.get("id") for m in (self.room.get("managers") or {}).values()):
-            threading.Thread(target=self.write_manuals, daemon=True).start()   # this burrow's port, their manuals as they are now
+            threading.Thread(target=lambda: (time.sleep(12), self.write_manuals()), daemon=True).start()   # this burrow's port, their manuals as they are now (once the poll has seen where they run)
         if DEMO and REAL_OFFICE:
             threading.Thread(target=self.demo_manager, daemon=True).start()
         threading.Thread(target=self.digest_worker, daemon=True).start()
@@ -870,21 +882,28 @@ class Hub:
                         "alive": bool(r and r["alive"]), "rc": (r or {}).get("rc") or ""})
         return out
 
-    def desk_of(self, style):
-        """her own directory: her CLAUDE.md, her sessions (Claude Code keys them by directory)"""
+    def desk_of(self, style, bid=None):
+        """her own directory: her CLAUDE.md, her sessions (Claude Code keys them by directory); where her session
+        runs, if it runs elsewhere in OFFICE (one hired before each had her own)"""
+        cwd = (self.mrows.get(bid) or {}).get("cwd") if bid else None
+        if cwd and (os.path.realpath(cwd) + os.sep).startswith(os.path.realpath(OFFICE) + os.sep):
+            return cwd
         return os.path.join(OFFICE, MANAGERS[style]["name"].lower())
 
     def write_manuals(self):
         """every session manager's CLAUDE.md, as the office is now (this port, her colleagues)"""
-        here = [self.manager(k)["style"] for k in self.booths()]
-        for style in here:
+        mgs = [self.manager(k) for k in self.booths()]
+        here = [mg["style"] for mg in mgs]
+        for mg in mgs:
+            style = mg["style"]
             M = MANAGERS[style]
             if not M["session"]:
                 continue
             others = [MANAGERS[x]["name"] + " (" + MANAGERS[x]["how"] + ")" for x in here if x != style]
             v = {"name": M["name"], "you": you_of(self.room)["name"], "port": PORT, "room": f"http://localhost:{PORT}"}
-            os.makedirs(self.desk_of(style), exist_ok=True)
-            with open(os.path.join(self.desk_of(style), "CLAUDE.md"), "w") as f:
+            d = self.desk_of(style, mg.get("id"))
+            os.makedirs(d, exist_ok=True)
+            with open(os.path.join(d, "CLAUDE.md"), "w") as f:
                 f.write(MANUAL % {**v, "brief": M.get("brief", "") % v, "colleagues": ", ".join(others) or "none: you are the only one"})
 
     def hire(self, style, at=None):
@@ -2183,6 +2202,8 @@ class Handler(BaseHTTPRequestHandler):
                     kind = b["add"]
                     if kind not in KINDS:
                         raise RuntimeError("no such furniture")
+                    if kind == "manager":
+                        raise RuntimeError("a reception comes with an office manager: pick one")
                     key = next(f"{kind}{i}" for i in range(1000) if f"{kind}{i}" not in fs)
                     fs.append(key)
                     hub.room["layout"][key] = [int(b["at"][0]), int(b["at"][1])]
