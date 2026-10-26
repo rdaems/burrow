@@ -591,6 +591,9 @@ not saying it should! You should investigate if it makes sense").
   without the focus gets none) and as you type. The host field's choices: `/api/hosts` = `ssh_hosts()`, the
   `Host` names of `~/.ssh/config` and its `Include`s, in its order, without patterns and without the hosts
   that have a door already.
+  A taken suggestion only fills the field (and lists its children), so both forms have an ADD → button (Enter with
+  nothing picked does the same, a double click on a suggestion takes and adds it): a directory that has directories of its own
+  could not be chosen with the mouse (reported 2026-10-26).
 - The home desk: the only one is `arthroid:/home/rembert` (teal, arthroid's); odyssey has no desk, its one
   session there is over (over bots bring no desk back) and the app's sessions at its `~` are interactive rows,
   hidden. A door and a desk take their paint from `paintOf(mid)`, the index in `state.machines`, so they
@@ -890,6 +893,44 @@ is behind Cloudflare (public DNS), whose browser check answers Python's default 
 Cloudflare, so it never showed here. `pair_fetch` sends `User-Agent: burrow (+…)` now, and an error that
 is not pair's own JSON carries the first line of what answered. Tested by pinning the name to Cloudflare's
 address: main gave "pair answered 403", the fix reaches pair. Jonas needs to pull and restart his server.
+## The notes on the sessions: the notice board, then the office manager (2026-10-25)
+
+Asked: keep track of what the sessions are doing, which decisions are still open, what was built; "a dedicated
+agent" with an up-to-date summary. Chosen: in the room, Claude writes it, refreshed when a session finishes or
+on opening. And, on the plan: "The 16 bit room is perfect for an overview, notes should help the user really
+understand in depth what is happening": so the notes are **not** a 16-bit `#view` panel but a tile at the
+screen's resolution (system sans 15 px, headings, lists), only the band in the room's look.
+- **The board** (`notes` kind, `notes0`, `ON_WALL`, 20 x 16, default `W - 118`; `furnish` v 7 adds it; in the
+  closet, burnable): cork in a frame, a paper per desk with notes on its listed sessions, pinned in the desk's
+  colour, six at most; a pencil wiggles on the paper being written (`drawNotes`). A click: `openNotes()`.
+- **The tile** (`kind: "notes"`, one at most, `renderNotes`): desks that wait on you first, then the freshest; a
+  desk's paragraph, then each session: name (a click opens it beside), state, goal, Now, Open decisions (question,
+  context, options), Built, Next, how much of the transcript it read. Re-rendered only when the HTML changes (the
+  scroll stays). `t.term` is absent on it: `closeTile` and the file drop check.
+- **The server** (`digest_*` in Hub): `digest_watch` on every poll queues a session that leaves busy, starts
+  waiting or goes over; `/api/digest {refresh}` (the tile opening) queues those whose record's `updatedAt` is newer
+  than their notes' `src` (over ones of the last three days). One worker, one at a time: `SLICE` over ssh returns
+  the job record and the transcript's tail (4 MB) only if its size changed; `condense()` keeps what the person
+  and the session said, EDITED paths, commit/push commands, AskUserQuestion with the answer, plans; the newest
+  80k characters. `summarize()` runs `claude -p` **here** (`--tools '' --strict-mcp-config --setting-sources ''`,
+  `--json-schema`, `structured_output`; `BURROW_DIGEST_MODEL`, default claude-sonnet-5-5, about 3 s and a few cents
+  a session), its pid in `self.own`. After the queue drains, the touched desks get their paragraph. Kept in
+  `~/.config/burrow/digest.json`; notes older than two weeks are dropped. Pushed as the `digest` event.
+- Tried on a real finished session (knee-id): three open decisions with options, its commits and tests, right.
+- A switch `digest` on the switchboard (on): off, nothing is written. With `yolo` (landed meanwhile) that is three
+  switches: the board is as tall as its levers need (`SB_H`: 14 dots for two, 18 for three).
+- Then (2026-10-26), asked: "the notes feature should be represented by an office manager on the office floor, not
+  by a notes board on the wall". The board is gone (`furnish` v 8 swaps `notes*` for `manager0`). The **office
+  manager** is a robot like the bots, but she (asked: "make it a she", then "office manager should be a
+  female robot") wears a bow on her head and a skirt in her pink (`body(…, femme)`; `MANAGER`: seed manager-16, one
+  antenna, happy eyes, #f06b72); `id: "manager"`, `staff: true`, `human: false`, kept out of the bots' logic by `staff`. In the
+  room while her desk (`manager` kind, a small writing desk with a stack of sheets as high as the sessions with
+  notes, her chair on the right; `drawManagerDesk`, placed by `free()`) is. `thinkManager`: while `digest.writing`
+  is a session she walks to its bot (below its chair, or beside it) with a sheet ("paper" arms) and writes; a
+  desk's paragraph: at that desk's screen; else seated at her desk, filing now and then; with `digest` off she
+  dozes (`doze`, the z's). A click on her or the desk: the notes tile; she cannot be picked up (`staff` is no
+  `press.bot`); hovering the notes tile lights her (`app.hl` gives "manager") and her the tile. Burn the desk
+  and she walks out of the door; the closet has it.
 
 ## Next
 

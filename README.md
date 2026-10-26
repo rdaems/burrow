@@ -66,6 +66,12 @@ beside the robot whose session is open, or under the screen when your own termin
 - **the limits**: the coffee pot is what is left of the five-hour session, the cooler's bottle what is left
   of the week; a click on either shows them all
 - **the printer** prints the office report: who is there, and the statistics of the shift
+- **the office manager** keeps the notes: while Claude writes up a session she goes over to its robot with a
+  sheet and writes; otherwise she sits at her desk behind a stack of them. A click on her or her desk opens the
+  notes beside the room, in a readable tile: per project and per session the goal, where it stands, the
+  decisions it leaves to you (with their options), what it built and committed, what is next. Claude writes
+  them (`claude -p`, on this computer) when a session finishes a turn or asks you something, and when the
+  notes open; a switch on the switchboard turns that off (she dozes)
 - **the whiteboard** opens large and you draw on it; the host of a meeting draws on it too
 - **the window** looks outside: the sky by the hour, the sun or the moon, stars at night
 - **the armchair**: click it and you go and sit there a while, reading (a robot in it gets up)

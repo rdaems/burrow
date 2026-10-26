@@ -45,6 +45,113 @@ PEERS = r'''find ~/.claude/projects -maxdepth 2 -name '*.jsonl' -mmin -1 2>/dev/
 # the same session is then in the Claude app and at claude.ai/code/session_<id>
 JOBS = r'''grep -o -E '"(updatedAt|detail|bridgeSessionId)": *"([^"\\]|\\.)*"' ~/.claude/jobs/*/state.json 2>/dev/null || true'''
 
+# ---- the office manager: notes on what each session is doing, which decisions are open, what it built,
+# written by Claude (`claude -p`, here, never on the machines) from the session's record and the newest
+# part of its transcript, when it finishes a turn, asks you something, or the notes are opened. Kept in
+# ~/.config/burrow/digest.json: a session is written up again only when its transcript has grown.
+DIGEST = os.path.join(HOME, ".config/burrow/digest.json")
+DIGEST_MODEL = os.environ.get("BURROW_DIGEST_MODEL", "claude-sonnet-5-5")
+TAIL = 4000000                                 # bytes of a transcript read, the newest
+STORY = 80000                                  # characters of it given to Claude, the newest
+
+# a session's record and its transcript's size; the transcript's tail only if it is not `size` long any more
+SLICE = r'''cat ~/.claude/jobs/%(id)s/state.json 2>/dev/null; echo; echo '@@burrow@@'; f=$(ls ~/.claude/projects/*/%(sid)s.jsonl 2>/dev/null | head -1); if [ -n "$f" ]; then n=$(wc -c < "$f" | tr -d ' '); echo "$n"; [ "$n" != "%(size)d" ] && tail -c %(tail)d "$f"; fi; true'''
+
+SESSION_NOTES = """You keep the notes for a person who runs many Claude Code background sessions at once and cannot follow \
+them all. On stdin: one session's record, the notes you wrote on it last time (if any), and the most recent part of its \
+transcript (USER = the person, MESSAGE = another session, CLAUDE = the session, EDITED = files it changed, $ = commands \
+that commit or push, ASKED = questions it put to the person, → = what came back). Write the notes anew, so that the \
+person understands in depth what happened without reading the transcript:
+- goal: what the person wants from this session overall, in one or two sentences (not only the last prompt).
+- now: two to five sentences: where it stands, what it is doing or where it stopped, and why.
+- decisions: every decision still open for the person: questions it asked that were not answered, choices it left to \
+them, things it flagged as undecided or risky. context: why it matters and what the session found; options: the options \
+as it laid them out (empty if none). Leave out what was decided.
+- built: concrete results, newest first: features and fixes, the main files changed, commits (hash, message, pushed or \
+not), tests run and how they went. Keep the items of the earlier notes that still hold; twelve at most.
+- next: what it said it would do next, or what is left; empty if nothing.
+Be plain and specific, no filler; use the session's own words where they are precise."""
+
+SESSION_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["goal", "now", "decisions", "built", "next"], "properties": {
+    "goal": {"type": "string"}, "now": {"type": "string"}, "next": {"type": "string"},
+    "built": {"type": "array", "items": {"type": "string"}},
+    "decisions": {"type": "array", "items": {"type": "object", "additionalProperties": False, "required": ["question", "context", "options"], "properties": {
+        "question": {"type": "string"}, "context": {"type": "string"}, "options": {"type": "array", "items": {"type": "string"}}}}}}}
+
+DESK_NOTES = """Below are your notes on each Claude Code session working in one project. Write one short paragraph, three \
+to five sentences, on where the project stands as a whole: what it is heading for, what landed recently, what is \
+blocked or waits on the person. Plain and specific, no filler."""
+
+DESK_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["text"], "properties": {"text": {"type": "string"}}}
+
+NOTE_KEYS = ("goal", "now", "decisions", "built", "next")
+TAGS = re.compile(r"<(system-reminder|command-[a-z-]+|local-command-[a-z-]+|task-notification)>.*?</\1>", re.S)
+
+
+def condense(raw, cap=STORY):
+    """a transcript's lines as the story of the session: what the person (or another session) said, what
+    the session said, the files it changed, the commands that commit or push, the questions it asked and
+    what came back; no thinking, no other tool output. The newest `cap` characters"""
+    out, asked = [], set()
+
+    def said(who, text, n):
+        text = TAGS.sub("", text or "").strip()
+        if text:
+            out.append(f"{who}: {text[:n]}")
+
+    for line in raw.splitlines()[1:]:          # the first may be cut
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        msg = d.get("message") if isinstance(d.get("message"), dict) else {}
+        c = msg.get("content")
+        if d.get("type") == "user":
+            o = d.get("origin") or {}
+            who = "MESSAGE from " + str(o.get("name") or "another session") if o.get("kind") == "peer" else "USER"
+            if isinstance(c, str):
+                said(who, c, 4000)
+            elif isinstance(c, list):
+                for x in c:
+                    if x.get("type") == "text":
+                        said(who, x.get("text"), 4000)
+                    elif x.get("type") == "tool_result" and x.get("tool_use_id") in asked:
+                        r = x.get("content")
+                        r = " ".join(y.get("text", "") for y in r if isinstance(y, dict)) if isinstance(r, list) else str(r or "")
+                        out.append("  → " + re.sub(r"\s+", " ", r)[:800])
+        elif d.get("type") == "assistant" and isinstance(c, list):
+            for x in c:
+                if x.get("type") == "text":
+                    said("CLAUDE", x.get("text"), 6000)
+                elif x.get("type") == "tool_use":
+                    name, inp = x.get("name"), x.get("input") or {}
+                    if name in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
+                        e = "EDITED " + str(inp.get("file_path") or inp.get("notebook_path") or "?")
+                        if not out or out[-1] != e:
+                            out.append(e)
+                    elif name == "Bash" and re.search(r"\bgit\s+(commit|push|merge|tag)\b|\bgh\s+pr\s+(create|merge)\b", str(inp.get("command") or "")):
+                        out.append("$ " + str(inp["command"])[:600])
+                        asked.add(x.get("id"))
+                    elif name == "AskUserQuestion":
+                        for q in inp.get("questions") or []:
+                            opts = "; ".join(f"{o.get('label')} ({o.get('description', '')})" for o in q.get("options") or [] if isinstance(o, dict))
+                            out.append(f"ASKED: {q.get('question')} Options: {opts}")
+                        asked.add(x.get("id"))
+                    elif name == "ExitPlanMode":
+                        out.append("CLAUDE proposed a plan" + (": " + str(inp["plan"])[:3000] if inp.get("plan") else ""))
+                        asked.add(x.get("id"))
+                    elif name in ("Agent", "Task"):
+                        out.append("DELEGATED: " + str(inp.get("description") or ""))
+    return "\n".join(out)[-cap:]
+
+
+def load_digest():
+    try:
+        d = json.load(open(DIGEST))
+        return {"sessions": d.get("sessions") or {}, "desks": d.get("desks") or {}}
+    except Exception:
+        return {"sessions": {}, "desks": {}}
+
 
 def sq(s):
     """single-quote for a POSIX shell; a leading ~/ stays a home directory"""
@@ -164,19 +271,20 @@ def split_unit(u):
 # the first room's pieces have no number). There can be any number of a kind. The closet in the
 # room adds a piece, the fireplace burns one; the fire, the closet and the switchboard themselves stay.
 FURNITURE = ["meet", "pong", "chess", "coffee", "cooler", "printer", "armchair",
-             "plant0", "plant1", "board", "window", "clock", "fire", "closet", "add", "bench0", "settings0"]
+             "plant0", "plant1", "board", "window", "clock", "fire", "closet", "add", "bench0", "settings0", "manager0"]
 FIXED = {"fire", "closet", "settings"}
 
 # Burrow's own settings: the switchboard on the wall, a switch each; kept in room.json `settings`
 OPTIONS = {
     "rc": True,     # a bot started here gets --remote-control: the same session is in the Claude app and at claude.ai/code
     "yolo": False,  # a bot started here gets --dangerously-skip-permissions: it never asks, it just does
+    "digest": True,  # the office manager's notes are written by Claude (`claude -p`, tokens): off, she dozes and keeps what she has
 }
 
 
 def options(room):
     return {**OPTIONS, **{k: bool(v) for k, v in (room.get("settings") or {}).items() if k in OPTIONS}}
-KINDS = {"meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "clock", "add", "pair", "bench"}
+KINDS = {"meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "clock", "add", "pair", "bench", "manager"}
 
 
 # A pair room (rdaems/pair-prompting, e.g. pair.daems.me): a chat where people and agents talk. One
@@ -331,6 +439,14 @@ def furnish(room):
         if seed and pair_seed(seed) != seed:
             room["you"]["seed"] = pair_seed(re.sub(r"[^A-Za-z0-9-]+", "-", seed))
         room["v"] = 6
+    if room["v"] < 8:                        # the office manager keeps the notes on the sessions (a board on the wall before, v 7)
+        fs = [k for k in room["furniture"] if kind_of(k) != "notes"]
+        for k in [k for k in room["layout"] if kind_of(k) == "notes"]:
+            room["layout"].pop(k)
+        if not any(kind_of(k) == "manager" for k in fs):
+            fs.append("manager0")
+        room["furniture"] = fs
+        room["v"] = 8
     return room
 
 
@@ -411,6 +527,7 @@ def parse_agents(out, jobs={}):
             "busy": not over and not needs and (state == "working" if state else status == "busy"),
             "waiting": not over and needs, "alive": "pid" in x, "state": state or "",
             "over": state if over else "", "endedAt": when(j.get("updatedAt")) if over else 0, "detail": j.get("detail") or "",
+            "updated": when(j.get("updatedAt")),       # its record's last write: the notes on it are older, or not
             "started": x.get("startedAt") or 0, "pid": x.get("pid") or 0, "session": x.get("sessionId") or "",
             "rc": j.get("bridgeSessionId") or "",      # its Remote Control session (cse_…): in the Claude app and at claude.ai/code too
         })
@@ -503,6 +620,12 @@ class Hub:
         self.demo_bots = {}         # the demo's made-up bots, by machine (stopped and deleted from here)
         self.awake = {"mode": (self.room.get("awake") or {}).get("mode", "off"), "until": 0}   # the clock: this computer kept awake
         self.caff = None            # the sleep inhibitor while it runs
+        self.digest = load_digest()  # the office manager's notes: {sessions: {id: notes}, desks: {unit: paragraph}}
+        self.dq = []                # the sessions waiting to be written up, in turn
+        self.dcv = threading.Condition()
+        self.writing = None         # what is being written up now: a session's id, or "u:<unit>" for a desk
+        self.seen = {}              # id → (busy, waiting, over) at the last poll: what changed
+        threading.Thread(target=self.digest_worker, daemon=True).start()
 
     def set_machines(self, ms):
         """a watcher for each machine, from when it turns up in the settings until it goes"""
@@ -627,6 +750,177 @@ class Hub:
                 pass
             time.sleep(300)
 
+    # ---- the office manager: notes on the sessions, written by Claude one at a time
+    def digest_view(self):
+        with self.lock:
+            return {"sessions": dict(self.digest["sessions"]), "desks": dict(self.digest["desks"]), "writing": self.writing, "on": options(self.room)["digest"]}
+
+    def push_digest(self):
+        self.push("digest", self.digest_view())
+
+    def digest_watch(self, bots):
+        """a session that finished a turn, asks you something or is over gets written up (on every poll)"""
+        on = options(self.room)["digest"]
+        for b in bots:
+            now = (b["busy"], b["waiting"], b["over"])
+            was = self.seen.get(b["id"])
+            self.seen[b["id"]] = now
+            if on and was and was != now and not b["busy"]:
+                self.digest_queue([b["id"]])
+
+    def digest_refresh(self):
+        """the notes opened: every session whose record moved since its notes were written (the ones
+        over only if they ended in the last three days), those that wait for you first"""
+        cut = (time.time() - 3 * 86400) * 1000
+        ss = self.digest["sessions"]
+        todo = [b for b in self.bots() if (not b["over"] or b["endedAt"] > cut)
+                and (b["id"] not in ss or not b.get("updated") or b["updated"] > ss[b["id"]].get("src", 0))]
+        todo.sort(key=lambda b: (not b["waiting"], -(b.get("updated") or b["started"])))
+        self.digest_queue([b["id"] for b in todo])
+        return len(todo)
+
+    def digest_queue(self, ids):
+        with self.dcv:
+            for i in ids:
+                if i not in self.dq and i != self.writing:
+                    self.dq.append(i)
+            self.dcv.notify()
+
+    def digest_worker(self):
+        dirty = set()                          # desks whose sessions' notes changed: their paragraph next
+        while True:
+            with self.dcv:
+                while not self.dq and not dirty:
+                    self.dcv.wait()
+                bid = self.dq.pop(0) if self.dq else None
+            try:
+                if bid:
+                    b = next((x for x in self.bots() if x["id"] == bid), None)
+                    if b and options(self.room)["digest"] and self.digest_one(b):
+                        dirty.add(b["unit"])
+                elif dirty:
+                    self.digest_desk(dirty.pop())
+            except Exception as e:
+                print(f"notes on {bid or 'a desk'}: {str(e)[:300]}", flush=True)
+            finally:
+                if self.writing:
+                    self.writing = None
+                    self.push_digest()
+
+    def summarize(self, prompt, story, schema):
+        """Claude, here, without tools, MCP servers or settings (no hooks): the JSON the schema asks for"""
+        os.makedirs(CACHE, exist_ok=True)
+        cmd = (f"cd {sq(CACHE)} && exec claude -p --no-session-persistence --model {sq(DIGEST_MODEL)} --tools '' --strict-mcp-config "
+               f"--setting-sources '' --output-format json --json-schema {sq(json.dumps(schema))} {sq(prompt)}")
+        p = subprocess.Popen(argv(self.machine(""), cmd, False), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        self.own.append(p.pid)                 # it shows up in `claude agents` while it runs
+        try:
+            out = p.communicate(story.encode(), timeout=600)[0].decode("utf-8", "replace")
+        except subprocess.TimeoutExpired:
+            p.kill()
+            raise RuntimeError("claude -p took too long")
+        try:
+            r = json.loads(out.strip().splitlines()[-1])
+        except (ValueError, IndexError):
+            raise RuntimeError(out.strip()[:300] or "claude -p said nothing")
+        if r.get("is_error"):
+            raise RuntimeError(str(r.get("result"))[:300])
+        if isinstance(r.get("structured_output"), dict):
+            return r["structured_output"]
+        m = re.search(r"\{.*\}", r.get("result") or "", re.S)
+        return json.loads(m.group(0)) if m else {}
+
+    def digest_one(self, b):
+        """a session written up: True if its notes changed"""
+        old = self.digest["sessions"].get(b["id"]) or {}
+        m = self.machine(b["m"])
+        if m.get("ssh") == "@demo":
+            return self.demo_notes(b, old)
+        p = subprocess.run(argv(m, SLICE % {"id": sq(b["id"]), "sid": sq(b["session"] or "-"), "size": old.get("size", -1), "tail": TAIL}, False),
+                           capture_output=True, timeout=60)
+        rec, _, rest = p.stdout.decode("utf-8", "replace").partition("@@burrow@@\n")
+        size, _, raw = rest.partition("\n")
+        try:
+            job = json.loads(rec.strip() or "{}")
+        except ValueError:
+            job = {}
+        size = int(size.strip() or 0)
+        if not size or (old and size == old.get("size")):      # no transcript, or nothing new in it
+            if old:
+                old["src"] = b.get("updated") or old.get("src", 0)
+            return False
+        story = condense(raw)
+        if not story:
+            return False
+        out = job.get("output") if isinstance(job.get("output"), dict) else {}
+        state = "over (" + b["over"] + ")" if b["over"] else "waiting for the person" if b["waiting"] else "working" if b["busy"] else "idle, done with its turn"
+        head = (f"SESSION {b['name']} in {b['cwd']} on {m['name']}, now {state}.\n"
+                f"Its own one-line summary: {job.get('detail') or b.get('detail') or '-'}\n"
+                f"Its last result: {str(out.get('result') or '-')[:2000]}\n")
+        prev = json.dumps({k: old.get(k) for k in NOTE_KEYS}, ensure_ascii=False) if old else "none yet"
+        self.writing = b["id"]
+        self.push_digest()
+        r = self.summarize(SESSION_NOTES, f"{head}\nYOUR NOTES LAST TIME:\n{prev}\n\nTRANSCRIPT (the most recent part):\n{story}", SESSION_SCHEMA)
+        notes = {k: r.get(k) or ([] if k in ("decisions", "built") else "") for k in NOTE_KEYS}
+        with self.lock:
+            self.digest["sessions"][b["id"]] = {**notes, "name": b["name"], "unit": b["unit"], "m": b["m"], "state": state,
+                                                "at": int(time.time() * 1000), "src": b.get("updated") or 0, "size": size,
+                                                "read": len(story), "whole": len(raw) < TAIL and len(story) < STORY}
+            self.save_digest()
+        self.push_digest()
+        return True
+
+    def digest_desk(self, u):
+        """a desk's paragraph, from the notes on its sessions that are still listed"""
+        ids = {b["id"] for b in self.bots()}
+        ents = [e for i, e in self.digest["sessions"].items() if e.get("unit") == u and i in ids]
+        if not ents:
+            return
+        if (self.machines.get(ents[0].get("m") or "") or {}).get("ssh") == "@demo":
+            text = f"{len(ents)} sessions here. Most of the work is the room itself; one waits on a decision from you about the layout."
+        else:
+            self.writing = "u:" + u
+            self.push_digest()
+            story = "\n\n".join(f"SESSION {e['name']} ({e['state']}):\n" + json.dumps({k: e.get(k) for k in NOTE_KEYS}, ensure_ascii=False) for e in ents)
+            text = self.summarize(DESK_NOTES, f"PROJECT {u}\n\n{story}", DESK_SCHEMA).get("text") or ""
+        with self.lock:
+            self.digest["desks"][u] = {"text": text, "at": int(time.time() * 1000)}
+            self.save_digest()
+        self.push_digest()
+
+    def save_digest(self):
+        """kept, without the notes on sessions gone for two weeks"""
+        cut = (time.time() - 14 * 86400) * 1000
+        ss = self.digest["sessions"]
+        for i in [i for i, e in ss.items() if e.get("at", 0) < cut]:
+            del ss[i]
+        if DEMO:
+            return
+        os.makedirs(os.path.dirname(DIGEST), exist_ok=True)
+        with open(DIGEST + ".tmp", "w") as f:
+            json.dump(self.digest, f, indent=1, ensure_ascii=False)
+        os.replace(DIGEST + ".tmp", DIGEST)
+
+    def demo_notes(self, b, old):
+        """the demo's notes: made up, a moment of writing"""
+        if old and old.get("src") == b.get("updated", 0) and old.get("state") == b["state"]:
+            return False
+        self.writing = b["id"]
+        self.push_digest()
+        time.sleep(1.2)
+        ask = [{"question": "Keep the bench, or show the finished sessions only in the list?", "context": "The bench fills up with more than six finished sessions; agent view folds them into “… N more”.",
+                "options": ["Keep the bench, three a seat", "Only the COMPLETED list"]}] if b["waiting"] else []
+        with self.lock:
+            self.digest["sessions"][b["id"]] = {
+                "goal": f"Work on {b['cwd'].rsplit('/', 1)[-1] or 'home'}: {b['name']} was asked to tidy up and finish the open edges.",
+                "now": ("It is waiting for your answer before it goes on." if b["waiting"] else "It is in the middle of a change and running the tests." if b["busy"]
+                        else "It finished its turn: the change is in and tested, nothing is pushed yet."),
+                "decisions": ask, "built": ["The room's layout code split into layout() and foot()", "Commit 3f2a9c1 “desks keep their place” (not pushed)", "Tests: 14 passed"],
+                "next": "Push once you have looked at it.", "name": b["name"], "unit": b["unit"], "m": b["m"], "state": b["state"],
+                "at": int(time.time() * 1000), "src": b.get("updated", 0), "size": 1, "read": 1200, "whole": True}
+        self.push_digest()
+        return True
+
     def fold(self, mid, m, bots):
         """each bot's desk: the directory it started in, or its repo's for a worktree"""
         new = sorted({b["cwd"] for b in bots if b["cwd"] and (mid, b["cwd"]) not in self.folds})
@@ -664,6 +958,7 @@ class Hub:
                     self.feeds[mid] = {"bots": bots, "light": light, "error": None}
                 self.chess_check()
                 self.awake_tick()
+                self.digest_watch(bots)
                 for msg, a, b in talks:
                     if msg not in heard:
                         heard.add(msg)
@@ -728,6 +1023,7 @@ class Hub:
             with self.lock:
                 self.feeds[mid] = {"bots": [dict(b) for b in bots], "light": False, "error": None}
             self.chess_check()
+            self.digest_watch(bots)
             self.push("state", self.state())
             poke.wait(3)
             poke.clear()
@@ -1175,6 +1471,7 @@ class Handler(BaseHTTPRequestHandler):
         q = queue.Queue()
         hub.clients.append(q)
         q.put(f"event: state\ndata: {json.dumps(hub.state())}\n\n".encode())
+        q.put(f"event: digest\ndata: {json.dumps(hub.digest_view())}\n\n".encode())
         try:
             while True:
                 try:
@@ -1336,7 +1633,10 @@ class Handler(BaseHTTPRequestHandler):
                     st[k] = bool(b[k])
             save_room(hub.room)
             hub.push("state", hub.state())
+            hub.push_digest()
             return {}
+        if path == "/api/digest":            # the notes opened: the sessions that moved since are written up again
+            return {"queued": hub.digest_refresh() if options(hub.room)["digest"] else 0}
         if path == "/api/forget":            # a desk taken away (carried to the door)
             if any(x["unit"] == b["unit"] and not x["over"] for x in hub.bots()):
                 raise RuntimeError("bots work at that desk")
