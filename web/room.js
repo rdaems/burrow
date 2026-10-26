@@ -2,11 +2,12 @@
 // breaks, its robots (pixel.js), furnished as pixel art (sprites.js). Every project (a working
 // directory, here or on another machine) is a desk: a cabinet with the project's screen and name at its left
 // end, a long desktop to the right where its bots sit facing the screen, a chair a bot. The desk is
-// handled at its screen: hover it for the path, the + beside it starts another bot there. Desks stay
-// (every directory a session ran in, and the ones you add); carry one to a door to remove it. A bot in a
+// handled at its screen: hover it for the path, the + beside it starts another bot there. The desks are
+// the ones you put down (the project cabinet) and stay until you burn one. A bot in a
 // git worktree of the project sits at the project's desk, its own copy of the files a laptop on the
 // cabinet, plugged in.
-// The bots are the sessions `claude agents --all` lists, and what a bot does is its tempo (Claude Code's
+// The bots are the sessions `claude agents --all` lists whose directory has a desk (the rest are not in
+// the room; the cabinet's form lists their directories), and what a bot does is its tempo (Claude Code's
 // record of each session: is a turn running), not its state (Claude Code's reading of its last words):
 //   a turn runs         at its project's desk, typing
 //   a dialog open       at its desk with its hand up and a ? in a bubble (a multiple-choice question, a
@@ -1115,9 +1116,8 @@ function startRoom(cv, app) {
     // what is being dragged over the fire (a desk without bots, a piece, a bot) is about to burn, a bot
     // held at its door is about to be stopped: it is outlined red and washed in red, flashing (tinted)
     const heldBot = held && held.b && !held.b.human && pointer ? held : null, botDrop = heldBot && dropAt(L, heldBot);
-    const movingDesk = moving && L.desks.find((d) => d.key === moving.key);
     const boothUnder = botDrop === "booth" ? boothAt(L, heldBot) : null;   // a bot held over the booth: let go and it goes in
-    dangerNow = !!boothUnder || botDrop === "fire" || !!(L.fire && moving && !(movingDesk && movingDesk.seats.length) && inFire(L, moving.key, moving.at, moving.u));
+    dangerNow = !!boothUnder || botDrop === "fire" || !!(L.fire && moving && inFire(L, moving.key, moving.at, moving.u));
     const danger = (key) => dangerNow && !!moving && moving.key === key, tintOf = (key) => (danger(key) ? flashA(w.T) : 0);
     // a desk being dragged takes its seated bots along, this very frame
     if (moving && moving.key.startsWith("u:")) {
@@ -1298,7 +1298,7 @@ function startRoom(cv, app) {
       w.burning = w.burning.filter((o) => performance.now() - o.t0 < 1400);
       items.push([F.y1, () => drawFire(ctx, F, T, !!feeding, burst, w.burning)]);
       const tx = F.x0 + 16, ty = F.y0 - 2;
-      if (fd) tip = { text: fd.seats.length ? fd.label + " has bots" : "burn " + fd.label, x: tx, y: ty };
+      if (fd) tip = { text: "burn " + fd.label + (fd.seats.length ? ", its bots go" : ""), x: tx, y: ty };   // they go on, out of the room
       else if (feeding && moving && KIND(moving.key) === "door") { const m = s.machines.find((m) => "door:" + m.id === moving.key); tip = { text: "take out " + (m ? m.name : "the door"), x: tx, y: ty }; }
       else if (feeding && moving) tip = { text: "burn the " + (NAMES[KIND(moving.key)] || KIND(moving.key)), x: tx, y: ty };
       else if (feeding) tip = { text: "delete " + held.b.name, x: tx, y: ty };
@@ -2315,7 +2315,7 @@ function startRoom(cv, app) {
     if (moving) {
       const s = app.state(), d = lastL && lastL.desks.find((d) => d.key === moving.key);
       const burn = lastL && inFire(lastL, moving.key, moving.at, moving.u);
-      if (burn && (!d || !d.seats.length)) {   // into the fire: a picture of it goes in, the thing itself goes
+      if (burn) {                            // into the fire: a picture of it goes in, the thing itself goes (a desk's bots walk out)
         const w = world(), r = foot(moving.key, moving.at, moving.u);
         const mid = KIND(moving.key) === "door" ? moving.key.slice(5) : null;      // a door: its machine goes out of the room (and of sshConfigs)
         toFire(r, snapshot(r, (c) => (d ? drawDesk(c, d, w, w.T, new Set()) : mid !== null ? drawDoor(c, moving.at[0], paintOf(mid), false, false, moving.at[1]) : drawKind(c, KIND(moving.key), moving.at, w, w.T))));

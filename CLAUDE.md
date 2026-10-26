@@ -1166,6 +1166,29 @@ Removing did work in the demo; his :7777 had not been restarted, so `/api/unmach
 - The demo can add a machine (`DEMO_ADDED`, made-up bots). look.mjs: `releaseTo` (a JS expression) for a held
   drag. A figure standing in front of a door takes the press (you, just in through it, at load).
 
+## Desks are yours; no desk, not in the room (2026-10-26)
+
+He: "We do have a state in burrow that is not in claude agents: the presence of desks. How should we handle that?
+Every bot is defined by its working dir, correct? Maybe we can hide bots that don't have a desk. And when you click
+new desk, you get a list of the recent/existing working dirs that are not on the floor". Yes: a bot's place is its
+unit (machine + directory, a worktree folded into its repo), and the desks are the one thing burrow owns, so they
+are his choice now instead of a record of every directory a session was seen in.
+- **No desk comes on its own** (`Hub.desks()` only lists room.json `desks`). `state()` carries only the sessions at
+  a desk (`on_floor`); the rest stay in `hub.bots()` for everything else (the clock's keep-awake counts every local
+  bot at work; the office manager writes notes only on the ones in the room: `digest_watch`, `digest_refresh`).
+  Their figures walk out through their door when they leave the state, in when they come back.
+- **The project cabinet's form** lists what is not on the floor (`/api/recent {m}` → `off_floor`): the units with
+  sessions first, how many running and "waits for you" when one needs input (they are not in the room: this is
+  where they show), the newest first; then where Claude Code ran lately on that machine (`RECENT`: the newest
+  transcript of the 100 latest dirs of `~/.claude/projects`, its first `"cwd"`, if it still exists; ~0.1 s), not
+  worktrees, not the Desktop app's scratch chats. Typed: the ones that contain it, then `ls` completion. The
+  completer (`completes`) takes `{value, note}` items, the note on the right. Asked once a form and machine.
+- **A desk with bots burns** (it was refused: it would have come right back): "burn NAME, its bots go"; they go
+  on, out of the room. `/api/forget` no longer refuses.
+- Decided myself (his to overrule): a session waiting for input in a directory without a desk is hidden like the
+  rest; only the cabinet's list says so. README brought up to date (desks, the booth instead of the door, a door
+  from the closet).
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

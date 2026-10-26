@@ -96,6 +96,7 @@ button, input, select { font:inherit; color:inherit; }
 .suggest { list-style:none; margin:0; padding:2px; max-height:200px; overflow:auto; background:var(--steel4); color:var(--ink); border:2px solid var(--ink); border-top:0; box-shadow: inset 2px 0 0 var(--steel2); font:14px/1.4 var(--mono); -webkit-font-smoothing:auto; text-shadow:none; }
 .suggest li { padding:3px 8px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .suggest li:hover { background:var(--steel3); }
+.suggest li small { float:right; margin-left:16px; font:inherit; opacity:.6; }
 .suggest li.on { background:var(--f-hot); }
 /* the outside, four pixels a dot */
 .outside { display:block; width:520px; max-width:100%; aspect-ratio:130/70; border:2px solid var(--ink); image-rendering:pixelated; }

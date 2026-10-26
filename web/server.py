@@ -47,6 +47,14 @@ PEERS = r'''find ~/.claude/projects -maxdepth 2 -name '*.jsonl' -mmin -1 2>/dev/
 # the same session is then in the Claude app and at claude.ai/code/session_<id>. And its tempo: whether a turn
 # runs (active), or not, waiting for you (blocked) or for nothing (idle); not in `claude agents --json`
 JOBS = r'''grep -o -E '"(updatedAt|detail|bridgeSessionId|tempo)": *"([^"\\]|\\.)*"' ~/.claude/jobs/*/state.json 2>/dev/null || true'''
+# where Claude Code ran lately, for the project cabinet's form: its home, then the working directory of the newest
+# transcript of each of its projects (~/.claude/projects/<the path, encoded>/<session>.jsonl), the latest first
+RECENT = r'''echo "$HOME"; cd ~/.claude/projects 2>/dev/null || exit 0
+for d in $(ls -t | head -100); do
+  f=$(ls -t ./"$d"/*.jsonl 2>/dev/null | head -1); [ -n "$f" ] || continue
+  c=$(grep -m1 -o '"cwd":"[^"]*"' "$f" | sed 's/^"cwd":"//; s/"$//')
+  [ -n "$c" ] && [ -d "$c" ] && echo "$c"
+done; true'''
 
 # ---- the office manager: notes on what each session is doing, which decisions are open, what it built,
 # written by Claude (`claude -p`, here, never on the machines) from the session's record and the newest
@@ -709,13 +717,9 @@ class Hub:
     def bots(self):
         return sorted((b for f in self.feeds.values() for b in f.get("bots", [])), key=lambda b: b["started"])
 
-    def desks(self, bots):
-        """the desks: every directory a session was ever seen running in, until you take the desk away
-        (one that is over roams the room idle, it brings no desk back)"""
-        new = [b["unit"] for b in bots if not b["over"] and b["unit"] not in self.room["desks"]]
-        if new:
-            self.room["desks"] += list(dict.fromkeys(new))
-            save_room(self.room)
+    def desks(self):
+        """the desks you put on the floor (the project cabinet), the one thing in the room Claude Code has no
+        notion of; a session is in the room only while its directory has one (`on_floor`)"""
         out, seen = [], set()
         for u in self.room["desks"]:
             mid, d = split_unit(u)
@@ -724,18 +728,39 @@ class Hub:
                 out.append({"unit": u, "m": mid, "dir": d})
         return out
 
+    def on_floor(self, bots):
+        """the sessions at a desk (in its directory, or in a worktree of it): the rest are not in the room"""
+        desks = set(self.room["desks"])
+        return [b for b in bots if b["unit"] in desks]
+
+    def off_floor(self, mid, recent=()):
+        """the working directories there that have no desk, for the project cabinet's form: those with
+        sessions first (running ones, then the newest), then where Claude Code ran lately (`recent`)"""
+        desks, out = set(self.room["desks"]), {}
+        for b in self.bots():
+            if (b["m"] or "") == mid and b["unit"] not in desks:
+                e = out.setdefault(b["unit"], {"dir": split_unit(b["unit"])[1], "bots": 0, "waiting": 0, "at": 0})
+                if not b["over"]:
+                    e["bots"] += 1
+                    e["waiting"] += bool(b["waiting"])
+                e["at"] = max(e["at"], b.get("endedAt") or b["started"])
+        first = sorted(out.values(), key=lambda e: (-e["bots"], -e["at"]))
+        rest = [{"dir": d, "bots": 0, "waiting": 0} for d in dict.fromkeys(recent)
+                if unit(mid, d) not in desks and unit(mid, d) not in out and "/.claude/worktrees/" not in d and "/scratch-workspaces/" not in d]   # (the Desktop app's scratch chats)
+        return first + rest
+
     def state(self):
         with self.lock:
-            bots = self.bots()
+            bots = self.on_floor(self.bots())
             return {"machines": [{"id": mid, "name": m["name"], "ssh": m.get("ssh") or "", **{k: v for k, v in self.feeds.get(mid, {}).items() if k != "bots"}}
                                  for mid, m in self.machines.items()],
-                    "desks": self.desks(bots), "bots": bots, "layout": self.room["layout"], "furniture": self.room["furniture"], "pair": self.room.get("pair", {}), "paint": self.room.get("paint", {}),
+                    "desks": self.desks(), "bots": bots, "layout": self.room["layout"], "furniture": self.room["furniture"], "pair": self.room.get("pair", {}), "paint": self.room.get("paint", {}),
                     "usage": self.usage, "chess": self.chess_view(), "demo": DEMO, "awake": self.awake_view(), "width": self.room.get("width"), "shells": self.shells_view(),
                     "settings": options(self.room),
                     "you": {**(self.room.get("you") or {}), **you_of(self.room), "login": USER}, "pairAt": PAIR}
 
     def keep(self, u, on):
-        """a desk added (by you), or taken away: gone with its place, until a session runs there again"""
+        """a desk added (by you), or taken away: gone with its place, and its sessions out of the room"""
         with self.lock:
             ds = [x for x in self.room["desks"] if x != u]
             self.room["desks"] = ds + [u] if on else ds
@@ -816,12 +841,12 @@ class Hub:
 
     def digest_watch(self, bots):
         """a session that finished a turn, asks you something or is over gets written up (on every poll)"""
-        on = options(self.room)["digest"]
+        on, desks = options(self.room)["digest"], set(self.room["desks"])
         for b in bots:
             now = (b["busy"], b["waiting"], b["over"])
             was = self.seen.get(b["id"])
             self.seen[b["id"]] = now
-            if on and was and was != now and not b["busy"]:
+            if on and was and was != now and not b["busy"] and b["unit"] in desks:   # only the ones in the room
                 self.digest_queue([b["id"]])
 
     def digest_refresh(self):
@@ -829,7 +854,7 @@ class Hub:
         over only if they ended in the last three days), those that wait for you first"""
         cut = (time.time() - 3 * 86400) * 1000
         ss = self.digest["sessions"]
-        todo = [b for b in self.bots() if (not b["over"] or b["endedAt"] > cut)
+        todo = [b for b in self.on_floor(self.bots()) if (not b["over"] or b["endedAt"] > cut)
                 and (b["id"] not in ss or "headline" not in ss[b["id"]] or not b.get("updated") or b["updated"] > ss[b["id"]].get("src", 0))]
         todo.sort(key=lambda b: (not b["waiting"], -(b.get("updated") or b["started"])))
         self.digest_queue([b["id"] for b in todo])
@@ -1916,9 +1941,7 @@ class Handler(BaseHTTPRequestHandler):
             return hub.answer(b.get("id") or "", b.get("question") or "", text[:4000])
         if path == "/api/digest":            # the notes opened: the sessions that moved since are written up again
             return {"queued": hub.digest_refresh() if options(hub.room)["digest"] else 0}
-        if path == "/api/forget":            # a desk taken away (carried to the door)
-            if any(x["unit"] == b["unit"] and not x["over"] for x in hub.bots()):
-                raise RuntimeError("bots work at that desk")
+        if path == "/api/forget":            # a desk burnt: its sessions go on, out of the room
             hub.kill_shells(b["unit"])
             hub.keep(b["unit"], False)
             return {}
@@ -1933,6 +1956,11 @@ class Handler(BaseHTTPRequestHandler):
                 return {"dirs": [f"{base}/{x}/" for x in ("alpha", "beta", "gamma") if x.startswith(part)]}
             out = run(m, f"ls -d {sq(d)}*/ 2>/dev/null | head -40", timeout=15)
             return {"dirs": [x for x in out.splitlines() if x]}
+        if path == "/api/recent":            # the working directories there without a desk (the cabinet's form)
+            if m.get("ssh") == "@demo":
+                return {"home": HOME, "dirs": hub.off_floor(mid, [f"{HOME}/projects/{x}" for x in ("alpha", "beta", "gamma")])}
+            out = run(m, RECENT, timeout=20).splitlines()
+            return {"home": out[0] if out else "", "dirs": hub.off_floor(mid, [x for x in out[1:] if x.startswith("/")])}
         if path == "/api/dir":               # a desk for a working directory there, kept
             d = (b.get("dir") or "").strip()
             if m.get("ssh") == "@demo":

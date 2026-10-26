@@ -27,7 +27,7 @@
       <div class="vhead"><span class="tname"></span><span class="tas"></span><button type="button" class="btn small tx" title="close">✕</button></div>
       <div class="vbody">
         <form id="vDir" class="vform" hidden>
-          <p>A working directory<span class="on"> on <b class="machine"></b></span>. Its bots will sit at one desk.</p>
+          <p>A desk for a working directory<span class="on"> on <b class="machine"></b></span>: its sessions come into the room, those in its worktrees too.</p>
           <div class="row machines"></div>
           <input class="field" name="dir" placeholder="~/projects/something" autocomplete="off" spellcheck="false">
           <ul class="suggest" id="dirs" hidden></ul>
@@ -256,6 +256,7 @@ view.querySelector(".tx").onclick = () => closeView();
 // the host from the Host entries of ~/.ssh/config
 function ask(kind) {
   openView(kind);
+  offFloor.m = null;                       // the directories without a desk, asked again
   const d = $(PANELS[kind]);
   d.querySelector(".err").textContent = "";
   d.querySelectorAll("input").forEach((i) => (i.value = ""));
@@ -292,11 +293,12 @@ for (const d of [$("#vDir"), $("#vMachine")]) {
 // so a directory that has directories of its own can be chosen too
 function completes(inp, list, choices) {
   let timer = null, asked = null, items = [], pick = -1;
+  const val = (x) => (typeof x === "string" ? x : x.value);       // an item: what it puts in the field, maybe with a note beside it
   const show = () => {
-    list.innerHTML = items.map((x, i) => `<li${i === pick ? ' class="on"' : ""}>${x.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]))}</li>`).join("");
+    list.innerHTML = items.map((x, i) => `<li${i === pick ? ' class="on"' : ""}>${esc(val(x))}${x.note ? `<small>${esc(x.note)}</small>` : ""}</li>`).join("");
     list.hidden = !items.length;
   };
-  const take = () => { if (pick >= 0 && items[pick]) { inp.value = items[pick]; inp.dispatchEvent(new Event("input")); } };
+  const take = () => { if (pick >= 0 && items[pick]) { inp.value = val(items[pick]); inp.dispatchEvent(new Event("input")); } };
   const look = () => {
     clearTimeout(timer);
     timer = setTimeout(async () => {
@@ -304,7 +306,7 @@ function completes(inp, list, choices) {
       if (text === asked) return;
       asked = text;
       const r = await choices(text);
-      if (inp.value === text) { items = r.filter((x) => x !== text); pick = -1; show(); }
+      if (inp.value === text) { items = r.filter((x) => val(x) !== text); pick = -1; show(); }
     }, 150);
   };
   inp.addEventListener("input", look);
@@ -321,9 +323,21 @@ function completes(inp, list, choices) {
   list.addEventListener("dblclick", (e) => { if (e.target.closest("li")) inp.form.requestSubmit(); });
   inp.form.addEventListener("submit", () => { items = []; show(); });
 }
-completes($("#vDir input"), $("#dirs"), async (dir) => {         // the directories there that start as typed
-  const r = await api("/api/complete", { m: $("#vDir input[name=m]").value || "", dir });
-  return r.dirs || [];
+// A desk is yours to put down: a session is in the room only while its directory has one. The form lists the
+// working directories there without a desk, those with sessions first (how many, and whether one waits for
+// you: they are not in the room), then where Claude Code ran lately; typed, the ones that match, then the
+// directories that start as typed
+let offFloor = { m: null, home: "", dirs: [] };      // asked once a form and machine
+completes($("#vDir input"), $("#dirs"), async (dir) => {
+  const m = $("#vDir input[name=m]").value || "";
+  if (offFloor.m !== m) { const r = await api("/api/recent", { m }); offFloor = { m, home: r.home || "", dirs: r.dirs || [] }; }
+  const h = offFloor.home, short = (d) => (h && (d === h || d.startsWith(h + "/")) ? "~" + d.slice(h.length) : d);
+  const t = dir.trim().toLowerCase(), bots = (n) => n + (n === 1 ? " bot" : " bots");
+  const known = offFloor.dirs.map((e) => ({ value: short(e.dir), note: e.bots ? bots(e.bots) + (e.waiting ? ", waits for you" : "") : "" }))
+    .filter((e) => !t || e.value.toLowerCase().includes(t));
+  if (!t) return known;
+  const r = await api("/api/complete", { m, dir });
+  return known.concat((r.dirs || []).filter((d) => !known.some((e) => e.value === d)));
 });
 completes($("#vMachine input"), $("#hosts"), async (text) => {   // the hosts of ~/.ssh/config without a door yet
   const r = await api("/api/hosts", {});

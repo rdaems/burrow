@@ -24,8 +24,9 @@ its robot to the bench, and your usage limits are the coffee pot and the water b
 room. Nothing of Claude Code is re-implemented, so whatever it can do, you can do here.
 
 **One room, all your machines.** The machines are Claude Code's ssh connections (`sshConfigs` in
-`~/.claude/settings.json`), one door each in the wall. The desks are the directories the sessions work in;
-a remote machine's door and desks are painted its colour.
+`~/.claude/settings.json`), one door each in the wall. The desks are the directories you put on the
+floor; a session is in the room while its directory has a desk. A remote machine's door and desks are
+painted its colour.
 
 **It is an office.** Idle robots take breaks: coffee, chess, a stretch, a nap on a mat they roll out, a
 meeting at the whiteboard. You arrange the furniture, the closet holds more of it, and the fire burns
@@ -55,9 +56,12 @@ beside the robot whose session is open, or under the screen when your own termin
 - **open a session**: click its robot. It opens as a tile beside the room, a terminal running `claude attach`.
   Shift-click adds a tile next to the open ones; drag a tile by its band onto another to arrange them.
   ✕, a click on the floor or `exit` closes a tile, and the session runs on
-- **start a session**: the `+` beside a desk's screen; the project cabinet adds a desk for a new directory
-- **stop a session**: carry its robot to the bench or to its machine's door. A sign over it counts five
-  seconds down (click it, or carry the robot away, to undo), then `claude stop`
+- **start a session**: the `+` beside a desk's screen
+- **a desk**: the project cabinet puts one down; its list has the directories with sessions that are not
+  in the room yet, then where Claude Code ran lately. Burn a desk and its sessions leave the room (they go on)
+- **a fresh start**: drop an idle robot by the neuralyzer: `/clear`, a new conversation in the same session
+- **delete a session gently**: carry its robot into the booth. A sign counts five seconds down (click it,
+  or carry the robot out, to undo), then `claude stop` and `claude rm`
 - **delete a session** (`claude rm`; the transcript stays for `claude --resume`): drop its robot in the fire
 - **your own terminal**: click a desk's screen. A login shell in that directory on that machine, one per
   desk, kept while burrow runs; the screen shows its prompt
@@ -83,7 +87,7 @@ beside the robot whose session is open, or under the screen when your own termin
   room a table: click it to open a new room (you are in it, with your name and face) or to link one you
   are in, then for the chat; drop a robot on it and the robot joins the chat as an agent
 - **furniture**: drag it where you want it; the closet on the wall holds more; drop yourself or a robot on a
-  piece and it is used; the fire burns a piece, a desk or a robot
+  piece and it is used; the fire burns a piece, a desk, a robot or a door (its machine out of `sshConfigs`)
 - **you**: a click on your own figure: your face and your name (the login name unless you type one);
   the pair rooms see you by them
 - **settings**: the switchboard on the wall, a switch a setting, its lamp lit while it is on. The first:
@@ -118,8 +122,8 @@ python3 web/server.py          # http://localhost:7777
 
 Python 3 (the standard library only), Claude Code, a browser. `BURROW_PORT` picks another port.
 
-The empty door frame on the wall adds a machine (it offers the `Host` names of your `~/.ssh/config` that
-have no door yet): an entry in `sshConfigs` in `~/.claude/settings.json`, the list the Desktop app's SSH
+A door from the closet, hung on the wall, adds a machine (it offers the `Host` names of your `~/.ssh/config`
+that have no door yet): an entry in `sshConfigs` in `~/.claude/settings.json`, the list the Desktop app's SSH
 environments use as well; `sshPort` and `sshIdentityFile` are honoured:
 
 ```json
