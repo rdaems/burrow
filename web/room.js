@@ -939,6 +939,11 @@ function startRoom(cv, app) {
       const d = L.desks.find((d) => d.key === moving.key);
       if (d) for (const [id, x] of d.seats) { const f = w.folk.get(id); if (f && f.sat && !f.held) { f.x = x; f.y = d.y; } }
     }
+    // and an armchair whoever reads in it (you too)
+    if (moving && KIND(moving.key) === "armchair") {
+      const ch = L.chairs.find((c) => c.key === moving.key);
+      if (ch) for (const f of w.folk.values()) if (f.act.kind === "chair" && f.act.at === ch.key && f.sat && !f.held) { f.x = ch.x - 2; f.y = ch.y - 1; }
+    }
     lastL = L;
     if (Object.keys(L.placed).length) app.act({ kind: "layout", layout: { ...(s.layout || {}), ...L.placed } });
     s.layout = { ...(s.layout || {}), ...L.placed };
@@ -1684,22 +1689,25 @@ function startRoom(cv, app) {
     const b = cv.getBoundingClientRect(), x = (cx - b.left) / K, y = (cy - b.top) / K;
     const inside = x >= 0 && x < W && y >= 0 && y < H;
     pointer = inside ? { x, y } : null;      // the room's pointer follows the carried piece (the canvas gets no events: the closet holds the pointer)
-    carrying = { kind, at: inside ? clampAt(kind, [Math.round(x), Math.round(y)]) : null };
+    carrying = { kind, at: inside ? settle(lastL, "new", clampAt(kind, [Math.round(x), Math.round(y)]), undefined, kind) : null };   // where it will land
     draw();
     return carrying.at;
   }
-  function placeKind(kind, cx, cy) { const at = carryKind(kind, cx, cy); carrying = null; draw(); return at && settle(lastL, "new", at, undefined, kind); }
-  // a piece put down settles on clear floor: the nearest spot around `at` (rings outward, two dots a
-  // step, up to sixty) whose footprint meets no other piece's, inside the room; a wall piece slides along
+  function placeKind(kind, cx, cy) { const at = carryKind(kind, cx, cy); carrying = null; draw(); return at; }
+  // a piece put down settles on clear floor: the nearest spot around `at` (rings outward) whose
+  // footprint meets no other piece's, inside the room; a wall piece slides along
   // the wall. One rule for a piece moved, a desk moved and a piece out of the closet, so nothing ever
   // lands behind something else (where it could neither be seen nor picked up)
   function settle(L, key, at, u, kind = key) {
     if (!L) return at;
     const fits = (spot) => { const r = foot(kind, spot, u); return !L.pieces.some((p) => p.key !== key && meets(r, p.r)); };
     const wall = onWall(kind);
-    for (let d = 0; d <= 60; d += 2) {
-      const ring = [];
-      for (let dx = -d; dx <= d; dx += 2) for (let dy = wall ? 0 : -d; dy <= (wall ? 0 : d); dy += 2) if (Math.max(Math.abs(dx), Math.abs(dy)) === d) ring.push([dx, dy]);
+    // as far as the room goes (two dots a step close by, four further out): in a crowded corner nothing
+    // within sixty dots may be clear, and giving up there put it on top of what was there
+    for (let d = 0; d <= Math.max(W, H); d += d < 60 ? 2 : 4) {
+      const s = d < 60 ? 2 : 4, ring = d ? [] : [[0, 0]];
+      if (d && wall) ring.push([-d, 0], [d, 0]);
+      else if (d) for (let t = -d; t < d; t += s) ring.push([t, -d], [d, t], [-t, d], [-d, -t]);
       ring.sort((a, b) => Math.hypot(...a) - Math.hypot(...b));
       for (const [dx, dy] of ring) { const spot = clampAt(kind, [at[0] + dx, at[1] + dy], u); if (fits(spot)) return spot; }
     }
@@ -1916,11 +1924,13 @@ function startRoom(cv, app) {
     }
     if (moving) {
       const at = [moving.from[0] + pointer.x - press.x, moving.from[1] + pointer.y - press.y], r = foot(moving.key, at, moving.u);
-      // on the grid of dots while it moves, as pair: it steps. A wall piece that can burn comes off the wall
-      // while it is carried (to the fire, or back up: it is hung again where it is let go); a fixed one slides along it
-      moving.at = onWall(moving.key) && !FIXED.has(KIND(moving.key))
+      // on the grid of dots while it moves, as pair: it steps. It shows where it will land: on clear floor
+      // (settle), or over the fire, to burn. A wall piece that can burn comes off the wall while it is
+      // carried (to the fire, or back up: it is hung again where it is let go); a fixed one slides along it
+      const off = onWall(moving.key) && !FIXED.has(KIND(moving.key)), raw = off
         ? [Math.round(Math.max(2 - (r[0] - at[0]), Math.min(W - 2 - (r[2] - at[0]), at[0]))), Math.round(Math.max(0, Math.min(H - 1 - (r[3] - at[1]), at[1])))]
         : clampAt(moving.key, at, moving.u);
+      moving.at = off || (lastL && inFire(lastL, moving.key, raw, moving.u)) ? raw : settle(lastL, moving.key, raw, moving.u);
     }
     if (held) {
       held.x = Math.max(0, Math.min(W, pointer.x)); held.y = Math.max(WALL, Math.min(FLOORY - 4, pointer.y + 24)); held.dir = -1;   // it hangs under the pointer, but never past the floor's bottom edge
@@ -2026,7 +2036,7 @@ function startRoom(cv, app) {
   new ResizeObserver(size).observe(cv.parentElement);
   size();
   requestAnimationFrame(frame);
-  window.__room = { world, size: () => ({ W, H, K }), layout: () => lastL, hp: () => lastHp };   // for poking at it from the console
+  window.__room = { world, size: () => ({ W, H, K }), layout: () => lastL, hp: () => lastHp, settle: (...a) => settle(lastL, ...a) };   // for poking at it from the console
   const stats = () => { const w = world(); return { since: w.born, bots: Object.fromEntries(w.stats), meetings: w.meetings, inked: w.ink ? inked(w) : 0 }; };
   // at(id): where a figure stands, in CSS pixels of the page (for look.mjs, to drive the room from outside)
   const at = (id) => { const f = world().folk.get(id), b = cv.getBoundingClientRect(); return f ? [b.left + f.x * K, b.top + (f.y - 12) * K] : null; };

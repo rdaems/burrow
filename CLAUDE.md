@@ -835,6 +835,24 @@ a person's head, floats ~6 dots over a robot). It takes the place of the talk do
 while the stop sign counts down. To look at it in the demo: `Object.defineProperty(f, 'waiting',
 {get: () => true, set() {}})` on a folk from `__room.world().folk` (think() resets `waiting` every frame).
 
+## Dragging an armchair (2026-10-26)
+
+He: "Draggin an armchair on the floor is still buggy, have you tested this? I've asked about it before."
+It had not been tested past the first fix (settle). Tested now in the demo with look.mjs (hold, shots
+mid-drag and after), three faults found and fixed:
+- **`settle` gave up after 60 dots** and put the piece where it was let go, on top of what was there: a
+  new armchair from the closet dropped on the whiteboard, with the old armchair, the meeting table, the
+  desks and the bench around it, landed on the board (covered by it, the board taking the clicks). It
+  searches the whole room now (two dots a step to 60, four beyond; about 7 ms in that corner).
+- **What you saw was not where it landed**: a dragged piece was drawn at the pointer, even over another,
+  and jumped to clear floor when let go. Now `moving.at` and the closet's ghost are settled while they
+  move: it lands where it is shown. Not while over the fire (it shows there, red, to burn) and not a
+  burnable wall piece off the wall.
+- **A reader rode a moved armchair a frame late** (think's `sitAt`, a jump of 40 dots made it get up and
+  walk): `draw()` sets whoever sits in it onto the seat each frame, as for a desk.
+`__room.settle(key, at, u, kind)` is a test hook for it. A press on a figure in the armchair still lifts the
+figure; the chair is dragged by its lamp then.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a
