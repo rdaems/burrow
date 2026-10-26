@@ -120,13 +120,15 @@ const room = startRoom($("#room"), {
   settings: () => (state && state.settings) || {},
   digest: () => digest,
   // the office manager clearing out (switchboard: cleanup): the sessions she would let go, oldest first:
-  // completed, her notes on them have nothing open (no decision left to you, nothing next), ended over an hour ago
+  // completed, her notes on them have nothing open (no decision left to you, nothing next: empty, or a line that
+  // says so, "Nothing left in this session …", as the notes often do), ended over an hour ago
   cleanup: () => {
     const cfg = (state && state.settings) || {}, ss = (digest && digest.sessions) || {};
+    const none = (t) => !(t || "").trim() || /^\s*(nothing|none|no further|no next)\b/i.test(t);
     const ids = cfg.cleanup && state ? state.bots.filter((b) => {
       const e = ss[b.id];
       if (!b.over || !e || !b.endedAt || Date.now() - b.endedAt < 3600e3) return false;
-      return !(e.decisions || []).some((q) => !(e.answered || {})[q.question]) && !(e.next || "").trim();
+      return !(e.decisions || []).some((q) => !(e.answered || {})[q.question]) && none(e.next);
     }).sort((a, b) => a.endedAt - b.endedAt).map((b) => b.id) : [];
     return { on: !!cfg.cleanup, hardcore: !!cfg.hardcore, ids };
   },

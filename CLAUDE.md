@@ -1081,7 +1081,8 @@ closet. If I click it, I get a cross hair and i can shoot bots."
 - Two switches (server `OPTIONS`, the page's `OPTIONS`, room.js `SWITCHES`), both off by default: `cleanup`
   and `hardcore`. Five levers do not fit one column above the floor: three a column (`SB_COLS`, `SB_W`).
 - **Her decision** (`app.cleanup()` in index.html): a session is let go when it is completed (`over`), her notes
-  on it have no open decision (answered ones do not count) and nothing `next`, and it ended over an hour ago;
+  on it have no open decision (answered ones do not count) and nothing `next` (empty, or a line starting "Nothing
+  left …", which the notes often write instead), and it ended over an hour ago;
   oldest first. Rules over her notes, no extra Claude call. No notes on it, no decision.
 - **Her round** (`cleanStep`, before her notes in `thinkManager`; `w.clean`, `w.cleanRest` the pause between):
   normal: `fetch` (to the bot) → `walk` (it follows a step behind her: `escort` act) → `booth` (it stands in the
