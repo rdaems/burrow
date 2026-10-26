@@ -30,6 +30,8 @@ button, input, select { font:inherit; color:inherit; }
 #app { flex:1; min-height:0; display:flex; }
 #roomwrap { flex:none; height:100%; overflow:hidden; padding:6px 0 6px 6px; }   /* the tiles' margin (tiles.js OUT) around the room too */
 #room { display:block; image-rendering:pixelated; image-rendering:crisp-edges; touch-action:none; }
+/* the gun closet, hardcore: the office in the first person (fps.js), over the whole window, in big pixels */
+#fps { position:fixed; inset:0; width:100vw; height:100vh; z-index:1000; display:block; background:#0c0a12; image-rendering:pixelated; image-rendering:crisp-edges; cursor:none; outline:none; }
 #divider { flex:none; width:6px; margin:0 -3px; cursor:col-resize; z-index:4; }
 #pane { flex:1; min-width:0; position:relative; overflow:hidden; }
 /* a tile, as a 16-bit window like the popups (pair's door panels): an ink ring with a steel bevel,

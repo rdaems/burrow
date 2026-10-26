@@ -174,8 +174,8 @@ folders) sit in its private `ccd-session-presets.json`. He chose, and it is buil
   `--bg` cwd got pinned forever (that is how a worktree had a desk).
 - **Worktrees**, "at the repo desk, but the repo desk is somehow connected, make it make sense": a session in a
   linked worktree (`git rev-parse --show-toplevel` ≠ the parent of `--git-common-dir`, asked once per new cwd
-  per machine; `/.claude/worktrees/` in the path as fallback) sits at its repo's desk, after the main
-  checkout's bots. The worktree is a laptop on the repo's cabinet beside the big screen, a cable between them
+  per machine; `/.claude/worktrees/` in the path as fallback) sits at its repo's desk (after the main
+  checkout's bots then; in arrival order since 2026-10-26). The worktree is a laptop on the repo's cabinet beside the big screen, a cable between them
   (its own copy of the files, the repo's git). Each screen shows only its own checkout's bots; hovering a
   laptop lights its bots, a lit bot lights its laptop. (Laptops at the seats were hidden behind the bots;
   an annex desk per worktree made desks too long for the 256-dot room.)
@@ -1094,7 +1094,8 @@ closet. If I click it, I get a cross hair and i can shoot bots."
 - **Hardcore** (`hardcore()`): the booth is drawn as a gun closet (`drawGunCloset`: olive steel, a red lamp, two
   shotguns behind glass, one gone while in someone's hands) and takes no bot in. A click on it takes a gun
   (`aiming`): the cursor is a pixel crosshair (red over a bot); a click shoots (a bot: `shoot`; the floor: a
-  puff), a click on a gravestone still undoes, a click on the closet or Esc puts the gun back.
+  puff), a click on a gravestone still undoes, a click on the closet or Esc puts the gun back. (Superseded the
+  same day: the gun closet opens the first-person view, see "the gun closet in the first person".)
 - Tested in the demo with notes faked for its completed bots (its made-up notes always have a `next`):
   her normal round (fetched, walked, five seconds, gone), her hardcore round (armed, hunted across the room,
   shot, the next), and the crosshair (shot, the stone clicked: back and spared).
@@ -1204,6 +1205,50 @@ are his choice now instead of a record of every directory a session was seen in.
 - Decided myself (his to overrule): a session waiting for input in a directory without a desk is hidden like the
   rest; only the cabinet's list says so. README brought up to date (desks, the booth instead of the door, a door
   from the closet).
+
+## Seats in arrival order; the gun closet in the first person (2026-10-26)
+
+He: "A new bot on a desk should append after the existing ones, now it gets a seat closest to the pc." And: "The gun
+closet in hardcore mode: If I click it I can kill bots. Make it such that the full screen is now showing a 3d view,
+very simple sprite graphics like wolf3d or doom, of the office, and we can kill the bots as a classic fps".
+- **Seats**: the row was sorted main checkout first, then each worktree, so a new bot in the main checkout sat down in
+  front of the worktree bots, and one whose process came back went by its old start time. Now `sitters` keeps a row
+  per unit (`seatRows`): who sits keeps the chair, a newcomer takes the far end, the rest close up when one leaves;
+  on page load in the order they started. The worktree grouping is gone (a worktree's laptop still lights its bots).
+- **The view** (web/fps.js, `startFps(room, done)`, started by `firstPerson` in room.js; the 2D crosshair, `aiming`,
+  is gone): a raycaster into a 200-row framebuffer (as wide as the window's shape, 440 at most), scaled up in
+  big pixels over the whole window, a depth and an id per pixel. It shows the room as it is: after each drawing
+  while it is on, `scene3()` builds the scene from what was just drawn (the room keeps thinking at 12 a second;
+  fps.js moves the figures smoothly between ticks):
+  - the floor canvas (planks, the rug, the mats rolled out, the oil), the wall (the 2D wall band, `panelled` with a
+    rail and panels for up close, then what hangs there: `wallPics`, recorded by `onTheWall` and for the closet and
+    the switchboard), the other three walls plain; walls 40 dots high (the 26-dot band stretched: doors come out a
+    bot's height), the eye at 21, a ceiling of tiles and lights; the floor and ceiling from smaller copies far off
+    (`mips`: the planks' seams shimmered in rings), fog toward a dark navy;
+  - a desk is blocks (cabinet z 0–11, desktop z 5–9 on legs) faced with crops of its own `drawDesk` picture (the
+    name plate on the cabinet's front, the keyboards and mugs on top), its ends and back in its paint; its screen
+    and laptops and its chairs are sprites;
+  - every other piece is a sprite of what the room just drew (`pics`: recorded in `piece()` and by the chess
+    table, the fire, the booth or gun closet, the bench, the cabinet), so its state shows (the coffee, the board);
+  - figures from `body()` in their pose (flipped by the way they face as you see them), the lying ones turned, a ?
+    over one that waits, the pieces of shot ones as they fly and land, the ball. Not you: you are the eyes.
+- **Playing**: you start in front of the gun closet facing the room's middle. WASD or arrows, Shift runs, the mouse
+  looks (the pointer locked; up and down by shifting the horizon), a click (or F, Enter) fires: the nearest bot in a
+  spread round the crosshair goes to pieces (the room's `shoot`: remains, sweepers, then `claude stop` + `claude rm`),
+  a miss puffs where it hits. E (or Space): the pieces under the crosshair, or the nearest in front within 70 dots,
+  are put back together (`unshoot`). A shot sends the idle bots within 110 dots running, hands up (`alarm`: `loiter`
+  with `panic`); not those at work, opened, or let go of (`DOOMED`). The office manager can't be shot. Desks and
+  pieces stop you (`solid`); bots don't. Your figure in the room follows you (`fps` act, the gun in hand); the
+  automatic hunt for condemned bots (`huntStep`) is off while you are in there (you shoot them yourself) and starts
+  over when you leave. Esc (losing the pointer lock) leaves, as does hardcore switched off; you stand where you went.
+- **Over it**: the shotgun (a pump gun, your skin and sleeves from your portrait), its kick, the pump, a flash that
+  lights the room; the crosshair, red on a bot; the name of who is in your sights at the top (under the crosshair
+  it covered their face), "E: put back together" near remains; the keys for the first six seconds. No sounds.
+- Tested in a demo started from a room file with desks (`BURROW_DEMO_ROOM`; the demo has one desk since "Desks are
+  yours"): look.mjs, `__fps` (set, turn, look, fire, use, under, ms, leave) since headless Chrome has no pointer
+  lock (then a click fires and a drag looks); the gun closet clicked in the room, shots, the pieces, E, Esc, walking
+  into desks, condemned bots shot in there and the hunt taking over after. About 1 ms a frame. Not tested: the
+  pointer lock and the mouse in his own Chrome.
 
 ## Next
 

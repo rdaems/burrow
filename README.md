@@ -64,6 +64,10 @@ beside the robot whose session is open, or under the screen when your own termin
 - **delete a session gently**: carry its robot into the booth, or ✕ twice in the bench's list. A sign counts
   five seconds down (click it, or carry the robot out, to undo), then `claude stop` and `claude rm`
 - **delete a session** (`claude rm`; the transcript stays for `claude --resume`): drop its robot in the fire
+- **hardcore** (a switch on the switchboard): the booth is a gun closet. Click it and the whole window is the
+  office through your own eyes, as Wolf3D drew it: WASD walks, the mouse looks, a click shoots. A shot robot
+  goes to pieces; E puts it back together until idle robots have cleared the pieces away (then `claude stop` and
+  `claude rm`). Esc, and you stand in the room where you walked to
 - **your own terminal**: click a desk's screen. A login shell in that directory on that machine, one per
   desk, kept while burrow runs; the screen shows its prompt
 - **drop a file** on a robot or a tile and its path is typed into the session (copied over first for a

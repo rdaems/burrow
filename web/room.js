@@ -328,8 +328,16 @@ function startRoom(cv, app) {
   }
 
   const dropped = new Map();
-  // a desk's bots: those in its own directory first, then those in each worktree
-  const sitters = (bots, d) => bots.filter((b) => b.unit === d.unit).sort((a, b) => (a.tree > b.tree) - (a.tree < b.tree));
+  // a desk's bots, in the order they came: a new one (or one whose process comes back) takes the chair at
+  // the far end of the row, the others keep theirs; when the page opens, in the order they started
+  const seatRows = new Map();                 // unit → ids, chair by chair from the screen
+  const sitters = (bots, d) => {
+    const here = new Map(bots.filter((b) => b.unit === d.unit).map((b) => [b.id, b]));
+    const row = (seatRows.get(d.unit) || []).filter((id) => here.has(id));
+    for (const id of here.keys()) if (!row.includes(id)) row.push(id);
+    seatRows.set(d.unit, row);
+    return row.map((id) => here.get(id));
+  };
   function layout(s, bots, moving) {
     const saved = s.layout || {}, placed = {};
     const units = s.desks.map((d) => {
@@ -549,7 +557,7 @@ function startRoom(cv, app) {
       if (first) homes.set(first[0], { x: Math.min(W - 8, d.x0 + d.w + 8), y: d.y + 1 });
     }
     for (const b of bots) { const f = folk.get(b.id); if (f && !f.held) thinkOne(w, f, L, now, dt, homes.get(b.id), usage); }
-    if (you && !you.held && !huntStep(w, you, L, dt)) thinkOne(w, you, L, now, dt, null, usage);
+    if (you && !you.held && (fps || !huntStep(w, you, L, dt))) thinkOne(w, you, L, now, dt, null, usage);   // (in the first person the shooting is yours)
     const mg = folk.get("manager");
     if (mg && !mg.leaving) thinkManager(w, mg, L, dt);
     // two standing about in the same place: they step apart
@@ -737,12 +745,13 @@ function startRoom(cv, app) {
     if (f.act.kind === "sleep" && f.act.there) st.asleep += dt;
     // you sleep on a mat once the window has been left alone a minute, as pair's people who are away. A
     // bot naps only as a break of its own: whether its process runs does not show (opening one restarts it)
-    const sleepy = f.human && app.away() > 60;
+    if (f.human && fps) { if (f.act.kind !== "fps") { end(f); f.act = { kind: "fps" }; } }   // you are where the view says (move)
+    const sleepy = f.human && !fps && app.away() > 60;
     if (sleepy && f.act.kind !== "sleep") { end(f); f.act = { kind: "sleep", there: false }; }
     if (!sleepy && f.act.kind === "sleep" && f.act.left === undefined) wake(f);   // you are back (a nap of its own ends by itself)
     // you: with the bot whose session is open, at the table of the game you play; else about the
     // room like the others
-    if (f.human && !sleepy) {
+    if (f.human && !sleepy && !fps) {
       const o = app.open(), g = o && folk.get(o), game = app.chess(), pp = app.pong(), sh = app.shell(), a = f.act;
       if (game) { if (!(a.kind === "chess" && a.you)) { end(f); f.act = { kind: "chess", side: game.white.id === "you" ? 0 : 1, you: true, left: 1e9, there: false }; } }
       else if (pp) { if (!(a.kind === "pong" && a.you)) { end(f); f.act = { kind: "pong", side: 0, you: true, left: 1e9, there: false }; } }
@@ -754,6 +763,9 @@ function startRoom(cv, app) {
     if (!["desk", "meeting", "chess", "chair", "sleep", "bench"].includes(act.kind)) f.sat = false;
     if (act.kind !== "football") f.kick = 0;
     switch (act.kind) {
+      case "fps":                            // the gun in hand, walking as you walk
+        f.carry = "gun"; f.arms = "gun"; f.legs = f.walking ? (Math.floor(w.T * 8) % 2 ? "walk1" : "walk2") : "stand";
+        break;
       case "with": {
         // beside the bot you talk to, at its desk (it sits down for you): right of its chair,
         // unless another sits there, then in front of it (the bubble is yours while you type)
@@ -794,6 +806,7 @@ function startRoom(cv, app) {
       }
       case "loiter":
         if (walk(f, act, act.v || v, dt)) { f.arms = f.carry || "down"; if ((act.left -= dt) <= 0) f.act = rest(); }
+        if (act.panic) f.arms = "up";        // away from the shotgun, hands up
         break;
       case "coffee":
         // the pot holds what is left of the session's limit: an empty one gives nothing
@@ -1170,7 +1183,8 @@ function startRoom(cv, app) {
 
   // ---- drawing, and what is under the pointer: hot spots are collected while drawing
   let pointer = null, hots = [], hovered = null, tip = null, lastL = null, moving = null, held = null, hoverId = null, lastHp = null, dangerNow = false;
-  let aiming = false;                       // hardcore: the gun taken from the gun closet, a crosshair for the pointer
+  let fps = null, view = null;              // hardcore: the gun taken from the gun closet, the office in the first person (fps.js); the scene it renders
+  let pics = [], wallPics = [];              // what was just drawn, each piece by itself, for that view (scene3)
   const hardcore = () => !!app.settings().hardcore;
   let screenHover = null, hoverScreen = null;    // the screen (or laptop) under the pointer: {m, dir}; the one told to the page
   const over = (x0, y0, x1, y1) => !!pointer && pointer.x >= x0 && pointer.x < x1 && pointer.y >= y0 && pointer.y < y1;
@@ -1185,7 +1199,7 @@ function startRoom(cv, app) {
     ctx.setTransform(2, 0, 0, 2, 0, 0);      // drawn in dots; the canvas has two pixels a dot, for dragging
     ctx.imageSmoothingEnabled = false;
     const s = app.state();
-    hots = []; tip = null; screenHover = null;
+    hots = []; tip = null; screenHover = null; pics = []; wallPics = [];
     ctx.drawImage(floor(), 0, 0);
     rect(ctx, W - 1, 0, 1, H, INK2);
     if (!s) return;
@@ -1259,6 +1273,7 @@ function startRoom(cv, app) {
     // else (it is in your hand), washed red over the fire
     let aloft = null;
     const onTheWall = (key, r, h, fn) => {
+      wallPics.push(fn);
       if (moving && moving.key === key) aloft = () => outlined(ctx, r, danger(key), fn, RED, tintOf(key));
       else outlined(ctx, r, h, fn);
     };
@@ -1297,12 +1312,14 @@ function startRoom(cv, app) {
       // the closet, against the wall: the furniture that is not in the room; a click opens it (on the right)
       const c = L.closet, h = hot(c.x0, c.y0, c.x1, c.y1, { kind: "closet" });
       outlined(ctx, [c.x0, c.y0, c.x1, c.y1], h, (x) => drawCloset(x, c, app.view() === "closet"));
+      wallPics.push((x) => drawCloset(x, c, false));
       if (h) tip = { text: "furniture", x: c.x0 + 11, y: c.y0 + 4 };
     }
     if (L.settings) {
       // the switchboard on the wall: burrow's own settings, a switch each; a click opens them
       const b = L.settings, h = hot(b.x0, b.y0, b.x1, b.y1, { kind: "settings" });
       outlined(ctx, [b.x0, b.y0, b.x1, b.y1], h, (x) => drawSwitchboard(x, b, app.settings(), app.view() === "settings"));
+      wallPics.push((x) => drawSwitchboard(x, b, app.settings(), false));
       if (h) tip = { text: "settings", x: b.x0 + 7, y: b.y0 + 4 };
     }
     // a bot and its seat at its project's desk are one thing: where the bot is only says what it
@@ -1316,6 +1333,7 @@ function startRoom(cv, app) {
     if (L.add) {
       const a = L.add, h = hot(a.x0 - 2, a.y0 - 10, a.x1 + 2, a.y1 + 1, { kind: "addDir" });
       outlined(ctx, foot("add", [a.x0, a.y1]), h || danger(a.key), (c) => drawAdd(c, a, h), danger(a.key) ? RED : GOLD, tintOf(a.key));
+      pics.push({ key: a.key, kind: "add", x: a.x0, y: a.y1, fn: (c) => drawAdd(c, a, false) });
       if (h) tip = { text: "project", x: a.x0 + ADD_W / 2, y: a.y0 - 2 };
     }
     for (const f of w.folk.values()) if (f.act.kind === "sleep" && f.act.there && f.act.at) drawMat(ctx, f.act.at);
@@ -1333,13 +1351,17 @@ function startRoom(cv, app) {
     }
     // every piece: outlined under the pointer, like a desk's chairs; what it does, on top of that. Held over
     // the fire it is drawn over everything (the flames would hide it), washed red
-    const piece = (p, kind, fn) => items.push([danger(p.key) ? 1e9 : p.y - 0.5, () => outlined(ctx, foot(kind, [p.x, p.y]), lit(p.key) || danger(p.key), fn, danger(p.key) ? RED : GOLD, tintOf(p.key))]);
+    const piece = (p, kind, fn) => {
+      pics.push({ key: p.key, kind, x: p.x, y: p.y, fn });
+      items.push([danger(p.key) ? 1e9 : p.y - 0.5, () => outlined(ctx, foot(kind, [p.x, p.y]), lit(p.key) || danger(p.key), fn, danger(p.key) ? RED : GOLD, tintOf(p.key))]);
+    };
     if (L.meet) piece(L.meet, "meet", (c) => { drawTable(c, L.meet); for (const i of [0, 1]) drawStool(c, L.meetSeat(i)); });
     if (L.chess) {
       const c = L.chess, g = s.chess && !s.chess.result ? s.chess : null, top = [c.x - 10, c.y - 17, c.x + 10, c.y - 5];
       const h = hot(...top, { kind: "chess" });
       if (h) tip = { text: !g ? "chess" : [g.white.id, g.black.id].includes("you") ? "chess with " + (g.white.id === "you" ? g.black.name : g.white.name) : g.white.name + " vs " + g.black.name, x: c.x, y: c.y - 18 };   // yours, or theirs to watch
       items.push([c.y - 0.5, () => { for (const i of [0, 1]) drawStool(ctx, L.chessSeat(i)); outlined(ctx, top, h, (x) => drawChess(x, c, g ? g.board : START)); }]);
+      pics.push({ key: c.key, kind: "chess", x: c.x, y: c.y, fn: (x) => { for (const i of [0, 1]) drawStool(x, L.chessSeat(i)); drawChess(x, c, g ? g.board : START); } });
     }
     if (L.coffeeAt) {
       const brewing = [...w.folk.values()].some((f) => f.act.kind === "coffee" && f.act.stage === 1);
@@ -1383,6 +1405,7 @@ function startRoom(cv, app) {
       const since = Math.min(performance.now() - w.sparks, performance.now() - w.flare), burst = since < 1500 ? since / 1500 : -1;
       w.burning = w.burning.filter((o) => performance.now() - o.t0 < 1400);
       items.push([F.y1, () => drawFire(ctx, F, T, !!feeding, burst, w.burning)]);
+      pics.push({ key: F.key, kind: "fire", x: F.x0, y: F.y1, fn: (x) => drawFire(x, F, T, false, burst, w.burning) });
       const tx = F.x0 + 16, ty = F.y0 - 2;
       if (fd) tip = { text: "burn " + fd.label + (!s.bots.some((b) => b.unit === fd.unit) ? "" : !L.booths.length ? " and its bots" : hardcore() ? ", shoot its bots" : ", its bots to the booth"), x: tx, y: ty };
       else if (feeding && moving && KIND(moving.key) === "door") { const m = s.machines.find((m) => "door:" + m.id === moving.key); tip = { text: "take out " + (m ? m.name : "the door"), x: tx, y: ty }; }
@@ -1392,17 +1415,19 @@ function startRoom(cv, app) {
     // the booth: a bot let go over it goes in, and after five seconds out of the list for good; the
     // neuralyzer: a bot let go by it gets `/clear` (the drop is useAt's)
     for (const bo of L.booths) {
-      if (hardcore()) {                     // hardcore: a gun closet; a click takes a gun (the crosshair), again puts it back
-        const out = aiming || (w.clean && w.clean.armed) || (w.folk.get("you") || {}).carry === "gun", h = hot(bo.x - 9, bo.y - 32, bo.x + 9, bo.y + 2, { kind: "aim" });
+      if (hardcore()) {                     // hardcore: a gun closet; a click takes a gun and you see the office through your own eyes (fps.js)
+        const out = !!fps || (w.clean && w.clean.armed) || (w.folk.get("you") || {}).carry === "gun", h = hot(bo.x - 9, bo.y - 32, bo.x + 9, bo.y + 2, { kind: "aim", key: bo.key });
         items.push([bo.y - 3.5, () => outlined(ctx, foot("booth", [bo.x, bo.y]), h || danger(bo.key), (c) => drawGunCloset(c, bo, false, out), danger(bo.key) ? RED : GOLD, tintOf(bo.key))]);
         items.push([bo.y - 2.5, () => drawGunCloset(ctx, bo, true, out)]);
-        if (h) tip = { text: aiming ? "put the gun back" : "gun closet: take a gun", x: bo.x, y: bo.y - 34 };
+        pics.push({ key: bo.key, kind: "booth", x: bo.x, y: bo.y, fn: (c) => { drawGunCloset(c, bo, false, out); drawGunCloset(c, bo, true, out); } });
+        if (h) tip = { text: "gun closet: take a gun", x: bo.x, y: bo.y - 34 };
         continue;
       }
       const inside = [...w.folk.values()].some((f) => f.act.kind === "doom" && f.act.at === bo.key);
       const fl = w.boothFlash && w.boothFlash.key === bo.key ? (performance.now() - w.boothFlash.t0) / 1200 : -1, flagged = !!boothUnder && boothUnder.key === bo.key;
       items.push([bo.y - 3.5, () => outlined(ctx, foot("booth", [bo.x, bo.y]), danger(bo.key) || flagged, (c) => drawBooth(c, bo, false, inside || flagged, fl), RED, tintOf(bo.key))]);
       items.push([bo.y - 2.5, () => drawBooth(ctx, bo, true, inside, fl)]);
+      pics.push({ key: bo.key, kind: "booth", x: bo.x, y: bo.y, fn: (c) => { drawBooth(c, bo, false, inside, fl); drawBooth(c, bo, true, inside, fl); } });
       if (flagged) tip = { text: "bye " + heldBot.b.name, x: bo.x, y: bo.y - 34 };
       else if (on(bo.key) && !inside) tip = { text: "booth: a bot in it is deleted", x: bo.x, y: bo.y - 34 };
     }
@@ -1459,6 +1484,7 @@ function startRoom(cv, app) {
     for (const bn of L.benches) {
       const h = hot(bn.x - 29, bn.y - 18, bn.x + 29, bn.y + 1, { kind: "completed" });
       items.push([bn.y - 0.5, () => outlined(ctx, foot("bench", [bn.x, bn.y]), lit(bn.key) || danger(bn.key), (c) => drawBench(c, bn), danger(bn.key) ? RED : GOLD, tintOf(bn.key))]);
+      pics.push({ key: bn.key, kind: "bench", x: bn.x, y: bn.y, fn: (c) => drawBench(c, bn) });
       if (h) tip = { text: completed ? `completed ${completed}` : "completed", x: bn.x, y: bn.y - 20 };
     }
     // the limits, in the coffee pot (this five-hour session) and the cooler's bottle (this week); a
@@ -1494,19 +1520,13 @@ function startRoom(cv, app) {
       for (let s = Math.ceil(tail); s <= head; s++) { const [x, y] = at(s); rect(ctx, x, y + 1, 1, 1, INK); rect(ctx, x, y, 1, 1, col); }
       if (head < total) { const [x, y] = at(head); rect(ctx, x - 1, y - 1, 3, 3, INK); rect(ctx, x - 1, y - 1, 2, 2, C.steel4); }
     }
-    // shots (hardcore): a flash where it hit (or at the barrel), a puff of smoke after; the crosshair while you
-    // hold the gun, red over a bot
-    if (aiming && !hardcore()) aiming = false;
+    // shots (hardcore): a flash where it hit (or at the barrel), a puff of smoke after
+    if (fps && !hardcore()) fps.leave();
     w.shots = w.shots.filter((sh) => performance.now() - sh.t0 < 700);
     for (const sh of w.shots) {
       const t = (performance.now() - sh.t0) / 700;
       if (t < 0.3) { const r = t < 0.15 ? 4 : 3; rect(ctx, sh.x - r, sh.y, 2 * r + 1, 1, "#fff6c0"); rect(ctx, sh.x, sh.y - r, 1, 2 * r + 1, "#fff6c0"); rect(ctx, sh.x - 1, sh.y - 1, 3, 3, "#ffe27a"); }
       else { ctx.globalAlpha = 1 - t; rect(ctx, sh.x - 2, sh.y - 2 - Math.round(t * 6), 5, 3, "#c9ced8"); ctx.globalAlpha = 1; }
-    }
-    if (aiming && pointer) {
-      const x = Math.round(pointer.x), y = Math.round(pointer.y), col = hovered && !hovered.b.human && !hovered.b.staff ? RED : C.steel4;
-      for (const [dx, dy, wd, ht] of [[-6, 0, 4, 1], [3, 0, 4, 1], [0, -6, 1, 4], [0, 3, 1, 4]]) { rect(ctx, x + dx + 1, y + dy + 1, wd, ht, INK); rect(ctx, x + dx, y + dy, wd, ht, col); }
-      rect(ctx, x, y, 1, 1, col);
     }
     // the neuralyzer's flash: the room goes white a moment, brightest at the flasher (only that glow with
     // reduced motion)
@@ -1562,8 +1582,155 @@ function startRoom(cv, app) {
     if (id !== hoverId) { hoverId = id; app.hover(id); }
     const sk = screenHover && !held && !moving ? screenHover.m + ":" + screenHover.dir : null;
     if (sk !== hoverScreen) { hoverScreen = sk; app.hoverShell(sk); }
+    if (fps) view = scene3(L, w, s, T);
     const onHot = hots.some((h) => over(h.x0, h.y0, h.x1, h.y1));
-    cv.style.cursor = aiming ? "none" : moving || held ? "grabbing" : onHot ? "pointer" : pieceAt(pointer) ? "grab" : "default";
+    cv.style.cursor = moving || held ? "grabbing" : onHot ? "pointer" : pieceAt(pointer) ? "grab" : "default";
+  }
+
+  // ---- the office in the first person (fps.js), from what the room has just drawn: the floor and what lies on
+  // it, the wall and what hangs on it, the desks as blocks (their faces cut from their own pictures), a sprite
+  // for every piece of furniture, chair, screen, bot and bit of a shot bot, where it is in the room
+  const canvases = new Map();
+  function canvas(name, w, h) {              // one per name, redrawn in place (its `v` says it was)
+    let c = canvases.get(name);
+    if (!c || c.width !== w || c.height !== h) { c = document.createElement("canvas"); c.width = w; c.height = h; c.v = 0; canvases.set(name, c); }
+    const x = c.getContext("2d", { willReadFrequently: true });
+    x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, w, h); x.imageSmoothingEnabled = false;
+    c.v++;
+    return [c, x];
+  }
+  const sides = new Map();                   // a desk's ends and back: its paint, outlined
+  function sideOf(p) {
+    if (!sides.has(p)) {
+      const c = document.createElement("canvas"); c.width = c.height = 8;
+      const x = c.getContext("2d"); rect(x, 0, 0, 8, 8, p.k); rect(x, 1, 1, 6, 6, p.d); rect(x, 1, 1, 6, 1, p.hi);
+      sides.set(p, c);
+    }
+    return { c: sides.get(p), sx: 0, sy: 0, sw: 8, sh: 8 };
+  }
+  const backs = new WeakMap();               // a figure on its back, head to the left, as drawSleeper turns it
+  function onItsBack(im) {
+    if (!backs.has(im)) {
+      const c = document.createElement("canvas"); c.width = SH; c.height = SW;
+      const x = c.getContext("2d"); x.translate(0, SW); x.rotate(-Math.PI / 2); x.drawImage(im, 0, 0);
+      backs.set(im, c);
+    }
+    return backs.get(im);
+  }
+  const smalls = new Map();                  // cogs, bolts, a spring, the ball, the ? of a bot that waits
+  function small(k, w, h, paint) {
+    if (!smalls.has(k)) { const c = document.createElement("canvas"); c.width = w; c.height = h; paint(c.getContext("2d")); smalls.set(k, c); }
+    return smalls.get(k);
+  }
+  function bitOf(p) {
+    const turn = Math.floor(p.spin) % 2, g = p.kind === "cog" ? (p.big ? COG7 : COG) : null, n = g ? g.length : 4;
+    return small(p.kind + (p.big ? 7 : "") + (p.char ? "c" : "") + turn, n, n, (x) => {
+      if (g) g.forEach((row, j) => [...row].forEach((ch, i) => { if (ch === "#") rect(x, turn ? n - 1 - i : i, j, 1, 1, i === n >> 1 && j === n >> 1 ? INK : p.char ? "#3a3438" : j < 2 ? C.steel3 : C.steel2); }));
+      else if (p.kind === "bolt") { rect(x, 0, 1, 3, 1, C.steel3); rect(x, 1, 2, 1, 2, C.steel2); }
+      else for (let q = 0; q < 4; q++) rect(x, q % 2, q, 2, 1, C.steel3);
+    });
+  }
+  // the walls as you see them up close: a rail a third of the way up, panels under it, seams over it
+  function panelled(x, w) {
+    rect(x, 0, 0, w, 1, "#33445c");
+    rect(x, 0, 15, w, 9, "#243245"); rect(x, 0, 14, w, 1, "#3d4f68"); rect(x, 0, 15, w, 1, "#1d2737");
+    for (let i = 0; i < w; i += 32) { rect(x, i, 1, 1, 13, "#223042"); rect(x, i + 16, 16, 1, 8, "#1d2737"); }
+  }
+  function scene3(L, w, s, T) {
+    const things = [], boxes = [], solid = [];
+    // the floor: the planks, the rug, the mats rolled out for a nap, the oil of the shot ones
+    const [fc, fx] = canvas("floor", W, H);
+    fx.drawImage(floor(), 0, 0);
+    if (L.pong) drawRug(fx, L.pong);
+    for (const f of w.folk.values()) if (f.act.kind === "sleep" && f.act.there && f.act.at) drawMat(fx, f.act.at);
+    for (const r of w.remains.values()) {
+      const rx = Math.round(r.puddle * r.parts.length / r.total);
+      if (rx > 1) ELL(rx, 3, 5).forEach((hw, j) => rect(fx, r.x - hw, r.y - 2 + j, 2 * hw, 1, "#17151f"));
+      for (const d of r.drops) rect(fx, d.x, d.y, d.s, d.s, d.hi ? "#4a4766" : "#17151f");
+    }
+    // the wall with the doors, the window, the clock, the closet, the switchboard; the other three plain
+    const [wc, wx] = canvas("wall", W, WALL);
+    wx.drawImage(floor(), 0, 0, W, WALL, 0, 0, W, WALL); panelled(wx, W);
+    for (const fn of wallPics) fn(wx);
+    const pc = canvases.get("plain") || (() => { const [c, x] = canvas("plain", 32, WALL); x.drawImage(floor(), 0, 0, 32, WALL, 0, 0, 32, WALL); panelled(x, 32); return c; })();
+    // a desk: its cabinet and its desktop on legs as blocks, faced with what the room draws of them; its
+    // screen (and laptops) standing on the cabinet, a chair a bot
+    const chair = sprites.get("chair");
+    for (const d of L.desks) {
+      const { x0, y, w: dw, cab } = d, ox = x0 - 2, oy = y - 35;
+      const [c, x] = canvas("d:" + d.key, dw + 4, 37);
+      x.translate(-ox, -oy); drawDesk(x, d, w, T, new Set());
+      const crop = (cx, cy, cw, ch) => ({ c, sx: cx - ox, sy: cy - oy, sw: cw, sh: ch }), side = sideOf(paintOf(d.m)), leg = (lx) => crop(lx, y - 4, 2, 4);
+      boxes.push({ x0, y0: y - 12, x1: x0 + cab, y1: y, z0: 0, z1: 11, front: crop(x0, y - 11, cab, 11), top: crop(x0, y - 15, cab, 4), side, back: side });
+      const tx = x0 + cab - 2;
+      boxes.push({ x0: tx, y0: y - 11, x1: x0 + dw, y1: y - 4, z0: 5, z1: 9, front: crop(tx, y - 7, x0 + dw - tx, 4), top: crop(tx, y - 12, x0 + dw - tx, 5), side, back: side });
+      for (const lx of [x0 + cab + 1, ...d.seats.map(([, sx]) => sx + 11), x0 + dw - 4]) for (const ly of [y - 6, y - 11])
+        boxes.push({ x0: lx, y0: ly, x1: lx + 2, y1: ly + 2, z0: 0, z1: 5, front: leg(lx), back: leg(lx), side: leg(lx), top: side });
+      solid.push([x0, y - 12, x0 + dw, y - 3]);
+      const gw = 22 + d.trees.length * LAP, { sx, sy } = screenAt(d);
+      things.push({ x: sx + gw / 2, y: y - 6, z: 10, ...crop(sx, sy, gw, 18), ax: gw / 2, ay: 18 });
+      if (chair) for (const [, cx] of d.seats) things.push({ x: cx - 4 + chair.width / 2, y: y - 0.7, z: 0, c: chair, sx: 0, sy: 0, sw: chair.width, sh: chair.height, ax: chair.width / 2, ay: 17 });
+    }
+    // every other piece standing on the floor, as the room drew it a moment ago
+    for (const p of pics) {
+      const r = foot(p.kind, [p.x, p.y]), P = 1, cw = r[2] - r[0] + 2 * P, ch = r[3] - r[1] + 2 * P;
+      const [c, x] = canvas("p:" + p.key, cw, ch);
+      x.translate(P - r[0], P - r[1]); p.fn(x);
+      const cx = (r[0] + r[2]) / 2;
+      things.push({ x: cx, y: p.y - 3, z: 0, c, sx: 0, sy: 0, sw: cw, sh: ch, ax: cx - r[0] + P, ay: p.y + 1 - r[1] + P });
+      solid.push([r[0] + 2, Math.max(r[1], p.y - 10), r[2] - 2, p.y + 2]);
+    }
+    // everyone but you (you are the eyes), walking, sitting, lying on a mat; a ? over one that waits for you
+    for (const f of w.folk.values()) {
+      if (f.id === "you" || f.held || !f.b) continue;
+      const b = f.b, im = body(seedOf(b), colorOf(b), f.arms, f.legs, b.human, b.staff);
+      if (!im) continue;
+      const who = { key: f.id, bot: b.human ? null : b.id, staff: !!b.staff, name: b.name };
+      if (f.lying) { things.push({ ...who, x: f.x, y: f.y - 9, z: 0, c: onItsBack(im), sx: 0, sy: 0, sw: SH, sh: SW, ax: SH / 2, ay: SW - 4 }); continue; }
+      things.push({ ...who, x: f.x, y: f.y, z: 0, c: im, sx: 0, sy: 0, sw: SW, sh: SH, ax: 11, ay: 28, face: f.dir < 0 ? -1 : 1 });
+      if (f.waiting && f.act.kind !== "doom") {
+        const q = small("?", 9, 10, (x) => { rect(x, 0, 0, 9, 9, INK); rect(x, 1, 1, 7, 7, C.steel4); rect(x, 1, 8, 1, 1, C.steel4); rect(x, 0, 9, 3, 1, INK); tiny(x, "?", 3, 2, INK); });
+        things.push({ key: "?" + f.id, x: f.x, y: f.y + 0.1, z: 28, c: q, sx: 0, sy: 0, sw: 9, sh: 10, ax: 4.5, ay: 10 });
+      }
+    }
+    // what is left of a shot bot: its pieces where they fly and land
+    for (const [id, r] of w.remains) r.parts.forEach((p, i) => {
+      const who = { key: id + "/" + i, rem: r.back ? null : id, name: r.b.name, x: p.x, y: p.y, z: p.z, flip: Math.floor(p.spin) % 2 === 1 };
+      if (p.img) things.push({ ...who, c: p.img, sx: p.sx, sy: p.sy, sw: p.sw, sh: p.sh, ax: p.sw / 2, ay: p.sh });
+      else { const c = bitOf(p); things.push({ ...who, c, sx: 0, sy: 0, sw: c.width, sh: c.height, ax: c.width / 2, ay: c.height }); }
+    });
+    if (w.ball) things.push({ key: "ball", x: w.ball.x, y: w.ball.y, z: w.ball.h, c: small("ball", 3, 3, (x) => { rect(x, 0, 0, 3, 3, INK); rect(x, 1, 1, 1, 1, C.white); }), sx: 0, sy: 0, sw: 3, sh: 3, ax: 1.5, ay: 3 });
+    return { v: (view ? view.v : 0) + 1, W, H, WALL, floor: fc, wall: wc, plain: pc, boxes, things, solid };
+  }
+  // a shot fired: the idle bots near it run off, hands up (the ones at work work on)
+  function alarm(x, y) {
+    const L = lastL;
+    for (const f of world().folk.values()) {
+      const d = Math.hypot(f.x - x, f.y - y) || 1;
+      if (!L || !f.b || f.b.human || f.b.staff || f.work || f.held || f.leaving || f.open || DOOMED.has(f.act.kind) || f.act.kind === "escort" || d > 110) continue;   // (the ones let go of stay put)
+      const k = rnd(40, 80);
+      end(f);
+      f.act = { kind: "loiter", x: Math.max(L.floor.x0, Math.min(L.floor.x1, f.x + (f.x - x) / d * k)), y: Math.max(L.floor.y0, Math.min(L.floor.y1, f.y + (f.y - y) / d * k)), left: rnd(2, 4), v: 60, panic: true };
+    }
+  }
+  // the gun closet clicked (hardcore): a gun, and the office through your own eyes, from in front of the
+  // closet, looking into the room; Esc and you are back, standing where you went
+  function firstPerson(key) {
+    if (fps || !lastL) return;
+    const bo = lastL.booths.find((b) => b.key === key) || lastL.booths[0];
+    pointer = null; world().hunt = null;      // a hunt under way in the room is yours to finish in here
+    view = scene3(lastL, world(), app.state(), world().T);
+    fps = startFps({
+      scene: () => view,
+      start: () => { const x = bo ? Math.max(14, Math.min(W - 14, bo.x)) : W / 2, y = bo ? Math.min(H - 8, bo.y + 24) : H / 2; return { x, y, a: Math.atan2((WALL + H) / 2 - y, W / 2 - x) }; },
+      move: (x, y, a, walking) => { const f = world().folk.get("you"); if (f && !f.held) { f.x = x; f.y = y; f.dir = Math.cos(a) < 0 ? -1 : 1; f.walking = walking; } },
+      shoot: (id) => { const f = world().folk.get(id); if (!f || f.held || !f.b || f.b.human || f.b.staff) return false; shoot(f); return true; },
+      unshoot, alarm, tiny, tinyW,
+      hands: () => {                         // your skin and your sleeves, as your figure wears them (its portrait's shoulders)
+        const f = world().folk.get("you"), b = f && f.b, seed = b ? seedOf(b) : "you", col = b ? colorOf(b) : YOU, px = face(seed, col, true).px, i = (19 * 20 + 6) * 4;
+        return { skin: pixelAvatar.skin(seed), clothes: px && px[i + 3] > 128 ? "#" + [px[i], px[i + 1], px[i + 2]].map((v) => v.toString(16).padStart(2, "0")).join("") : col };
+      },
+    }, () => { fps = null; view = null; world().hunt = null; const f = world().folk.get("you"); if (f) end(f); });   // (drawn at the next tick: this can come from inside draw)
   }
 
   // the wall and the wooden floor, drawn once for the room's height: Pixel Agents' planks, three
@@ -2354,16 +2521,6 @@ function startRoom(cv, app) {
     if (e.button !== 0) return;
     pointer = dots(e); draw();
     const h = [...hots].reverse().find((h) => over(h.x0, h.y0, h.x1, h.y1));
-    if (aiming) {                           // the gun in hand: a click shoots (a bot, or the floor); on the closet, it goes back
-      if (h && h.action && h.action.kind === "aim") aiming = false;
-      else if (h && h.action && h.action.kind === "unshoot") unshoot(h.action.id);    // its remains still undo, gun or not
-      else {
-        const f = hovered && !hovered.b.human && !hovered.b.staff && world().folk.get(hovered.b.id);
-        if (f && !f.held) shoot(f); else world().shots.push({ x: Math.round(pointer.x), y: Math.round(pointer.y), t0: performance.now(), hit: false });
-      }
-      draw();
-      return;
-    }
     press = { x: pointer.x, y: pointer.y, action: h && h.action, bot: hovered && !hovered.seat && !hovered.b.staff && hovered.b.id, piece: pieceAt(pointer), shift: e.shiftKey };
     cv.setPointerCapture(e.pointerId);
   });
@@ -2438,7 +2595,7 @@ function startRoom(cv, app) {
       f.legs = "stand";
     } else if (press && press.action && press.action.kind === "undo") { const f = world().folk.get(press.action.id); if (f && f.act.kind === "doom") f.act = resume(f); }
     else if (press && press.action && press.action.kind === "unshoot") unshoot(press.action.id);
-    else if (press && press.action && press.action.kind === "aim") aiming = true;     // a gun from the gun closet
+    else if (press && press.action && press.action.kind === "aim") firstPerson(press.action.key);     // a gun from the gun closet
     else if (press && press.action && press.action.kind === "water") {     // you go and water the plant
       const you = world().folk.get("you");
       if (you && !you.held) { end(you); you.act = { kind: "plant", at: press.action.key, wait: 0, chosen: true }; }
@@ -2462,7 +2619,6 @@ function startRoom(cv, app) {
     draw();
   });
   cv.addEventListener("pointerleave", () => { if (!press) { pointer = null; draw(); } });
-  addEventListener("keydown", (e) => { if (e.key === "Escape" && aiming) { aiming = false; draw(); } });   // Esc puts the gun back
 
   // a file dropped on a bot goes into its session
   cv.addEventListener("dragover", (e) => { e.preventDefault(); pointer = dots(e); draw(); });
@@ -2503,7 +2659,7 @@ function startRoom(cv, app) {
   new ResizeObserver(size).observe(cv.parentElement);
   size();
   requestAnimationFrame(frame);
-  window.__room = { world, size: () => ({ W, H, K }), layout: () => lastL, hp: () => lastHp, settle: (...a) => settle(lastL, ...a) };   // for poking at it from the console
+  window.__room = { world, size: () => ({ W, H, K }), layout: () => lastL, hp: () => lastHp, settle: (...a) => settle(lastL, ...a), fps: (key) => firstPerson(key) };   // for poking at it from the console
   const stats = () => { const w = world(); return { since: w.born, bots: Object.fromEntries(w.stats), meetings: w.meetings, inked: w.ink ? inked(w) : 0 }; };
   // at(id): where a figure stands, in CSS pixels of the page (for look.mjs, to drive the room from outside)
   const at = (id) => { const f = world().folk.get(id), b = cv.getBoundingClientRect(); return f ? [b.left + f.x * K, b.top + (f.y - 12) * K] : null; };
