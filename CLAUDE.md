@@ -987,6 +987,26 @@ where it was put down. Now picking the fire up ends the `warm` acts (and no new 
 carried), and putting it down on a figure sends that one out below the pit (`loiter`). The pit still snaps to
 clear floor while carried, as everything does since the morning.
 
+## The booth and the neuralyzer; no more stopping at the door (2026-10-26)
+
+He: "a more humane bot removal tool, like a futurama cabin? And a men in black mechanic for executing `/clear`
+on a bot? When you add that, you can remove the mechanic by draggin over the door, that one's confusing".
+- **The booth** (`booth` kind, `drawBooth`: a glass cabin on a plinth, a lit sign on its roof; two layers so a
+  bot stands inside, behind the glass): a bot let go over it (`dropAt` → "booth", `boothAt`) is washed red
+  while held ("bye NAME"), then stands inside (`doom` act `{at, left: 5}`), the roof sign red, a countdown
+  sign over the booth ("bye NAME - undo"; a click on it or the bot, or carrying it out, undoes). At zero
+  `claude stop` + `claude rm` (`/api/stop {rm}`), a soft light fills the cabin (`w.boothFlash`, 1.2 s) and it
+  is gone (`w.stopped` keeps it out while the feed still lists it). Any bot, running or completed. The fire
+  still deletes at once, with its gravestone.
+- **The neuralyzer** (`neuralyzer` kind, `drawNeuralyzer`: a black pedestal, the silver flasher): an idle bot
+  let go by it (`useAt`; a busy one is refused, "NAME is busy") steps up (`neuralyze` act), a flash (the room
+  white 0.5 s at half strength, brightest at the flasher; only the glow with reduced motion), stars round its
+  head while it stands dazed, and `/api/clear` runs `clear_session` in a thread: `claude attach` in a pty,
+  read until the screen settles, `/clear` and Enter, read again, let go. Tested on throwaway Haiku sessions:
+  the job and its process stay, the session id is new (a new conversation), 4.8 s.
+- **The door** stops nothing any more (`dropAt` has no "door"; the door is no longer ajar for a doomed bot).
+- Both pieces are in the closet; `furnish` v 9 puts one of each in older rooms, `FURNITURE` in new ones.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

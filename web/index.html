@@ -158,6 +158,7 @@ async function act(a) {
   else if (a.kind === "forget") { const r = await api("/api/forget", { unit: a.unit }); if (r.error) note(r.error); }
   else if (a.kind === "layout") await api("/api/layout", { layout: a.layout });
   else if (a.kind === "stop" && b) stopBot(b.m, b.id, a.rm);
+  else if (a.kind === "clear" && b) { const r = await api("/api/clear", { m: b.m, id: b.id }); if (r.error) note(r.error); }   // the neuralyzer
   else if (a.kind === "blank") { for (const t of tiles.all()) closeTile(t); closeView(); }
   else if (a.kind === "drop" && b) { const t = openBot(b.m, b.id, a.shift); for (const f of a.files) await hand(f, t); }
   else if (a.kind === "spawn") {
@@ -341,7 +342,7 @@ function askYou() {
 
 // ---- the closet: the furniture there is, drawn as it stands in the room; drag a piece into the
 // room to put it there, as many as you like. The fireplace takes a piece back out (it burns)
-const CATALOGUE = ["plant", "armchair", "window", "clock", "board", "meet", "chess", "pong", "coffee", "cooler", "printer", "add", "pair", "bench", "manager"];
+const CATALOGUE = ["plant", "armchair", "window", "clock", "board", "meet", "chess", "pong", "coffee", "cooler", "printer", "add", "pair", "bench", "manager", "booth", "neuralyzer"];
 function fillCloset() {
   const el = $("#vCloset");
   el.innerHTML = "";

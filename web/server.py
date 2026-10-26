@@ -274,7 +274,7 @@ def split_unit(u):
 # the first room's pieces have no number). There can be any number of a kind. The closet in the
 # room adds a piece, the fireplace burns one; the fire, the closet and the switchboard themselves stay.
 FURNITURE = ["meet", "pong", "chess", "coffee", "cooler", "printer", "armchair",
-             "plant0", "plant1", "board", "window", "clock", "fire", "closet", "add", "bench0", "settings0", "manager0"]
+             "plant0", "plant1", "board", "window", "clock", "fire", "closet", "add", "bench0", "settings0", "manager0", "booth0", "neuralyzer0"]
 FIXED = {"fire", "closet", "settings"}
 
 # Burrow's own settings: the switchboard on the wall, a switch each; kept in room.json `settings`
@@ -287,7 +287,8 @@ OPTIONS = {
 
 def options(room):
     return {**OPTIONS, **{k: bool(v) for k, v in (room.get("settings") or {}).items() if k in OPTIONS}}
-KINDS = {"meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "clock", "add", "pair", "bench", "manager"}
+KINDS = {"meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "clock", "add", "pair", "bench", "manager",
+         "booth", "neuralyzer"}
 
 
 # A pair room (rdaems/pair-prompting, e.g. pair.daems.me): a chat where people and agents talk. One
@@ -450,6 +451,11 @@ def furnish(room):
             fs.append("manager0")
         room["furniture"] = fs
         room["v"] = 8
+    if room["v"] < 9:                        # the booth (a bot in it is deleted) and the neuralyzer (/clear), once
+        for k in ("booth", "neuralyzer"):
+            if not any(kind_of(x) == k for x in room["furniture"]):
+                room["furniture"].append(k + "0")
+        room["v"] = 9
     return room
 
 
@@ -1243,6 +1249,53 @@ def ws_send(sock, data, op=2):
     sock.sendall(head + data)
 
 
+def clear_session(m, bot):
+    """the neuralyzer: `/clear` typed into a session as you would type it. Attached in a pty, its screen
+    drawn until the output settles, the command and Enter, a moment for it to take, then let go. Claude
+    Code keeps the job and its process; the conversation is a new one (a new session id)"""
+    pid, fd = pty.fork()
+    if pid == 0:
+        os.environ.update(TERM="xterm-256color", COLORTERM="truecolor")
+        a = argv(m, f"exec claude attach {sq(bot)}", True)
+        try:
+            os.execvp(a[0], a)
+        finally:
+            os._exit(127)
+
+    def settle(quiet, most):
+        """read until it has said something and then nothing for `quiet` seconds (`most` at most)"""
+        end, last, got = time.time() + most, time.time(), False
+        while time.time() < end and not (got and time.time() - last >= quiet):
+            if select.select([fd], [], [], 0.1)[0]:
+                try:
+                    if not os.read(fd, 65536):
+                        break
+                except OSError:
+                    break
+                last, got = time.time(), True
+    try:
+        fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
+        settle(1.5, 25)
+        os.write(fd, b"/clear")
+        time.sleep(0.5)
+        os.write(fd, b"\r")
+        settle(1.5, 8)
+    except OSError:
+        pass
+    finally:
+        for sig in (signal.SIGTERM, signal.SIGKILL):
+            try:
+                os.kill(pid, sig)
+            except ProcessLookupError:
+                break
+            time.sleep(0.5)
+        try:
+            os.waitpid(pid, 0)
+        except ChildProcessError:
+            pass
+        os.close(fd)
+
+
 def terminal(sock, m, bot):
     """`claude attach <id>` in a pty, both ways over the websocket; closing it only ends the attach"""
     pid, fd = pty.fork()
@@ -1686,7 +1739,11 @@ class Handler(BaseHTTPRequestHandler):
                 raise RuntimeError(out.strip())
             poke.set()
             return {"id": mm.group(1)}
-        if path == "/api/stop":              # stop a session: it stays listed, over (the bench); with rm, it is
+        if path == "/api/clear":             # the neuralyzer: /clear typed into the session, in the background
+            if m.get("ssh") != "@demo":
+                threading.Thread(target=clear_session, args=(m, b["id"]), daemon=True).start()
+            return {}
+        if path == "/api/stop":              # stop a session: it stays listed, completed; with rm, it is
             if m.get("ssh") == "@demo":      # deleted from the list as well (agent view's second Ctrl+X, `claude rm`)
                 hub.demo_stop(mid, b["id"], bool(b.get("rm")))
             elif b.get("rm"):
