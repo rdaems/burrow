@@ -824,6 +824,17 @@ blue panel ("we have the stars background already"), and a burnt desk "cropped a
   longer cropped by the pit's clip while it sinks.
 - Test hooks on `window.__room`: `game(kind, a, b)` seats two bots at chess or pong, `football(ids)`.
 
+## A ? for needs input (2026-10-26)
+
+He, of a bot in `needs input`: "I would like him to have a text bubble with a question mark". So a bot that
+waits for you (blocked, or a prompt open) has a bubble with pair's 3x5 `?` in it, steady (no animation,
+reduced motion too), for as long as it waits, besides its hand up and its screen's blinking cursor. The
+one exception to "dots, never words": a glyph, not words. 9 x 9 with the talk bubble's notch, its bottom a
+dot over the antenna and right of it (a robot's portrait is empty above row 4: the talk bubble, placed for
+a person's head, floats ~6 dots over a robot). It takes the place of the talk dots while it shows; not
+while the stop sign counts down. To look at it in the demo: `Object.defineProperty(f, 'waiting',
+{get: () => true, set() {}})` on a folk from `__room.world().folk` (think() resets `waiting` every frame).
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

@@ -8,8 +8,8 @@
 // cabinet, plugged in.
 // The bots are the sessions `claude agents` lists, and where a bot is says what agent view would:
 //   working             at its project's desk, typing
-//   needs input         at its desk with its hand up (a question, a permission prompt), its screen's
-//                       cursor blinking; never falls asleep
+//   needs input         at its desk with its hand up and a ? in a bubble (a question, a permission
+//                       prompt), its screen's cursor blinking; never falls asleep
 //   idle (done)         by its desk, or on a break: coffee, the printer, the cooler, ping-pong,
 //                       chess, the plants, the window, the armchair, a meeting at the whiteboard,
 //                       a visit, a nap on a mat it rolls out, warming its hands at the fire, watching
@@ -1196,8 +1196,14 @@ function startRoom(cv, app) {
       for (let s = Math.ceil(tail); s <= head; s++) { const [x, y] = at(s); rect(ctx, x, y + 1, 1, 1, INK); rect(ctx, x, y, 1, 1, col); }
       if (head < total) { const [x, y] = at(head); rect(ctx, x - 1, y - 1, 3, 3, INK); rect(ctx, x - 1, y - 1, 2, 2, C.steel4); }
     }
-    // talk, over everything: dots in a bubble, never the words
-    for (const f of w.folk.values()) if (f.chat > 0 && !still) {
+    // talk, over everything: dots in a bubble, never the words; a bot that needs input asks, a ? in
+    // its bubble for as long as it waits (the one glyph a bubble holds)
+    for (const f of w.folk.values()) if (f.waiting && !f.gone && f.act.kind !== "doom") {
+      const bx = Math.round(f.x) + 3, by = Math.round(f.y) - 30;      // a dot over its antenna, right of it
+      rect(ctx, bx - 1, by - 1, 9, 9, INK); rect(ctx, bx, by, 7, 7, C.steel4); rect(ctx, bx, by + 7, 1, 1, C.steel4);
+      tiny(ctx, "?", bx + 2, by + 1, INK);
+    }
+    for (const f of w.folk.values()) if (f.chat > 0 && !still && !f.waiting) {
       const bx = Math.round(f.x) + 3, by = Math.round(f.y) - (f.lying ? 20 : 27) - 6;
       rect(ctx, bx - 1, by - 1, 11, 7, INK); rect(ctx, bx, by, 9, 5, C.steel4); rect(ctx, bx, by + 5, 1, 1, C.steel4);
       for (let i = 0; i < 3; i++) if ((Math.floor(f.chat * 4) + i) % 3) rect(ctx, bx + 2 + i * 2, by + 2, 1, 1, INK);
