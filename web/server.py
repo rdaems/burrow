@@ -329,7 +329,7 @@ OPTIONS = {
 def options(room):
     return {**OPTIONS, **{k: bool(v) for k, v in (room.get("settings") or {}).items() if k in OPTIONS}}
 KINDS = {"meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "clock", "add", "pair", "bench", "manager",
-         "booth", "neuralyzer"}
+         "booth", "neuralyzer", "doghouse"}
 
 
 # The office manager: whoever sits at the reception booth (the `manager` piece; one at a time). Her style is

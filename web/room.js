@@ -270,7 +270,7 @@ function startRoom(cv, app) {
   const CLICK = new Set(["add", "closet", "chess", "pong", "printer", "pair", "board", "coffee", "cooler", "window", "bench", "armchair", "settings", "clock", "plant", "manager", "door"]);   // a click does something there
   const NAMES = { meet: "meeting table", pong: "ping-pong table", chess: "chess table", coffee: "coffee machine", cooler: "water cooler",
     printer: "printer", armchair: "armchair", plant: "plant", board: "whiteboard", window: "window", clock: "clock", add: "project cabinet", pair: "pair room", bench: "bench", settings: "switchboard", manager: "reception",
-    booth: "booth", neuralyzer: "neuralyzer", door: "door" };
+    booth: "booth", neuralyzer: "neuralyzer", door: "door", doghouse: "dog house" };
   // the bench seats three, side by side, idle bots on a break (a click on it lists the completed sessions)
   const BENCH_SEATS = 3, benchSeat = (bn, k) => ({ x: bn.x - 14 + k * 14, y: bn.y });
   // a clear spot on the floor for a figure that has no chair when the page opens (spread by its id, the same each time)
@@ -313,6 +313,7 @@ function startRoom(cv, app) {
       case "booth": return [x - 9, y - 32, x + 9, y + 2];
       case "door": return [x, y, x + 16, y + 20];
       case "neuralyzer": return [x - 7, y - 19, x + 7, y + 2];
+      case "doghouse": return [x - 12, y - 21, x + 12, y + 2];
       default: return [x - 8, y - 31, x + 8, y + 1];     // a plant
     }
   }
@@ -346,7 +347,7 @@ function startRoom(cv, app) {
       const n = sitters(bots, d, gone).length, label = deskLabel(d);
       const trees = [...new Set(sitters(bots, d, gone).map((b) => b.tree).filter(Boolean))];
       const cab = Math.max(tinyW(label) + 6, 22, trees.length ? 26 + trees.length * LAP : 0);
-      return { key: "u:" + d.unit, d, label, trees, cab, w: cab + 4 + Math.max(1, n) * SEAT };   // a chair a bot; one when there is none
+      return { key: "u:" + d.unit, d, label, trees, cab, w: n ? cab + 4 + n * SEAT : cab };   // a chair a bot; none, and no desktop either, without one
     });
     const where = (key, u) => {
       if (moving && moving.key === key) return moving.at;
@@ -396,7 +397,7 @@ function startRoom(cv, app) {
       const [x, y] = u.at, mine = sitters(bots, u.d, gone);
       const seat = (k) => x + u.cab + 4 + SEAT / 2 + k * SEAT;
       return { key: u.key, ...u.d, label: u.label, trees: u.trees, x0: x, w: u.w, cab: u.cab, y, color: projectColor(u.d.unit),
-        seats: mine.map((b, k) => [b.id, seat(k), b.tree]), empty: mine.length ? null : seat(0), at: u.at, u };
+        seats: mine.map((b, k) => [b.id, seat(k), b.tree]), at: u.at, u };
     });
     const b0 = one("board"), c0 = one("clock"), f0 = one("fire"), cl = one("closet"), a0 = one("add"), sw = one("settings");
     const L = {
@@ -405,7 +406,7 @@ function startRoom(cv, app) {
       windows: all("window").map((p) => ({ key: p.key, x0: p.x, y0: p.y, x1: p.x + 21, y1: p.y + 18 })),
       fire: f0 && { key: f0.key, x0: f0.x, y0: f0.y - FIRE.h, x1: f0.x + FIRE.w, y1: f0.y }, closet: cl && { key: cl.key, x0: cl.x, y0: cl.y, x1: cl.x + 22, y1: cl.y + 24 },
       settings: sw && { key: sw.key, x0: sw.x, y0: sw.y, x1: sw.x + SB_W(), y1: sw.y + SB_H() },
-      managers: all("manager"), meet: one("meet"), pong: one("pong"), chess: one("chess"), pairs: all("pair"), benches: all("bench"), booths: all("booth"), neuralyzers: all("neuralyzer"),
+      managers: all("manager"), meet: one("meet"), pong: one("pong"), chess: one("chess"), pairs: all("pair"), benches: all("bench"), booths: all("booth"), neuralyzers: all("neuralyzer"), doghouses: all("doghouse"),
       cooler: one("cooler"), plants: all("plant"), printer: one("printer"), chairs: all("armchair"),
       coffeeAt: one("coffee"), floor: { x0: 11, y0: WALL + 8, x1: W - 11, y1: H - 2 }, placed,   // (where a figure may stand: right up to the bottom edge, its body inside the side walls)
     };
@@ -572,6 +573,7 @@ function startRoom(cv, app) {
     for (const b of bots) { const f = folk.get(b.id); if (f && !f.held) thinkOne(w, f, L, now, dt, homes.get(b.id), usage); }
     if (you && !you.held && (fps || !huntStep(w, you, L, dt))) thinkOne(w, you, L, now, dt, null, usage);   // (in the first person the shooting is yours)
     for (const f of folk.values()) if (f.staff && !f.leaving && f.b) thinkManager(w, f, L, dt);
+    thinkDog(w, L, dt);
     // two standing about in the same place: they step apart
     const loit = [...folk.values()].filter((f) => f.legs === "stand" && f.act.kind === "loiter");
     for (const a of loit) for (const b of loit) if (a.id < b.id && Math.abs(a.x - b.x) < 12 && Math.abs(a.y - b.y) < 4) {
@@ -826,6 +828,16 @@ function startRoom(cv, app) {
         if (home) f.dir = -1;
         if ((act.left -= dt) > 0) break;
         f.carry = null; f.act = pickBreak(w, f, L, others);
+        break;
+      }
+      case "pet": {                          // you, petting the dog (a click on it)
+        const g = w.dog;
+        if (!g || g.inside || g.leaving) { f.act = rest(); break; }
+        const side = f.x < g.x ? -1 : 1;
+        if (walk(f, { x: g.x + side * 13, y: g.y + 1 }, 36, dt)) {
+          f.legs = "stand"; f.dir = -side; f.arms = Math.floor(w.T * 4) % 2 ? "reach" : "down";
+          if ((act.left -= dt) <= 0) f.act = rest();
+        }
         break;
       }
       case "meet": {                         // its session opened while it idled: halfway to you, facing you, talking
@@ -1288,6 +1300,7 @@ function startRoom(cv, app) {
       if (!w.folk.has(b.id)) {
         const at = b.staff && !late ? managerSeat(L.managers.find((m) => m.key === b.booth)) : late || b.human ? w.riseAt.get(b.id) || { x: doorX(b.m), y: WALL + 3 } : L.seat(b.id) || freeAt(L, b.id);   // back from its grave, or in by the door; at first, at its desk or anywhere
         w.riseAt.delete(b.id);
+        if (late && !b.human && !b.staff) w.dogNews = b.id;    // a newcomer: the dog goes and barks at it
         const work = !b.human && (b.busy || b.waiting), stand = late || (b.human && !b.staff);
         w.folk.set(b.id, { id: b.id, x: at.x, y: at.y, dir: -1, arms: "down", legs: stand ? "stand" : "sit", step: 0, sat: !stand,
           act: work ? { kind: "desk" } : rest(), carry: null, lying: false, busy: b.busy, waiting: b.waiting, work, human: !!b.human, staff: !!b.staff,
@@ -1478,6 +1491,38 @@ function startRoom(cv, app) {
       pics.push({ key: bo.key, kind: "booth", x: bo.x, y: bo.y, fn: (c) => { drawBooth(c, bo, false, inside, fl); drawBooth(c, bo, true, inside, fl); } });
       if (flagged) tip = { text: "bye " + heldBot.b.name, x: bo.x, y: bo.y - 34 };
       else if (on(bo.key) && !inside) tip = { text: "booth: a bot in it is deleted", x: bo.x, y: bo.y - 34 };
+    }
+    for (const dh of L.doghouses) piece(dh, "doghouse", (c) => drawDoghouse(c, dh));
+    const dog = w.dog;
+    if (dog && !dog.leaving && dog.inside && L.doghouses[0]) {   // at home: its head out of the door (only its eyes, afraid), z's asleep
+      const dh = L.doghouses[0];
+      items.push([dh.y - 0.4, () => {
+        if (dog.act.hide) { rect(ctx, dh.x - 2, dh.y - 5, 1, 1, C.steel4); rect(ctx, dh.x + 1, dh.y - 5, 1, 1, C.steel4); return; }
+        const im = dogPic("lie", 0);
+        ctx.drawImage(im, 10, 0, 8, 6, dh.x - 4, dh.y - 6, 8, 6);
+        if (dog.act.left > 1e8 || dog.asleep) zzz(ctx, dog, dh.x + 3, dh.y - 9);
+      }]);
+    } else if (dog && !dog.held) {
+      const im = dogPic(dog.pose, dog.wag), x0 = Math.round(dog.x - im.width / 2), y0 = Math.round(dog.y - im.height + 1);
+      const h = !dog.leaving && hot(x0, y0, x0 + im.width, y0 + im.height + 1, { kind: "pet" });
+      if (h) tip = { text: "pet the dog", x: dog.x, y: y0 - 2 };
+      items.push([dog.y, () => {
+        rect(ctx, x0 + 2, y0 + im.height - 1, im.width - 4, 1, "rgba(0,0,0,0.3)");
+        ctx.save();
+        if (dog.dir < 0) { ctx.translate(x0 * 2 + im.width, 0); ctx.scale(-1, 1); }
+        if (h) ctx.drawImage(halo(im, GOLD), x0, y0);
+        ctx.drawImage(im, x0, y0);
+        ctx.restore();
+        if (dog.barking && Math.floor(w.T * 5) % 2) {        // a bark: three short lines off its snout
+          const sx = dog.dir < 0 ? x0 - 1 : x0 + im.width, d = dog.dir < 0 ? -1 : 1;
+          ctx.fillStyle = INK; for (const [ox, oy] of [[1, -2], [2, 0], [1, 2]]) ctx.fillRect(sx + d * ox, y0 + 3 + oy, 1, 1);
+        }
+      }]);
+    }
+    if (dog) for (const ht of dog.hearts) {                 // hearts, rising and gone
+      const k = (performance.now() - ht.t0) / 1200;
+      if (k >= 1) continue;
+      items.push([1e8, () => { ctx.globalAlpha = 1 - k; heart(ctx, Math.round(ht.x), Math.round(ht.y - k * 10)); ctx.globalAlpha = 1; }]);
     }
     for (const n of L.neuralyzers) {
       const fl = w.flash && performance.now() - w.flash.t0 < 400;
@@ -1717,9 +1762,11 @@ function startRoom(cv, app) {
       const crop = (cx, cy, cw, ch) => ({ c, sx: cx - ox, sy: cy - oy, sw: cw, sh: ch }), side = sideOf(paintOf(d.m)), leg = (lx) => crop(lx, y - 4, 2, 4);
       boxes.push({ x0, y0: y - 12, x1: x0 + cab, y1: y, z0: 0, z1: 11, front: crop(x0, y - 11, cab, 11), top: crop(x0, y - 15, cab, 4), side, back: side });
       const tx = x0 + cab - 2;
-      boxes.push({ x0: tx, y0: y - 11, x1: x0 + dw, y1: y - 4, z0: 5, z1: 9, front: crop(tx, y - 7, x0 + dw - tx, 4), top: crop(tx, y - 12, x0 + dw - tx, 5), side, back: side });
-      for (const lx of [x0 + cab + 1, ...d.seats.map(([, sx]) => sx + 11), x0 + dw - 4]) for (const ly of [y - 6, y - 11])
-        boxes.push({ x0: lx, y0: ly, x1: lx + 2, y1: ly + 2, z0: 0, z1: 5, front: leg(lx), back: leg(lx), side: leg(lx), top: side });
+      if (d.seats.length) {
+        boxes.push({ x0: tx, y0: y - 11, x1: x0 + dw, y1: y - 4, z0: 5, z1: 9, front: crop(tx, y - 7, x0 + dw - tx, 4), top: crop(tx, y - 12, x0 + dw - tx, 5), side, back: side });
+        for (const lx of [x0 + cab + 1, ...d.seats.map(([, sx]) => sx + 11), x0 + dw - 4]) for (const ly of [y - 6, y - 11])
+          boxes.push({ x0: lx, y0: ly, x1: lx + 2, y1: ly + 2, z0: 0, z1: 5, front: leg(lx), back: leg(lx), side: leg(lx), top: side });
+      }
       solid.push([x0, y - 12, x0 + dw, y - 3]);
       const gw = 22 + d.trees.length * LAP, { sx, sy } = screenAt(d);
       things.push({ x: sx + gw / 2, y: y - 6, z: 10, ...crop(sx, sy, gw, 18), ax: gw / 2, ay: 18 });
@@ -1777,6 +1824,7 @@ function startRoom(cv, app) {
       if (p.img) things.push({ ...who, c: p.img, sx: p.sx, sy: p.sy, sw: p.sw, sh: p.sh, ax: p.sw / 2, ay: p.sh });
       else { const c = bitOf(p); things.push({ ...who, c, sx: 0, sy: 0, sw: c.width, sh: c.height, ax: c.width / 2, ay: c.height }); }
     });
+    if (w.dog && !w.dog.inside && !w.dog.leaving) { const im = dogPic(w.dog.pose, w.dog.wag); things.push({ key: "dog", x: w.dog.x, y: w.dog.y, z: 0, c: im, sx: 0, sy: 0, sw: im.width, sh: im.height, ax: im.width / 2, ay: im.height - 1, face: w.dog.dir < 0 ? -1 : 1 }); }
     if (w.ball) things.push({ key: "ball", x: w.ball.x, y: w.ball.y, z: w.ball.h, c: small("ball", 3, 3, (x) => { rect(x, 0, 0, 3, 3, INK); rect(x, 1, 1, 1, 1, C.white); }), sx: 0, sy: 0, sw: 3, sh: 3, ax: 1.5, ay: 3 });
     return { v: (view ? view.v : 0) + 1, W, H, WALL, floor: fc, wall: wc, plain: pc, boxes, things, solid };
   }
@@ -1845,6 +1893,154 @@ function startRoom(cv, app) {
     for (let j = 0; j < h; j++) if ([...Array(w).keys()].some((i) => d[(j * w + i) * 4 + 3] > 128)) { top = j - 4 + r[1]; break; }
     if (sprites.get("PLANT")) tops.set(kind, top);         // (once the sprites are in)
     return top;
+  }
+  // The dog (the dog house, from the closet): a dachshund, a badger dog, as burrows go. It lives on the floor while
+  // its house is in the room: naps in it, its head out of the door; trots about and sniffs; visits a bot or you and
+  // sits by them wagging (a bot that is idle pets it); follows you a while; chases the ball while bots play football;
+  // barks at whoever comes in through a door; and a click on it sends you over to pet it (hearts). At night (23 to
+  // 7 here), while you are away, and in hardcore while the bots are afraid (only its eyes in the dark door), it
+  // stays in its house. Its house burnt, it trots out through the door
+  const DOG = { b: "#c27a3e", d: "#7a4424", w: "#efd8b4", r: "#d9473a", n: "#1a1626", e: "#1a1626" };
+  const DOGS = {                             // facing right; its tail is put on by `wag`
+    stand: ["...........bbb..", "..........bbbebb", "..........dbbbbn", "..........rbb...", "..bbbbbbbbbbb...", "..bbbbbbbbbbw...", "..bb......bb...."],
+    walk1: ["...........bbb..", "..........bbbebb", "..........dbbbbn", "..........rbb...", "..bbbbbbbbbbb...", "..bbbbbbbbbbw...", "...bb......bb..."],
+    walk2: ["...........bbb..", "..........bbbebb", "..........dbbbbn", "..........rbb...", "..bbbbbbbbbbb...", "..bbbbbbbbbbw...", "..b.b.....b.b..."],
+    sit: [".......bbb..", "......bbbebb", "......dbbbbn", "......rbb...", "...bbbbbb...", "..bbbbbbw...", "..bb..bb...."],
+    lie: ["...........bbb..", "..........bbbdbb", ".bbbbbbbbbdbbbbn", ".bbbbbbbbbbbbw.."],
+  };
+  const TAIL = { stand: [[[1, 3], [0, 2]], [[1, 3], [1, 2]]], walk1: [[[1, 3], [0, 2]], [[1, 3], [1, 2]]], walk2: [[[1, 3], [0, 2]], [[1, 3], [1, 2]]],
+    sit: [[[1, 5], [0, 6]], [[1, 5], [0, 5]]], lie: [[[0, 3]], [[0, 2]]] };
+  const dogPics = new Map();
+  function dogPic(pose, wag) {
+    const key = pose + (wag ? 1 : 0);
+    if (dogPics.has(key)) return dogPics.get(key);
+    const rows = DOGS[pose], w = Math.max(...rows.map((r) => r.length)) + 2, h = rows.length + 2, px = new Map();
+    rows.forEach((r, y) => [...r].forEach((ch, x) => { if (DOG[ch]) px.set((y + 1) * w + x + 1, DOG[ch]); }));
+    for (const [x, y] of TAIL[pose][wag ? 1 : 0]) px.set((y + 1) * w + x + 1, DOG.d);
+    const c = document.createElement("canvas"); c.width = w; c.height = h;
+    const x = c.getContext("2d");
+    x.fillStyle = INK;
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++)
+      if (!px.has(j * w + i) && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => i + dx >= 0 && i + dx < w && px.has((j + dy) * w + i + dx))) x.fillRect(i, j, 1, 1);
+    for (const [k, col] of px) { x.fillStyle = col; x.fillRect(k % w, Math.floor(k / w), 1, 1); }
+    dogPics.set(key, c);
+    return c;
+  }
+  function heart(ctx, x, y) {
+    rect(ctx, x - 2, y - 1, 2, 1, RED); rect(ctx, x + 1, y - 1, 2, 1, RED); rect(ctx, x - 2, y, 5, 1, RED); rect(ctx, x - 1, y + 1, 3, 1, RED); rect(ctx, x, y + 2, 1, 1, RED);
+  }
+  function walkDog(g, to, v, dt) {
+    const dx = to.x - g.x, dy = to.y - g.y, d = Math.hypot(dx, dy);
+    if (d <= v * dt) { g.x = to.x; g.y = to.y; return true; }
+    g.x += (dx / d) * v * dt; g.y += (dy / d) * v * dt;
+    if (Math.abs(dx) > 0.5) g.dir = Math.sign(dx);
+    g.step += dt * 10; g.pose = Math.floor(g.step) % 2 ? "walk1" : "walk2";
+    return false;
+  }
+  function nextDog(w, g, L) {
+    const r = Math.random(), folk = [...w.folk.values()].filter((f) => f.b && !f.held && !f.leaving && !f.lying && !f.b.staff && !DOOMED.has(f.act.kind));
+    const bots = folk.filter((f) => !f.human), you = folk.find((f) => f.human);
+    if (r < 0.3) { const p = freeAt(L, "dog" + Math.floor(w.T)); return { kind: "wander", to: p, sniff: rnd(1.5, 4) }; }
+    if (r < 0.5 && bots.length) return { kind: "visit", to: any(bots).id, left: rnd(6, 14) };
+    if (r < 0.65 && you) return { kind: "visit", to: "you", left: rnd(6, 12) };
+    if (r < 0.8 && you) return { kind: "follow", left: rnd(15, 30) };
+    return { kind: "home", left: rnd(20, 60) };
+  }
+  function thinkDog(w, L, dt) {
+    const h = L.doghouses[0];
+    let g = w.dog;
+    if (!h) {                                // its house is gone: out through the door
+      if (!g) return;
+      g.inside = false; g.leaving = true; g.barking = false;
+      if (walkDog(g, { x: doorX(""), y: WALL + 2 }, 40, dt)) w.dog = null;
+      return;
+    }
+    const door = { x: h.x, y: h.y + 3 };
+    if (!g || g.leaving) g = w.dog = { x: door.x, y: door.y, dir: 1, pose: "stand", wag: 0, step: 0, z: 0, inside: true, hearts: [], act: { kind: "home", left: rnd(3, 10) } };
+    g.z += dt; g.barking = false;
+    g.hearts = g.hearts.filter((x) => performance.now() - x.t0 < 1200);
+    const folk = w.folk, T = w.T, hour = new Date().getHours();
+    const sleepy = hour >= 23 || hour < 7 || app.away() > 60, afraid = (w.fear || 0) > 0.4;
+    const love = (x, y) => { if (!g.loveAt || T - g.loveAt > 0.7) { g.loveAt = T; g.hearts.push({ x: x + rnd(-3, 3), y: y, t0: performance.now() }); } };
+    if ((sleepy || afraid) && !(g.act.kind === "home" && g.act.left > 1e8)) g.act = { kind: "home", left: 1e9, hide: afraid };
+    else if (!sleepy && !afraid && g.act.kind === "home" && g.act.left > 1e8) g.act = { kind: "home", left: rnd(1, 4) };
+    if (!sleepy && !afraid && g.act.kind !== "petted") {
+      if (w.ball && g.act.kind !== "chase") g.act = { kind: "chase" };
+      else if (w.dogNews && g.act.kind !== "bark") { const n = folk.get(w.dogNews); if (n) g.act = { kind: "bark", to: n.id, left: 3 }; }
+    }
+    w.dogNews = null;
+    const a = g.act;
+    if (a.kind !== "home") g.inside = false;
+    g.wag = Math.floor(T * (["visit", "petted", "follow", "chase"].includes(a.kind) ? 8 : 1.5)) % 2;
+    switch (a.kind) {
+      case "home":                           // in its house: in through the door, a nap there
+        if (!g.inside && !walkDog(g, door, 34, dt)) break;
+        g.inside = true; g.pose = "lie"; g.dir = 1; g.asleep = a.left > 1e8 || sleepy;
+        if ((a.left -= dt) <= 0) { g.inside = false; g.asleep = false; g.act = nextDog(w, g, L); }
+        break;
+      case "wander":                         // somewhere on the floor, a sniff there
+        if (!walkDog(g, a.to, 26, dt)) break;
+        g.pose = "stand";
+        if ((a.sniff -= dt) <= 0) g.act = nextDog(w, g, L);
+        break;
+      case "visit": {                        // beside a bot or you, sitting, wagging; an idle bot pets it
+        const f = folk.get(a.to);
+        if (!f || f.leaving || f.held) { g.act = nextDog(w, g, L); break; }
+        const side = f.x > (L.floor.x0 + L.floor.x1) / 2 ? -1 : 1, spot = { x: f.x + side * 13, y: f.y + 1 };
+        if (Math.hypot(spot.x - g.x, spot.y - g.y) > 3) { walkDog(g, spot, 32, dt); break; }
+        g.pose = "sit"; g.dir = -side;
+        if (!f.human && !f.work && f.legs === "stand" && !f.sat) { f.dir = side; f.arms = Math.floor(T * 3) % 2 ? "reach" : "down"; love(g.x, g.y - 10); }
+        if (f.human && Math.random() < dt * 0.6) love(g.x, g.y - 10);
+        if ((a.left -= dt) <= 0) g.act = nextDog(w, g, L);
+        break;
+      }
+      case "follow": {                       // at your heels a while
+        const f = folk.get("you");
+        if (!f || f.held) { g.act = nextDog(w, g, L); break; }
+        const spot = { x: Math.max(L.floor.x0, Math.min(L.floor.x1, f.x - (f.dir || 1) * 14)), y: f.y + 2 };
+        if (Math.hypot(spot.x - g.x, spot.y - g.y) > 6) walkDog(g, spot, 38, dt);
+        else { g.pose = "sit"; g.dir = f.x < g.x ? -1 : 1; }
+        if ((a.left -= dt) <= 0) g.act = nextDog(w, g, L);
+        break;
+      }
+      case "chase": {                        // after the ball the bots kick about
+        if (!w.ball) { g.act = nextDog(w, g, L); break; }
+        const b = w.ball;
+        if (Math.hypot(b.x - g.x, b.y - g.y) > 5) walkDog(g, { x: b.x + (g.x < b.x ? -5 : 5), y: b.y + 1 }, 55, dt);
+        else { g.pose = "stand"; g.dir = b.x < g.x ? -1 : 1; g.barking = Math.floor(T * 1.5) % 3 === 0; }
+        break;
+      }
+      case "bark": {                         // at a newcomer, from a little way off
+        const f = folk.get(a.to);
+        if (!f) { g.act = nextDog(w, g, L); break; }
+        if (Math.hypot(f.x - g.x, f.y - g.y) > 24) { walkDog(g, { x: f.x + (g.x < f.x ? -20 : 20), y: f.y + 1 }, 50, dt); break; }
+        g.pose = "stand"; g.dir = f.x < g.x ? -1 : 1; g.barking = true;
+        if ((a.left -= dt) <= 0) g.act = nextDog(w, g, L);
+        break;
+      }
+      case "petted": {                       // sitting for you while you pet it
+        const f = folk.get("you");
+        if (!f || f.act.kind !== "pet") { g.act = nextDog(w, g, L); break; }
+        g.pose = "sit"; g.dir = f.x < g.x ? -1 : 1;
+        if (Math.hypot(f.x - g.x, f.y - g.y) < 16) love(g.x, g.y - 10);
+        break;
+      }
+      default: g.act = nextDog(w, g, L);
+    }
+  }
+  // the dog house: a wooden kennel, a red gabled roof, a dark arched door; its bowl by the corner
+  function drawDoghouse(ctx, h) {
+    const x = h.x, y = h.y;
+    rect(ctx, x - 10, y, 20, 1, SHADOW);
+    rect(ctx, x - 9, y - 12, 18, 12, WOOD.k); rect(ctx, x - 8, y - 11, 16, 11, WOOD.top);
+    for (const j of [y - 8, y - 5, y - 2]) rect(ctx, x - 8, j, 16, 1, WOOD.d);
+    for (let j = 0; j < 9; j++) {           // the roof, a gable, overhanging the walls
+      const hw = 2 + j * 1.25, ry = y - 20 + j;
+      rect(ctx, Math.round(x - hw - 1), ry, Math.round(hw * 2 + 2), 1, "#5a2420");
+      if (j > 0) rect(ctx, Math.round(x - hw), ry, Math.round(hw * 2), 1, j < 3 ? "#c9574b" : j < 7 ? "#a8433a" : "#8a3530");
+    }
+    rect(ctx, x - 4, y - 8, 8, 8, "#1e1512"); rect(ctx, x - 3, y - 9, 6, 1, "#1e1512"); rect(ctx, x - 5, y - 8, 1, 8, WOOD.k); rect(ctx, x + 4, y - 8, 1, 8, WOOD.k);   // the door
+    rect(ctx, x - 12, y - 2, 5, 2, SP.F); rect(ctx, x - 11, y - 2, 3, 1, "#8a5a32");    // the bowl
   }
   // somewhere to hide: behind a piece that stands tall enough, far from the gun closet, not where another hides
   function hideSpot(w, f, L) {
@@ -1996,12 +2192,15 @@ function startRoom(cv, app) {
       if (sh.busy) rect(ctx, g.x + 4, py, Math.min(gw - 6, 2 + ((Math.floor(T * 6) * 7) % (gw > 10 ? 9 : 3))), 1, C.steel2);
       else if (Math.floor(T * 2) % 2) rect(ctx, g.x + 4, py, 1, 1, C.steel4);
     }
-    // the desktop, lower than the cabinet: a leg between each two chairs, a keyboard at each seat
-    slab(ctx, x0 + cab - 2, y - 12, dw - cab + 2, 5, 4, p);
-    for (const x of [x0 + cab + 1, ...d.seats.map(([, x]) => x + 11), x0 + dw - 4]) {
-      rect(ctx, x, y - 4, 2, 4, p.k); rect(ctx, x, y - 4, 1, 3, p.d); rect(ctx, x, y, 2, 1, SHADOW);
+    // the desktop, lower than the cabinet: a leg between each two chairs, a keyboard at each seat; none until the
+    // first bot comes
+    if (d.seats.length) {
+      slab(ctx, x0 + cab - 2, y - 12, dw - cab + 2, 5, 4, p);
+      for (const x of [x0 + cab + 1, ...d.seats.map(([, x]) => x + 11), x0 + dw - 4]) {
+        rect(ctx, x, y - 4, 2, 4, p.k); rect(ctx, x, y - 4, 1, 3, p.d); rect(ctx, x, y, 2, 1, SHADOW);
+      }
+      for (const [, x] of d.seats) { rect(ctx, x - 9, y - 11, 7, 2, SP.F); rect(ctx, x - 8, y - 11, 5, 1, SP.B); }
     }
-    for (const x of [...d.seats.map(([, x]) => x), ...(d.empty ? [d.empty] : [])]) { rect(ctx, x - 9, y - 11, 7, 2, SP.F); rect(ctx, x - 8, y - 11, 5, 1, SP.B); }
     for (const [id, x] of d.seats) {          // a coffee a colleague brought, by the keyboard, for a while
       const until = w.mugs.get(id), f = w.folk.get(id);
       if (until === undefined) continue;
@@ -2012,9 +2211,7 @@ function startRoom(cv, app) {
     slab(ctx, x0, y - 15, cab, 4, 11, p);
     const lx = Math.round(x0 + (cab - tinyW(d.label)) / 2), onPlate = hot(x0 + 2, y - 10, x0 + cab - 2, y - 2, { kind: "desk", unit: d.unit });
     plate(ctx, x0 + 2, y - 9, cab - 4, false, p);
-    if (onPlate) rect(ctx, x0 + 3, y - 8, cab - 6, 5, GOLD);
-    tiny(ctx, d.label, lx, y - 8, onPlate ? INK : C.steel3);
-    if (onPlate) tip = { text: d.name || d.dir.replace(/\/+$/, "").split("/").pop() || d.dir, x: x0 + cab / 2, y: y - 12 };
+    tiny(ctx, d.label, lx, y - 8, onPlate ? GOLD : C.steel3);   // under the pointer only its letters light up
     // on it the project's screen, and a laptop for each worktree, plugged in; the pointer on one
     // lights up the bots working there. The desk is handled at its screen: a + beside it starts a
     // bot here, a click on the screen (or a laptop) opens your terminal there
@@ -2357,6 +2554,7 @@ function startRoom(cv, app) {
       case "bench": drawBench(ctx, pt); break;
       case "booth": drawBooth(ctx, pt, false, false, -1); drawBooth(ctx, pt, true, false, -1); break;
       case "neuralyzer": drawNeuralyzer(ctx, pt, false); break;
+      case "doghouse": drawDoghouse(ctx, pt); break;
       case "door": { const ms = (app.state() || {}).machines || []; drawDoor(ctx, x, PAINT[Math.max(0, ms.length - 1) % PAINT.length], false, false, y); break; }   // in the paint the next machine gets
     }
   }
@@ -2782,6 +2980,10 @@ function startRoom(cv, app) {
       const you = world().folk.get("you");
       if (you && !you.held) { end(you); you.act = { kind: "plant", at: press.action.key, wait: 0, chosen: true }; }
     }
+    else if (press && press.action && press.action.kind === "pet") {       // you go and pet the dog
+      const w = world(), you = w.folk.get("you");
+      if (you && !you.held && w.dog) { end(you); you.act = { kind: "pet", left: 5, chosen: true }; w.dog.act = { kind: "petted" }; }
+    }
     else if (press && press.action && press.action.kind === "sit") {       // you take the armchair; a bot sitting in it gets up
       const w = world(), you = w.folk.get("you");
       for (const g of w.folk.values()) if (g !== you && g.act.kind === "chair" && g.act.at === press.action.key) end(g);
@@ -2842,7 +3044,7 @@ function startRoom(cv, app) {
   size();
   requestAnimationFrame(frame);
   window.__room = { world, size: () => ({ W, H, K }), layout: () => lastL, hp: () => lastHp, fps: (key) => firstPerson(key),
-    shoot: (id) => { const f = world().folk.get(id); if (f) shoot(f); }, unshoot, fear: (v) => { if (v !== undefined) world().fear = v; return world().fear; } };   // for poking at it from the console
+    shoot: (id) => { const f = world().folk.get(id); if (f) shoot(f); }, unshoot, dogPic, fear: (v) => { if (v !== undefined) world().fear = v; return world().fear; } };   // for poking at it from the console
   const stats = () => { const w = world(); return { since: w.born, bots: Object.fromEntries(w.stats), meetings: w.meetings, inked: w.ink ? inked(w) : 0 }; };
   // at(id): where a figure stands, in CSS pixels of the page (for look.mjs, to drive the room from outside)
   const at = (id) => { const f = world().folk.get(id), b = cv.getBoundingClientRect(); return f ? [b.left + f.x * K, b.top + (f.y - 12) * K] : null; };

@@ -105,6 +105,10 @@ have sent it something; then you stand behind its desk), or under the screen whe
 - **the whiteboard** opens large and you draw on it; the host of a meeting draws on it too
 - **the window** looks outside: the sky by the hour, the sun or the moon, stars at night
 - **the armchair**: click it and you go and sit there a while, reading (a robot in it gets up)
+- **the dog house** (in the closet) comes with a dachshund: it naps in its house, trots about, visits the
+  robots and you (an idle robot pets it), follows you a while, chases the ball when the robots play football,
+  barks at whoever comes in through a door; click it and you go and pet it. At night, while you are away, and
+  while the robots are afraid in hardcore, it stays in its house
 - **chess and ping-pong** are games against an idle robot, drawn by lot
 - **a pair room** ([pair](https://github.com/rdaems/pair-prompting)) is a table with a speakerphone, one
   room a table: click it to open a new room (you are in it, with your name and face) or to link one you

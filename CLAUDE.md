@@ -1416,6 +1416,26 @@ clicked the desk's monitor ... it acted on the bot".
   solid is drawn over it there (items carry what of them is solid: a desk its screen, cabinet and desktop; a piece
   its footprint; a reception its panel and counter). A bot behind a desk's screen: the click is the screen's.
 
+## The dog; an empty desk has no desktop; a quieter name plate (2026-10-27)
+
+He: "Let's add a dog house to the furniture. This has a dog going around the floor, resting in it's house,
+interacting with robots and my avatar"; "A desk without bots should not yet have that little table for the first
+bot"; "the hover on the desk name is way too disruptive, should be more subtle".
+- **The dog house** (`doghouse` kind, in the closet, not in new rooms; `drawDoghouse`: plank walls, a red gabled
+  roof, a dark arched door, a bowl) and **the dog**, a dachshund (a badger dog, as burrows go): `w.dog`, not a folk;
+  `thinkDog` after everyone else, `dogPic(pose, wag)` from letter grids (`DOGS`: stand, walk1, walk2, sit, lie;
+  `TAIL` two positions for the wag; outlined in ink as `body()` does). What it does (`g.act`): `home` (in through
+  its door, its head out of it, z's when asleep), `wander` (a spot, a sniff), `visit` (beside a bot or you, sitting,
+  wagging; an idle standing bot pets it: its arms set after its own think; hearts), `follow` (at your heels),
+  `chase` (while `w.ball` is in play), `bark` (at a figure that comes in late: `w.dogNews`, set where figures are
+  made), `petted` (a click on it, `{kind: "pet"}`: you get the `pet` act, walk over, reach down). At night (23 to 7,
+  this computer's clock), while you are away, and with `w.fear` over 0.4 it stays home (afraid: only its eyes in
+  the door). Its house burnt, it trots out through this computer's door. In 3d it is a sprite like the rest.
+- **An empty desk** is its cabinet and screen only: `w` is `cab` with no bots, no desktop, legs or keyboard
+  (`d.empty` is gone); the first bot brings the desktop with its chair (the desk grows then; he asked for it, over
+  the earlier "keeps its one-seat length").
+- **The name plate** under the pointer: only its letters turn gold; no fill, no tip.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a
