@@ -482,7 +482,9 @@ def furnish(room):
 def load_room():
     """the first time, the desks and layout of the Rust app's rooms.json, one room per machine
     (not the desks of worktrees: those sit at their repo's desk now)"""
-    if DEMO:
+    if DEMO:                                 # made up, or a copy of a real room.json to try things on (never saved)
+        if os.environ.get("BURROW_DEMO_ROOM"):
+            return furnish({"desks": [], "layout": {}, **json.load(open(os.environ["BURROW_DEMO_ROOM"]))})
         return furnish({"desks": [HOME + "/projects/romuald"], "layout": {}})
     try:
         return furnish({"desks": [], "layout": {}, **json.load(open(ROOM))})

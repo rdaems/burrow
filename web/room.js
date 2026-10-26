@@ -1138,11 +1138,12 @@ function startRoom(cv, app) {
     for (const d of L.desks) {
       const sc = screenAt(d);
       if (!moving && !held && over(sc.sx, sc.sy, sc.sx + 22, sc.sy + 18)) for (const b of bots) if (b.over && b.unit === d.unit) hl.add(b.id);   // its completed ones too (no chair)
-      items.push([d.y - 1, () => outlined(ctx, foot(d.key, d.at, d.u), danger(d.key), (c) => drawDesk(c, d, w, T, hl), RED, tintOf(d.key))]);
+      items.push([danger(d.key) ? 1e9 : d.y - 1, () => outlined(ctx, foot(d.key, d.at, d.u), danger(d.key), (c) => drawDesk(c, d, w, T, hl), RED, tintOf(d.key))]);
       for (const [id, x] of d.seats) items.push([d.y - 0.5, () => drawChair(ctx, x, d.y, hl.has(id))]);
     }
-    // every piece: outlined under the pointer, like a desk's chairs; what it does, on top of that
-    const piece = (p, kind, fn) => items.push([p.y - 0.5, () => outlined(ctx, foot(kind, [p.x, p.y]), lit(p.key) || danger(p.key), fn, danger(p.key) ? RED : GOLD, tintOf(p.key))]);
+    // every piece: outlined under the pointer, like a desk's chairs; what it does, on top of that. Held over
+    // the fire it is drawn over everything (the flames would hide it), washed red
+    const piece = (p, kind, fn) => items.push([danger(p.key) ? 1e9 : p.y - 0.5, () => outlined(ctx, foot(kind, [p.x, p.y]), lit(p.key) || danger(p.key), fn, danger(p.key) ? RED : GOLD, tintOf(p.key))]);
     if (L.meet) piece(L.meet, "meet", (c) => { drawTable(c, L.meet); for (const i of [0, 1]) drawStool(c, L.meetSeat(i)); });
     if (L.chess) {
       const c = L.chess, g = s.chess && !s.chess.result ? s.chess : null, top = [c.x - 10, c.y - 17, c.x + 10, c.y - 5];
@@ -1493,8 +1494,13 @@ function startRoom(cv, app) {
   // stones on the floor, embers and logs in it, the flames rising from it. What is dragged into it
   // burns: a desk (its bots must be gone first), a piece of furniture, a bot (stopped, after a
   // countdown). `burst` (0..1) is a shower of sparks: the pointer stirred it, or something burnt
-  const inFire = (L, key, at, u) => L.fire && (key.startsWith("u:") || !FIXED.has(KIND(key))) &&
-    meets(foot(key, at, u), [L.fire.x0, L.fire.y0, L.fire.x1, L.fire.y1 + 4]);
+  // what is carried is over the fire when its middle is: a piece only touching it at an edge (put down
+  // beside the pit, and so picked up again) is not about to burn
+  const inFire = (L, key, at, u) => {
+    if (!L.fire || !(key.startsWith("u:") || !FIXED.has(KIND(key)))) return false;
+    const r = foot(key, at, u), cx = (r[0] + r[2]) / 2, cy = (r[1] + r[3]) / 2;
+    return cx >= L.fire.x0 && cx < L.fire.x1 && cy >= L.fire.y0 && cy < L.fire.y1 + 4;
+  };
   // a held figure hangs 24 dots under the pointer, so what it is dropped on is found by where it
   // stands, not by the pointer: `spot` is its feet, a little up; `dropAt` is where a bot would be
   // stopped if let go: in the fire pit (standing in it or just in front of it), in its own doorway, or on

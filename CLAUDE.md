@@ -1060,6 +1060,17 @@ glow round lit windows after dark, fireflies over the meadow. Its name under it 
 (`room.tiny`, `room.tinyW`, cut to its share of the width). Looked at by day and at 22:15 (`getHours`
 patched) with three machines put into the page's state (working, idle, out of reach).
 
+## Dragging, once more: the fire's edge (2026-10-26)
+
+He: "the draggin of new furniture still doesn't work". Tested in a copy of his room (`BURROW_DEMO_ROOM=<a copy
+of room.json>` makes the demo start from it; still never saved): a piece out of the closet, the booth, the
+neuralyzer and the door frame all moved and landed. What was wrong was his armchair, put down right under
+the fire: `inFire` counted any overlap with the fire's footprint plus 4 dots below, and settle only keeps
+footprints apart, so the chair rested 1 dot inside that margin. Picked up and slid sideways it was washed red
+("burn the armchair") and let go it would have burnt. Now a piece is over the fire when the middle of its
+footprint is (an edge touching does not count); and a piece or desk held over the fire is drawn over
+everything (depth 1e9), so its red wash shows instead of being hidden behind the flames.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a
