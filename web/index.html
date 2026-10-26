@@ -493,7 +493,7 @@ function fillDone() {
   }
 }
 // ---- the clock: this computer kept awake (caffeinate): while bots work, for a while, or not. The server
-// runs the inhibitor; the buttons show the choice, the clock's light and tip show what it does
+// runs the inhibitor; the buttons show the choice, the clock's face and tip show what it does
 const AWAKE = [["off", "off", 0], ["work", "when local bots work", 0], ["for", "1 h", 60], ["for", "3 h", 180], ["for", "8 h", 480]];
 function fillClock() {
   const a = (state && state.awake) || { mode: "off" }, row = $("#vClock .row"), left = a.mode === "for" ? Math.max(0, a.until - Date.now()) : 0;

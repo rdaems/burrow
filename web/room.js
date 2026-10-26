@@ -1020,9 +1020,9 @@ function startRoom(cv, app) {
     }
     if (L.clock) {
       // the clock keeps this computer awake, as Amphetamine does: a click chooses (while bots work, for
-      // a while, not at all); its light is on while it does
+      // a while, not at all); its face says which, yellowed (drawClock)
       const ck = L.clock, a = s.awake || { mode: "off" }, h = hot(ck.x0, ck.y0, ck.x0 + 12, ck.y0 + 10, { kind: "clock" });
-      outlined(ctx, foot("clock", [ck.x0, ck.y0]), h, (c) => drawClock(c, ck.x0 + 6, ck.y0 + 5, a.on));
+      outlined(ctx, foot("clock", [ck.x0, ck.y0]), h, (c) => drawClock(c, ck.x0 + 6, ck.y0 + 5, a));
       if (h) {
         const tm = Math.round(Math.max(0, a.until - Date.now()) / 60000), hh = Math.floor(tm / 60), mm = tm % 60;
         tip = { text: a.mode === "for" ? `awake ${hh ? hh + "h " : ""}${mm}m more` : a.mode === "work" ? (a.on ? "awake, local bots at work" : "awake when local bots work") : "clock", x: ck.x0 + 6, y: WALL + 10 };
@@ -1745,12 +1745,39 @@ function startRoom(cv, app) {
     for (let j = 0; j < 18; j += 2) { ctx.fillRect(x, WALL - 20 + j, 1, 1); ctx.fillRect(x + 15, WALL - 20 + j, 1, 1); }
     tiny(ctx, "+", x + 6, WALL - 14, lit ? GOLD : C.steel1);
   }
-  function drawClock(ctx, x, y, awake) {    // Pixel Agents' clock, telling this computer's time; a light on it while it keeps the computer awake
+  // the clock's face: the sprite's light cells, found once
+  let dial = null;
+  function dialCells() {
+    if (dial) return dial;
+    const s = sprites.get("clock"), d = s.getContext("2d").getImageData(0, 0, s.width, s.height).data;
+    dial = [];
+    for (let j = 0; j < s.height; j++) for (let i = 0; i < s.width; i++) {
+      const k = (j * s.width + i) * 4;
+      if (d[k] === 0xed && d[k + 1] === 0xed && d[k + 2] === 0xed && d[k + 3] === 255) dial.push([i, j]);
+    }
+    return dial;
+  }
+  // Pixel Agents' clock, telling this computer's time. While it keeps the computer awake its face is
+  // yellowed: for a while, a wedge from the hour hand to the hour it ends (shrinking as the time runs
+  // out, as a kitchen timer); while local bots work, all of it; set to wait for them and none at work,
+  // hatched
+  function drawClock(ctx, x, y, a) {
     put(ctx, "clock", x - 6, y - 5);
-    if (awake) rect(ctx, x + 5, y - 5, 1, 1, SP.Y);
-    const t = new Date();
+    const t = new Date(), hour = ((t.getHours() % 12) + t.getMinutes() / 60) / 12 * 2 * Math.PI;
+    if (a && a.mode !== "off") {
+      const left = a.mode === "for" ? a.until - Date.now() : 0;
+      const span = left > 0 ? Math.max(Math.PI / 12, left / 432e5 * 2 * Math.PI) : 0;   // 12 h round; never under half an hour, or the hands hide it
+      ctx.fillStyle = SP.Y;
+      for (const [i, j] of dialCells()) {
+        // a cell the wedge reaches at all (its half width in angle past the end), so the last minutes still show
+        const px = x - 6 + i, py = y - 5 + j, dx = px - (x - 1), dy = (y - py) / 0.75;
+        const on = a.mode === "for" ? span > 0 && (Math.atan2(dx, dy) - hour + 4 * Math.PI) % (2 * Math.PI) < span + Math.atan2(0.5, Math.hypot(dx, dy))
+          : a.on || (i + j) % 3 === 0;
+        if (on) ctx.fillRect(px, py, 1, 1);
+      }
+    }
     const hand = (ang, len) => { for (let i = 1; i <= len; i++) ctx.fillRect(Math.round(x - 1 + Math.sin(ang) * i), Math.round(y - Math.cos(ang) * i * 0.75), 1, 1); };
-    ctx.fillStyle = SP.G; hand(((t.getHours() % 12) + t.getMinutes() / 60) / 12 * 2 * Math.PI, 2);
+    ctx.fillStyle = SP.G; hand(hour, 2);
     ctx.fillStyle = SP.r; hand(t.getMinutes() / 60 * 2 * Math.PI, 3);
     rect(ctx, x - 1, y, 1, 1, SP.F);
   }
@@ -2047,5 +2074,6 @@ function startRoom(cv, app) {
   // for look.mjs: two bots sent to a game, a kickabout for some
   window.__room.game = (kind, a, b) => { const w = world(), fa = w.folk.get(a), fb = w.folk.get(b); if (!fa || !fb) return false; end(fa); end(fb); fa.act = { kind, side: 0, with: b, left: 90, there: false }; fb.act = { kind, side: 1, with: a, left: 90, there: false }; return true; };
   window.__room.football = (ids) => { const w = world(), team = ids.map((id) => w.folk.get(id)).filter(Boolean); return team.length >= 2 && !!football(w, lastL, team); };
+  window.__room.clock = (a) => { const c = document.createElement("canvas"); c.width = 12; c.height = 10; drawClock(c.getContext("2d"), 6, 5, a); return c.toDataURL(); };   // the clock's face for an awake state
   return { talk, typed, size, draw, width, color: projectColor, icon, printer: printerPicture, carry: carryKind, place: placeKind, playing: playingAt, names: NAMES, at, board, stats, hovered: () => hovered && { id: hovered.b.id, seat: !!hovered.seat } };
 }

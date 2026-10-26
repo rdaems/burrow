@@ -787,7 +787,7 @@ after two movements; a bigger plus; the clock "a control like amphetamine".
   every poll, `inhibitor()`: `caffeinate -i -s -w <server pid>`, else `systemd-inhibit`): off, when local
   bots work (a busy bot on this machine; remote ones go on without it; kept in room.json `awake`), or
   1/3/8 h (not kept). The CLOCK panel
-  (`#vClock`, `fillClock`, `AWAKE`), the clock's light (`SP.Y` dot) while the inhibitor runs, the tip says
+  (`#vClock`, `fillClock`, `AWAKE`), the clock's face yellowed (see "The clock's face", 2026-10-26), the tip says
   "awake 2h 13m more" / "awake, bots at work". The state carries `awake: {mode, until, on}`.
 
 ## Games for real, and the kickabout (2026-10-25)
@@ -852,6 +852,22 @@ mid-drag and after), three faults found and fixed:
   walk): `draw()` sets whoever sits in it onto the seat each frame, as for a desk.
 `__room.settle(key, at, u, kind)` is a test hook for it. A press on a figure in the armchair still lifts the
 figure; the chair is dragged by its lamp then.
+
+## The clock's face (2026-10-26)
+
+He: "Show the state of the computer not being closed, on the clock. 1h, 3h, 8h, show that as yellowed
+regions on the clock (pie's). And when local bots do not allow sleep/shutdown, the full dial is yellow ...
+if setting is on but no local bots are working, the full dial is 'gearceerd'" (hatched). Built as he said;
+the light dot it replaces is gone. `drawClock(ctx, x, y, awake)` paints the face's cells (`dialCells`: the
+sprite's #ededed, found once) in Pixel Agents' yellow (`SP.Y`) before the hands:
+- **For a while**: a wedge from the hour hand clockwise to the hour it ends, on the 12-hour dial (1 h = 30°),
+  so it shrinks as the time runs out, as a kitchen timer. A cell is lit if the wedge reaches it at all
+  (its half width in angle past the end), and the wedge is never under half an hour wide while time is left:
+  the hands cover its start, and 20 minutes or less vanished under them (the clock looked off while on).
+- **When local bots work**, one at work (the inhibitor runs): the whole face. None at work: hatched, a
+  diagonal line every third cell.
+At the room's size (12 x 10 dots) 1 h is three cells, 3 h a quarter, 8 h most of the face. The tip keeps the
+exact minutes. Test hook `__room.clock(awake)`: the face as a data URL, for looking at every state at once.
 
 ## Next
 
