@@ -49,7 +49,7 @@ whatever you drag into it.
 
 Sessions started in the same directory share a desk, named after the folder. A session in a git worktree
 sits at its repository's desk, the worktree a laptop beside the big screen. You are in the room too:
-beside the robot whose session is open, or under the screen when your own terminal is.
+behind the desk of the robot whose session is open, or under the screen when your own terminal is.
 
 ## What you do
 
@@ -64,10 +64,12 @@ beside the robot whose session is open, or under the screen when your own termin
 - **delete a session gently**: carry its robot into the booth, or ✕ twice in the bench's list. A sign counts
   five seconds down (click it, or carry the robot out, to undo), then `claude stop` and `claude rm`
 - **delete a session** (`claude rm`; the transcript stays for `claude --resume`): drop its robot in the fire
-- **hardcore** (a switch on the switchboard): the booth is a gun closet. Click it and the whole window is the
-  office through your own eyes, as Wolf3D drew it: WASD walks, the mouse looks, a click shoots. A shot robot
-  goes to pieces; E puts it back together until idle robots have cleared the pieces away (then `claude stop` and
-  `claude rm`). Esc, and you stand in the room where you walked to
+- **3d**: click the goggles and the whole window is the office through your own eyes, as Wolf3D drew it: WASD
+  walks, the mouse looks, a click uses what is under the crosshair (a robot opens its session). Esc, and you
+  stand in the room where you walked to
+- **hardcore** (a switch on the switchboard): the booth is a gun closet. Click it (in the room, or in 3d) and
+  you hold a shotgun: a click shoots. A shot robot goes to pieces; E puts it back together until idle robots
+  have cleared the pieces away (then `claude stop` and `claude rm`). In 3d the gun closet takes the gun back
 - **your own terminal**: click a desk's screen. A login shell in that directory on that machine, one per
   desk, kept while burrow runs; the screen shows its prompt
 - **drop a file** on a robot or a tile and its path is typed into the session (copied over first for a
@@ -75,15 +77,24 @@ beside the robot whose session is open, or under the screen when your own termin
 - **the limits**: the coffee pot is what is left of the five-hour session, the cooler's bottle what is left
   of the week; a click on either shows them all
 - **the printer** prints the office report: who is there, and the statistics of the shift
-- **the office manager** keeps the notes: while Claude writes up a session she goes over to its robot with a
-  sheet and writes; otherwise she sits at her desk behind a stack of them. A click on her or her desk opens the
-  notes beside the room, in a readable tile: on the left what needs you (every open decision, the ones a
-  session waits on first) and every session in a line; on the right, for what you click, the goal, where it
-  stands, the decisions with their options, what it built and committed, what is next. A decision can be explained
-  (what is at stake, each option's upside and cost, a recommendation) and answered right there: the answer is
-  typed into the session for you. Claude writes
-  them (`claude -p`, on this computer) when a session finishes a turn or asks you something, and when the
-  notes open; a switch on the switchboard turns that off (she dozes)
+- **the office manager** sits at the reception, a booth with her name over it. Take one out of the closet and
+  you pick who:
+  - **Susan** is a Claude Code session of her own (in `~/.config/burrow/office`, whose `CLAUDE.md` burrow
+    writes: the office, what she can do in it). A click on her opens her terminal: ask her what goes on at a
+    desk, to start a bot on something, put up a desk, clear out old sessions, pass a message on. She does it
+    through burrow (`/api/office`), so it happens in the room: she walks a robot to the booth herself (in
+    hardcore she shoots it), and her messages to other sessions are beams. Her hand goes up when she asks you
+  - **Joan** is Susan doing rounds by herself, every half hour (Claude Code's `/loop`): who is stuck, who is
+    done; she nudges, clears out (if the switch says so), and asks you what is yours to decide
+  - **Linda** keeps the notes (Stijn's): while Claude writes up a session she goes over to its robot with a
+    sheet and writes. A click on her opens the notes beside the room, in a readable tile: on the left what
+    needs you (every open decision, the ones a session waits on first) and every session in a line; on the
+    right, for what you click, the goal, where it stands, the decisions with their options, what it built and
+    committed, what is next. A decision can be explained (what is at stake, each option's upside and cost, a
+    recommendation) and answered right there: the answer is typed into the session for you. Claude writes them
+    (`claude -p`, on this computer) when a session finishes a turn or asks you something, and when the notes open
+
+  Burn her booth to let her go (her session is stopped and deleted)
 - **the whiteboard** opens large and you draw on it; the host of a meeting draws on it too
 - **the window** looks outside: the sky by the hour, the sun or the moon, stars at night
 - **the armchair**: click it and you go and sit there a while, reading (a robot in it gets up)

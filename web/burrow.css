@@ -156,6 +156,14 @@ button, input, select { font:inherit; color:inherit; }
 .doors .rm { flex:none; margin-left:auto; align-self:center; }
 #view .doors .rm.on { background:#c9473a; color:var(--white); }   /* armed: a second click takes the door out */
 .tbar .tapp { margin-left:auto; }
+/* the office managers: a card each, her figure (three pixels a dot), her name in her colour, what she does */
+.managers p { margin:0 0 10px; }
+.managers .styles { display:flex; flex-direction:column; gap:8px; }
+#view .managers .style { display:flex; gap:14px; align-items:center; text-align:left; padding:8px 12px; color:var(--ink); }
+.managers .style img { flex:none; width:66px; height:87px; image-rendering:pixelated; }
+.managers .who { display:flex; flex-direction:column; gap:2px; }
+.managers .who b { text-shadow:2px 2px 0 var(--ink); }
+.managers .who small { color:var(--steel0); font-size:13px; }
 /* the closet: every kind of furniture as it stands in the room (two pixels a dot, as the room), to drag in */
 .closet { display:flex; flex-wrap:wrap; gap:14px 18px; align-items:flex-end; }
 /* the completed list: a row a session, as agent view's Completed group */

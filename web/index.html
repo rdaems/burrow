@@ -55,6 +55,7 @@
         <div id="vSettings" class="settings" hidden></div>
         <div id="vDoors" class="settings doors" hidden></div>
         <div id="vDone" class="done" hidden></div>
+        <div id="vManager" class="managers" hidden><p>Who sits at the reception? Pick one; burn her booth to let her go.</p><div class="styles"></div></div>
         <div id="vClock" class="awake" hidden><p>Keep this computer awake</p><div class="row"></div></div>
         <div id="vOutside" hidden><canvas class="outside" width="130" height="70"></canvas></div>
         <div id="vBoard" hidden><canvas class="board" width="130" height="55"></canvas><div class="row"><button type="button" class="btn" id="wipe">wipe</button></div></div>
@@ -111,10 +112,12 @@ let hoverTile = null;                      // the tile the pointer is on
 const view = $("#view");
 let viewKind = null;                       // what the view shows: closet, chess, pong, dir, machine, you; null when tiles do
 
+const herId = () => (state && state.manager && state.manager.id) || null;   // the office manager's own session (not a bot at a desk)
+const asFolk = (id) => (id && id === herId() ? "manager" : id);         // in the room she is "manager"
 const room = startRoom($("#room"), {
   state: () => state,
-  open: focusedBot,
-  opens: () => botTiles().map((t) => t.id),
+  open: () => asFolk(focusedBot()),
+  opens: () => botTiles().map((t) => asFolk(t.id)),
   chess: () => (viewKind === "chess" && state && state.chess && !state.chess.result ? state.chess : null),
   pong: () => (viewKind === "pong" ? pongUI.playing() : null),
   view: () => viewKind,
@@ -123,19 +126,21 @@ const room = startRoom($("#room"), {
   // the office manager clearing out (switchboard: cleanup): the sessions she would let go, oldest first:
   // completed, her notes on them have nothing open (no decision left to you, nothing next: empty, or a line that
   // says so, "Nothing left in this session …", as the notes often do), ended over an hour ago
+  // and first, the ones her session asked to be removed (/api/office remove: Susan, Joan)
   cleanup: () => {
     const cfg = (state && state.settings) || {}, ss = (digest && digest.sessions) || {};
     const none = (t) => !(t || "").trim() || /^\s*(nothing|none|no further|no next)\b/i.test(t);
+    const asked = ((state && state.manager && state.manager.remove) || []).filter((id) => byId(id));
     const ids = cfg.cleanup && state ? state.bots.filter((b) => {
       const e = ss[b.id];
       if (!b.over || !e || !b.endedAt || Date.now() - b.endedAt < 3600e3) return false;
       return !(e.decisions || []).some((q) => !(e.answered || {})[q.question]) && none(e.next);
     }).sort((a, b) => a.endedAt - b.endedAt).map((b) => b.id) : [];
-    return { on: !!cfg.cleanup, hardcore: !!cfg.hardcore, ids };
+    return { on: !!cfg.cleanup || asked.length > 0, hardcore: !!cfg.hardcore, ids: [...asked, ...ids.filter((id) => !asked.includes(id))] };
   },
   away: () => (blurAt ? (performance.now() - blurAt) / 1000 : 0),
-  hl: () => (hoverTile && hoverTile.kind === "bot" ? hoverTile.id : hoverTile && hoverTile.kind === "notes" ? "manager" : null),   // the notes are the office manager's
-  hover: (id) => { for (const t of botTiles()) t.el.classList.toggle("hl", t.id === id); for (const t of notesTiles()) t.el.classList.toggle("hl", id === "manager"); },
+  hl: () => (hoverTile && hoverTile.kind === "bot" ? asFolk(hoverTile.id) : hoverTile && hoverTile.kind === "notes" ? "manager" : null),   // the notes are the office manager's
+  hover: (id) => { for (const t of botTiles()) t.el.classList.toggle("hl", asFolk(t.id) === id); for (const t of notesTiles()) t.el.classList.toggle("hl", id === "manager"); },
   // your terminals: the one whose tile has the focus (you stand at its screen), every one the server
   // keeps (its screen shows a prompt; busy while output comes, from the server or the open tile)
   shell: focusedShell,
@@ -161,6 +166,8 @@ async function act(a) {
   else if (a.kind === "completed") { openView("completed"); fillDone(); }
   else if (a.kind === "clock") { openView("clock"); fillClock(); }
   else if (a.kind === "notes") openNotes(a.shift);
+  else if (a.kind === "manager") openManager(a.shift);
+  else if (a.kind === "kept") api("/api/office", { kept: a.id });   // one she was seeing out, kept: her session is told
   else if (a.kind === "outside") openOutside();
   else if (a.kind === "pairOpen") openPair(a.key);
   else if (a.kind === "pair" && b) joinPair(a.key, b);
@@ -229,8 +236,8 @@ addEventListener("focus", focus); addEventListener("blur", focus); document.addE
 }
 
 // ---- the view: one thing at a time on the right, in place of the tiles, framed like one
-const PANELS = { dir: "#vDir", machine: "#vMachine", you: "#vYou", closet: "#vCloset", chess: "#chess", pong: "#pong", report: "#vReport", pair: "#vPair", board: "#vBoard", limits: "#vLimits", outside: "#vOutside", completed: "#vDone", settings: "#vSettings", clock: "#vClock", doors: "#vDoors" };
-const TITLES = { dir: "A PROJECT", machine: "A MACHINE", you: "YOU", closet: "THE CLOSET", chess: "CHESS", pong: "PING-PONG", report: "REPORT", pair: "PAIR ROOM", board: "WHITEBOARD", limits: "LIMITS", outside: "OUTSIDE", completed: "COMPLETED", settings: "SETTINGS", clock: "CLOCK", doors: "DOORS" };
+const PANELS = { dir: "#vDir", machine: "#vMachine", you: "#vYou", closet: "#vCloset", chess: "#chess", pong: "#pong", report: "#vReport", pair: "#vPair", board: "#vBoard", limits: "#vLimits", outside: "#vOutside", completed: "#vDone", settings: "#vSettings", clock: "#vClock", doors: "#vDoors", manager: "#vManager" };
+const TITLES = { dir: "A PROJECT", machine: "A MACHINE", you: "YOU", closet: "THE CLOSET", chess: "CHESS", pong: "PING-PONG", report: "REPORT", pair: "PAIR ROOM", board: "WHITEBOARD", limits: "LIMITS", outside: "OUTSIDE", completed: "COMPLETED", settings: "SETTINGS", clock: "CLOCK", doors: "DOORS", manager: "OFFICE MANAGER" };
 function openView(kind) {
   if (viewKind && viewKind !== kind) closeView(true);
   for (const t of tiles.all()) closeTile(t);
@@ -249,6 +256,7 @@ function closeView(keep) {                 // keep: another view takes its place
   if (was === "chess" && state && state.chess && !state.chess.result && [state.chess.white.id, state.chess.black.id].includes("you")) api("/api/chess", { resign: true });   // your game; the bots' goes on
   if (was === "pong") pongUI.close();
   if (was === "machine" && machineAt) { machineAt = null; room.pend(null); }   // the new door goes back into the closet
+  if (was === "manager" && managerAt) { managerAt = null; room.pend(null); }   // the booth too, with nobody picked
   if (!keep) { view.hidden = true; $("#pane").classList.toggle("empty", !tiles.all().length); room.draw(); }
 }
 view.querySelector(".tx").onclick = () => closeView();
@@ -376,7 +384,7 @@ function askYou() {
 
 // ---- the closet: the furniture there is, drawn as it stands in the room; drag a piece into the
 // room to put it there, as many as you like. The fireplace takes a piece back out (it burns)
-const CATALOGUE = ["plant", "armchair", "window", "clock", "board", "meet", "chess", "pong", "coffee", "cooler", "printer", "add", "pair", "bench", "manager", "booth", "neuralyzer", "door"];
+const CATALOGUE = ["plant", "armchair", "window", "clock", "board", "meet", "chess", "pong", "coffee", "cooler", "printer", "add", "pair", "bench", "manager", "booth", "neuralyzer", "goggles", "door"];
 // Built when it opens, and again on a state update only while its pictures were still loading: never while
 // something is being carried out of it. Rebuilding it on every update (each second or two in a room with
 // many bots) took the picture being held away mid-drag, and the piece never arrived
@@ -535,10 +543,8 @@ const OPTIONS = [
     what: "Started with <code>claude --bg --remote-control</code>: the same session can be continued on your phone or at claude.ai/code, and is in the app's list of sessions. Its tile gets an APP button, its antenna a blinking light." },
   { key: "yolo", name: "New bots skip permissions (yolo)",
     what: "Started with <code>--dangerously-skip-permissions</code>: the bot never waits for an answer, it runs every command and edit. Bots already running keep their mode." },
-  { key: "digest", name: "Claude writes the notes",
-    what: "The office manager's notes on each session (what it is doing, the decisions left to you, what it built) are written by <code>claude -p</code> on this computer when a session finishes a turn, asks you something, or the notes are opened. It costs tokens; off, she dozes and keeps the notes she has." },
   { key: "cleanup", name: "The office manager clears out finished sessions",
-    what: "A session that is completed, has nothing open in her notes (no decision left to you, nothing next) and ended over an hour ago: she walks it to the booth, one at a time. The booth's five seconds still let you take it out; one you rescue she leaves alone. Gone means <code>claude rm</code>: off Claude Code's list, its conversation still there for <code>claude --resume</code>." },
+    what: "Linda: a session that is completed, has nothing open in her notes (no decision left to you, nothing next) and ended over an hour ago. Joan: on her rounds, the ones done for a day with nothing left. She walks it to the booth, one at a time. The booth's five seconds still let you take it out; one you rescue she leaves alone. Gone means <code>claude rm</code>: off Claude Code's list, its conversation still there for <code>claude --resume</code>." },
   { key: "hardcore", name: "Hardcore",
     what: "The booth is a gun closet. The office manager clears sessions out with a shotgun, and a click on the closet gives you a crosshair to do it yourself (Esc puts it away). A shot bot goes to pieces: click them to put it back together, until the idle bots have cleared them away (then it is deleted)." },
 ];
@@ -699,9 +705,39 @@ function carryOut(e, kind, it) {
     if (!on) return;
     const at = room.place(kind, ev.clientX, ev.clientY);
     if (at && kind === "door") { ask("machine"); machineAt = at; room.pend(at); }   // a door is a machine: which one, then it hangs there
+    else if (at && kind === "manager") askManager(at);                              // the reception: who sits there
     else if (at) { const r = await api("/api/furniture", { add: kind, at }); if (r.error) note(r.error); }
   };
   it.onpointercancel = () => { done(); room.carry(null); };   // taken away by the browser: no ghost left behind
+}
+
+// ---- the office manager: her styles (server.py MANAGERS), picked when her booth comes out of the closet; a click
+// on her or her booth is hers: Linda's notes, or the others' own session in a tile (started again if it is gone)
+let managerAt = null;                       // where her booth was let go
+async function askManager(at) {
+  managerAt = at; room.pend(at, null, "manager");
+  openView("manager");
+  const el = $("#vManager .styles"), r = await api("/api/manager", {});
+  if (viewKind !== "manager") return;
+  el.innerHTML = (r.styles || []).map((st) => `<button type="button" class="style" data-key="${st.key}"><img alt="" data-seed="${esc(st.seed)}" data-color="${st.color}">` +
+    `<span class="who"><b style="color:${st.color}">${esc(st.name.toUpperCase())}</b><span class="line">${esc(st.line)}</span><small>${esc(st.how)}</small></span></button>`).join("");
+  const faces = () => { let left = 0; for (const im of el.querySelectorAll("img:not([src])")) { const u = room.figure(im.dataset.seed, im.dataset.color, 3); if (u) im.src = u; else left++; } if (left && viewKind === "manager") setTimeout(faces, 100); };
+  faces();
+  for (const b of el.querySelectorAll(".style")) b.onclick = async () => {
+    const at = managerAt; managerAt = null;
+    const r = await api("/api/manager", { hire: b.dataset.key, at });
+    room.pend(null);
+    if (r.error) note(r.error);
+    closeView();
+  };
+}
+async function openManager(retain) {
+  const M = state && state.manager;
+  if (!M) return;
+  if (M.style === "notes") return openNotes(retain);
+  const r = await api("/api/manager", { open: true });
+  if (!r.id) return note(r.error || M.name + " is not there yet");
+  openBot("", r.id, retain);
 }
 
 // ---- tiles: what every one has
@@ -741,6 +777,7 @@ function showWho(t) {
   if (t.kind === "notes") return t.name("notes", digest && digest.writing ? "writing…" : digest && !digest.on ? "switched off" : "");
   const m = machine(t.m), on = m ? "on " + m.name : "";
   if (t.kind === "shell") t.name(t.dir.replace(/\/+$/, "").split("/").pop() || t.dir, on);
+  else if (t.id === herId()) { t.name(state.manager.name, "office manager"); appLink(t, state.manager.rc); }
   else { const b = byId(t.id); t.name(b ? b.name : t.id, on); appLink(t, b && b.rc); }
   t.term.options.theme = m && m.light ? LIGHT : DARK;
 }

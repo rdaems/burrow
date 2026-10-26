@@ -1,17 +1,20 @@
-// The gun closet, hardcore: the office in the first person, as Wolf3D drew its castle. The whole window is
-// the view: the room as it is, raycast. Its floor (the planks, the rug, the mats rolled out, the oil), its
-// wall with what hangs on it (the doors, the window, the clock, the closet), the other three walls plain,
-// a ceiling of tiles and lights; the desks as blocks, their screens, chairs and everything else as sprites
-// (their own pictures from the room), and the bots, walking about as they do there. You hold a shotgun:
-// a bot shot goes to pieces, in the room as well (room.js: the remains, the sweepers, the undo); E on the
-// pieces puts it back together. Esc leaves; you stand in the room where you left off.
+// The 3d goggles (or the gun closet, hardcore): the office in the first person, as Wolf3D drew its castle.
+// The whole window is the view: the room as it is, raycast. Its floor (the planks, the rug, the mats rolled
+// out, the oil), its wall with what hangs on it (the doors, the window, the clock, the closet), the other
+// three walls plain, a ceiling of tiles and lights; the desks as blocks, their screens, chairs and everything
+// else as sprites (their own pictures from the room), and the bots, walking about as they do there. A click
+// uses what is under the crosshair (room.use: the gun closet hands you a shotgun, the goggles come off, a bot
+// opens). With the shotgun a click shoots: a bot shot goes to pieces, in the room as well (room.js: the
+// remains, the sweepers, the undo); E on the pieces puts it back together, E on the gun closet puts the gun
+// back. Esc leaves; you stand in the room where you left off.
 //
 // startFps(room, done): room = { scene(), start(), move(x, y, a, walking), shoot(id), unshoot(id), alarm(x, y),
-// tiny(ctx, s, x, y, col), tinyW(s), hands() }. scene() is the room at its last tick (twelve a second):
+// armed(), use(thing), label(thing), tiny(ctx, s, x, y, col), tinyW(s), hands() }. scene() is the room at
+// its last tick (twelve a second):
 //   { v, W, H, WALL, floor, wall, plain: canvases (the floor W x H, the wall W x WALL, a plain wall),
 //     boxes: [{x0, y0, x1, y1, z0, z1, front, back, side, top}]  a face: {c, sx, sy, sw, sh}, a crop of a canvas
-//     things: [{key, x, y, z, c, sx, sy, sw, sh, ax, ay, flip, bot, staff, rem, name}]  a sprite standing at
-//             x, y (its column ax there), its row ay at height z; a bot to shoot, or a remains' piece
+//     things: [{key, x, y, z, c, sx, sy, sw, sh, ax, ay, flip, bot, staff, rem, name, piece}]  a sprite standing
+//             at x, y (its column ax there), its row ay at height z; a bot to shoot, a remains' piece, a piece
 //     solid: [[x0, y0, x1, y1]] }                   what you can't walk through
 // A canvas redrawn in place says so with its `v`.
 function startFps(room, done) {
@@ -169,7 +172,7 @@ function startFps(room, done) {
     if (e.key === "Escape") return leave();
     if (MOVE.has(e.code)) keys.add(e.code);
     if (e.code === "KeyE" || e.code === "Space") use();
-    if (e.code === "Enter" || e.code === "KeyF") fire();
+    if (e.code === "Enter" || e.code === "KeyF") (room.armed() ? fire : use)();
   };
   const onMove = (e) => {
     if (locked) { a += e.movementX * 0.0024; look(-e.movementY * 0.3); }
@@ -178,7 +181,7 @@ function startFps(room, done) {
   const onDown = (e) => {
     if (e.button !== 0) return;
     e.preventDefault();
-    if (locked || nolock) fire();                // (no lock to be had: a click fires all the same)
+    if (locked || nolock) (room.armed() ? fire : use)();   // (no lock to be had: a click fires all the same)
     if (!locked) { dragging = [e.clientX, e.clientY]; lock(); }
   };
   const onUp = () => { dragging = null; };
@@ -204,6 +207,7 @@ function startFps(room, done) {
   const COOL = 800;
   function fire() {
     const now = performance.now();
+    if (!room.armed()) return;
     if (now - shot < COOL) return;
     shot = now;
     const cx = RW >> 1, cy = RH >> 1;
@@ -217,13 +221,17 @@ function startFps(room, done) {
     if (!(best && room.shoot(best.bot))) puffs.push({ x: hx, y: hy, z: Math.max(1, hz), t0: now });
     room.alarm(me.x, me.y);
   }
-  // E: the pieces under the crosshair are put back together
+  // E (or a click with nothing in your hands): the pieces under the crosshair are put back together, or
+  // what is under it is used (room.use); else the nearest pieces in front of you
   function use() {
     const now = performance.now();
     if (now - used < 300) return;
     used = now;
-    const th = near();
-    if (th) room.unshoot(th.rem);
+    const th = under(3);
+    if (th && th.rem) return room.unshoot(th.rem);
+    if (th && room.use(th)) { t0 = now; return; }   // (the keys again: a gun taken or put back)
+    const r = near();
+    if (r) room.unshoot(r.rem);
   }
   function near() {                           // the pieces under the crosshair, or the nearest in front of you within reach
     const th = under(4);
@@ -379,20 +387,23 @@ function startFps(room, done) {
       }
     }
   }
-  // over it: the shotgun (bobbing as you walk, kicking and pumped after a shot), the crosshair, who is under it
-  const t0 = performance.now();
+  // over it: the shotgun (bobbing as you walk, kicking and pumped after a shot), the crosshair, who or what
+  // is under it
+  let t0 = performance.now();
   function hud(now) {
+    const armed = room.armed();
     const since = now - shot, cx = RW >> 1, cy = RH >> 1;
     const kick = since < 90 ? since / 90 : since < 320 ? 1 - (since - 90) / 230 : 0;
     const pumpY = since > 380 && since < 720 ? Math.sin((since - 380) / 340 * Math.PI) * 9 : 0;
     const bx = walking && !still ? Math.sin(bob) * 5 : 0, by = walking && !still ? Math.abs(Math.cos(bob)) * 4 : 0;
     const gx = Math.round(cx - GX + bx), gy = Math.round(RH - GH + 8 + by + kick * 10);
-    if (since < 70) {                          // the flash lights the room a moment
+    if (armed && since < 70) {                 // the flash lights the room a moment
       ctx.fillStyle = "rgba(255,226,150,0.14)"; ctx.fillRect(0, 0, RW, RH);
       ctx.drawImage(flash, gx + GX - 20, gy - 24);
     }
-    ctx.drawImage(gun, gx, gy); ctx.drawImage(pump, gx, Math.round(gy + pumpY));
-    const th = under(2), bot = th && th.bot && !th.staff, col = bot ? "#ff6b5a" : "#e8e8ee";
+    if (armed) { ctx.drawImage(gun, gx, gy); ctx.drawImage(pump, gx, Math.round(gy + pumpY)); }
+    const th = under(2), bot = armed && th && th.bot && !th.staff, what = !armed && th && room.label(th);
+    const col = bot ? "#ff6b5a" : what && (th.bot || th.staff || /^(take|put)/.test(what)) ? "#f6c784" : "#e8e8ee";
     ctx.fillStyle = "rgba(10,8,16,0.6)";
     for (const [x, y, w, h] of [[cx - 5, cy, 3, 1], [cx + 3, cy, 3, 1], [cx, cy - 5, 1, 3], [cx, cy + 3, 1, 3]]) ctx.fillRect(x + 1, y + 1, w, h);
     ctx.fillStyle = col;
@@ -403,9 +414,10 @@ function startFps(room, done) {
       room.tiny(ctx, text, x, y, c);
     };
     const rm = near(), who = bot ? th : rm || (th && th.name ? th : null);
-    if (who) tag(who.name, 18, bot ? "#ffb4a8" : "#e8e8ee");                  // who is in your sights, up top (not over their face)
+    if (armed || rm) { if (who) tag(who.name, 18, bot ? "#ffb4a8" : "#e8e8ee"); }   // who is in your sights, up top (not over their face)
+    else if (what) tag(what, 18, "#e8e8ee");                                       // what a click would use
     if (!bot && rm) tag("E: put back together", 28, "#e8e8ee");
-    if (now - t0 < 6000) tag("wasd walk - mouse look - click shoot - esc leave", 6, "#c9ced8");
+    if (now - t0 < 6000) tag(armed ? "wasd walk - mouse look - click shoot - e use - esc leave" : "wasd walk - mouse look - click use - esc leave", 6, "#c9ced8");
   }
 
   let raf = 0, last = performance.now(), ms = 0;   // ms: how long a frame takes to draw, smoothed

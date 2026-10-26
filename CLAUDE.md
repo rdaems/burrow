@@ -1250,6 +1250,67 @@ very simple sprite graphics like wolf3d or doom, of the office, and we can kill 
   into desks, condemned bots shot in there and the hunt taking over after. About 1 ms a frame. Not tested: the
   pointer lock and the mouse in his own Chrome.
 
+## The reception: office managers in three styles; the 3d goggles (2026-10-26, evening)
+
+He: "I want to generalize the concept of the notes bot. It's the office manager. Make their desk a bit bigger,
+like, she's really sitting behind a booth. When you add this, you get a popup with different office manager
+styles. The basis is just a claude code session with knowledge of this whole thing, and the power to remove
+bots, add desks, ask help, etc. The notes thing Stijn made is actually already a quite elaborate version of
+this, and is thus one of the options. They're all female and have simple female names, like Susan".
+- **The reception** (`manager` kind, still one at a time; `drawReception`, two layers: a back panel and posts
+  under a sign in her colour with her name, then the counter, a slab, over her): 46 x 45 dots, she sits at
+  `x + 27, y - 5`, her head and shoulders over the counter. On it a bell, and for a session her screen (runs
+  while a turn runs, cursor blinking while she asks, dark while her process is off); Linda's stack of notes.
+- **The styles** (server.py `MANAGERS`, room.json `manager: {style, id, since}`; no entry = Linda, so his room
+  kept its manager): **Susan** (`ask`, susan-10, teal) a `claude --bg -n Susan --append-system-prompt …` session
+  of her own in `OFFICE` (`~/.config/burrow/office`; `BURROW_OFFICE` to move it), whose CLAUDE.md burrow writes
+  (`MANUAL`: the office, how it maps onto Claude Code, `/api/office`, rules, her style's brief; rewritten when the
+  server starts, for the port); **Joan** (`rounds`, joan-10, lilac) the same with the first prompt `/loop 30m Do
+  your round…` (Claude Code's own: CronCreate in her session, a round at once, then every half hour; she logs
+  them in `rounds.md` there; a session cron expires after seven days); **Linda** (`notes`, manager-16, pink),
+  Stijn's notes as they were. rc and yolo apply to her session as to any bot.
+- **Hiring**: the closet's reception, let go in the room, waits there (`room.pend(at, null, "manager")`) while the
+  OFFICE MANAGER view shows the styles as cards (her figure, `room.figure`); a pick posts `/api/manager {hire,
+  at}`: the booth there (an existing one moves), the one before let go (`claude stop` + `rm`), hers started.
+  Burning the booth (`hub.fire`) lets her go; she walks out. ✕ puts the booth back in the closet.
+- **Her session is not a bot**: `take_manager` takes her row (and anything else in OFFICE) out of this computer's
+  feed (`hub.mrow`); `state.manager` carries her style, look, id and busy/waiting/alive. In the room she is the
+  folk "manager" (`staff`): typing at the booth while a turn runs, hand up and the ? while a dialog is open in her
+  session ("ask help": AskUserQuestion), dozing while her process is off. A click on her or the booth
+  (`{kind: "manager"}`) opens her terminal (`/api/manager {open}` starts her again if she is gone) or, for Linda,
+  the notes. The page maps her session id to "manager" (`asFolk`) for the open tile, the rings and the hover; you
+  stand at the counter's end while her tile has the focus. Beams to and from her are hers (`her()` in watch).
+- **`/api/office`** (GET: machines, desks, every session with its state, desk or none, summary; the settings;
+  `removing`, `kept`) and POST `{do: remove | desk | start | say}`. A remove, with the room open and a booth,
+  goes into `hub.removing`; the page puts those first in `app.cleanup()`, so she fetches the bot and walks it to
+  the booth (hardcore: shoots it) with the same `cleanStep` as the clearing out; one you rescue (`spare()`) is
+  posted back as `kept`. With no page open it is `claude stop` + `rm` at once. start puts up the desk too.
+  Tested on real sessions in the demo: Susan, asked in her terminal, removed tidy-tess (curl, then the shotgun,
+  the sweepers, deleted, ~50 s); Joan's first round read the office and wrote her log; the booth burnt left no
+  session behind. The demo hires a real one only with `BURROW_OFFICE` set (its term attaches to her locally).
+- **The notes switch is gone**: Linda hired is the notes on (`notes_on()`); the switchboard has four levers.
+
+He: "3d mode: let's generalize this. Add a 3d mode furniture piece. When i click it, i switch to 3d mode. Of
+course, I can still click it with my crosshairs enabled, so i get into the doom mode that way."
+- **The goggles** (`goggles` kind, `drawGoggles`: a headset on a stand; `furnish` v 12 adds `goggles0`): a click is
+  `firstPerson(key, false)`: the same view with nothing in your hands, a click (or E) uses what is under the
+  crosshair (`room.use`, `room.label` in fps.js): the gun closet (hardcore) takes a gun or puts it back
+  (`fpsArmed`), the goggles take you out, a bot or the office manager leaves 3d and opens. The gun closet in the
+  room still starts armed. Hardcore switched off in there puts the gun back (you stay in 3d). The goggles are off
+  their stand while you wear them (`fpsWear`), also on your figure.
+
+And, the same evening:
+- "The clock should be a wall object, I can drag it onto the floor! On the wall, the drag mechanics should be the
+  same as on the floor": a wall piece that can burn (clock, window, a door) no longer comes off the wall while
+  carried; it slides along it and settles clear of the others as it moves (the floor's rule, so nothing overlaps
+  there either). Only when its free position would be over the fire is it shown there, washed red, to burn.
+- "When I'm next to a desk to talk to an agent, I should be standing behind the desk ... I want to be able to click
+  the bots, now I'm in front and I click my own avatar": you stand behind the desktop over the bot's shoulder
+  (`at.y - 12`), drawn before the desk and the bot, so the pointer on the bot is the bot.
+- "When a bot is liquidated, its chair disappears immediately. When it is restored, the chair is put back": a bot
+  in pieces, in the booth or stopped gives up its chair at once (`gone` in `layout`), keeping its place in the row
+  (`seatRows`): put back together it sits where it sat.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

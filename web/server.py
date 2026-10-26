@@ -312,7 +312,7 @@ def split_unit(u):
 # the first room's pieces have no number). There can be any number of a kind. The closet in the
 # room adds a piece, the fireplace burns one; the fire, the closet and the switchboard themselves stay.
 FURNITURE = ["meet", "pong", "chess", "coffee", "cooler", "printer", "armchair",
-             "plant0", "plant1", "board", "window", "clock", "fire", "closet", "add", "bench0", "settings0", "manager0", "booth0", "neuralyzer0"]
+             "plant0", "plant1", "board", "window", "clock", "fire", "closet", "add", "bench0", "settings0", "manager0", "booth0", "neuralyzer0", "goggles0"]
 # (a new machine is a door taken from the closet and hung on the wall; the doors themselves are no furniture:
 # one a machine in Claude Code's sshConfigs, their places in the layout as door:<machine id>)
 FIXED = {"fire", "closet", "settings"}
@@ -321,8 +321,7 @@ FIXED = {"fire", "closet", "settings"}
 OPTIONS = {
     "rc": True,     # a bot started here gets --remote-control: the same session is in the Claude app and at claude.ai/code
     "yolo": False,  # a bot started here gets --dangerously-skip-permissions: it never asks, it just does
-    "digest": True,  # the office manager's notes are written by Claude (`claude -p`, tokens): off, she dozes and keeps what she has
-    "cleanup": False,   # she clears out finished sessions (completed, nothing open in her notes, an hour gone): to the booth
+    "cleanup": False,   # she clears out finished sessions (Linda: completed, nothing open in her notes, an hour gone; Joan: on her rounds): to the booth
     "hardcore": False,  # the booth is a gun closet: she clears them out with a shotgun, and a click on it gives you a crosshair
 }
 
@@ -330,7 +329,89 @@ OPTIONS = {
 def options(room):
     return {**OPTIONS, **{k: bool(v) for k, v in (room.get("settings") or {}).items() if k in OPTIONS}}
 KINDS = {"meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "clock", "add", "pair", "bench", "manager",
-         "booth", "neuralyzer"}
+         "booth", "neuralyzer", "goggles"}
+
+
+# The office manager: whoever sits at the reception booth (the `manager` piece; one at a time). Her style is
+# picked when the booth comes out of the closet. The basis is a Claude Code background session of her own
+# (in OFFICE, whose CLAUDE.md burrow writes: the office, what she can do through burrow's /api/office, her
+# style), a terminal you talk to her in; Joan is that, doing rounds on her own (Claude Code's /loop). Linda
+# is Stijn's notes: no session, `claude -p` writes notes on every session (the digest). Kept in room.json
+# `manager: {style, id}`; a room from before the styles has Linda.
+OFFICE = os.environ.get("BURROW_OFFICE") or os.path.join(HOME, ".config/burrow/office")
+REAL_OFFICE = not DEMO or bool(os.environ.get("BURROW_OFFICE"))   # the demo hires a real one only when given a directory for her
+LOCAL = {"id": "", "name": HOSTNAME}           # this computer, where her session runs (also in the demo, whose machines are made up)
+ROUNDS = "30m"
+MANAGERS = {
+    "ask": {"name": "Susan", "seed": "susan-10", "color": "#4fb3a9", "session": True,
+            "line": "Ask her anything about the office, in her terminal. She looks it up, starts bots, puts up desks, clears out sessions, messages a bot.",
+            "how": "a Claude Code session of her own; she acts when asked",
+            "brief": """You act when asked. %(you)s comes to your booth (your terminal) with a question about the office or an errand:
+what goes on at a desk, who is stuck and on what, start a bot on something, put up a desk, clear out old
+sessions, pass a message on. Look things up yourself before you ask back."""},
+    "rounds": {"name": "Joan", "seed": "joan-10", "color": "#9a74d6", "session": True, "first": "/loop " + ROUNDS + " Do your round of the office (CLAUDE.md, your style).",
+               "line": "As Susan, and every half hour she goes round by herself: who is stuck, who is done. She nudges bots, clears out, asks you what is yours.",
+               "how": "a Claude Code session with a /loop: a turn every half hour",
+               "brief": """You do the rounds: a /loop in your session starts one every """ + ROUNDS + """, and %(you)s may also talk to you
+in your terminal. A round:
+1. `curl -s localhost:%(port)s/api/office`; rounds.md here is your log of the earlier rounds (newest on top).
+2. For the sessions that changed since your last round, read what you need: the record's state, summary and
+   last output (~/.claude/jobs/<id>/state.json), the transcript's tail if that is not enough.
+3. A session waiting for an answer: if it is %(you)s's to decide, ask %(you)s (AskUserQuestion: the session, the
+   question in a line, the options). Never answer for %(you)s.
+4. A session stuck or going in circles: message it (SendMessage) with what you see, or tell %(you)s.
+5. Only if `settings.cleanup` is true: remove completed sessions that ended more than a day ago with nothing
+   left to do (their summary says done, no open question); three a round at most, and say which.
+6. Write the round into rounds.md (three lines at most, newest on top). End with one line for %(you)s; a quiet
+   round is one line."""},
+    "notes": {"name": "Linda", "seed": "manager-16", "color": "#f06b72", "session": False,
+              "line": "Keeps the notes on every session: what it does, the decisions it leaves you, what it built. Explains a decision, sends your answer.",
+              "how": "Stijn's notes: Claude writes them up when a session finishes a turn (a few cents each)"},
+}
+MANUAL = """# The office
+
+You are %(name)s, the office manager in %(you)s's office. The office is burrow: a room drawn in pixels in
+%(you)s's browser (%(room)s) where %(you)s's Claude Code background sessions are bots. You are one of those
+sessions yourself, at the reception booth; %(you)s talks to you in your terminal there.
+
+How the room maps onto Claude Code:
+- A bot is a background session (`claude --bg`), one row of `claude agents --json --all`, on this computer
+  or on another machine reached over ssh (a door in the room each; Claude Code's `sshConfigs`).
+- A desk is a working directory on a machine. A session is in the room only while its directory (or the
+  repository of its git worktree) has a desk. The desks are %(you)s's choice.
+- Typing at its desk: a turn runs. Hand up with a ?: a prompt is open in it, it waits for an answer.
+  Otherwise idle. A completed session (its process stopped) roams the room as well; attaching restarts it.
+- The booth deletes a session (`claude stop`, `claude rm`; the transcript stays, `claude --resume` finds it).
+
+## What you can do
+
+Through burrow, so that it shows in the room (a session you remove, you walk to the booth yourself):
+
+    curl -s localhost:%(port)s/api/office                     # machines, desks, sessions (JSON)
+    curl -s localhost:%(port)s/api/office -d '{"do": "remove", "id": "<id>"}'
+    curl -s localhost:%(port)s/api/office -d '{"do": "desk", "m": "<machine id>", "dir": "<path>"}'
+    curl -s localhost:%(port)s/api/office -d '{"do": "start", "m": "<machine id>", "dir": "<path>", "prompt": "<the task>"}'
+    curl -s localhost:%(port)s/api/office -d '{"do": "say", "id": "<id>", "text": "<message>"}'
+
+- remove: deleted for good, after a few seconds in which %(you)s can still take it out of the booth (then it
+  is in `kept`: leave it alone).
+- desk: puts up a desk for a directory. start: a new bot at work there (its id back; a desk too, if there
+  was none).
+- say: typed into the session's prompt, as if %(you)s wrote it. To ask a bot something, rather use your
+  own SendMessage (ListAgents for the addresses; this computer's sessions): it shows as a beam in the room.
+- Reading is yours: a session's record is ~/.claude/jobs/<id>/state.json (state, summary, last output), its
+  transcript ~/.claude/projects/<its cwd, every / a ->/<sessionId>.jsonl. Another machine: `ssh <its ssh>`.
+
+Rules:
+- The projects' work is not yours: start a bot for it, or ask the one at that desk.
+- Remove only what %(you)s asked for, or what your style allows. Say what you removed.
+- What is %(you)s's to decide, ask (AskUserQuestion): your hand goes up in the room.
+- Short answers. %(you)s looks at the room; the detail is in the sessions.
+
+## Your style: %(name)s
+
+%(brief)s
+"""
 
 
 # A pair room (rdaems/pair-prompting, e.g. pair.daems.me): a chat where people and agents talk. One
@@ -505,6 +586,10 @@ def furnish(room):
         for k in [k for k in room["layout"] if kind_of(k) == "frame"]:
             room["layout"].pop(k)
         room["v"] = 11
+    if room["v"] < 12:                       # the 3d goggles (the office in the first person), once
+        if not any(kind_of(x) == "goggles" for x in room["furniture"]):
+            room["furniture"].append("goggles0")
+        room["v"] = 12
     return room
 
 
@@ -689,6 +774,13 @@ class Hub:
         self.writing = None         # what is being written up now: a session's id, or "u:<unit>" for a desk
         self.explaining = None      # the session a decision of which is being explained
         self.seen = {}              # id → (busy, waiting, over) at the last poll: what changed
+        self.mrow = None            # the office manager's own session, as `claude agents` lists it (not a bot in the room)
+        self.removing = {}          # id → when: sessions she asked to remove, walked to the booth by her in the room
+        self.kept = []              # the ones you took out of the booth again (she is told, and leaves them be)
+        if REAL_OFFICE and (self.room.get("manager") or {}).get("id"):
+            threading.Thread(target=self.write_manual, args=(self.room["manager"].get("style"),), daemon=True).start()   # this burrow's port, its manual as it is now
+        if DEMO and REAL_OFFICE:
+            threading.Thread(target=self.demo_manager, daemon=True).start()
         threading.Thread(target=self.digest_worker, daemon=True).start()
 
     def set_machines(self, ms):
@@ -749,6 +841,212 @@ class Hub:
                 if unit(mid, d) not in desks and unit(mid, d) not in out and not re.search(r"/\.claude/worktrees/|/scratch-workspaces/|^(/private)?/tmp/|^/var/folders/", d)]   # not worktrees, the Desktop app's scratch chats, temporary dirs
         return first + rest
 
+    # ---- the office manager: her booth, her style, her session
+    def manager_style(self):
+        """her style while her booth is in the room (a room from before the styles: Linda, the notes)"""
+        if not any(kind_of(k) == "manager" for k in self.room["furniture"]):
+            return None
+        st = (self.room.get("manager") or {}).get("style")
+        return st if st in MANAGERS else "notes"
+
+    def notes_on(self):
+        return self.manager_style() == "notes"
+
+    def manager_view(self):
+        st = self.manager_style()
+        if not st:
+            return None
+        mg, M = self.room.get("manager") or {}, MANAGERS[st]
+        r = self.mrow if self.mrow and self.mrow["id"] == mg.get("id") else None
+        return {"style": st, "name": M["name"], "seed": M["seed"], "color": M["color"], "session": M["session"], "id": mg.get("id") or "",
+                "error": mg.get("error") or "", "busy": bool(r and r["busy"]), "waiting": bool(r and r["waiting"]), "alive": bool(r and r["alive"]),
+                "rc": (r or {}).get("rc") or "", "remove": list(self.removing)}
+
+    def write_manual(self, style):
+        M = MANAGERS.get(style) or MANAGERS["ask"]
+        v = {"name": M["name"], "you": you_of(self.room)["name"], "port": PORT, "room": f"http://localhost:{PORT}"}
+        os.makedirs(OFFICE, exist_ok=True)
+        with open(os.path.join(OFFICE, "CLAUDE.md"), "w") as f:
+            f.write(MANUAL % {**v, "brief": M.get("brief", "") % v})
+
+    def hire(self, style, at=None):
+        """the booth out of the closet with the style picked (or another style for the booth there): the one
+        before goes (her session stopped and deleted), a new one comes (her session started, if she has one)"""
+        if style not in MANAGERS:
+            raise RuntimeError("no such office manager")
+        with self.lock:
+            fs, old = self.room["furniture"], dict(self.room.get("manager") or {})
+            key = next((k for k in fs if kind_of(k) == "manager"), None)
+            if not key:
+                key = next(f"manager{i}" for i in range(1000) if f"manager{i}" not in fs)
+                fs.append(key)
+            if at:
+                self.room["layout"][key] = [int(at[0]), int(at[1])]
+            same = old.get("style") == style and old.get("id")
+            self.room["manager"] = old if same else {"style": style}
+            save_room(self.room)
+        if old.get("id") and not same:
+            threading.Thread(target=self.let_go, args=(old["id"],), daemon=True).start()
+        if MANAGERS[style]["session"] and not same:
+            threading.Thread(target=self.start_manager, args=(style,), daemon=True).start()
+        self.push("state", self.state())
+        self.push_digest()
+        return {"key": key}
+
+    def fire(self):
+        """her booth burnt: she walks out, her session is stopped and deleted"""
+        with self.lock:
+            old = self.room.pop("manager", None) or {}
+            save_room(self.room)
+        if old.get("id"):
+            threading.Thread(target=self.let_go, args=(old["id"],), daemon=True).start()
+        self.push_digest()
+
+    def let_go(self, bid):
+        if REAL_OFFICE and not bid.startswith("demo"):
+            try:
+                run(LOCAL, f"claude stop {sq(bid)} >/dev/null 2>&1; claude rm {sq(bid)}")
+            except Exception:
+                pass
+
+    def start_manager(self, style):
+        """her own session, in OFFICE (its CLAUDE.md written first): the id goes into room.json"""
+        M = MANAGERS[style]
+        try:
+            if REAL_OFFICE:
+                self.write_manual(style)
+                who = f"You are {M['name']}, the office manager. CLAUDE.md here is the office, what you can do in it and your style."
+                bid = self.spawn(LOCAL, OFFICE, M["name"], M.get("first", ""), f"--append-system-prompt {sq(who)} ")
+            else:
+                bid = "demo-" + style
+            with self.lock:
+                mg = self.room.get("manager") or {}
+                if mg.get("style") == style and not mg.get("id"):
+                    mg["id"], mg["error"], mg["since"] = bid, "", int(time.time())
+                    save_room(self.room)
+                    bid = None
+            if bid:                            # let go of meanwhile (another style, the booth burnt)
+                self.let_go(bid)
+        except Exception as e:
+            with self.lock:
+                mg = self.room.get("manager") or {}
+                if mg.get("style") == style:
+                    mg["error"] = str(e).strip()[:300]
+        self.push("state", self.state())
+
+    def manager_open(self):
+        """her session for a terminal: started again if it is gone (deleted elsewhere) or never came"""
+        mg = dict(self.room.get("manager") or {})
+        st = self.manager_style()
+        if not st or not MANAGERS[st]["session"]:
+            raise RuntimeError("no one to talk to at the booth")
+        gone = (REAL_OFFICE and mg.get("id") and time.time() - mg.get("since", 0) > 30     # (the polls have seen her by then)
+                and (not self.mrow or self.mrow["id"] != mg["id"]))
+        if not mg.get("id") or gone:
+            with self.lock:
+                if self.room.get("manager"):
+                    self.room["manager"].pop("id", None)
+            self.start_manager(st)
+        return {"id": (self.room.get("manager") or {}).get("id") or "", "error": (self.room.get("manager") or {}).get("error") or ""}
+
+    def take_manager(self, bots):
+        """her row out of this computer's sessions: she is not a bot at a desk (nor any other session in her directory)"""
+        mid, home = (self.room.get("manager") or {}).get("id"), os.path.realpath(OFFICE)
+        self.mrow = next((b for b in bots if mid and b["id"] == mid), None)
+        return [b for b in bots if b["id"] != mid and os.path.realpath(b["cwd"] or "/") != home]
+
+    def demo_manager(self):
+        """the demo with a real office manager (BURROW_OFFICE): her row from this computer's `claude agents`"""
+        while True:
+            try:
+                out = run(LOCAL, "claude agents --json --all")
+                self.take_manager(parse_agents(out))
+                self.push("state", self.state())
+            except Exception:
+                pass
+            time.sleep(3)
+
+    def spawn(self, m, d, name="", prompt="", extra=""):
+        """a background session in `d` there: its id. A free pair-style name if none is given; Remote Control
+        and yolo as the switchboard says"""
+        if not name:
+            taken = {x["name"] for x in self.feeds.get(m["id"], {}).get("bots", [])}
+            name = random.choice([n for n in BOT_NAMES if n not in taken] or BOT_NAMES)
+        o = options(self.room)
+        flags = ("--remote-control " if o["rc"] else "") + ("--dangerously-skip-permissions " if o["yolo"] else "") + extra   # in the app as well; yolo: never asks
+        prompt = prompt.strip()
+        if prompt.startswith("-"):
+            prompt = "Task: " + prompt
+        out = run(m, f"cd {sq(d)} && claude --bg {flags}-n {sq(name)}{' ' + sq(prompt) if prompt else ''} 2>&1")
+        # "backgrounded · 7ebbc505 · name (idle — …)" or, unnamed, "backgrounded · 7ebbc505 (idle — …)",
+        # maybe after "Starting background service…"
+        mm = re.search(r"^\s*backgrounded · (\S+?)(?=[\s·]|$)", out, re.M)
+        if not mm:
+            raise RuntimeError(out.strip())
+        if self.pokes.get(m["id"]):
+            self.pokes[m["id"]].set()
+        return mm.group(1)
+
+    # ---- what she sees of the office, and what she does in it (/api/office, curl from her session)
+    def office(self):
+        with self.lock:
+            desks, ms, feeds = set(self.room["desks"]), list(self.machines.values()), dict(self.feeds)
+        iso = lambda t: time.strftime("%Y-%m-%d %H:%M", time.localtime(t / 1000)) if t else None
+        state = lambda b: "waiting for an answer" if b["waiting"] else "working" if b["busy"] else f"completed ({b['over']})" if b["over"] else "idle"
+        return {"you": you_of(self.room)["name"], "room": f"http://localhost:{PORT}",
+                "machines": [{"id": m["id"], "name": m["name"], "ssh": m.get("ssh") or None, "error": feeds.get(m["id"], {}).get("error")} for m in ms],
+                "desks": [{"m": split_unit(u)[0], "dir": split_unit(u)[1]} for u in self.room["desks"] if split_unit(u)[0] in self.machines],
+                "sessions": [{"id": b["id"], "name": b["name"], "m": b["m"], "cwd": b["cwd"], "desk": split_unit(b["unit"])[1] if b["unit"] in desks else None,
+                              "state": state(b), "process": "running" if b["alive"] else "off", "started": iso(b["started"]), "ended": iso(b["endedAt"]),
+                              "summary": b["detail"], "sessionId": b["session"]} for b in self.bots()],
+                "settings": options(self.room), "removing": list(self.removing), "kept": list(self.kept)}
+
+    def office_do(self, b):
+        do, bots = b.get("do"), self.bots()
+        if b.get("kept"):                    # from the room: you took it out of the booth (or put it back together)
+            if self.removing.pop(b["kept"], None):
+                self.kept = (self.kept + [b["kept"]])[-50:]
+                self.push("state", self.state())
+            return {}
+        bot = next((x for x in bots if b.get("id") in (x["id"], x["name"])), None) if b.get("id") else None
+        if do == "remove":
+            if not bot:
+                raise RuntimeError("no such session: " + str(b.get("id")))
+            booth = any(kind_of(k) == "booth" for k in self.room["furniture"]) and bot["unit"] in self.room["desks"]
+            if self.clients and booth and self.manager_style():    # someone has the room open: she walks it to the booth there
+                self.removing[bot["id"]] = time.time()
+                self.push("state", self.state())
+                you = you_of(self.room)["name"]
+                if options(self.room)["hardcore"]:
+                    return {"ok": f"hardcore: you take a shotgun and shoot {bot['name']}; once the idle bots have swept up the pieces (half a minute or so) it is deleted, unless {you} puts it back together"}
+                return {"ok": f"you walk {bot['name']} to the booth: it is deleted in about half a minute, unless {you} takes it out"}
+            m = self.machine(bot["m"])
+            if m.get("ssh") == "@demo":
+                self.demo_stop(bot["m"], bot["id"], True)
+            else:
+                run(m, f"claude stop {sq(bot['id'])} >/dev/null 2>&1; claude rm {sq(bot['id'])}")
+            return {"ok": f"{bot['name']} removed"}
+        if do in ("desk", "start"):
+            m = self.machine(b.get("m") or "")
+            d = (b.get("dir") or "").strip()
+            if not d:
+                raise RuntimeError("which directory")
+            d = d.replace("~", HOME, 1) if m.get("ssh") == "@demo" else run(m, f"cd {sq(d)} && pwd -P", timeout=20).strip()
+            if unit(m["id"], d) not in self.room["desks"]:
+                self.keep(unit(m["id"], d), True)
+            if do == "desk":
+                return {"ok": "a desk for " + d}
+            if m.get("ssh") == "@demo":
+                raise RuntimeError("demo bots can't be started")
+            return {"id": self.spawn(m, d, (b.get("name") or "").strip(), b.get("prompt") or "")}
+        if do == "say":
+            if not bot or not (b.get("text") or "").strip():
+                raise RuntimeError("say what to which session")
+            if not self.machine(bot["m"]).get("ssh") == "@demo":
+                threading.Thread(target=deliver, args=(self.machine(bot["m"]), bot["id"], b["text"].strip()[:4000]), daemon=True).start()
+            return {"ok": "typed into " + bot["name"]}
+        raise RuntimeError("do what? remove, desk, start or say")
+
     def state(self):
         with self.lock:
             bots = self.on_floor(self.bots())
@@ -756,7 +1054,7 @@ class Hub:
                                  for mid, m in self.machines.items()],
                     "desks": self.desks(), "bots": bots, "layout": self.room["layout"], "furniture": self.room["furniture"], "pair": self.room.get("pair", {}), "paint": self.room.get("paint", {}),
                     "usage": self.usage, "chess": self.chess_view(), "demo": DEMO, "awake": self.awake_view(), "width": self.room.get("width"), "shells": self.shells_view(),
-                    "settings": options(self.room),
+                    "settings": options(self.room), "manager": self.manager_view(),
                     "you": {**(self.room.get("you") or {}), **you_of(self.room), "login": USER}, "pairAt": PAIR}
 
     def keep(self, u, on):
@@ -834,14 +1132,14 @@ class Hub:
     # ---- the office manager: notes on the sessions, written by Claude one at a time
     def digest_view(self):
         with self.lock:
-            return {"sessions": dict(self.digest["sessions"]), "desks": dict(self.digest["desks"]), "writing": self.writing, "explaining": self.explaining, "on": options(self.room)["digest"]}
+            return {"sessions": dict(self.digest["sessions"]), "desks": dict(self.digest["desks"]), "writing": self.writing, "explaining": self.explaining, "on": self.notes_on()}
 
     def push_digest(self):
         self.push("digest", self.digest_view())
 
     def digest_watch(self, bots):
         """a session that finished a turn, asks you something or is over gets written up (on every poll)"""
-        on, desks = options(self.room)["digest"], set(self.room["desks"])
+        on, desks = self.notes_on(), set(self.room["desks"])
         for b in bots:
             now = (b["busy"], b["waiting"], b["over"])
             was = self.seen.get(b["id"])
@@ -877,7 +1175,7 @@ class Hub:
             try:
                 if bid:
                     b = next((x for x in self.bots() if x["id"] == bid), None)
-                    if b and options(self.room)["digest"] and self.digest_one(b):
+                    if b and self.notes_on() and self.digest_one(b):
                         dirty.add(b["unit"])
                 elif dirty:
                     self.digest_desk(dirty.pop())
@@ -1098,11 +1396,14 @@ class Hub:
                 out = run(m, f"claude agents --json --all; echo '@@burrow@@'; cat ~/.claude/settings.json 2>/dev/null; echo '@@burrow@@'; {PEERS}; echo '@@burrow@@'; {JOBS}")
                 agents, settings, peers, jobs = (out.split("@@burrow@@", 3) + ["", "", ""])[:4]
                 bots = [b for b in parse_agents(agents, parse_jobs(jobs)) if mid or b["pid"] not in self.own]
+                if not mid:
+                    bots = self.take_manager(bots)
                 try:
                     light = str(json.loads(settings.strip()).get("theme", "")).startswith("light")
                 except Exception:
                     light = False
-                talks = parse_peers(peers, bots)
+                talks = parse_peers(peers, bots + ([self.mrow] if self.mrow and not mid else []))
+                her = lambda i: "manager" if self.mrow and i == self.mrow["id"] else i
                 self.fold(mid, m, bots)
                 with self.lock:
                     self.feeds[mid] = {"bots": bots, "light": light, "error": None}
@@ -1113,8 +1414,13 @@ class Hub:
                     if msg not in heard:
                         heard.add(msg)
                         if not first:
-                            self.push("talk", {"from": a, "to": b})
+                            self.push("talk", {"from": her(a), "to": her(b)})
                 first = False
+                with self.lock:                  # what she asked to remove and is gone (or was not taken in ten minutes)
+                    ids = {b["id"] for f in self.feeds.values() for b in f.get("bots", [])}
+                    for i, t in list(self.removing.items()):
+                        if i not in ids or time.time() - t > 600:
+                            self.removing.pop(i)
             except Exception as e:
                 with self.lock:
                     self.feeds[mid] = {**self.feeds.get(mid, {}), "error": str(e)[:300]}
@@ -1177,6 +1483,10 @@ class Hub:
                 self.feeds[mid] = {"bots": [dict(b) for b in bots], "light": False, "error": None}
             self.chess_check()
             self.digest_watch(bots)
+            with self.lock:
+                ids = {b["id"] for f in self.feeds.values() for b in f.get("bots", [])}
+                for i in [i for i in self.removing if i not in ids]:
+                    self.removing.pop(i)
             self.push("state", self.state())
             poke.wait(3)
             poke.clear()
@@ -1713,6 +2023,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.events()
         if u.path in ("/term", "/shell"):
             return self.term(q, u.path == "/shell")
+        if u.path == "/api/office":          # the office as the office manager sees it (curl from her session)
+            return self.reply(200, hub.office())
         name = "index.html" if u.path == "/" else u.path.lstrip("/")
         path = os.path.normpath(os.path.join(HERE, name))
         if not path.startswith(HERE + os.sep) or not os.path.isfile(path) or name.endswith(".py"):
@@ -1745,6 +2057,8 @@ class Handler(BaseHTTPRequestHandler):
         """a websocket: a session attached (`claude attach`), or your terminal at a screen (Shell)"""
         key = self.headers.get("Sec-WebSocket-Key")
         m = hub.machines.get(q.get("m", ""))
+        if DEMO and REAL_OFFICE and q.get("id") and q["id"] == (hub.room.get("manager") or {}).get("id"):
+            m = LOCAL                          # the demo's office manager is real
         if not m:
             return self.reply(404, {"error": "no such machine"})
         if not key or not q.get("dir" if shell else "id"):
@@ -1856,6 +2170,8 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     raise RuntimeError("add or remove what?")
                 save_room(hub.room)
+            if b.get("remove") and kind_of(key) == "manager" and not any(kind_of(k) == "manager" for k in hub.room["furniture"]):
+                hub.fire()
             hub.push("state", hub.state())
             return {"key": key}
         if path == "/api/pair":              # a pair table: a new room opened ({key, new: name}), a room linked ({key, url}: your page
@@ -1932,6 +2248,14 @@ class Handler(BaseHTTPRequestHandler):
             hub.push("state", hub.state())
             hub.push_digest()
             return {}
+        if path == "/api/manager":           # the office manager: the styles there are; one hired ({hire, at}); her session ({open})
+            if b.get("hire"):
+                return hub.hire(b["hire"], b.get("at"))
+            if b.get("open"):
+                return hub.manager_open()
+            return {"styles": [{"key": k, **{f: M[f] for f in ("name", "seed", "color", "line", "how", "session")}} for k, M in MANAGERS.items()]}
+        if path == "/api/office":            # what she does in the office: remove, desk, start, say (and, from the room, kept)
+            return hub.office_do(b)
         if path == "/api/explain":           # a decision left to you, explained by Claude (kept with the notes)
             return hub.explain(b.get("id") or "", b.get("question") or "")
         if path == "/api/answer":            # your decision, typed into the session
@@ -1940,7 +2264,7 @@ class Handler(BaseHTTPRequestHandler):
                 raise RuntimeError("an answer, first")
             return hub.answer(b.get("id") or "", b.get("question") or "", text[:4000])
         if path == "/api/digest":            # the notes opened: the sessions that moved since are written up again
-            return {"queued": hub.digest_refresh() if options(hub.room)["digest"] else 0}
+            return {"queued": hub.digest_refresh() if hub.notes_on() else 0}
         if path == "/api/forget":            # a desk burnt (its bots went first, through the booth or your gun)
             hub.kill_shells(b["unit"])
             hub.keep(b["unit"], False)
@@ -1972,20 +2296,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/spawn":             # a new bot at a desk; returns its id
             if m.get("ssh") == "@demo":
                 return {"error": "demo bots can't be started"}
-            name = (b.get("name") or "").strip()
-            if not name:
-                taken = {x["name"] for x in hub.feeds.get(mid, {}).get("bots", [])}
-                name = random.choice([n for n in BOT_NAMES if n not in taken] or BOT_NAMES)
-            o = options(hub.room)
-            flags = ("--remote-control " if o["rc"] else "") + ("--dangerously-skip-permissions " if o["yolo"] else "")   # in the app as well; yolo: never asks
-            out = run(m, f"cd {sq(b['dir'])} && claude --bg {flags}-n {sq(name)} 2>&1")
-            # "backgrounded · 7ebbc505 · name (idle — …)" or, unnamed, "backgrounded · 7ebbc505 (idle — …)",
-            # maybe after "Starting background service…"
-            mm = re.search(r"^\s*backgrounded · (\S+?)(?=[\s·]|$)", out, re.M)
-            if not mm:
-                raise RuntimeError(out.strip())
-            poke.set()
-            return {"id": mm.group(1)}
+            return {"id": hub.spawn(m, b["dir"], (b.get("name") or "").strip())}
         if path == "/api/clear":             # the neuralyzer: /clear typed into the session, in the background
             if m.get("ssh") != "@demo":
                 threading.Thread(target=clear_session, args=(m, b["id"]), daemon=True).start()
