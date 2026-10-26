@@ -54,6 +54,10 @@ function startRoom(cv, app) {
     { hi: "#f4f1ea", top: "#d8d2c6", d: "#a59d90", k: "#4a4250", plate: "#2a2530" },
     { hi: "#a3c0e4", top: "#7397c4", d: "#4f6e9a", k: "#263652", plate: "#182236" },
     { hi: "#e8a493", top: "#c97766", d: "#964c40", k: "#4f2430", plate: "#2e151c" },
+    { hi: "#f2d27a", top: "#d6aa45", d: "#a07c2c", k: "#4f3a1e", plate: "#2e2214" },   // mustard
+    { hi: "#c9b3e6", top: "#a185c9", d: "#76599e", k: "#3a2a52", plate: "#221830" },   // lilac
+    { hi: "#b9d39a", top: "#8fae6c", d: "#62804a", k: "#2f4027", plate: "#1b2617" },   // sage
+    { hi: "#8a93a3", top: "#646c7b", d: "#454b57", k: "#22262e", plate: "#16181d" },   // charcoal
   ];
   const WALLC = "#28374b", BASEBOARD = "#1b2433";
   const PLANK = "#734728", SEAM = "#6a4224";
@@ -75,11 +79,14 @@ function startRoom(cv, app) {
   // a desk's name: its project's, cut to eight letters like a name in a 16-bit game (its machine is
   // its paint, the whole path is on its screen under the pointer)
   const deskLabel = (d) => [...projectLabel(d.dir)].slice(0, NAME).join("").replace(/(.)[-_. ]+$/, "$1");
-  // a machine's door: the first is this one's; its bots come in and go out at its middle
+  // a machine's door: the first is this one's; its bots come in and go out at its middle, wherever it was
+  // slid along the wall. Its paint (and its desks'): the one picked in the doors' panel (room.json `paint`,
+  // -1 the wood), else this machine wood and the others PAINT in their order
   const doorOf = (mid) => Math.max(0, app.state().machines.findIndex((m) => m.id === (mid || "")));
-  const doorX = (mid) => 10 + doorOf(mid) * DOOR;
-  const paintOf = (mid) => { const i = doorOf(mid); return i ? PAINT[(i - 1) % PAINT.length] : WOOD; };
-  const wallFrom = () => 24 + app.state().machines.length * DOOR;    // what hangs on the wall: past the doors
+  const doorX = (mid) => { const d = lastL && lastL.doors.find((d) => d.mid === (mid || "")); return d ? d.x0 + 8 : 10 + doorOf(mid) * DOOR; };
+  const paintIdx = (mid) => { const o = (app.state().paint || {})[mid || ""]; return Number.isInteger(o) ? o : doorOf(mid) - 1; };
+  const paintOf = (mid) => { const i = paintIdx(mid); return i < 0 ? WOOD : PAINT[i % PAINT.length]; };
+  const wallFrom = () => 2;                 // what hangs on the wall: anywhere along it (it settles off the others)
 
   // ---- pair's lettering: 3x5 glyphs, upper case, like a Pico-8
   const F = {};
@@ -252,13 +259,14 @@ function startRoom(cv, app) {
   }
   // The furniture is what the server lists (room.json `furniture`): keys, a kind and maybe a number
   // (plant0, window1). The closet adds a piece, the fireplace burns one; the fire, the closet and the
-  // switchboard (burrow's settings) stay
-  const KIND = (key) => key.replace(/\d+$/, "");
-  const FIXED = new Set(["fire", "closet", "settings"]);
-  const CLICK = new Set(["add", "closet", "chess", "pong", "printer", "pair", "board", "coffee", "cooler", "window", "bench", "armchair", "settings", "clock", "plant", "manager"]);   // a click does something there
+  // switchboard (burrow's settings) stay. A machine's door is a piece too (`door:<machine id>`, not in the
+  // list): it slides along the wall and never burns (it would take the machine out of Claude Code's settings)
+  const KIND = (key) => key.startsWith("door:") ? "door" : key.replace(/\d+$/, "");
+  const FIXED = new Set(["fire", "closet", "settings", "door"]);
+  const CLICK = new Set(["add", "closet", "chess", "pong", "printer", "pair", "board", "coffee", "cooler", "window", "bench", "armchair", "settings", "clock", "plant", "manager", "door", "frame"]);   // a click does something there
   const NAMES = { meet: "meeting table", pong: "ping-pong table", chess: "chess table", coffee: "coffee machine", cooler: "water cooler",
     printer: "printer", armchair: "armchair", plant: "plant", board: "whiteboard", window: "window", clock: "clock", add: "project cabinet", pair: "pair room", bench: "bench", settings: "switchboard", manager: "office manager's desk",
-    booth: "booth", neuralyzer: "neuralyzer" };
+    booth: "booth", neuralyzer: "neuralyzer", frame: "door frame", door: "door" };
   // the bench seats three, side by side, idle bots on a break (a click on it lists the completed sessions)
   const BENCH_SEATS = 3, benchSeat = (bn, k) => ({ x: bn.x - 14 + k * 14, y: bn.y });
   // a clear spot on the floor for a figure that has no chair when the page opens (spread by its id, the same each time)
@@ -275,7 +283,7 @@ function startRoom(cv, app) {
   const FIRE = { w: 48, h: 42, S: 1.5 };     // the fire pit's footprint, drawn to scale from its 32 x 28 original
   // the default places for desks: columns of them, as many as the room is wide
   const SLOTS = () => [104, 150, 196, 242, 288, 334].flatMap((y) => [...Array(Math.max(1, Math.floor((W - 10) / 124)))].map((_, i) => [10 + i * 124, y]));
-  const ON_WALL = new Set(["closet", "window", "clock", "settings"]), WALL_Y = { closet: 2, window: 4, clock: 5, settings: 5 };
+  const ON_WALL = new Set(["closet", "window", "clock", "settings", "door", "frame"]), WALL_Y = { closet: 2, window: 4, clock: 5, settings: 5, door: WALL - 20, frame: WALL - 20 };
   const onWall = (key) => ON_WALL.has(KIND(key));
   // what each piece covers, from where it stands
   function foot(key, [x, y], u) {
@@ -299,6 +307,7 @@ function startRoom(cv, app) {
       case "pair": return [x - 13, y - 20, x + 13, y + 1];
       case "bench": return [x - 29, y - 18, x + 29, y + 2];
       case "booth": return [x - 9, y - 32, x + 9, y + 2];
+      case "door": case "frame": return [x, y, x + 16, y + 20];
       case "neuralyzer": return [x - 7, y - 19, x + 7, y + 2];
       default: return [x - 8, y - 31, x + 8, y + 1];     // a plant
     }
@@ -347,7 +356,22 @@ function startRoom(cv, app) {
       return SLOTS()[0];
     };
     for (const u of units) if (!u.at) { u.at = free(u.key, u); placed[u.key] = u.at; }
-    for (const k of keys) if (!at0[k]) { at0[k] = onWall(k) ? [wallFrom(), KIND(k) === "closet" ? 2 : 5] : free(k); placed[k] = at0[k]; }   // a piece without a place yet
+    // along the wall: the doors (one a machine, in their order unless slid elsewhere) and what hangs there;
+    // one without a place yet gets the stretch of wall nearest its default that nothing else covers
+    const doorKeys = (s.machines || []).map((m) => "door:" + m.id), onTheWall = [];
+    const wallSpot = (k, x0) => {
+      const y = WALL_Y[KIND(k)], fits = (x) => { const r = foot(k, [x, y]); return r[0] >= 2 && r[2] <= W - 2 && !onTheWall.some((t) => meets(t, r)); };
+      for (let d = 0; d < W; d += 2) for (const x of [x0 + d, x0 - d]) if (fits(x)) return [x, y];
+      return [x0, y];
+    };
+    for (const k of doorKeys) { at0[k] = where(k); if (at0[k]) onTheWall.push(foot(k, at0[k])); }
+    for (const k of keys) if (at0[k] && onWall(k)) onTheWall.push(foot(k, at0[k]));
+    doorKeys.forEach((k, i) => { if (!at0[k]) { at0[k] = wallSpot(k, 2 + i * DOOR); onTheWall.push(foot(k, at0[k])); placed[k] = at0[k]; } });
+    for (const k of keys) if (!at0[k]) {      // a piece without a place yet
+      at0[k] = onWall(k) ? wallSpot(k, 2 + doorKeys.length * DOOR) : free(k);
+      if (onWall(k)) onTheWall.push(foot(k, at0[k]));
+      placed[k] = at0[k];
+    }
 
     const P = (k) => at0[k];
     // the pieces by kind, in the order of their keys; most kinds are one at most, some can be many
@@ -372,10 +396,13 @@ function startRoom(cv, app) {
       coffeeAt: one("coffee"), floor: { x0: 14, y0: WALL + 8, x1: W - 14, y1: FLOORY - 4 }, placed,
     };
     L.coffee = L.coffeeAt && { x: L.coffeeAt.x + 27, y: L.coffeeAt.y - 10 };
+    L.doors = (s.machines || []).map((m, i) => ({ key: doorKeys[i], mid: m.id, m, x0: at0[doorKeys[i]][0] }));
+    L.frames = all("frame");
     // what can be picked up and moved, front to back
     L.pieces = [
       ...desks.map((d) => ({ key: d.key, at: d.at, u: d.u, r: foot(d.key, d.at, d.u) })),
       ...keys.map((k) => ({ key: k, at: P(k), r: foot(k, P(k)) })),
+      ...doorKeys.map((k) => ({ key: k, at: P(k), r: foot(k, P(k)) })),
     ].sort((a, b) => b.r[3] - a.r[3]);
     L.pieceOf = (key) => L.pieces.find((p) => p.key === key) || null;
     L.coolerSpot = (side) => L.cooler && { x: L.cooler.x + (side ? 10 : -8), y: L.cooler.y + 1 };
@@ -1043,24 +1070,25 @@ function startRoom(cv, app) {
     const hl = new Set();
     if (app.hl()) hl.add(app.hl());
 
-    // the doors, one a machine; its name and its bots lit under the pointer. A door is ajar while
-    // someone goes in or out; boarded up while its machine is out of reach (why, under the pointer).
-    // After them an empty door frame, for another machine
-    s.machines.forEach((m, i) => {
-      const x0 = 2 + i * DOOR, h = over(x0, WALL - 20, x0 + 16, WALL);
+    // the doors, one a machine, where they were slid along the wall; its name and its bots lit under the
+    // pointer, a click lists them all (names, paints). A door is ajar while someone goes in or out; boarded
+    // up while its machine is out of reach (why, under the pointer)
+    for (const dr of L.doors) {
+      const m = dr.m, x0 = dr.x0, h = hot(x0, WALL - 20, x0 + 16, WALL, { kind: "doors" }) && !moving;
       const ajar = performance.now() - (w.doorAt[m.id] || 0) < 900 ||
         [...w.folk.values()].some((f) => f.b && (f.b.m || "") === m.id && f.leaving && f.y < WALL + 12);
-      drawDoor(ctx, x0, paintOf(m.id), ajar && !m.error, !!m.error, h);
+      drawDoor(ctx, x0, paintOf(m.id), ajar && !m.error, !!m.error, h || (moving && moving.key === dr.key));
       if (h) { for (const b of bots) if ((b.m || "") === m.id) hl.add(b.id); tip = { text: clip(m.error ? m.name + ": " + m.error : m.name, W - 8), x: x0 + 8, y: 20 }; }
-    });
-    {
-      const x0 = 2 + s.machines.length * DOOR, h = hot(x0, WALL - 20, x0 + 16, WALL, { kind: "addMachine" });
-      drawFrame(ctx, x0, h);
-      if (h) tip = { text: "machine", x: x0 + 8, y: 20 };
+    }
+    // an empty door frame (a piece, from the closet): a click adds a machine, its door hangs in the wall
+    for (const fr of L.frames) {
+      const h = hot(fr.x, fr.y, fr.x + 16, fr.y + 20, { kind: "addMachine" });
+      outlined(ctx, foot(fr.key, [fr.x, fr.y]), danger(fr.key), (c) => drawFrame(c, fr.x, h, fr.y), RED, tintOf(fr.key));
+      if (h) tip = { text: "add a machine", x: fr.x + 8, y: fr.y + 14 };
     }
     // trouble here goes on the wall, in red, instead of the whiteboard
     const here = s.machines.find((m) => !m.id), trouble = s.note || (here && here.error);
-    if (trouble) { const nx = wallFrom(); tiny(ctx, clip(trouble, W - 24 - nx), nx, 18, RED); }
+    if (trouble) { const nx = Math.max(24, ...L.doors.map((d) => d.x0 + 20)); tiny(ctx, clip(trouble, W - 24 - nx), nx, 18, RED); }   // past the last door
     for (const win of L.windows) {
       const h = hot(win.x0, win.y0, win.x1, win.y1, { kind: "outside" });
       outlined(ctx, [win.x0, win.y0, win.x1, win.y1], h, (c) => drawWindow(c, win));
@@ -1698,6 +1726,7 @@ function startRoom(cv, app) {
       case "bench": drawBench(ctx, pt); break;
       case "booth": drawBooth(ctx, pt, false, false, -1); drawBooth(ctx, pt, true, false, -1); break;
       case "neuralyzer": drawNeuralyzer(ctx, pt, false); break;
+      case "frame": drawFrame(ctx, x, false, y); break;
     }
   }
   // the printer the report comes out of, in the pane: a wide-carriage line printer drawn to the paper's
@@ -1714,6 +1743,15 @@ function startRoom(cv, app) {
     return { src: c.toDataURL(), rows: rows.length, w };
   }
   // a picture of a kind of furniture, for the closet: a canvas, two pixels a dot as the room
+  // a door in a paint (-1 the wood), for the doors' panel: its picture, S pixels a dot
+  function doorPicture(i, S = 3) {
+    const p = i < 0 ? WOOD : PAINT[i % PAINT.length], c = document.createElement("canvas");
+    c.width = 16 * S; c.height = 20 * S;
+    const ctx = c.getContext("2d");
+    ctx.imageSmoothingEnabled = false; ctx.setTransform(S, 0, 0, S, 0, 0);
+    put(ctx, sprites.swap("door", { h: p.hi, w: p.top, d: p.d, k: p.k }), 0, 0);
+    return c.toDataURL();
+  }
   function icon(kind, S = K, pad = 4) {
     const r = foot(kind, [0, 0]), c = document.createElement("canvas");
     c.width = (r[2] - r[0] + 2 * pad) * S; c.height = (r[3] - r[1] + 2 * pad) * S;
@@ -1793,11 +1831,11 @@ function startRoom(cv, app) {
       rect(ctx, x + 1, y + 1, 1, 1, C.steel1); rect(ctx, x + 14, y + 1, 1, 1, C.steel1);
     }
   }
-  function drawFrame(ctx, x, lit) {         // where another door could go: its outline, a + in it
+  function drawFrame(ctx, x, lit, y = WALL - 20) {   // where another door could go: its outline, a + in it
     ctx.fillStyle = lit ? GOLD : "#3d4d66";
-    for (let i = 0; i < 16; i += 2) ctx.fillRect(x + i, WALL - 20, 1, 1);
-    for (let j = 0; j < 18; j += 2) { ctx.fillRect(x, WALL - 20 + j, 1, 1); ctx.fillRect(x + 15, WALL - 20 + j, 1, 1); }
-    tiny(ctx, "+", x + 6, WALL - 14, lit ? GOLD : C.steel1);
+    for (let i = 0; i < 16; i += 2) ctx.fillRect(x + i, y, 1, 1);
+    for (let j = 0; j < 18; j += 2) { ctx.fillRect(x, y + j, 1, 1); ctx.fillRect(x + 15, y + j, 1, 1); }
+    tiny(ctx, "+", x + 6, y + 6, lit ? GOLD : C.steel1);
   }
   // the clock's face: the sprite's light cells, found once
   let dial = null;
@@ -2159,5 +2197,5 @@ function startRoom(cv, app) {
   window.__room.game = (kind, a, b) => { const w = world(), fa = w.folk.get(a), fb = w.folk.get(b); if (!fa || !fb) return false; end(fa); end(fb); fa.act = { kind, side: 0, with: b, left: 90, there: false }; fb.act = { kind, side: 1, with: a, left: 90, there: false }; return true; };
   window.__room.football = (ids) => { const w = world(), team = ids.map((id) => w.folk.get(id)).filter(Boolean); return team.length >= 2 && !!football(w, lastL, team); };
   window.__room.clock = (a) => { const c = document.createElement("canvas"); c.width = 12; c.height = 10; drawClock(c.getContext("2d"), 6, 5, a); return c.toDataURL(); };   // the clock's face for an awake state
-  return { talk, typed, size, draw, width, color: projectColor, icon, printer: printerPicture, carry: carryKind, place: placeKind, playing: playingAt, names: NAMES, at, board, stats, hovered: () => hovered && { id: hovered.b.id, seat: !!hovered.seat } };
+  return { talk, typed, size, draw, width, color: projectColor, icon, door: doorPicture, paints: () => ({ wood: WOOD.top, list: PAINT.map((p) => p.top) }), paintOf: paintIdx, printer: printerPicture, carry: carryKind, place: placeKind, playing: playingAt, names: NAMES, at, board, stats, hovered: () => hovered && { id: hovered.b.id, seat: !!hovered.seat } };
 }

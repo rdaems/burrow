@@ -145,6 +145,11 @@ button, input, select { font:inherit; color:inherit; }
 .settings .nm { color:var(--gold2); }
 .settings .what { color:var(--steel3); margin-top:4px; }
 .settings .what code { font:13px/1 var(--mono); -webkit-font-smoothing:auto; text-shadow:none; color:var(--white); }
+/* the doors: a machine a line, its door in its paint, the paints as steel-ringed swatches, the one it wears in gold */
+.doors .door { flex:none; width:48px; height:60px; image-rendering:pixelated; }
+.doors .swatches { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.doors .swatch { width:22px; height:22px; padding:0; border:2px solid var(--ink); box-shadow:inset 2px 2px 0 rgba(255,255,255,0.35), inset -2px -2px 0 rgba(0,0,0,0.3); cursor:pointer; }
+.doors .swatch.on { outline:2px solid var(--pale0); outline-offset:1px; }
 .tbar .tapp { margin-left:auto; }
 /* the closet: every kind of furniture as it stands in the room (two pixels a dot, as the room), to drag in */
 .closet { display:flex; flex-wrap:wrap; gap:14px 18px; align-items:flex-end; }

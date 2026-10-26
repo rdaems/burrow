@@ -52,6 +52,7 @@
         <div id="vReport" class="print" hidden><img class="machine" alt=""><div class="sheet"><pre></pre><span class="ruler" aria-hidden="true"></span></div></div>
         <div id="vLimits" hidden></div>
         <div id="vSettings" class="settings" hidden></div>
+        <div id="vDoors" class="settings doors" hidden></div>
         <div id="vDone" class="done" hidden></div>
         <div id="vClock" class="awake" hidden><p>Keep this computer awake</p><div class="row"></div></div>
         <div id="vOutside" hidden><canvas class="outside" width="130" height="70"></canvas></div>
@@ -142,6 +143,7 @@ async function act(a) {
   else if (a.kind === "board") openBoard();
   else if (a.kind === "limits") { openView("limits"); fillLimits(); }
   else if (a.kind === "settings") { openView("settings"); fillSettings(); }
+  else if (a.kind === "doors") { openView("doors"); fillDoors(); }
   else if (a.kind === "completed") { openView("completed"); fillDone(); }
   else if (a.kind === "clock") { openView("clock"); fillClock(); }
   else if (a.kind === "notes") openNotes(a.shift);
@@ -183,6 +185,7 @@ es.addEventListener("state", (e) => {
   if (viewKind === "closet") fillCloset();
   if (viewKind === "limits") fillLimits();
   if (viewKind === "settings") fillSettings();
+  if (viewKind === "doors") fillDoors();
   if (viewKind === "completed") fillDone();
   if (viewKind === "clock") fillClock();
   // a bot that gets work, or a question for you, leaves the ping-pong table
@@ -212,8 +215,8 @@ addEventListener("focus", focus); addEventListener("blur", focus); document.addE
 }
 
 // ---- the view: one thing at a time on the right, in place of the tiles, framed like one
-const PANELS = { dir: "#vDir", machine: "#vMachine", you: "#vYou", closet: "#vCloset", chess: "#chess", pong: "#pong", report: "#vReport", pair: "#vPair", board: "#vBoard", limits: "#vLimits", outside: "#vOutside", completed: "#vDone", settings: "#vSettings", clock: "#vClock" };
-const TITLES = { dir: "A PROJECT", machine: "A MACHINE", you: "YOU", closet: "THE CLOSET", chess: "CHESS", pong: "PING-PONG", report: "REPORT", pair: "PAIR ROOM", board: "WHITEBOARD", limits: "LIMITS", outside: "OUTSIDE", completed: "COMPLETED", settings: "SETTINGS", clock: "CLOCK" };
+const PANELS = { dir: "#vDir", machine: "#vMachine", you: "#vYou", closet: "#vCloset", chess: "#chess", pong: "#pong", report: "#vReport", pair: "#vPair", board: "#vBoard", limits: "#vLimits", outside: "#vOutside", completed: "#vDone", settings: "#vSettings", clock: "#vClock", doors: "#vDoors" };
+const TITLES = { dir: "A PROJECT", machine: "A MACHINE", you: "YOU", closet: "THE CLOSET", chess: "CHESS", pong: "PING-PONG", report: "REPORT", pair: "PAIR ROOM", board: "WHITEBOARD", limits: "LIMITS", outside: "OUTSIDE", completed: "COMPLETED", settings: "SETTINGS", clock: "CLOCK", doors: "DOORS" };
 function openView(kind) {
   if (viewKind && viewKind !== kind) closeView(true);
   for (const t of tiles.all()) closeTile(t);
@@ -342,7 +345,7 @@ function askYou() {
 
 // ---- the closet: the furniture there is, drawn as it stands in the room; drag a piece into the
 // room to put it there, as many as you like. The fireplace takes a piece back out (it burns)
-const CATALOGUE = ["plant", "armchair", "window", "clock", "board", "meet", "chess", "pong", "coffee", "cooler", "printer", "add", "pair", "bench", "manager", "booth", "neuralyzer"];
+const CATALOGUE = ["plant", "armchair", "window", "clock", "board", "meet", "chess", "pong", "coffee", "cooler", "printer", "add", "pair", "bench", "manager", "booth", "neuralyzer", "frame"];
 function fillCloset() {
   const el = $("#vCloset");
   el.innerHTML = "";
@@ -475,6 +478,21 @@ function fillSettings() {
   const cfg = (state && state.settings) || {}, el = $("#vSettings");
   el.innerHTML = OPTIONS.map((o) => `<div class="opt"><button type="button" class="btn sw${cfg[o.key] ? " on" : ""}" data-key="${o.key}" title="${cfg[o.key] ? "on: click to switch it off" : "off: click to switch it on"}">${cfg[o.key] ? "ON" : "OFF"}</button><div><div class="nm">${o.name}</div><div class="what">${o.what}</div></div></div>`).join("");
   for (const bt of el.querySelectorAll(".sw")) bt.onclick = () => api("/api/settings", { [bt.dataset.key]: !cfg[bt.dataset.key] });
+}
+// ---- the doors: a line a machine, its door in its paint, its name, how it is reached and how it is, and
+// the paints to pick from (its door and its desks wear it; wood or one of the room's paints)
+function fillDoors() {
+  const el = $("#vDoors"), ms = (state && state.machines) || [], { wood, list } = room.paints();
+  const key = JSON.stringify([ms.map((m) => [m.id, m.name, m.error]), state.paint, state.bots.map((b) => b.m || "")]);
+  if (el.dataset.key === key) return;
+  el.dataset.key = key;
+  el.innerHTML = ms.map((m) => {
+    const cur = room.paintOf(m.id), n = state.bots.filter((b) => (b.m || "") === m.id).length;
+    const how = (m.id ? "over ssh, " + esc(m.ssh || m.id) : "this computer") + " · " + (m.error ? esc(m.error) : n + (n === 1 ? " session" : " sessions"));
+    const sw = [-1, ...list.keys()].map((i) => `<button type="button" class="swatch${i === cur ? " on" : ""}" data-m="${esc(m.id)}" data-p="${i}" title="${i < 0 ? "wood" : "paint"}" style="background:${i < 0 ? wood : list[i]}"></button>`).join("");
+    return `<div class="opt"><img class="door" src="${room.door(cur)}" alt=""><div><div class="nm">${esc(m.name)}</div><div class="what">${how}</div><div class="swatches">${sw}</div></div></div>`;
+  }).join("");
+  for (const bt of el.querySelectorAll(".swatch")) bt.onclick = () => api("/api/paint", { m: bt.dataset.m, paint: +bt.dataset.p });
 }
 // ---- the sessions that are over, as agent view's Completed group: how each ended, its name, where, when
 // and how long it ran, its last line; the newest first. A click opens one (Claude Code restarts it), its ✕

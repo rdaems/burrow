@@ -1007,6 +1007,30 @@ on a bot? When you add that, you can remove the mechanic by draggin over the doo
 - **The door** stops nothing any more (`dropAt` has no "door"; the door is no longer ajar for a doomed bot).
 - Both pieces are in the closet; `furnish` v 9 puts one of each in older rooms, `FURNITURE` in new ones.
 
+## Doors that move, their panel, the door frame as furniture (2026-10-26)
+
+He: "Allow the doors to be dragged as the other things on the wall, and remove the empty plus door, that
+should be a furniture object. Though my design principle is now flawed.. about the principle where things at
+the top wall can not be deleted. ... But let's not be too strict. When I click a door, I get a popup with an
+overview of all the doors where I can change colors and see the names."
+- **A door is a piece** (`door:<machine id>`, not in the furniture list; `KIND` gives "door"): `ON_WALL`,
+  `FIXED` (it slides along the wall and never burns: that would take the machine out of Claude Code's
+  settings), its place in room.json `layout` under its key. `layout()` places the doors first (saved, or the
+  old row `2 + i * DOOR`, else the nearest free stretch of wall: `wallSpot`), then what hangs on the wall;
+  `L.doors` `{key, mid, m, x0}`; `doorX(mid)` reads them (bots come and go where the door is now).
+  `wallFrom()` is 2: wall pieces go anywhere along the wall, settling off the others and the doors.
+- **The door frame** (`frame` kind, `drawFrame` with a y now): the dotted frame with its + as a wall piece,
+  in the closet, burnable; a click adds a machine (the old form). `furnish` v 10 puts one in older rooms
+  (`frame0`), placed right after the doors.
+- **The doors' panel** (a click on a door, `#vDoors`, `fillDoors`): a line a machine, its door in its paint
+  (`room.door(i)`), its name, "this computer" or "over ssh, host", its sessions or its error, and the paints as
+  swatches (wood and nine: the four there were, then mustard, lilac, sage, charcoal). `/api/paint {m, paint}`
+  keeps it in room.json `paint` (-1 the wood); `paintOf` takes it before the order-based default, so the
+  door and the machine's desks change together.
+- Testing: his Chrome had a tab open on localhost:7783 (a demo port) from an earlier session; it reconnects
+  to whatever demo runs there, with an old room.js, and posts its own layout (it put the frame on the floor).
+  The demo for this ran on 7785.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

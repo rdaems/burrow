@@ -274,7 +274,8 @@ def split_unit(u):
 # the first room's pieces have no number). There can be any number of a kind. The closet in the
 # room adds a piece, the fireplace burns one; the fire, the closet and the switchboard themselves stay.
 FURNITURE = ["meet", "pong", "chess", "coffee", "cooler", "printer", "armchair",
-             "plant0", "plant1", "board", "window", "clock", "fire", "closet", "add", "bench0", "settings0", "manager0", "booth0", "neuralyzer0"]
+             "plant0", "plant1", "board", "window", "clock", "fire", "closet", "add", "bench0", "settings0", "manager0", "booth0", "neuralyzer0",
+             "frame0"]   # the empty door frame on the wall: a click adds a machine (a door)
 FIXED = {"fire", "closet", "settings"}
 
 # Burrow's own settings: the switchboard on the wall, a switch each; kept in room.json `settings`
@@ -288,7 +289,7 @@ OPTIONS = {
 def options(room):
     return {**OPTIONS, **{k: bool(v) for k, v in (room.get("settings") or {}).items() if k in OPTIONS}}
 KINDS = {"meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "clock", "add", "pair", "bench", "manager",
-         "booth", "neuralyzer"}
+         "booth", "neuralyzer", "frame"}
 
 
 # A pair room (rdaems/pair-prompting, e.g. pair.daems.me): a chat where people and agents talk. One
@@ -456,6 +457,10 @@ def furnish(room):
             if not any(kind_of(x) == k for x in room["furniture"]):
                 room["furniture"].append(k + "0")
         room["v"] = 9
+    if room["v"] < 10:                       # the empty door frame for another machine is a piece on the wall now
+        if not any(kind_of(x) == "frame" for x in room["furniture"]):
+            room["furniture"].append("frame0")
+        room["v"] = 10
     return room
 
 
@@ -684,7 +689,7 @@ class Hub:
             bots = self.bots()
             return {"machines": [{"id": mid, "name": m["name"], "ssh": m.get("ssh") or "", **{k: v for k, v in self.feeds.get(mid, {}).items() if k != "bots"}}
                                  for mid, m in self.machines.items()],
-                    "desks": self.desks(bots), "bots": bots, "layout": self.room["layout"], "furniture": self.room["furniture"], "pair": self.room.get("pair", {}),
+                    "desks": self.desks(bots), "bots": bots, "layout": self.room["layout"], "furniture": self.room["furniture"], "pair": self.room.get("pair", {}), "paint": self.room.get("paint", {}),
                     "usage": self.usage, "chess": self.chess_view(), "demo": DEMO, "awake": self.awake_view(), "width": self.room.get("width"), "shells": self.shells_view(),
                     "settings": options(self.room),
                     "you": {**(self.room.get("you") or {}), **you_of(self.room), "login": USER}, "pairAt": PAIR}
@@ -1686,6 +1691,15 @@ class Handler(BaseHTTPRequestHandler):
             hub.push("state", hub.state())
             pair_me_all(hub.room)
             return you_of(hub.room)
+        if path == "/api/paint":             # a machine's door (and its desks) in another paint: {m, paint: n}, -1 the wood, none its own again
+            pt = hub.room.setdefault("paint", {})
+            if b.get("paint") is None:
+                pt.pop(b.get("m") or "", None)
+            else:
+                pt[b.get("m") or ""] = int(b["paint"])
+            save_room(hub.room)
+            hub.push("state", hub.state())
+            return {}
         if path == "/api/settings":          # the switchboard: {key: true/false} for the options there are
             st = hub.room.setdefault("settings", {})
             for k in OPTIONS:
