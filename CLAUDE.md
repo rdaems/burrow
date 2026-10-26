@@ -1181,7 +1181,7 @@ are his choice now instead of a record of every directory a session was seen in.
   sessions first, how many running and "waits for you" when one needs input (they are not in the room: this is
   where they show), the newest first; then where Claude Code ran lately on that machine (`RECENT`: the newest
   transcript of the 100 latest dirs of `~/.claude/projects`, its first `"cwd"`, if it still exists; ~0.1 s), not
-  worktrees, not the Desktop app's scratch chats. Typed: the ones that contain it, then `ls` completion. The
+  worktrees, not the Desktop app's scratch chats, not temporary dirs (/tmp, /var/folders). Typed: the ones that contain it, then `ls` completion. The
   completer (`completes`) takes `{value, note}` items, the note on the right. Asked once a form and machine.
 - **A desk with bots burns** (it was refused: it would have come right back): "burn NAME, its bots go"; they go
   on, out of the room. `/api/forget` no longer refuses.

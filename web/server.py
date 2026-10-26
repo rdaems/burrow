@@ -746,7 +746,7 @@ class Hub:
                 e["at"] = max(e["at"], b.get("endedAt") or b["started"])
         first = sorted(out.values(), key=lambda e: (-e["bots"], -e["at"]))
         rest = [{"dir": d, "bots": 0, "waiting": 0} for d in dict.fromkeys(recent)
-                if unit(mid, d) not in desks and unit(mid, d) not in out and "/.claude/worktrees/" not in d and "/scratch-workspaces/" not in d]   # (the Desktop app's scratch chats)
+                if unit(mid, d) not in desks and unit(mid, d) not in out and not re.search(r"/\.claude/worktrees/|/scratch-workspaces/|^(/private)?/tmp/|^/var/folders/", d)]   # not worktrees, the Desktop app's scratch chats, temporary dirs
         return first + rest
 
     def state(self):
