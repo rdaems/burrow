@@ -184,7 +184,7 @@ es.addEventListener("state", (e) => {
   if (viewKind === "completed") fillDone();
   if (viewKind === "clock") fillClock();
   // a bot that gets work, or a question for you, leaves the ping-pong table
-  const pp = viewKind === "pong" && pongUI.playing(), idle = (id) => state.bots.some((b) => b.id === id && !b.busy && !b.waiting && !b.over);
+  const pp = viewKind === "pong" && pongUI.playing(), idle = (id) => state.bots.some((b) => b.id === id && !b.busy && !b.waiting);
   if (pp) { const gone = (pp.ids || [pp.id]).find((id) => !idle(id)); if (gone) pongUI.left(gone); }
   room.draw();
 });
@@ -542,11 +542,10 @@ function fillReport() {
   const working = bots.filter((b) => b.busy).length, waiting = bots.filter((b) => b.waiting).length;
   L.push(`STAFF  ${n(bots.length, "session")}, ${working} working, ${waiting} waiting`);
   for (const m of state.machines) for (const b of bots.filter((b) => (b.m || "") === m.id))
-    L.push(row(`  ${b.name.slice(0, 16)}`, m.name.slice(0, 10), b.waiting ? "needs you" : b.busy ? "working" : b.alive === false ? "off" : "idle"));
+    L.push(row(`  ${b.name.slice(0, 16)}`, m.name.slice(0, 10), b.waiting ? "needs you" : b.busy ? "working" : "idle"));
   if (!bots.length) L.push("  nobody. the plants are thriving");
   const done = over.filter((b) => b.over === "done").length, failed = over.filter((b) => b.over === "failed").length, stopped = over.length - done - failed;
-  const bench = (state.furniture || []).some((k) => k.replace(/\d+$/, "") === "bench");   // without one the over sessions are not in the room
-  if (over.length) L.push(`  ${bench ? "bench" : "out of the room"}: ${done} done, ${failed} failed, ${stopped} stopped`);
+  if (over.length) L.push(`  completed, idling about: ${done} done, ${failed} failed, ${stopped} stopped`);
   const coffee = sum("coffee"), cooler = sum("cooler"), naps = sum("sleep"), nap = top("asleep"), prints = sum("print");
   L.push("", "BREAK ROOM");
   L.push(coffee ? `  coffee: ${n(coffee, "cup")}, the pot at ${left(u.session)}` : `  coffee: none fetched, the pot at ${left(u.session)}`);
@@ -728,7 +727,7 @@ function connect(t, term) {
   s.onclose = () => { if (t.ws === s) { t.ws = null; if ((shell && !t.fresh) || performance.now() - since > 3000) closeTile(t); } };
   t.ws = s;
 }
-// stop a session (it is over then: on the bench); with rm it is deleted from the list as well
+// stop a session (it goes on idle in the room); with rm it is deleted from the list as well
 // (agent view's second Ctrl+X, `claude rm`; the transcript stays, for `claude --resume`)
 async function stopBot(mid, id, rm) {
   const t = tileOf(id);
@@ -834,7 +833,7 @@ const botFace = (p) => {
   const b = byId(p.id);
   return pixelAvatar(p.id, "agent", b ? projectColor(b.unit) : "#8b93ad");
 };
-const idleBots = () => ((state && state.bots) || []).filter((b) => !b.busy && !b.waiting && !b.over)
+const idleBots = () => ((state && state.bots) || []).filter((b) => !b.busy && !b.waiting)
   .map((b) => ({ id: b.id, name: b.name, kind: "agent", present: true, color: projectColor(b.unit) }));
 const chessUI = chessPanel($("#chess"), {
   post: async (body) => { const r = await api("/api/chess", body); return { ok: !r.error, json: async () => r }; },

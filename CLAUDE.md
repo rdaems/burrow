@@ -940,6 +940,35 @@ screen's resolution (system sans 15 px, headings, lists), only the band in the r
   tile stacks them (`@container`). The notes got `headline` (twelve words: where it stands, what it waits on)
   and per decision `blocking`, most important first, five at most; notes without a headline are written again.
 
+## Tempo, not state; the completed ones roam (2026-10-26)
+
+He asked why tidy-tess looked busy. It sat in a pair room with a 50-minute `curl …/wait` as a background
+command: `claude agents` said `working` (its last message, "listening for replies"); an hour later the same
+activity, worded "no replies yet, still listening", was `done`. `state` is Claude Code's classification of
+how the last message ends (23 named branches in the 2.1.310 binary: trailing-q, wait-external,
+will-check-back, result-marker, …); the job record (~/.claude/jobs/<id>/state.json) also has `tempo`: active
+(a turn runs), blocked (it waits for you; `needs` says for what), idle. His decisions:
+- **Tempo, not state.** `busy` = tempo active with a live process. `waiting` (hand up, the ?) = a dialog open,
+  `status: "waiting"` in the list: tested with a throwaway Haiku session asking an AskUserQuestion (list:
+  `status waiting, waitingFor "input needed"`; record: `tempo blocked, needs "answer: Which colour? (Red ·
+  Blue)"`). `waitingFor` is "permission prompt", "dialog open", "input needed", "sandbox request" or "goal
+  proposal". A last message that only reads as a question (tempo blocked, no dialog: "Shall I build it?")
+  is idle, like done. No tempo (an old record): Claude Code's own fallback, busy→active, waiting→blocked.
+  The JOBS grep takes `tempo` along; parse_agents keeps `state` and `tempo` in the bot for the record.
+- **The completed ones roam**, idle like the rest. He: "is there any difference in the state of this bot [3 h
+  after its task], than a bot that I ran 48 days ago?" None: the supervisor stops a finished process after
+  about an hour, both are done with no process, both restart on attach. So every session `claude agents
+  --all` lists is a figure (35 completed against 4 running when built); the fire (`claude rm`) is how one
+  leaves for good. No more greys, no chest lights, no walking out, no nap forced on a stopped process (a nap
+  is a break of its own; you still sleep when away). A chair at its desk only while its process runs (desks
+  would grow a chair per completed session); opening one restarts it and its chair comes. Completed bots play
+  chess too (`idle_bot` no longer excludes them). A figure with no chair at page load starts at `freeAt`.
+- **The bench** is a bench: idle bots sit on it a while (`bench` act `{at, seat}`, `benchFree`), a bot dropped
+  on it sits; a click on the bench still lists the completed sessions (COMPLETED, open or ✕✕ delete), its
+  tip counts them. Dropping a bot on it no longer stops it; the door still does (until the booth comes).
+Superseded: "The bench: the sessions that are over", "The bench is optional", "Busy is the state, not the
+process", "Idle bots wander"'s process-off nap.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

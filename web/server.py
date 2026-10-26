@@ -42,8 +42,9 @@ PEERS = r'''find ~/.claude/projects -maxdepth 2 -name '*.jsonl' -mmin -1 2>/dev/
 # each background session's record (~/.claude/jobs/<id>/state.json): when it was last written (for a session
 # that is over: when it ended) and agent view's one-line summary of it; one grep, a `<path>:"<key>": "<value>"`
 # a line. And its Remote Control session (bridgeSessionId, cse_…) when it was started with --remote-control:
-# the same session is then in the Claude app and at claude.ai/code/session_<id>
-JOBS = r'''grep -o -E '"(updatedAt|detail|bridgeSessionId)": *"([^"\\]|\\.)*"' ~/.claude/jobs/*/state.json 2>/dev/null || true'''
+# the same session is then in the Claude app and at claude.ai/code/session_<id>. And its tempo: whether a turn
+# runs (active), or not, waiting for you (blocked) or for nothing (idle); not in `claude agents --json`
+JOBS = r'''grep -o -E '"(updatedAt|detail|bridgeSessionId|tempo)": *"([^"\\]|\\.)*"' ~/.claude/jobs/*/state.json 2>/dev/null || true'''
 
 # ---- the office manager: notes on what each session is doing, which decisions are open, what it built,
 # written by Claude (`claude -p`, here, never on the machines) from the session's record and the newest
@@ -502,32 +503,34 @@ def fold(cwd, line):
 
 
 def parse_agents(out, jobs={}):
-    """the sessions `claude agents --json --all` lists, with their state as agent view groups them: the
-    background ones (an interactive `claude` in someone's terminal is listed too, but nothing can attach
-    to it, so it is left out, as agent view does). `state` is the session's (working, blocked, done,
-    failed, stopped), `status` its process's (busy, waiting, idle) while that runs:
-      needs    blocked, or a prompt open (status waiting): it waits for you, whatever its process does
-      busy     state working, as agent view groups it (a background command left running keeps a session
-               `working` after its turn; `status: busy` alone does not count: a done session's process
-               reports busy while such a command runs, and agent view files it under Completed). The
-               process's status decides only for a row that carries no state at all
-      idle     done, or nothing to do, its process still there
-      over     done, failed or stopped and its process gone: agent view's Completed group (only --all
-               lists them); `over` says which, `endedAt` when (its record's last write), `detail` is
-               agent view's one-line summary. Attaching restarts it, `claude rm` deletes it.
-    A session whose process has exited but is not over (a /loop between runs) sleeps; the supervisor
-    restarts it when it is opened."""
+    """the sessions `claude agents --json --all` lists: the background ones (an interactive `claude` in
+    someone's terminal is listed too, but nothing can attach to it, so it is left out, as agent view does).
+    What a bot does is its tempo (its record's), not its state: the state is Claude Code's reading of how
+    the last message ends (the same "still listening" was `working` once and `done` the next time), the
+    tempo is what happens:
+      busy     tempo active: a turn runs, its process there
+      waiting  a dialog open (`status: waiting`): a multiple-choice question, a permission prompt. A last
+               message that only reads as a question (tempo blocked, no dialog) is idle: it waits for
+               your next prompt, as a done one does
+      idle     the rest: done, a background command left running, its process stopped after an hour, a
+               session that completed 48 days ago; opening one restarts it
+    A row without a tempo (an old record) gets Claude Code's own fallback from the process's status.
+    `over` (done, failed or stopped with its process gone: agent view's Completed group, listed with
+    --all only) says which, `endedAt` when (its record's last write), `detail` is agent view's one-line
+    summary: the bench's list shows them, `claude rm` deletes one."""
     bots = []
     for x in json.loads(out.strip() or "[]"):
         if x.get("kind") != "background" or not x.get("id"):
             continue
         state, status, j = x.get("state"), x.get("status"), jobs.get(x["id"], {})
-        needs = state == "blocked" or status == "waiting"
-        over = "pid" not in x and state in ("done", "failed", "stopped")
+        alive = "pid" in x
+        tempo = j.get("tempo") or ("active" if status == "busy" else "blocked" if status == "waiting" else "idle")
+        waiting = alive and status == "waiting"
+        over = not alive and state in ("done", "failed", "stopped")
         bots.append({
             "id": x["id"], "name": x.get("name") or x["id"], "cwd": x.get("cwd") or "",
-            "busy": not over and not needs and (state == "working" if state else status == "busy"),
-            "waiting": not over and needs, "alive": "pid" in x, "state": state or "",
+            "busy": alive and not waiting and tempo == "active", "waiting": waiting, "alive": alive,
+            "state": state or "", "tempo": tempo,
             "over": state if over else "", "endedAt": when(j.get("updatedAt")) if over else 0, "detail": j.get("detail") or "",
             "updated": when(j.get("updatedAt")),       # its record's last write: the notes on it are older, or not
             "started": x.get("startedAt") or 0, "pid": x.get("pid") or 0, "session": x.get("sessionId") or "",
@@ -546,10 +549,10 @@ def when(iso):
 
 
 def parse_jobs(out):
-    """{id: {updatedAt, detail, bridgeSessionId}} from the records' lines"""
+    """{id: {updatedAt, detail, bridgeSessionId, tempo}} from the records' lines"""
     jobs = {}
     for line in out.splitlines():
-        m = re.match(r'(?:.*/)?([^/:]+)/state\.json:"(updatedAt|detail|bridgeSessionId)": *"(.*)"$', line)
+        m = re.match(r'(?:.*/)?([^/:]+)/state\.json:"(updatedAt|detail|bridgeSessionId|tempo)": *"(.*)"$', line)
         if not m:
             continue
         try:
@@ -657,7 +660,7 @@ class Hub:
 
     def desks(self, bots):
         """the desks: every directory a session was ever seen running in, until you take the desk away
-        (one that is over sits on the bench, it brings no desk back)"""
+        (one that is over roams the room idle, it brings no desk back)"""
         new = [b["unit"] for b in bots if not b["over"] and b["unit"] not in self.room["desks"]]
         if new:
             self.room["desks"] += list(dict.fromkeys(new))
@@ -1091,10 +1094,10 @@ class Hub:
 
     def idle_bot(self, bid):
         return next((b for f in self.feeds.values() for b in f.get("bots", []) if b["id"] == bid
-                     and not b["busy"] and not b.get("waiting") and not b.get("over")), None)
+                     and not b["busy"] and not b.get("waiting")), None)
 
     def chess_check(self):
-        """a player that is no longer idle (work, a question, over) has left the table: the other wins"""
+        """a player that is no longer idle (work, a question) has left the table: the other wins"""
         g = self.game
         if not g or g.get("result"):
             return
