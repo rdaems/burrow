@@ -1099,6 +1099,22 @@ closet. If I click it, I get a cross hair and i can shoot bots."
   her normal round (fetched, walked, five seconds, gone), her hardcore round (armed, hunted across the room,
   shot, the next), and the crosshair (shot, the stone clicked: back and spared).
 
+## The closet drag, for real this time (2026-10-26)
+
+He, after three rounds of "fixed": "DRAGGING A BENCH STILL DOESN'T WORK. Why are you not fixing this?" His
+room.json had not been written in 27 minutes: his drops never reached the server. The cause was not in the
+room at all: `fillCloset` ran on every `state` push while the closet was open, rebuilding its items, and the
+item being dragged (pointer capture, its own pointermove/pointerup) was thrown away mid-drag. In his room (40
+bots, three machines, the notes) a push comes every second or two; the demo pushes rarely and look.mjs drags
+took half a second, so every test passed. Reproduced with a 3.6 s drag over 4 pushes (nothing landed); fixed:
+the closet is built when it opens and again on a push only while its pictures were still loading, never while
+something is carried out of it (`closetCarry`); a cancelled drag clears its ghost; the pictures are not
+draggable. The same flaw, smaller: `fillSettings` and `fillClock` rebuilt their buttons on every push, which
+could swallow a click; they rebuild only when what they show changed.
+Lesson for testing drags here: drag slowly (seconds, many steps) against a room that pushes often, e.g. his
+room.json through `BURROW_DEMO_ROOM`; look.mjs's `{cdp: "Input.setInterceptDrags", params: {enabled: true}}`
+reports a native browser drag if one starts.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

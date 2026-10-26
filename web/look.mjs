@@ -1,5 +1,5 @@
 // node web/look.mjs URL W H steps.json: drive headless Chrome over CDP (no packages) to look at the page.
-// steps: [{wait:ms} | {shot:"file.png"} | {js:"expr"} | {click:[x,y]} | {move:[x,y]} | {moveTo|clickTo:"js giving [x,y]"} | {drag:[[x,y],…], alt:true?} | {dragTo:"js giving [[x,y],…]"} | {drag:…, hold:true} then {release:[x,y]} | {key:"text"} | {press:"Enter", shift:true}]
+// steps: [{wait:ms} | {shot:"file.png"} | {js:"expr"} | {click:[x,y]} | {move:[x,y]} | {moveTo|clickTo:"js giving [x,y]"} | {drag:[[x,y],…], alt:true?} | {dragTo:"js giving [[x,y],…]"} | {drag:…, hold:true} then {release:[x,y]} | {cdp:"Method", params:{}} | {key:"text"} | {press:"Enter", shift:true}]
 import { spawn } from "node:child_process";
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -25,6 +25,7 @@ ws.onmessage = (e) => {
   if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); }
   if (m.method === "Runtime.consoleAPICalled") console.log("console:", m.params.args.map((a) => a.value ?? a.description).join(" "));
   if (m.method === "Runtime.exceptionThrown") console.log("exception:", m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text);
+  if (m.method === "Input.dragIntercepted") console.log("native drag started:", JSON.stringify(m.params.data.items.map((i) => i.mimeType)));
 };
 const send = (method, params = {}) => new Promise((r) => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
 await send("Runtime.enable");
@@ -33,6 +34,7 @@ await send("Page.navigate", { url });
 const mouse = async (type, [x, y], buttons = 0, modifiers = 0) => send("Input.dispatchMouseEvent", { type, x, y, button: "left", buttons, clickCount: 1, pointerType: "mouse", modifiers });
 for (const s of steps) {
   if (s.wait) await sleep(s.wait);
+  if (s.cdp) console.log("cdp:", JSON.stringify((await send(s.cdp, s.params || {})).result ?? null));   // a raw call, e.g. Input.setInterceptDrags {enabled: true} to see the browser's own drags
   if (s.js) { const r = await send("Runtime.evaluate", { expression: s.js, returnByValue: true, awaitPromise: true }); console.log("js:", JSON.stringify(r.result?.result?.value ?? r.result?.exceptionDetails?.exception?.description)); }
   if (s.move) await mouse("mouseMoved", s.move);
   if (s.moveTo || s.clickTo) {               // a JS expression giving [x, y] in CSS pixels: for things that move

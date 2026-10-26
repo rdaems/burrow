@@ -195,7 +195,7 @@ es.addEventListener("state", (e) => {
   for (const t of tiles.all()) showWho(t);
   for (const t of notesTiles()) renderNotes(t);
   if (viewKind === "chess") showChess();
-  if (viewKind === "closet") fillCloset();
+  if (viewKind === "closet") fillCloset(true);   // only if its pictures were still loading, never mid-drag
   if (viewKind === "limits") fillLimits();
   if (viewKind === "settings") fillSettings();
   if (viewKind === "doors") fillDoors();
@@ -359,13 +359,20 @@ function askYou() {
 // ---- the closet: the furniture there is, drawn as it stands in the room; drag a piece into the
 // room to put it there, as many as you like. The fireplace takes a piece back out (it burns)
 const CATALOGUE = ["plant", "armchair", "window", "clock", "board", "meet", "chess", "pong", "coffee", "cooler", "printer", "add", "pair", "bench", "manager", "booth", "neuralyzer", "frame"];
-function fillCloset() {
-  const el = $("#vCloset");
+// Built when it opens, and again on a state update only while its pictures were still loading: never while
+// something is being carried out of it. Rebuilding it on every update (each second or two in a room with
+// many bots) took the picture being held away mid-drag, and the piece never arrived
+const SPRITES = ["PLANT", "PLANT_2", "WHITEBOARD", "CUSHIONED_CHAIR_SIDE", "WOODEN_BENCH", "SMALL_TABLE_FRONT", "COFFEE"];
+let closetCarry = false;
+function fillCloset(again) {
+  const el = $("#vCloset"), ready = SPRITES.every((n) => sprites.get(n));
+  if (again && (closetCarry || el.dataset.ready === "1")) return;
+  el.dataset.ready = ready ? "1" : "";
   el.innerHTML = "";
   for (const kind of CATALOGUE) {
     const it = document.createElement("div");
     it.className = "item";
-    it.innerHTML = `<img src="${room.icon(kind)}" alt=""><small>${room.names[kind]}</small>`;
+    it.innerHTML = `<img src="${room.icon(kind)}" alt="" draggable="false"><small>${room.names[kind]}</small>`;
     it.title = "drag it into the room";
     it.addEventListener("pointerdown", (e) => carryOut(e, kind, it));
     el.appendChild(it);
@@ -517,8 +524,10 @@ const OPTIONS = [
   { key: "hardcore", name: "Hardcore",
     what: "The booth is a gun closet. The office manager clears sessions out with a shotgun, and a click on the closet gives you a crosshair to do it yourself (Esc puts it away). A shot bot leaves a gravestone: click it within five seconds to undo." },
 ];
-function fillSettings() {
-  const cfg = (state && state.settings) || {}, el = $("#vSettings");
+function fillSettings() {                  // rebuilt only when a setting changed (an update mid-click swallowed the click)
+  const cfg = (state && state.settings) || {}, el = $("#vSettings"), key = JSON.stringify(cfg);
+  if (el.dataset.key === key) return;
+  el.dataset.key = key;
   el.innerHTML = OPTIONS.map((o) => `<div class="opt"><button type="button" class="btn sw${cfg[o.key] ? " on" : ""}" data-key="${o.key}" title="${cfg[o.key] ? "on: click to switch it off" : "off: click to switch it on"}">${cfg[o.key] ? "ON" : "OFF"}</button><div><div class="nm">${o.name}</div><div class="what">${o.what}</div></div></div>`).join("");
   for (const bt of el.querySelectorAll(".sw")) bt.onclick = () => api("/api/settings", { [bt.dataset.key]: !cfg[bt.dataset.key] });
 }
@@ -575,6 +584,9 @@ function fillClock() {
   const a = (state && state.awake) || { mode: "off" }, row = $("#vClock .row"), left = a.mode === "for" ? Math.max(0, a.until - Date.now()) : 0;
   const chosen = AWAKE.find(([m, , n]) => m === "for" && n * 60000 >= left);   // the duration that was picked: the shortest that still covers what is left
   const on = ([m, , n]) => a.mode === m && (m !== "for" || (chosen && chosen[2] === n));
+  const key = AWAKE.map(on).join();         // rebuilt only when what is lit changes (not under a click)
+  if (row.dataset.key === key) return;
+  row.dataset.key = key;
   row.innerHTML = AWAKE.map((o) => `<button type="button" class="btn${on(o) ? " on" : ""}" data-mode="${o[0]}" data-min="${o[2]}">${o[1]}</button>`).join("");
   for (const btn of row.querySelectorAll("button")) btn.onclick = async () => { const r = await api("/api/awake", { mode: btn.dataset.mode, minutes: +btn.dataset.min }); if (r.error) note(r.error); };
 }
@@ -646,17 +658,20 @@ function carryOut(e, kind, it) {
   try { it.setPointerCapture(e.pointerId); } catch {}
   const x0 = e.clientX, y0 = e.clientY;
   let on = false;
+  closetCarry = true;                       // the closet is not rebuilt meanwhile (fillCloset)
+  const done = () => { it.onpointermove = it.onpointerup = it.onpointercancel = null; it.classList.remove("lift"); closetCarry = false; };
   it.onpointermove = (ev) => {
     if (!on && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 4) return;
     on = true; it.classList.add("lift");
     room.carry(kind, ev.clientX, ev.clientY);
   };
   it.onpointerup = async (ev) => {
-    it.onpointermove = it.onpointerup = null; it.classList.remove("lift");
+    done();
     if (!on) return;
     const at = room.place(kind, ev.clientX, ev.clientY);
     if (at) { const r = await api("/api/furniture", { add: kind, at }); if (r.error) note(r.error); }
   };
+  it.onpointercancel = () => { done(); room.carry(null); };   // taken away by the browser: no ghost left behind
 }
 
 // ---- tiles: what every one has
