@@ -1134,6 +1134,18 @@ fire) the gravestone code is gone (`GRAVE`, `drawGrave`, `w.graves`, `unbury`):
   (`RUST`) and goes then. Tested in the demo: shot, landed within 2 s, two sweepers, cleared and deleted; the undo;
   the fire.
 
+## Taking a door out (2026-10-26)
+
+He: "Obviously, the doors interface should have a way of deleting a door". In the doors' panel every door but
+this computer's has "remove", asked twice ("sure? remove" within 3 s, `doorArmed`, kept across the panel's
+redraws). `/api/unmachine {m}`: `remove_machine` takes its entry out of Claude Code's sshConfigs in
+~/.claude/settings.json the way `add_machine` writes (in place, `json.dumps(indent=2)` + newline: tested on a copy
+of his settings.json, the rest byte for byte); the machine and its sessions are left as they are. Then
+`set_machines` and a poke (its watcher sees it gone, drops its feed and stops; the demo's machine thread does the
+same, `DEMO_GONE` stands in for the settings there), your terminals there killed, its door's place and paint, its
+desks and their places dropped from room.json. Its figures walk out (through this computer's door: theirs is gone).
+Adding it again brings the door back; its desks come back as sessions are seen there.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

@@ -25,6 +25,7 @@ OLD = os.path.join(HOME, ".config/burrow/rooms.json")      # one room per machin
 SETTINGS = os.path.join(HOME, ".claude/settings.json")
 CACHE = os.path.join(HOME, ".cache/burrow")
 DEMO = bool(os.environ.get("BURROW_DEMO"))
+DEMO_GONE = set()                              # the demo's doors taken out (it never writes the settings)
 PORT = int(os.environ.get("BURROW_PORT", "7777"))
 HOSTNAME = subprocess.run(["hostname", "-s"], capture_output=True, text=True).stdout.strip() or "here"
 USER = getpass.getuser()                       # you, in the room: the name unless room.json has one
@@ -193,7 +194,7 @@ def machines():
     """this computer (id ""), then each of `sshConfigs` in ~/.claude/settings.json ({id, name, sshHost,
     sshPort?, sshIdentityFile?}, the Desktop app's SSH environments)"""
     if DEMO:
-        return [{"id": "", "name": "mac", "ssh": "@demo"}, {"id": "odyssey", "name": "odyssey", "ssh": "@demo"}]
+        return [m for m in [{"id": "", "name": "mac", "ssh": "@demo"}, {"id": "odyssey", "name": "odyssey", "ssh": "@demo"}] if m["id"] not in DEMO_GONE]
     ms = [{"id": "", "name": HOSTNAME}]
     for c in claude_settings().get("sshConfigs") or []:
         if isinstance(c, dict) and c.get("id") and c.get("sshHost"):
@@ -220,6 +221,19 @@ def add_machine(ssh, name):
     with open(SETTINGS, "w") as f:           # in place: it may be a link into someone's dotfiles
         f.write(json.dumps(v, indent=2, ensure_ascii=False) + "\n")
     return mid
+
+
+def remove_machine(mid):
+    """a machine's entry out of Claude Code's sshConfigs, the rest of its settings as they were (nothing on
+    the machine itself changes: its sessions go on there)"""
+    v = json.loads(open(SETTINGS).read())
+    cs = v.get("sshConfigs") or []
+    left = [c for c in cs if not (isinstance(c, dict) and str(c.get("id")) == mid)]
+    if len(left) == len(cs):
+        raise RuntimeError("no such machine: " + mid)
+    v["sshConfigs"] = left
+    with open(SETTINGS, "w") as f:           # in place, as add_machine
+        f.write(json.dumps(v, indent=2, ensure_ascii=False) + "\n")
 
 
 def ssh_hosts():
@@ -1127,6 +1141,9 @@ class Hub:
                 a, b = random.sample(live, 2)
                 self.push("talk", {"from": a["id"], "to": b["id"]})
             with self.lock:
+                if mid not in self.machines:         # its door taken out: gone with its bots
+                    self.feeds.pop(mid, None)
+                    return
                 self.feeds[mid] = {"bots": [dict(b) for b in bots], "light": False, "error": None}
             self.chess_check()
             self.digest_watch(bots)
@@ -1750,6 +1767,29 @@ class Handler(BaseHTTPRequestHandler):
             mid = add_machine(ssh, name)
             hub.set_machines(machines())
             return {"m": mid}
+        if path == "/api/unmachine":         # a door taken out (the doors' panel): out of sshConfigs, and out of the room
+            mid = b.get("m") or ""
+            if not mid:
+                raise RuntimeError("this computer's door stays")
+            if DEMO:
+                DEMO_GONE.add(mid)
+            else:
+                remove_machine(mid)
+            poke = hub.pokes.get(mid)
+            hub.set_machines(machines())
+            if poke:
+                poke.set()                   # its watcher sees it gone, drops its bots and stops
+            for key, sh in hub.shells.copy().items():
+                if key[0] == mid:
+                    sh.kill()                # your terminals there
+            with hub.lock:                   # its door's place and paint, its desks and theirs
+                r = hub.room
+                r["layout"] = {k: v for k, v in r["layout"].items() if k != "door:" + mid and not k.startswith("u:" + mid + ":")}
+                (r.get("paint") or {}).pop(mid, None)
+                r["desks"] = [u for u in r["desks"] if not u.startswith(mid + ":")]
+                save_room(r)
+            hub.push("state", hub.state())
+            return {}
         if path == "/api/chess":
             return hub.chess(b)
         if path == "/api/layout":            # where the furniture stands, moved by hand: {key: [x, y]}

@@ -532,19 +532,30 @@ function fillSettings() {                  // rebuilt only when a setting change
   for (const bt of el.querySelectorAll(".sw")) bt.onclick = () => api("/api/settings", { [bt.dataset.key]: !cfg[bt.dataset.key] });
 }
 // ---- the doors: a line a machine, its door in its paint, its name, how it is reached and how it is, and
-// the paints to pick from (its door and its desks wear it; wood or one of the room's paints)
+// the paints to pick from (its door and its desks wear it; wood or one of the room's paints). Another
+// machine's door can be taken out: out of Claude Code's sshConfigs (the machine and its sessions are left as
+// they are), asked twice as a completed session's ✕ is: "remove", then "sure? remove" within three seconds
+let doorArmed = null;                       // {m, t}: a door's remove pressed once
 function fillDoors() {
   const el = $("#vDoors"), ms = (state && state.machines) || [], { wood, list } = room.paints();
-  const key = JSON.stringify([ms.map((m) => [m.id, m.name, m.error]), state.paint, state.bots.map((b) => b.m || "")]);
+  const armed = doorArmed && Date.now() - doorArmed.t < 3000 ? doorArmed.m : null;
+  const key = JSON.stringify([ms.map((m) => [m.id, m.name, m.error]), state.paint, state.bots.map((b) => b.m || ""), armed]);
   if (el.dataset.key === key) return;
   el.dataset.key = key;
   el.innerHTML = ms.map((m) => {
     const cur = room.paintOf(m.id), n = state.bots.filter((b) => (b.m || "") === m.id).length;
     const how = (m.id ? "over ssh, " + esc(m.ssh || m.id) : "this computer") + " · " + (m.error ? esc(m.error) : n + (n === 1 ? " session" : " sessions"));
     const sw = [-1, ...list.keys()].map((i) => `<button type="button" class="swatch${i === cur ? " on" : ""}" data-m="${esc(m.id)}" data-p="${i}" title="${i < 0 ? "wood" : "paint"}" style="background:${i < 0 ? wood : list[i]}"></button>`).join("");
-    return `<div class="opt"><img class="door" src="${room.door(cur)}" alt=""><div><div class="nm">${esc(m.name)}</div><div class="what">${how}</div><div class="swatches">${sw}</div></div></div>`;
+    const rm = m.id ? `<button type="button" class="btn rm${armed === m.id ? " on" : ""}" data-m="${esc(m.id)}" title="take it out of Claude Code's sshConfigs; the machine and its sessions are left as they are">${armed === m.id ? "sure? remove" : "remove"}</button>` : "";
+    return `<div class="opt"><img class="door" src="${room.door(cur)}" alt=""><div><div class="nm">${esc(m.name)}</div><div class="what">${how}</div><div class="swatches">${sw}</div></div>${rm}</div>`;
   }).join("");
   for (const bt of el.querySelectorAll(".swatch")) bt.onclick = () => api("/api/paint", { m: bt.dataset.m, paint: +bt.dataset.p });
+  for (const bt of el.querySelectorAll(".rm")) bt.onclick = async () => {
+    const m = bt.dataset.m;
+    if (armed === m) { doorArmed = null; const r = await api("/api/unmachine", { m }); if (r.error) note(r.error); }
+    else { doorArmed = { m, t: Date.now() }; setTimeout(() => viewKind === "doors" && fillDoors(), 3100); }
+    fillDoors();
+  };
 }
 // ---- the sessions that are over, as agent view's Completed group: how each ended, its name, where, when
 // and how long it ran, its last line; the newest first. A click opens one (Claude Code restarts it), its ✕
