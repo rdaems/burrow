@@ -420,7 +420,7 @@ function startRoom(cv, app) {
   // ---- everyone: what each bot is doing
   let everyone = null;
   function world() {
-    if (!everyone) everyone = { folk: new Map(), meeting: null, lastMeeting: -60, board: [], pong: { t: 0, from: 0 }, doorAt: {}, stopped: new Map(), flare: 0, sparks: 0, boothFlash: null, flash: null, shots: [], spared: new Set(), clean: null, cleanRest: 0, print: 0, burning: [], strokes: 0, stats: new Map(), meetings: 0,
+    if (!everyone) everyone = { condemned: new Map(), razed: new Set(), hunt: null, folk: new Map(), meeting: null, lastMeeting: -60, board: [], pong: { t: 0, from: 0 }, doorAt: {}, stopped: new Map(), flare: 0, sparks: 0, boothFlash: null, flash: null, shots: [], spared: new Set(), clean: null, cleanRest: 0, print: 0, burning: [], strokes: 0, stats: new Map(), meetings: 0,
       remains: new Map(), riseAt: new Map(), sway: new Map(), ball: null, mugs: new Map(),
       beams: [], T: 0, born: performance.now() };
     return everyone;
@@ -512,18 +512,19 @@ function startRoom(cv, app) {
       // a bot whose session is open sits at its desk for you, whatever it was doing; when the
       // session closes it gets up again
       f.open = opens.includes(b.id);
-      if (f.open && !work && !["desk", "doom"].includes(f.act.kind)) { end(f); f.act = { kind: "desk" }; }
+      if (f.open && !work && f.act.kind !== "desk" && !DOOMED.has(f.act.kind)) { end(f); f.act = { kind: "desk" }; }
       if (!f.open && !work && f.act.kind === "desk" && f.sat) f.act = { kind: "stand", left: 0.5 };
       if (work !== f.work) {
         f.work = work;
         // to work, whatever it was doing (a bot by the door stays)
-        if (work && f.act.kind !== "doom") { end(f); f.act = { kind: "desk" }; }
+        if (work && !DOOMED.has(f.act.kind)) { end(f); f.act = { kind: "desk" }; }
         if (!work && f.act.kind === "desk") f.act = { kind: "stand", left: 0.5 + (fnv(b.id) % 20) / 10 };
       }
     }
     // remains on the floor: idle bots come over and clear them away, two to a heap, once the pieces have
     // had a moment to land (whoever is on an ordinary break; not one at work, in a game, asleep or held)
     stepRemains(w, dt, L);
+    condemnStep(w, L);
     for (const [id, r] of w.remains) {
       if (r.back || !r.parts.length || performance.now() - r.t0 < 1500) continue;
       if ([...folk.values()].filter((g) => g.act.kind === "sweep" && g.act.at === id).length >= 2) continue;
@@ -548,7 +549,7 @@ function startRoom(cv, app) {
       if (first) homes.set(first[0], { x: Math.min(W - 8, d.x0 + d.w + 8), y: d.y + 1 });
     }
     for (const b of bots) { const f = folk.get(b.id); if (f && !f.held) thinkOne(w, f, L, now, dt, homes.get(b.id), usage); }
-    if (you && !you.held) thinkOne(w, you, L, now, dt, null, usage);
+    if (you && !you.held && !huntStep(w, you, L, dt)) thinkOne(w, you, L, now, dt, null, usage);
     const mg = folk.get("manager");
     if (mg && !mg.leaving) thinkManager(w, mg, L, dt);
     // two standing about in the same place: they step apart
@@ -563,6 +564,75 @@ function startRoom(cv, app) {
   // notes switched off at the switchboard she dozes in her chair
   const MANAGER = { seed: "manager-16", color: "#f06b72" };   // a robot: one antenna, happy eyes; a pink bow and skirt (body's femme)
   const managerSeat = (L) => L.manager ? { x: L.manager.x + 24, y: L.manager.y } : { x: W / 2, y: H / 2 };
+  // a bot let go of from here (its desk burnt, or ✕✕ in the completed list) is not just deleted: it walks to
+  // the booth and waits in line, then its five seconds inside as for one put in by hand; in hardcore it stands
+  // with its hands up and you fetch a gun from the gun closet and shoot it (its remains are the undo, until
+  // they are cleared). With no booth it walks into the fire. Taking one out of the line, or its undo, keeps it,
+  // and a burnt desk with it: the desk goes (`forget`) only once the last of its bots has
+  const DOOMED = new Set(["doom", "queue", "condemned", "pyre"]);
+  function condemn(ids, unit = null) {
+    const w = world(), took = [];
+    for (const id of ids) {
+      const f = w.folk.get(id);
+      if (!f || !f.b || f.b.human || f.b.staff || f.held || DOOMED.has(f.act.kind) || w.remains.has(id)) continue;
+      end(f); f.act = { kind: "queue", n: 99 };
+      w.condemned.set(id, { unit }); w.spared.delete(id); took.push(id);
+    }
+    if (unit && took.length) w.razed.add(unit);
+    return took;
+  }
+  function condemnStep(w, L) {
+    const folk = w.folk, bo = L.booths[0], hard = hardcore() && !!bo;
+    for (const [id, c] of w.condemned) {
+      const f = folk.get(id);
+      if (w.spared.has(id) || (f && !f.held && !DOOMED.has(f.act.kind))) { w.condemned.delete(id); if (c.unit) w.razed.delete(c.unit); }   // kept: and its desk
+      else if (!f && !w.remains.has(id)) w.condemned.delete(id);                                                                       // gone for good
+    }
+    for (const u of w.razed) if (![...w.condemned.values()].some((c) => c.unit === u)) { w.razed.delete(u); app.act({ kind: "forget", unit: u }); }
+    const line = [...w.condemned.keys()].map((id) => folk.get(id)).filter((f) => f && !f.held && ["queue", "condemned"].includes(f.act.kind));
+    if (hard) { for (const f of line) if (f.act.kind !== "condemned") f.act = { kind: "condemned" }; return; }
+    if (!bo) { for (const f of line) f.act = { kind: "pyre" }; return; }
+    line.forEach((f, n) => { if (f.act.kind !== "queue") f.act = { kind: "queue", n }; else f.act.n = n; });
+    if (line[0] && line[0].act.there && ![...folk.values()].some((g) => g.act.kind === "doom" && g.act.at === bo.key)) line[0].act = { kind: "doom", at: bo.key, left: 5 };
+  }
+  // you, in hardcore: a gun from the gun closet, up to each of them, levelled a moment, the shot; the gun back
+  function huntStep(w, f, L, dt) {
+    const bo = L.booths[0], hard = hardcore() && !!bo, v = 34;
+    const targets = () => [...w.condemned.keys()].map((id) => w.folk.get(id)).filter((g) => g && !g.held && g.act.kind === "condemned");
+    let h = w.hunt;
+    if (!h) { if (!hard || !targets().length) return false; h = w.hunt = { phase: "arm", id: null, t: 0 }; end(f); }
+    const front = bo && { x: bo.x + 14, y: bo.y };
+    f.sat = false; f.lying = false; f.act = { kind: "hunt", chosen: true };
+    if (!hard && h.phase !== "return") h.phase = f.carry === "gun" ? "return" : "done";
+    switch (h.phase) {
+      case "arm":
+        if (walk(f, front, v, dt)) { f.dir = -1; f.carry = "gun"; h.phase = "hunt"; }
+        return true;
+      case "hunt": {                         // the nearest, from its right (or its left by the wall)
+        const g = targets().sort((a, b) => Math.hypot(a.x - f.x, a.y - f.y) - Math.hypot(b.x - f.x, b.y - f.y))[0];
+        if (!g) { h.phase = "return"; return true; }
+        h.id = g.id;
+        if (walk(f, { x: g.x + (g.x + 24 <= L.floor.x1 ? 24 : -24), y: g.y }, v, dt)) { f.legs = "stand"; h.phase = "aim"; h.t = 0; }
+        return true;
+      }
+      case "aim": {
+        const g = w.folk.get(h.id);
+        if (!g || g.held || g.act.kind !== "condemned") { h.phase = "hunt"; return true; }
+        f.legs = "stand"; f.arms = "gun"; f.dir = g.x < f.x ? -1 : 1;
+        if ((h.t += dt) > 0.9) { w.shots.push({ x: Math.round(f.x) + 10 * f.dir, y: Math.round(f.y) - 9, t0: performance.now(), hit: false }); shoot(g); h.phase = "after"; h.t = 0; }
+        return true;
+      }
+      case "after":
+        f.legs = "stand"; f.arms = "gun";
+        if ((h.t += dt) > 1.5) h.phase = targets().length ? "hunt" : "return";
+        return true;
+      case "return":
+        if (!front || walk(f, front, v, dt)) { f.carry = null; h.phase = "done"; }
+        return true;
+    }
+    w.hunt = null; f.carry = null; f.act = rest();
+    return false;
+  }
   // clearing out (switchboard: cleanup): one finished session at a time (app.cleanup(): completed, nothing
   // open in her notes, an hour gone; never one you rescued). She fetches it and walks it to the booth, a step
   // behind her, where its five seconds run as for any bot put in. Hardcore: a shotgun from the gun closet,
@@ -570,7 +640,7 @@ function startRoom(cv, app) {
   // one from her, or its undo, spares it for good. A pause between them, so it can be watched
   function cleanStep(w, f, L, dt) {
     const cu = app.cleanup(), bo = L.booths[0];
-    const next = () => cu.ids.find((id) => { const g = w.folk.get(id); return g && !w.spared.has(id) && !g.held && !["doom", "escort"].includes(g.act.kind); });
+    const next = () => cu.ids.find((id) => { const g = w.folk.get(id); return g && !w.spared.has(id) && !g.held && !DOOMED.has(g.act.kind) && g.act.kind !== "escort"; });
     let c = w.clean;
     const finish = (pause) => {
       const g = c && w.folk.get(c.id);
@@ -927,6 +997,22 @@ function startRoom(cv, app) {
         }
         break;
       }
+      case "queue": {                        // let go of from here: in line by the booth (on its roomier side), its turn next
+        const bo = L.booths[0];
+        if (!bo) break;
+        const n = act.n || 0, side = bo.x - 70 < L.floor.x0 ? 1 : -1;
+        act.there = walk(f, { x: bo.x + side * (18 + (n % 5) * 12), y: Math.min(L.floor.y1, bo.y + 2 + Math.floor(n / 5) * 9) }, v, dt);
+        if (act.there) { f.legs = "stand"; f.dir = -side; f.arms = "down"; }
+        break;
+      }
+      case "condemned":                      // hardcore: where it is, hands up, until you get to it
+        f.legs = "stand"; f.arms = "up";
+        break;
+      case "pyre": {                         // no booth: into the fire (and with no fire, gone at once)
+        if (!L.fire) { app.act({ kind: "stop", id: f.id, rm: true }); w.stopped.set(f.id, performance.now()); folk.delete(f.id); break; }
+        if (walk(f, { x: (L.fire.x0 + L.fire.x1) / 2, y: L.fire.y1 - 8 }, v, dt)) bury(f, L);
+        break;
+      }
       case "sweep": {                        // clearing away what is left of a bot: to the nearest piece that landed, bent down for it
         const r = w.remains.get(act.at);
         if (!r || r.back || !r.parts.length) { f.act = rest(); break; }
@@ -1107,7 +1193,7 @@ function startRoom(cv, app) {
     // every session is a bot about the room; a chair at its desk only while its process runs (a completed one
     // would otherwise keep a chair for good: a desk a dozen chairs long). Opening one restarts it, and its chair comes
     const bots = all;
-    const L = layout(s, all.filter((b) => !b.over), moving);
+    const L = layout(w.razed.size ? { ...s, desks: s.desks.filter((d) => !w.razed.has(d.unit)) } : s, all.filter((b) => !b.over), moving);   // (a burnt desk whose bots are on their way out)
     // the piece under the pointer: outlined if a click does something there (the rest only reacts in
     // its own way, a plant sways)
     const hp = !moving && !held && !carrying ? pieceAt(pointer) : null;
@@ -1298,7 +1384,7 @@ function startRoom(cv, app) {
       w.burning = w.burning.filter((o) => performance.now() - o.t0 < 1400);
       items.push([F.y1, () => drawFire(ctx, F, T, !!feeding, burst, w.burning)]);
       const tx = F.x0 + 16, ty = F.y0 - 2;
-      if (fd) tip = { text: "burn " + fd.label + (fd.seats.length ? ", its bots go" : ""), x: tx, y: ty };   // they go on, out of the room
+      if (fd) tip = { text: "burn " + fd.label + (!s.bots.some((b) => b.unit === fd.unit) ? "" : !L.booths.length ? " and its bots" : hardcore() ? ", shoot its bots" : ", its bots to the booth"), x: tx, y: ty };
       else if (feeding && moving && KIND(moving.key) === "door") { const m = s.machines.find((m) => "door:" + m.id === moving.key); tip = { text: "take out " + (m ? m.name : "the door"), x: tx, y: ty }; }
       else if (feeding && moving) tip = { text: "burn the " + (NAMES[KIND(moving.key)] || KIND(moving.key)), x: tx, y: ty };
       else if (feeding) tip = { text: "delete " + held.b.name, x: tx, y: ty };
@@ -1307,7 +1393,7 @@ function startRoom(cv, app) {
     // neuralyzer: a bot let go by it gets `/clear` (the drop is useAt's)
     for (const bo of L.booths) {
       if (hardcore()) {                     // hardcore: a gun closet; a click takes a gun (the crosshair), again puts it back
-        const out = aiming || (w.clean && w.clean.armed), h = hot(bo.x - 9, bo.y - 32, bo.x + 9, bo.y + 2, { kind: "aim" });
+        const out = aiming || (w.clean && w.clean.armed) || (w.folk.get("you") || {}).carry === "gun", h = hot(bo.x - 9, bo.y - 32, bo.x + 9, bo.y + 2, { kind: "aim" });
         items.push([bo.y - 3.5, () => outlined(ctx, foot("booth", [bo.x, bo.y]), h || danger(bo.key), (c) => drawGunCloset(c, bo, false, out), danger(bo.key) ? RED : GOLD, tintOf(bo.key))]);
         items.push([bo.y - 2.5, () => drawGunCloset(ctx, bo, true, out)]);
         if (h) tip = { text: aiming ? "put the gun back" : "gun closet: take a gun", x: bo.x, y: bo.y - 34 };
@@ -2319,7 +2405,8 @@ function startRoom(cv, app) {
         const w = world(), r = foot(moving.key, moving.at, moving.u);
         const mid = KIND(moving.key) === "door" ? moving.key.slice(5) : null;      // a door: its machine goes out of the room (and of sshConfigs)
         toFire(r, snapshot(r, (c) => (d ? drawDesk(c, d, w, w.T, new Set()) : mid !== null ? drawDoor(c, moving.at[0], paintOf(mid), false, false, moving.at[1]) : drawKind(c, KIND(moving.key), moving.at, w, w.T))));
-        app.act(d ? { kind: "forget", unit: d.unit } : mid !== null ? { kind: "unmachine", m: mid } : { kind: "burn", key: moving.key });
+        if (d) { const ids = s.bots.filter((b) => b.unit === d.unit).map((b) => b.id); if (!condemn(ids, d.unit).length) app.act({ kind: "forget", unit: d.unit }); }   // its bots first (condemn), then the desk
+        else app.act(mid !== null ? { kind: "unmachine", m: mid } : { kind: "burn", key: moving.key });
       } else {
         const at = settle(lastL, moving.key, clampAt(moving.key, moving.at, moving.u), moving.u);       // put down on the grid of dots, on clear floor
         dropped.set(moving.key, { at, t: performance.now() });
@@ -2428,5 +2515,5 @@ function startRoom(cv, app) {
   window.__room.game = (kind, a, b) => { const w = world(), fa = w.folk.get(a), fb = w.folk.get(b); if (!fa || !fb) return false; end(fa); end(fb); fa.act = { kind, side: 0, with: b, left: 90, there: false }; fb.act = { kind, side: 1, with: a, left: 90, there: false }; return true; };
   window.__room.football = (ids) => { const w = world(), team = ids.map((id) => w.folk.get(id)).filter(Boolean); return team.length >= 2 && !!football(w, lastL, team); };
   window.__room.clock = (a) => { const c = document.createElement("canvas"); c.width = 12; c.height = 10; drawClock(c.getContext("2d"), 6, 5, a); return c.toDataURL(); };   // the clock's face for an awake state
-  return { talk, typed, size, draw, width, color: projectColor, icon, door: doorPicture, paints: () => ({ wood: WOOD.top, list: PAINT.map((p) => p.top) }), paintOf: paintIdx, paint: paintOf, tiny, tinyW, printer: printerPicture, carry: carryKind, place: placeKind, pend, playing: playingAt, names: NAMES, at, board, stats, hovered: () => hovered && { id: hovered.b.id, seat: !!hovered.seat } };
+  return { talk, typed, size, draw, width, color: projectColor, icon, door: doorPicture, paints: () => ({ wood: WOOD.top, list: PAINT.map((p) => p.top) }), paintOf: paintIdx, paint: paintOf, tiny, tinyW, printer: printerPicture, carry: carryKind, place: placeKind, pend, condemn: (ids) => condemn(ids), playing: playingAt, names: NAMES, at, board, stats, hovered: () => hovered && { id: hovered.b.id, seat: !!hovered.seat } };
 }

@@ -58,10 +58,11 @@ beside the robot whose session is open, or under the screen when your own termin
   ✕, a click on the floor or `exit` closes a tile, and the session runs on
 - **start a session**: the `+` beside a desk's screen
 - **a desk**: the project cabinet puts one down; its list has the directories with sessions that are not
-  in the room yet, then where Claude Code ran lately. Burn a desk and its sessions leave the room (they go on)
+  in the room yet, then where Claude Code ran lately. Burn a desk and its sessions are deleted with it: they
+  walk into the booth one by one (in hardcore you take a gun and shoot them); rescue one and the desk stays
 - **a fresh start**: drop an idle robot by the neuralyzer: `/clear`, a new conversation in the same session
-- **delete a session gently**: carry its robot into the booth. A sign counts five seconds down (click it,
-  or carry the robot out, to undo), then `claude stop` and `claude rm`
+- **delete a session gently**: carry its robot into the booth, or ✕ twice in the bench's list. A sign counts
+  five seconds down (click it, or carry the robot out, to undo), then `claude stop` and `claude rm`
 - **delete a session** (`claude rm`; the transcript stays for `claude --resume`): drop its robot in the fire
 - **your own terminal**: click a desk's screen. A login shell in that directory on that machine, one per
   desk, kept while burrow runs; the screen shows its prompt

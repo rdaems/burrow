@@ -576,7 +576,7 @@ function fillDoors() {
 }
 // ---- the sessions that are over, as agent view's Completed group: how each ended, its name, where, when
 // and how long it ran, its last line; the newest first. A click opens one (Claude Code restarts it), its ✕
-// deletes it from the list (asked twice, as agent view's Ctrl+X)
+// deletes it (asked twice, as agent view's Ctrl+X): in the room it walks into the booth, or you shoot it
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const projOf = (b) => (b.tree ? b.tree.split("/").pop() + " (worktree)" : (b.cwd || "").replace(/^\/(Users|home)\/[^/]+$/, "~").split("/").pop() || "~");
 const ago = (sec) => sec < 90 ? `${Math.round(sec)} s` : sec < 5400 ? `${Math.round(sec / 60)} min` : sec < 48 * 3600 ? `${(sec / 3600).toFixed(1)} h` : `${Math.round(sec / 86400)} d`;
@@ -599,7 +599,7 @@ function fillDone() {
     row.onclick = (e) => { if (e.target.closest(".rm")) return; if (b) openBot(b.m, b.id, e.shiftKey); };
     let armed = 0;
     x.onclick = () => {
-      if (performance.now() - armed < 2500) { x.textContent = "…"; if (b) stopBot(b.m, b.id, true); return; }
+      if (performance.now() - armed < 2500) { x.textContent = "…"; if (b && !room.condemn([b.id]).length) stopBot(b.m, b.id, true); return; }   // to the booth (hardcore: you shoot it), as a burnt desk's bots
       armed = performance.now(); x.textContent = "delete?"; x.classList.add("warn");
       setTimeout(() => { if (performance.now() - armed >= 2500) { x.textContent = "✕"; x.classList.remove("warn"); } }, 2600);
     };

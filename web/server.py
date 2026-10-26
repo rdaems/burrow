@@ -1941,7 +1941,7 @@ class Handler(BaseHTTPRequestHandler):
             return hub.answer(b.get("id") or "", b.get("question") or "", text[:4000])
         if path == "/api/digest":            # the notes opened: the sessions that moved since are written up again
             return {"queued": hub.digest_refresh() if options(hub.room)["digest"] else 0}
-        if path == "/api/forget":            # a desk burnt: its sessions go on, out of the room
+        if path == "/api/forget":            # a desk burnt (its bots went first, through the booth or your gun)
             hub.kill_shells(b["unit"])
             hub.keep(b["unit"], False)
             return {}

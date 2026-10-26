@@ -1183,8 +1183,24 @@ are his choice now instead of a record of every directory a session was seen in.
   transcript of the 100 latest dirs of `~/.claude/projects`, its first `"cwd"`, if it still exists; ~0.1 s), not
   worktrees, not the Desktop app's scratch chats, not temporary dirs (/tmp, /var/folders). Typed: the ones that contain it, then `ls` completion. The
   completer (`completes`) takes `{value, note}` items, the note on the right. Asked once a form and machine.
-- **A desk with bots burns** (it was refused: it would have come right back): "burn NAME, its bots go"; they go
-  on, out of the room. `/api/forget` no longer refuses.
+- **A desk with bots burns** (it was refused: it would have come right back). First built as "its bots go on, out
+  of the room, through their door"; he: "They should not walk out the door, we changed that! In normal mode, they go
+  in the cabin, in hardcore mode my avatar takes a gun and shoots them", and "Likewise when I exit a bot from the
+  bench UI". So both hand the bots to `condemn(ids, unit)` (room.js; `room.condemn` for the page):
+  - normal: they line up by the booth (`queue` act, on its roomier side, 12 dots apart, five a row) and go in one
+    at a time when the first has arrived (`condemnStep`), the booth's own five seconds each (`doom`);
+  - hardcore: they stand where they are, hands up (`condemned`), and you (`huntStep`, before your `thinkOne`) walk
+    to the gun closet, take a gun (one shows gone from it), go to the nearest, level it 0.9 s, shoot (`shoot`: the
+    remains, the sweepers, `gone()`), the next, then put the gun back;
+  - no booth: they walk into the fire (`pyre`, `bury`); no fire either: deleted at once.
+  `DOOMED` (doom, queue, condemned, pyre) keeps work, an opened session and the office manager off them. Kept: taken
+  out of the line (picked up and let go anywhere but the booth), the booth's undo, or the remains clicked
+  (`w.spared`). A burnt desk is hidden at once (`w.razed`, left out of `layout`) but `forget` is posted only when
+  the last of its bots is gone; rescuing one brings the desk back where it stood. A reload before then shows the
+  desk and what is left of its bots again (nothing lost). The fire's tip: "burn NAME, its bots to the booth" /
+  ", shoot its bots" / " and its bots". The completed list's ✕✕ condemns too (deletes directly only if the
+  bot has no figure). Tested in the demo: five bots through the booth and the desk gone after, five shot in
+  hardcore, a ✕✕, and a rescue from the line that brought the desk back.
 - Decided myself (his to overrule): a session waiting for input in a directory without a desk is hidden like the
   rest; only the cabinet's list says so. README brought up to date (desks, the booth instead of the door, a door
   from the closet).
