@@ -1,12 +1,11 @@
-// The 3d goggles (or the gun closet, hardcore): the office in the first person, as Wolf3D drew its castle.
-// The whole window is the view: the room as it is, raycast. Its floor (the planks, the rug, the mats rolled
-// out, the oil), its wall with what hangs on it (the doors, the window, the clock, the closet), the other
-// three walls plain, a ceiling of tiles and lights; the desks as blocks, their screens, chairs and everything
-// else as sprites (their own pictures from the room), and the bots, walking about as they do there. A click
-// uses what is under the crosshair (room.use: the gun closet hands you a shotgun, the goggles come off, a bot
-// opens). With the shotgun a click shoots: a bot shot goes to pieces, in the room as well (room.js: the
-// remains, the sweepers, the undo); E on the pieces puts it back together, E on the gun closet puts the gun
-// back. Esc leaves; you stand in the room where you left off.
+// The gun closet, hardcore: the office in the first person, as Wolf3D drew its castle. The whole window is
+// the view: the room as it is, raycast. Its floor (the planks, the rug, the mats rolled out, the oil), its
+// wall with what hangs on it (the doors, the window, the clock, the closet), the other three walls plain, a
+// ceiling of tiles and lights; the desks as blocks, their screens, chairs and everything else as sprites
+// (their own pictures from the room), and the bots, walking about as they do there. You hold a shotgun: a
+// click shoots, a bot shot goes to pieces, in the room as well (room.js: the remains, the sweepers, the undo);
+// E on the pieces puts it back together, E on the gun closet loads the gun again. Esc leaves; you stand in the
+// room where you left off.
 //
 // Under the view Doom's status bar: your shells, health (what is left of the five-hour limit, the coffee pot's),
 // kills, your face, armor (what is left of the week, the cooler's bottle), the doors as keys (lit while their
@@ -243,7 +242,7 @@ function startFps(room, done) {
     used = now;
     const th = under(3);
     if (th && th.rem) return room.unshoot(th.rem);
-    if (th && room.use(th)) { t0 = now; return; }   // (the keys again: a gun taken or put back)
+    if (th && room.use(th) === "reload") { shells = SHELLS; return; }
     const r = near();
     if (r) room.unshoot(r.rem);
   }
@@ -442,6 +441,7 @@ function startFps(room, done) {
     };
     const rm = near(), who = bot ? th : rm || (th && th.name ? th : null);
     if (armed || rm) { if (who) tag(who.name, 18, bot ? "#ffb4a8" : "#e8e8ee"); }   // who is in your sights, up top (not over their face)
+    if (armed && !who && th && room.use(th) === "reload") tag("E: reload", 18, "#e8e8ee");   // the gun closet
     else if (what) tag(what, 18, "#e8e8ee");                                       // what a click would use
     if (!bot && rm) tag("E: put back together", 28, "#e8e8ee");
     if (now - t0 < 6000) tag(armed ? "wasd walk - mouse look - click shoot - e use - esc leave" : "wasd walk - mouse look - click use - esc leave", 6, "#c9ced8");

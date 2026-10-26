@@ -1358,6 +1358,20 @@ and on the floor, I want there to be overlap! It's the responsability of the use
   pictures (`views`: front, back from `backOf`, side as the room draws it), picked by the way they walk or look
   against the way to you. All pieces were looked at from the front in 3d (a contact sheet); the rest stand right.
 
+## The goggles go; you stay put while a bot goes (2026-10-27)
+
+He: "Let's remove the 3d furniture actually", "I mean the 3d goggle furniture. 3d view is only used for the
+shotgun experience"; and "when i delete a bot, i walk towards its desk, while the office manager is busy grabbing
+the gun etc."
+- **No goggles**: the kind is gone (`furnish` drops `goggles*` from every room; not in the closet, `KINDS`,
+  `CLICK`). The first person is the gun closet's only (`firstPerson(key)`, hardcore): you always hold the gun
+  there (`room.armed()` is true), E on the gun closet loads it again (8 shells; "E: reload" under the crosshair),
+  hardcore switched off takes you out. fps.js still has its unarmed branches; nothing reaches them.
+- **Staying put**: with a bot's tile open you are `with` it, and that act walked you to stand behind its desk
+  whatever it was doing; a bot dropped on the gun closet (or into the booth, or in the line for it) kept its chair,
+  so you walked to its desk while she fetched the gun. Now, while the bot you are with is condemned, queued, in the
+  booth or being walked there, you stand where you are and watch it.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

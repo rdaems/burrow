@@ -312,7 +312,7 @@ def split_unit(u):
 # the first room's pieces have no number). There can be any number of a kind. The closet in the
 # room adds a piece, the fireplace burns one; the fire, the closet and the switchboard themselves stay.
 FURNITURE = ["meet", "pong", "chess", "coffee", "cooler", "printer", "armchair",
-             "plant0", "plant1", "board", "window", "clock", "fire", "closet", "add", "bench0", "settings0", "manager0", "booth0", "neuralyzer0", "goggles0"]
+             "plant0", "plant1", "board", "window", "clock", "fire", "closet", "add", "bench0", "settings0", "manager0", "booth0", "neuralyzer0"]
 # (a new machine is a door taken from the closet and hung on the wall; the doors themselves are no furniture:
 # one a machine in Claude Code's sshConfigs, their places in the layout as door:<machine id>)
 FIXED = {"fire", "closet", "settings"}
@@ -329,7 +329,7 @@ OPTIONS = {
 def options(room):
     return {**OPTIONS, **{k: bool(v) for k, v in (room.get("settings") or {}).items() if k in OPTIONS}}
 KINDS = {"meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "clock", "add", "pair", "bench", "manager",
-         "booth", "neuralyzer", "goggles"}
+         "booth", "neuralyzer"}
 
 
 # The office manager: whoever sits at the reception booth (the `manager` piece; one at a time). Her style is
@@ -588,9 +588,7 @@ def furnish(room):
         for k in [k for k in room["layout"] if kind_of(k) == "frame"]:
             room["layout"].pop(k)
         room["v"] = 11
-    if room["v"] < 12:                       # the 3d goggles (the office in the first person), once
-        if not any(kind_of(x) == "goggles" for x in room["furniture"]):
-            room["furniture"].append("goggles0")
+    if room["v"] < 12:                       # (the 3d goggles came here for a day)
         room["v"] = 12
     # the receptions: each has the office manager hired at it. One office manager of the first round of styles
     # (`manager`) is the first booth's; a room from before the styles has Linda (the notes) at its booth. A booth
@@ -609,6 +607,9 @@ def furnish(room):
     for k in [k for k in ms if k not in room["furniture"]]:
         ms.pop(k)
     room["v"] = max(room["v"], 13)
+    room["furniture"] = [k for k in room["furniture"] if kind_of(k) != "goggles"]   # the 3d goggles: the first person is the gun closet's only
+    for k in [k for k in room["layout"] if kind_of(k) == "goggles"]:
+        room["layout"].pop(k)
     return room
 
 

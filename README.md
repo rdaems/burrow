@@ -64,16 +64,16 @@ have sent it something; then you stand behind its desk), or under the screen whe
 - **a fresh start**: drop an idle robot by the neuralyzer: `/clear`, a new conversation in the same session
 - **delete a session gently**: carry its robot into the booth, or ✕ twice in the bench's list. A sign counts
   five seconds down (click it, or carry the robot out, to undo), then `claude stop` and `claude rm`
-- **3d**: click the goggles and the whole window is the office through your own eyes, as Wolf3D drew it: WASD
-  walks, the mouse looks, a click uses what is under the crosshair (a robot opens its session). Doom's status
-  bar under it: your shells, health (the five-hour limit), kills, your face, armor (the week), the doors as
-  keys, the sessions as the ammo table. Esc, and you stand in the room where you walked to
 - **hardcore** (a switch on the switchboard): the booth is a gun closet. A robot dropped on it is shot: it
   stands there with its hands up while an office manager (you, if there is none) takes a gun and comes over.
-  Click the closet (in the room, or in 3d) and you hold a shotgun yourself: a click shoots. A shot robot goes to
-  pieces; E puts it back together until idle robots have cleared the pieces away (then `claude stop` and
-  `claude rm`). The others grow afraid with every kill: they tremble, sweat, keep away from whoever holds a
-  gun, hide behind the furniture and peek out; it wears off when nobody is shot for a few minutes
+  Click the closet and you take a shotgun yourself, and the whole window is the office through your own eyes,
+  as Wolf3D drew it: WASD walks, the mouse looks, a click shoots, E at the closet reloads; Doom's status bar
+  under it (your shells, health = the five-hour limit, kills, your face, armor = the week, the doors as keys,
+  the sessions as the ammo table); Esc, and you stand in the room where you walked to. A shot robot goes to
+  pieces; E (or a click in the room) puts it back together until idle robots have cleared the pieces away
+  (then `claude stop` and `claude rm`). The others grow afraid with every kill: they tremble, sweat, keep away
+  from whoever holds a gun, hide behind the furniture and peek out; it wears off when nobody is shot for a few
+  minutes
 - **your own terminal**: click a desk's screen. A login shell in that directory on that machine, one per
   desk, kept while burrow runs; the screen shows its prompt
 - **drop a file** on a robot or a tile and its path is typed into the session (copied over first for a
