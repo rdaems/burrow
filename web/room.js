@@ -1384,7 +1384,7 @@ function startRoom(cv, app) {
     const ids = new Set(bots.map((b) => b.id)), you ={ id: "you", name: (s.you && s.you.name) || "you", seed: s.you && s.you.seed, color: s.you && s.you.color, human: true, m: "" };
     ids.add("you");
     // the office managers, one at each reception (thinkManager)
-    const mgrs = L.managers.map((mb) => (s.managers || []).find((M) => M.key === mb.key)).filter(Boolean).map((M) => ({ id: "mgr:" + M.key, booth: M.key, name: M.name, seed: M.seed,
+    const mgrs = L.managers.map((mb) => (s.managers || []).find((M) => M.key === mb.key)).filter((M) => M && !M.vacant).map((M) => ({ id: "mgr:" + M.key, booth: M.key, name: M.name, seed: M.seed,
       color: M.color, style: M.style, session: M.session, busy: M.busy, waiting: M.waiting, alive: M.alive, rc: M.rc, human: false, staff: true, m: "" }));
     for (const g of mgrs) ids.add(g.id);
     for (const f of w.folk.values()) if (!ids.has(f.id) && !f.leaving) { f.leaving = true; f.held = false; f.lying = false; f.sat = false; f.legs = "stand"; }
@@ -1437,9 +1437,6 @@ function startRoom(cv, app) {
     }
     if (pending && pending.mid != null && (s.machines.some((m) => m.id === pending.mid) || performance.now() - pending.t > 10000)) pending = null;
     if (pending) drawKind(ctx, pending.kind, pending.at, w, T);
-    // trouble here goes on the wall, in red, instead of the whiteboard
-    const here = s.machines.find((m) => !m.id), trouble = s.note || (here && here.error);
-    if (trouble) { const nx = Math.max(24, ...L.doors.map((d) => d.x0 + 20)); tiny(ctx, clip(trouble, W - 24 - nx), nx, 18, RED); }   // past the last door
     for (const win of L.windows) {
       const h = hot(win.x0, win.y0, win.x1, win.y1, { kind: "outside" });
       onTheWall(win.key, [win.x0, win.y0, win.x1, win.y1], h, (c) => drawWindow(c, win));
@@ -1527,13 +1524,13 @@ function startRoom(cv, app) {
       // a reception, an office manager's booth: a click (on it or on her) is hers: her terminal, or the notes
       // (Linda). Two layers, she sits between them: the back wall, then the counter with her name on it
       const M = (s.managers || []).find((x) => x.key === mg.key) || {}, dg = app.digest(), live = new Set(all.map((b) => b.id)), r = foot("manager", [mg.x, mg.y]);
-      const o = { name: M.name || "", color: M.color || SP.r, n: M.style === "notes" && dg ? Object.keys(dg.sessions || {}).filter((id) => live.has(id)).length : 0,
+      const o = M.vacant ? { name: "", color: M.color || SP.r, n: 0, screen: M.session ? "off" : null, T } : { name: M.name || "", color: M.color || SP.r, n: M.style === "notes" && dg ? Object.keys(dg.sessions || {}).filter((id) => live.has(id)).length : 0,
         screen: M.session ? (M.busy ? "busy" : M.waiting ? "asks" : M.alive ? "on" : "off") : null, T };
       const h = hot(...r, { kind: "manager", key: mg.key }), both = (c) => { drawReception(c, mg, o, false); drawReception(c, mg, o, true); };
       pics.push({ key: mg.key, kind: "manager", x: mg.x, y: mg.y, fn: both });
       items.push([danger(mg.key) ? 1e9 : mg.y - 20, () => outlined(ctx, r, h || hl.has("mgr:" + mg.key) || danger(mg.key), both, danger(mg.key) ? RED : GOLD, tintOf(mg.key)), [[mg.x + 2, mg.y - 30, mg.x + 44, mg.y - 14]]]);
       if (!danger(mg.key)) items.push([mg.y - 0.5, () => drawReception(ctx, mg, o, true), [[mg.x, mg.y - 16, mg.x + 46, mg.y + 1]]]);
-      if (h) tip = { text: (M.name || "office manager") + (M.error ? " - " + M.error : M.style === "notes" ? " - notes" : M.session && !M.id ? " - on her way" : " - office manager"), x: mg.x + 23, y: mg.y - 30 };
+      if (h) tip = { text: M.vacant ? "empty - a click hires " + (M.name || "her") + " again" : (M.name || "office manager") + (M.error ? " - " + M.error : M.style === "notes" ? " - notes" : M.session && !M.id ? " - on her way" : " - office manager"), x: mg.x + 23, y: mg.y - 30 };
     }
     for (const ch of L.chairs) {              // a click on one: you go and sit in it (a bot in it gets up)
       const h = hot(...foot("armchair", [ch.x, ch.y]), { kind: "sit", key: ch.key });
@@ -1870,7 +1867,7 @@ function startRoom(cv, app) {
       if (p.kind === "printer") { const job = [...w.folk.values()].find((f) => f.act.kind === "print" && f.act.stage === 1), since = (performance.now() - w.print) / 1000; st.printing = job ? job.act.wait : since < 3 ? since : undefined; }
       if (p.kind === "manager") {
         const M = (s.managers || []).find((x) => x.key === p.key) || {}, dg = app.digest(), live = new Set((s.bots || []).map((b) => b.id));
-        Object.assign(st, { name: M.name, color: M.color, screen: M.session ? (M.busy ? "busy" : M.waiting ? "asks" : M.alive ? "on" : "off") : null, notes: M.style === "notes" && dg ? Object.keys(dg.sessions || {}).filter((id) => live.has(id)).length : 0 });
+        Object.assign(st, M.vacant ? { name: "", color: M.color, screen: M.session ? "off" : null, notes: 0 } : { name: M.name, color: M.color, screen: M.session ? (M.busy ? "busy" : M.waiting ? "asks" : M.alive ? "on" : "off") : null, notes: M.style === "notes" && dg ? Object.keys(dg.sessions || {}).filter((id) => live.has(id)).length : 0 });
       }
       if (p.kind === "add") st.w = ADD_W;
       if (p.kind === "booth") {
@@ -2205,7 +2202,7 @@ function startRoom(cv, app) {
       scene: () => view,
       start: () => { const x = p ? Math.max(14, Math.min(W - 14, (p.r[0] + p.r[2]) / 2)) : W / 2, y = p ? Math.min(H - 8, p.r[3] + 22) : H / 2; return { x, y, a: Math.atan2((WALL + H) / 2 - y, W / 2 - x) }; },
       move: (x, y, a, walking) => { const f = world().folk.get("you"); if (f && !f.held) { f.x = x; f.y = y; f.dir = Math.cos(a) < 0 ? -1 : 1; f.walking = walking; } },
-      shoot: (id) => { const f = world().folk.get(id); if (!f || f.held || !f.b || f.b.human || f.b.staff) return false; shoot(f); return true; },
+      shoot: (id) => { const f = world().folk.get(id); if (!f || f.held || !f.b || f.b.human) return false; shoot(f); return true; },   // an office manager too: a bot like the others
       armed: () => true,
       status: () => {
         const s = app.state() || {}, u = s.usage || {}, bots = s.bots || [], left = (x) => (x && x.used !== undefined ? Math.max(0, 100 - x.used) : null);
@@ -2579,7 +2576,7 @@ function startRoom(cv, app) {
   function scatter(f, at) {
     const charred = false;
     const w = world(), x = Math.round(at[0]), y = Math.max(WALL + 14, Math.round(at[1]));
-    const im = body(seedOf(f.b), colorOf(f.b), "down", "stand", false), cut = (sx, sy, sw, sh, kind) => ({ kind, img: im, sx, sy, sw, sh });
+    const im = body(seedOf(f.b), colorOf(f.b), "down", "stand", false, !!f.b.staff), cut = (sx, sy, sw, sh, kind) => ({ kind, img: im, sx, sy, sw, sh });
     const kinds = (charred || !im ? [] : [cut(1, 1, 20, 17, "head"), cut(6, 18, 10, 5, "chest"), cut(4, 18, 3, 5, "arm"), cut(15, 18, 3, 5, "arm"), cut(7, 23, 4, 6, "leg"), cut(11, 23, 4, 6, "leg")])
       .concat([{ kind: "cog", big: true }, { kind: "cog" }, { kind: "cog" }, { kind: "bolt" }, { kind: "bolt" }, { kind: "bolt" }], charred ? [] : [{ kind: "cog" }, { kind: "spring" }]);
     const parts = kinds.map((p) => {
@@ -2635,7 +2632,8 @@ function startRoom(cv, app) {
     }
   }
   function gone(w, id) {                      // the last piece cleared away (or rusted): out of the list for good
-    w.remains.delete(id); w.stopped.set(id, performance.now()); app.act({ kind: "stop", id, rm: true });
+    w.remains.delete(id); w.stopped.set(id, performance.now());
+    app.act(id.startsWith("mgr:") ? { kind: "managerGone", key: id.slice(4) } : { kind: "stop", id, rm: true });   // an office manager: her session, her reception left empty
   }
   function drawPart(ctx, p, fade) {
     const x = Math.round(p.x), y = Math.round(p.y), z = Math.round(p.z);

@@ -1237,7 +1237,7 @@ very simple sprite graphics like wolf3d or doom, of the office, and we can kill 
   spread round the crosshair goes to pieces (the room's `shoot`: remains, sweepers, then `claude stop` + `claude rm`),
   a miss puffs where it hits. E (or Space): the pieces under the crosshair, or the nearest in front within 70 dots,
   are put back together (`unshoot`). A shot sends the idle bots within 110 dots running, hands up (`alarm`: `loiter`
-  with `panic`); not those at work, opened, or let go of (`DOOMED`). The office manager can't be shot. Desks and
+  with `panic`); not those at work, opened, or let go of (`DOOMED`). The office manager can't be shot (since 2026-10-27 she can: see "Susan is a bot"). Desks and
   pieces stop you (`solid`); bots don't. Your figure in the room follows you (`fps` act, the gun in hand); the
   automatic hunt for condemned bots (`huntStep`) is off while you are in there (you shoot them yourself) and starts
   over when you leave. Esc (losing the pointer lock) leaves, as does hardcore switched off; you stand where you went.
@@ -1632,6 +1632,21 @@ an orange fire it went the colour of skin.
   with a highlight band (`metal`, all but the torso in its colour).
 - **Doom's light**: in steps (`STEP` 18 in fps.js's `shade`, its colormaps: bands into the dark), the fire's light
   warm rather than orange (col 1, 0.8, 0.58; k 0.9).
+
+## Susan is a bot; no red text (2026-10-27)
+
+He: "I can't shoot susan at her desk though" (the gun skipped `staff`), and to my plan of a new Susan walking in on her
+own: "huh why? she's a subclass of the bot concept, no? she's just a bot like all the others??". So an office manager is
+shot like any bot: to pieces, E puts her back together, swept up (or rusted) her session is stopped and deleted
+(`gone()` → `managerGone` → `/api/manager {gone: key}`, `Hub.manager_gone`: her id popped, `claude stop` + `rm`). What is
+hers alone: her reception is left empty (`vacant` in room.json `managers[key]`, in `managers_view`): no figure, no name on
+the counter, its screen off, the tip "empty - a click hires NAME again"; a click hires her again (`manager_open` clears
+`vacant`, a fresh session; for Linda the notes come back on, `notes_on` skips a vacant one). Tested in the demo: shot from
+in front of her counter, her pieces aged, the reception empty, a click, she is back.
+And: "Sometimes a red text flashes at the top. That's never necessary." The room's trouble line (red on the wall: a failed
+request's `note()` until the next push, or this computer's poll error) is gone; `note()` writes to the console. The 3d
+view's Doom messages ("NAME IS DELETED.", "PICKED UP SOME SHELLS.") are gone too; its key help, the first six seconds, is
+grey.
 
 ## Next
 

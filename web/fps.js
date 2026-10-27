@@ -108,7 +108,7 @@ function startFps(room, done) {
   // ---- you: where you stand, which way you look
   const me = room.start();
   let a = me.a, pitch = 0, walking = false, bob = 0, shot = -1e9, used = -1e9, shells = room.armed() ? SHELLS : 0, armedWas = room.armed(), kills0 = (room.status() || {}).kills || 0, grin = -1e9;   // pitch: how far the horizon is pushed down (you look up) or up
-  const keys = new Set(), puffs = [], said = [];
+  const keys = new Set(), puffs = [];
   let sc = room.scene(), seen = new Map(), sv = -1;
   const blocked = (x, y) => x < R || x > sc.W - R || y < sc.WALL + R || y > sc.H - R ||
     sc.solid.some((r) => x > r[0] - R && x < r[2] + R && y > r[1] - R && y < r[3] + R);
@@ -183,12 +183,11 @@ function startFps(room, done) {
     let best = null, bd = Infinity;
     for (let y = cy - 9; y <= cy + 9; y++) for (let x = cx - 14; x <= cx + 14; x++) {
       const i = y * RW + x, n = idb[i], th = n && drawn[n - 1];
-      if (th && th.bot && !th.staff && zb[i] < bd) { best = th; bd = zb[i]; }
+      if (th && th.bot && zb[i] < bd) { best = th; bd = zb[i]; }      // (an office manager is a bot like the others)
     }
     const d = Math.min(best ? bd : zb[cy * RW + cx], 2000) * 0.97;
     const hx = me.x + Math.cos(a) * d, hy = me.y + Math.sin(a) * d, hz = EYE + Math.round(pitch) * d / focal;
-    if (best && room.shoot(best.bot)) said.push({ text: (best.name || "a bot").toUpperCase() + " IS DELETED.", t0: now });
-    else puffs.push({ x: hx, y: hy, z: Math.max(1, hz), t0: now });
+    if (!(best && room.shoot(best.bot))) puffs.push({ x: hx, y: hy, z: Math.max(1, hz), t0: now });
     room.alarm(me.x, me.y);
   }
   // E (or a click with nothing in your hands): the pieces under the crosshair are put back together, or what is
@@ -199,7 +198,7 @@ function startFps(room, done) {
     used = now;
     const th = under(3);
     if (th && th.rem) return room.unshoot(th.rem);
-    if (th && room.use(th) === "reload") { shells = SHELLS; said.push({ text: "PICKED UP SOME SHELLS.", t0: now }); return; }
+    if (th && room.use(th) === "reload") { shells = SHELLS; return; }
     const r = near();
     if (r) room.unshoot(r.rem);
   }
@@ -462,7 +461,7 @@ function startFps(room, done) {
       ctx.drawImage(pump, 0, Math.round(back));
       ctx.restore();
     }
-    const th = under(2), bot = armed && th && th.bot && !th.staff, what = !armed && th && room.label(th);
+    const th = under(2), bot = armed && th && th.bot, what = !armed && th && room.label(th);
     const col = bot ? "#ff6b5a" : "#e8e8ee";
     ctx.fillStyle = "rgba(10,8,16,0.6)";
     for (const [x, y, w, h] of [[cx - 6, cy, 4, 1], [cx + 3, cy, 4, 1], [cx, cy - 6, 1, 4], [cx, cy + 3, 1, 4]]) ctx.fillRect(x + 1, y + 1, w, h);
@@ -474,10 +473,8 @@ function startFps(room, done) {
     if (armed && !who && th && room.use(th) === "reload") mid("E: RELOAD", 22, "#e8e8ee");
     else if (what) mid(what.toUpperCase(), 22, "#e8e8ee");
     if (!bot && rm) mid("E: PUT BACK TOGETHER", 36, "#e8e8ee");
-    // Doom's messages, up left, a few seconds each: the keys at first, a kill, shells picked up
-    const msgs = said.filter((m) => now - m.t0 < 4000).slice(-2);
-    if (now - t0 < 6000) msgs.unshift({ text: armed ? "WASD WALK - MOUSE LOOK - CLICK SHOOT - E USE - ESC LEAVE" : "WASD WALK - MOUSE LOOK - CLICK USE - ESC LEAVE" });
-    msgs.forEach((m, i) => words(m.text, 4, 4 + i * 13, "#e8402a"));
+    // the keys, up left, the first seconds (no other messages: what happens shows in the view)
+    if (now - t0 < 6000) words(armed ? "WASD WALK - MOUSE LOOK - CLICK SHOOT - E USE - ESC LEAVE" : "WASD WALK - MOUSE LOOK - CLICK USE - ESC LEAVE", 4, 4, "#c9ced8");
     statusBar(now, armed);
   }
   // the room's 3x5 letters at twice their size, with a shadow

@@ -107,7 +107,8 @@ have sent it something; then you stand behind its desk), or under the screen whe
     recommendation) and answered right there: the answer is typed into the session for you. Claude writes them
     (`claude -p`, on this computer) when a session finishes a turn or asks you something, and when the notes open
 
-  Burn her booth to let her go (her session is stopped and deleted)
+  Burn her booth to let her go (her session is stopped and deleted). In hardcore she can be shot like any robot: once
+  her pieces are cleared away her session is deleted and her reception stands empty until a click hires her again
 - **the whiteboard** is the robots' dream: a pixel-art picture that appears bit by bit, two robots in love
   running hand in hand over a sunny hill, or along a beach. It grows faster while robots nap (they dream it)
   and while the host of a meeting draws at the board; a finished one is wiped for the next. A click opens it

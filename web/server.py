@@ -894,7 +894,7 @@ class Hub:
         return {**mg, "style": mg.get("style") if mg.get("style") in MANAGERS else "notes"}
 
     def notes_on(self):
-        return any(self.manager(k)["style"] == "notes" for k in self.booths())
+        return any(self.manager(k)["style"] == "notes" and not self.manager(k).get("vacant") for k in self.booths())
 
     def managers_view(self):
         out = []
@@ -903,8 +903,24 @@ class Hub:
             M, r = MANAGERS[mg["style"]], self.mrows.get(mg.get("id"))
             out.append({"key": key, "style": mg["style"], "name": M["name"], "seed": M["seed"], "color": M["color"], "session": M["session"],
                         "id": mg.get("id") or "", "error": mg.get("error") or "", "busy": bool(r and r["busy"]), "waiting": bool(r and r["waiting"]),
-                        "alive": bool(r and r["alive"]), "rc": (r or {}).get("rc") or ""})
+                        "alive": bool(r and r["alive"]), "rc": (r or {}).get("rc") or "", "vacant": bool(mg.get("vacant"))})
         return out
+
+    def manager_gone(self, key):
+        """shot and swept up, as any bot: her session stopped and deleted (its transcript stays), her reception left
+        empty (`vacant`) until a click on it hires her again"""
+        if key not in self.booths():
+            raise RuntimeError("no one at that booth")
+        with self.lock:
+            mg = self.room.setdefault("managers", {}).setdefault(key, {"style": self.manager(key)["style"]})
+            old = mg.pop("id", None)
+            mg["vacant"] = True
+            save_room(self.room)
+        if old:
+            threading.Thread(target=self.let_go, args=(old,), daemon=True).start()
+        self.push("state", self.state())
+        self.push_digest()
+        return {}
 
     def desk_of(self, style, bid=None):
         """her own directory: her CLAUDE.md, her sessions (Claude Code keys them by directory); where her session
@@ -1002,6 +1018,15 @@ class Hub:
         if key not in self.booths():
             raise RuntimeError("no one at that booth")
         mg = self.manager(key)
+        if mg.get("vacant"):                   # her reception empty (she was shot): hired again
+            with self.lock:
+                self.room.setdefault("managers", {}).setdefault(key, {"style": mg["style"]}).pop("vacant", None)
+                save_room(self.room)
+            self.push("state", self.state())
+            self.push_digest()
+            mg = self.manager(key)
+            if not MANAGERS[mg["style"]]["session"]:
+                return {"id": "", "error": ""}
         if not MANAGERS[mg["style"]]["session"]:
             raise RuntimeError("no one to talk to at the booth")
         gone = (REAL_OFFICE and mg.get("id") and time.time() - mg.get("since", 0) > 30     # (the polls have seen her by then)
@@ -2327,6 +2352,8 @@ class Handler(BaseHTTPRequestHandler):
                 return hub.hire(b["hire"], b.get("at"))
             if b.get("open"):
                 return hub.manager_open(b["open"])
+            if b.get("gone"):
+                return hub.manager_gone(b["gone"])
             here = {hub.manager(k)["style"] for k in hub.booths()}
             return {"styles": [{"key": k, "here": k in here, **{f: M[f] for f in ("name", "seed", "color", "line", "how", "session")}} for k, M in MANAGERS.items()]}
         if path == "/api/office":            # what she does in the office: remove, desk, start, say (and, from the room, kept)
