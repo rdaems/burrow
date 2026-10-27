@@ -297,7 +297,7 @@ function startRoom(cv, app) {
       case "coffee": return [x, y - 22, x + 20, y + 1];
       case "cooler": return [x - 5, y - 26, x + 5, y + 1];
       case "printer": return [x - 7, y - 15, x + 7, y + 1];
-      case "armchair": return [x - 8, y - 12, x + 8, y + 1];
+      case "armchair": return [x - 8, y - 14, x + 8, y + 1];
       case "board": return [x - 16, y - 26, x + 16, y + 1];
       case "window": return [x, y, x + 21, y + 18];
       case "clock": return [x, y, x + 17, y + 17];
@@ -1531,7 +1531,7 @@ function startRoom(cv, app) {
     }
     for (const ch of L.chairs) {              // a click on one: you go and sit in it (a bot in it gets up)
       const h = hot(...foot("armchair", [ch.x, ch.y]), { kind: "sit", key: ch.key });
-      piece(ch, "armchair", (c) => drawArmchair(c, ch), 2.5);
+      piece(ch, "armchair", (c) => drawArmchair(c, ch), 4.5);
       if (h) tip = { text: "have a seat", x: ch.x, y: ch.y - 14 };
     }
     if (L.board) {
@@ -3012,12 +3012,12 @@ function startRoom(cv, app) {
     if (wait !== undefined) { const k = Math.min(4, Math.floor(wait * 2)); box(ctx, pr.x - 4, pr.y - 8, 8, k + 1, C.steel4, SP.D); }
   }
   // the pouf (the kind is still "armchair"): a square green cushion seen from above at a slant, as the furniture
-  // is, so it is the same from each of its four sides; its top lit along the front edge, a button in the middle.
-  // Pixel Agents' armchair, its seat without the back
-  const POUF = { k: "#173115", h: "#8cbf8c", t: "#6fa374", s: "#487841", d: "#355f31" };
+  // is, so it is the same from each of its four sides; its corners rounded, its top lit along the front edge, a
+  // button in the middle, on two little splayed wooden feet. Pixel Agents' armchair, its seat without the back
+  const POUF = { k: "#173115", h: "#8cbf8c", t: "#6fa374", s: "#487841", d: "#355f31", w: "#885c47", x: "#532e3d" };
   const POUF_ROWS = [
-    ".kkkkkkkkkkkkkk.",
-    "kttttttttttttttk",
+    "..kkkkkkkkkkkk..",
+    ".kttttttttttttk.",
     "kttttttttttttttk",
     "kttttttttttttttk",
     "kttttttssttttttk",
@@ -3026,8 +3026,10 @@ function startRoom(cv, app) {
     "khhhhhhhhhhhhhhk",
     "kssssssssssssssk",
     "kssssssssssssssk",
-    "kddddddddddddddk",
-    ".kkkkkkkkkkkkkk.",
+    ".kddddddddddddk.",
+    "..kkkkkkkkkkkk..",
+    "..wx........wx..",
+    ".wx..........wx.",
   ];
   let poufPic = null;
   function pouf() {
@@ -3039,9 +3041,9 @@ function startRoom(cv, app) {
   }
   function drawArmchair(ctx, c) {
     rect(ctx, c.x - 7, c.y, 14, 1, SHADOW);
-    ctx.drawImage(pouf(), c.x - 8, c.y - 12);
+    ctx.drawImage(pouf(), c.x - 8, c.y - 14);
   }
-  const poufSeat = (ch) => ({ x: ch.x, y: ch.y - 2 });      // on its top, drawn over it
+  const poufSeat = (ch) => ({ x: ch.x, y: ch.y - 4 });      // on its top, drawn over it (piece's dz)
   const poufFace = (ch) => (ch.x < W / 2 ? 1 : -1);          // facing the middle of the room
   function drawPlant(ctx, pl, i, since) {   // Pixel Agents' plants; stirred (since: when the pointer came), the leaves sway twice
     const im = sprites.get(i ? "PLANT_2" : "PLANT");

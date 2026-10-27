@@ -511,8 +511,12 @@ window.Props3D = (() => {
         solid(x - 15, y - 4.5, x + 15, y - 1.5);
         break;
       }
-      case "armchair":                       // under whoever sits on it (at y - 2), as high as a seated robot's thighs; its shins hang over the edge
-        B(x - 3.5, y - 5.5, x + 3.5, y + 1.5, 0, 3.4, M.plain("#487841", 0.06), { top: poufTop() }); solid(x - 3.5, y - 5.5, x + 3.5, y + 1.5); break;
+      case "armchair": {                     // under whoever sits on it (at y - 4), as high as a seated robot's thighs (its shins hang over the edge), on four wooden feet
+        const sy = y - 4;
+        B(x - 3.5, sy - 3.5, x + 3.5, sy + 3.5, 1, 3.4, M.plain("#487841", 0.06), { top: poufTop() });
+        for (const [fx, fy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) B(x + fx * 2.8 - 0.4, sy + fy * 2.8 - 0.4, x + fx * 2.8 + 0.4, sy + fy * 2.8 + 0.4, 0, 1, M.wood("#885c47"));
+        solid(x - 3.5, sy - 3.5, x + 3.5, sy + 3.5); break;
+      }
       case "plant": pic(plant(p.variant || 0), x, y - 3, 0); solid(x - 6, y - 7, x + 6, y); break;
       case "pair": pic(pairTable(!!p.linked), x, y - 4, 0); solid(x - 12, y - 8, x + 12, y); break;
       default: return null;

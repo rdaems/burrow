@@ -1538,6 +1538,10 @@ countryside, running on a sunny hill. Or on the beach. The drawing is done in pi
   invariance :) Keep them square like they where". So it is square: the old armchair's seat without its back, a
   16 x 12 letter grid (`POUF_ROWS`), its top lit along the front edge, a button in the middle; in 3d (props3d.js)
   a 7-dot box under whoever sits on it, as high as a seated robot's thighs (3.4), its top `poufTop()`.
+  Then (2026-10-27): "add little feet to the poofs? They are not easily interpreted as that. And you can bend the
+  corners a bit": its corners rounded a dot, two splayed wooden feet (Pixel Agents' wood #885c47, plum #532e3d), so
+  the grid is 16 x 14 and the cushion two dots higher: the seat is `y - 4` and the piece's `dz` 4.5 (the sitter over
+  it); in 3d the box (z 1-3.4) stands on four legs, centred under the seat.
 - **Quieter robots**: no blinking `rc` light over the antenna (the APP button on the tile stays); no z's over a
   sleeping or dozing robot (you still get them, and the dog in its house); no talk bubble on a robot at the chess
   board, and no random chatter there.
