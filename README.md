@@ -2,7 +2,7 @@
 
 A room for your Claude Code sessions.
 
-![burrow: the room, and the office manager's notes beside it](docs/burrow.png)
+![burrow: the room, and a session open beside it](docs/burrow.png)
 
 Every Claude Code session running in the background on your machines is a robot in one 16-bit office.
 Where a robot is and what it does is what its session is doing; what you do to a robot happens to its
@@ -30,7 +30,7 @@ whiteboard. You furnish it, and keeping it tidy is yours: a full room is a full 
 
 ## The room
 
-![a desk at work: robots typing, one with a question, a message beamed across, a nap](docs/room.png)
+![the room: robots typing, one with a question, a message beamed across, a game of ping-pong](docs/room.png)
 
 At its desk and typing, a robot is working; with its hand up and a `?` it needs you; anywhere else it is
 idle. A finished session stays in the room, idle, until you delete it; opening it picks it up where it left

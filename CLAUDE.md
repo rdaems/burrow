@@ -1658,17 +1658,32 @@ long one of "README with pictures".
 - **The demo was not his-free**: it read his real notes (`digest.json`; a desk's paragraph is keyed by directory, and
   the demo's `~/projects/burrow` is his), its projects were four real folders of his (romuald, hexant, football,
   website), its second machine was named odyssey. Now `load_digest()` is empty in the demo (demo_notes makes them
-  up), the projects are made up (orbit, recipes, garden, atlas, weather; burrow stays, it is this repo), the machine
-  is "lab", and the made-up notes no longer ask about the bench. Still real in the demo: `~` itself (its paths show
-  as `~/…`), the login name (YOU panel only), `~/.ssh/config` and Claude Code's recent directories in the forms.
+  up), the projects are made up, the machine is "lab", and the made-up notes no longer ask about the bench. Still
+  real in the demo: `~` itself (its paths show as `~/…`), the login name (YOU panel only), `~/.ssh/config` and
+  Claude Code's recent directories in the forms.
+- **Made-up is not enough**: he, at once: "You put atlas on the readme?? I said don't put antyhing personal there???"
+  odyssey has `~/super-atlas`; I had checked the names against this Mac's `~/projects` only. The demo's names are
+  now kite, teapot, lantern, pebble, puffin (and burrow), checked against `ls ~ ~/projects ~/.claude/projects` on all
+  three machines (ssh, read-only); tidy-tess and lucky-lou, real sessions of his, are sunny-sam and jolly-jo. Check
+  every name that goes into a picture the same way.
 - **The notes named the home desk after the user** (the folder's last name): `deskName` now says "home", as the
   room's `projectLabel` does.
-- **The pictures** (1280 x 820 through look.mjs, demo on its own port): the hero is the room with Linda's notes
-  open on a waiting session, its decision explained (a real session's tile would show Claude Code's own header with
-  the account); `room.png` the top of the room at device pixels (`clip`), staged: a `waiting` forced on a bot (the
-  defineProperty trick), a nap (`act {kind: "sleep"}`), you kept aside by an interval, `room.talk` fired 0.38 s
-  before each of six shots and the best one kept (a beam is a dash in flight); the closet and the limits are the
-  `#view` panel clipped (`clipTo` its rect).
+- **Every terminal was 18 px too tall and 24 px too wide** (seen in the hero: Claude Code's status line half under the
+  tile's edge). `* { box-sizing: border-box }` made `.term`'s computed size include its padding, and the fit addon
+  takes the parent's computed size and subtracts only the `.xterm` element's own padding (0). `.term` is
+  `box-sizing: content-box` now; measured: the screen ends 10 px inside the tile at the bottom, 29 px at the right.
+  (The 2026-10-24 note "the fit addon takes it off the parent's size, so nothing is cut" was wrong since then.)
+- **The pictures** (1280 x 820 through look.mjs, demo on its own port). The hero is a plain Claude Code session in a
+  tile ("Do not use the notes as the first printscreen, that's already very specialized. Show a simple claude code
+  session"): `BURROW_DEMO_REAL=demo0005=<id>` puts a real session of this computer behind the demo's teapot bot. The
+  session was a throwaway in a made-up `~/projects/teapot` (a tea timer, no git; `.claude/settings.json` with
+  `worktree.bgIsolation: none`, or its first line is a red "Cannot create a worktree"), started with the `CLAUDE_*`
+  variables of the calling session unset (inherited, they turn its transcript saving off), asked for one small
+  change; its header shows version, model, plan and `~/projects/teapot`, no name or email. Stopped and removed after
+  (`claude stop`, `claude rm`, its folder and transcript deleted). `room.png` is the top of the room at device pixels
+  (`clip`), staged: a `waiting` forced on a bot (the defineProperty trick), a nap (`act {kind: "sleep"}`), you kept
+  aside by an interval, `room.talk` fired 0.38 s before each of six shots and the best one kept (a beam is a dash in
+  flight); the closet and the limits are the `#view` panel clipped (`clipTo` its rect).
 
 ## Next
 

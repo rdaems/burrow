@@ -58,7 +58,9 @@ button, input, select { font:inherit; color:inherit; }
 .resizing-row, .resizing-row * { cursor:col-resize !important; }   /* a gap being dragged: the cursor stays, the terminals under it are left alone */
 .resizing-col, .resizing-col * { cursor:row-resize !important; }
 .resizing-row .tile, .resizing-col .tile { pointer-events:none; user-select:none; }
-.term { flex:1; min-height:0; padding:10px 12px 8px 12px; }   /* the text keeps off the ring (the fit addon takes the padding off) */
+/* the text keeps off the ring. Content-box: the fit addon takes this box's computed size as the room the terminal has
+   (with border-box that included the padding, and the last row and a column or two went under the edge) */
+.term { flex:1; min-height:0; padding:10px 12px 8px 12px; box-sizing:content-box; }
 .term .xterm-viewport { background:transparent !important; }
 .term .xterm-viewport::-webkit-scrollbar { width:8px; }
 .term .xterm-viewport::-webkit-scrollbar-thumb { background:var(--ink2); }

@@ -27,6 +27,8 @@ CACHE = os.path.join(HOME, ".cache/burrow")
 DEMO = bool(os.environ.get("BURROW_DEMO"))
 DEMO_GONE = set()                              # the demo's doors taken out (it never writes the settings)
 DEMO_ADDED = []                                # and the ones hung up from the closet
+# a real session of this computer behind a demo bot's terminal, for pictures: BURROW_DEMO_REAL=demo0005=<session id>
+DEMO_REAL = dict(x.split("=", 1) for x in os.environ.get("BURROW_DEMO_REAL", "").split(",") if "=" in x)
 PORT = int(os.environ.get("BURROW_PORT", "7777"))
 HOSTNAME = subprocess.run(["hostname", "-s"], capture_output=True, text=True).stdout.strip() or "here"
 USER = getpass.getuser()                       # you, in the room: the name unless room.json has one
@@ -626,7 +628,7 @@ def load_room():
     if DEMO:                                 # made up, or a copy of a real room.json to try things on (never saved)
         if os.environ.get("BURROW_DEMO_ROOM"):
             return furnish({"desks": [], "layout": {}, **json.load(open(os.environ["BURROW_DEMO_ROOM"]))})
-        return furnish({"desks": [HOME + "/projects/atlas"], "layout": {}})
+        return furnish({"desks": [HOME + "/projects/pebble"], "layout": {}})
     try:
         return furnish({"desks": [], "layout": {}, **json.load(open(ROOM))})
     except Exception:
@@ -1530,10 +1532,10 @@ class Hub:
 
     def demo(self, mid, poke):
         i = list(self.machines).index(mid)
-        bots = [("burrow", "burrow"), ("burrow", "talk-ui"), ("burrow/.claude/worktrees/icons", "icons"), ("orbit", "orbit"),
-                ("orbit/.claude/worktrees/moons", "moons"), ("recipes", "recipes"), ("", "home"), ("garden", "garden")]
+        bots = [("burrow", "burrow"), ("burrow", "talk-ui"), ("burrow/.claude/worktrees/icons", "icons"), ("kite", "kite"),
+                ("kite/.claude/worktrees/tails", "tails"), ("teapot", "teapot"), ("", "home"), ("lantern", "lantern")]
         if i == 1:
-            bots = [("weather", "weather"), ("weather/.claude/worktrees/eval", "eval"), ("", "home")]
+            bots = [("puffin", "puffin"), ("puffin/.claude/worktrees/eval", "eval"), ("", "home")]
         self.usage = {"session": {"used": 64, "resets": "3:20pm"}, "week": {"used": 23, "resets": "Oct 24 at 9am"}}
         now = int(time.time() * 1000)
         bots = [{"id": f"demo{i}{k:03}", "name": n, "cwd": f"{HOME}/projects/{d}" if d else HOME, "busy": k % 3 == 0, "waiting": k % 5 == 1,
@@ -1542,10 +1544,10 @@ class Hub:
                 for k, (d, n) in enumerate(bots)]
         bots[-1].update(alive=False, busy=True, state="working", pid=0)      # a /loop between runs: its process is off
         # and some that are over: done, failed, stopped, as agent view's Completed group
-        over = [("burrow", "tidy-tess", "done", "the booth built and tested"), ("orbit", "zany-zoe", "failed", "a moon got out of its orbit"),
-                ("recipes", "posh-pam", "stopped", ""), ("burrow", "merry-max", "done", "README brought up to date"), ("garden", "lucky-lou", "done", "the planting calendar rebuilt")]
+        over = [("burrow", "sunny-sam", "done", "the booth built and tested"), ("kite", "zany-zoe", "failed", "the string snapped in the wind test"),
+                ("teapot", "posh-pam", "stopped", ""), ("burrow", "merry-max", "done", "README brought up to date"), ("lantern", "jolly-jo", "done", "the docs rebuilt")]
         if i == 1:
-            over = [("weather", "nimble-ned", "done", "forecast run 12 scored, the report in out/"), ("weather", "witty-wes", "failed", "CUDA out of memory on the big batch")]
+            over = [("puffin", "nimble-ned", "done", "run 12 scored, the report in out/"), ("puffin", "witty-wes", "failed", "CUDA out of memory on the big batch")]
         bots += [{"id": f"demo{i}over{k}", "name": n, "cwd": f"{HOME}/projects/{d}", "busy": False, "waiting": False, "alive": False, "state": st,
                   "over": st, "endedAt": now - 1800000 * (k + 1), "detail": det, "started": now - 1800000 * (k + 3), "pid": 0, "session": f"demo{i}o{k}", "rc": ""}
                  for k, (d, n, st, det) in enumerate(over)]
@@ -2158,6 +2160,8 @@ class Handler(BaseHTTPRequestHandler):
         m = hub.machines.get(q.get("m", ""))
         if DEMO and REAL_OFFICE and q.get("id") and q["id"] in {m.get("id") for m in (hub.room.get("managers") or {}).values()}:
             m = LOCAL                          # the demo's office manager is real
+        if DEMO and not shell and q.get("id") in DEMO_REAL:
+            m, q = LOCAL, {**q, "id": DEMO_REAL[q["id"]]}
         if not m:
             return self.reply(404, {"error": "no such machine"})
         if not key or not q.get("dir" if shell else "id"):
