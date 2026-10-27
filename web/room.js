@@ -267,7 +267,7 @@ function startRoom(cv, app) {
   // This computer's door (`door:`) only slides along the wall
   const KIND = (key) => key.startsWith("door:") ? "door" : key.replace(/\d+$/, "");
   const FIXED = new Set(["fire", "closet", "settings", "clock"]), fixed = (key) => FIXED.has(KIND(key)) || key === "door:";
-  const CLICK = new Set(["add", "closet", "chess", "pong", "printer", "pair", "board", "coffee", "cooler", "window", "bench", "armchair", "settings", "clock", "plant", "manager", "door"]);   // a click does something there
+  const CLICK = new Set(["doghouse", "add", "closet", "chess", "pong", "printer", "pair", "board", "coffee", "cooler", "window", "bench", "armchair", "settings", "clock", "plant", "manager", "door"]);   // a click does something there
   const NAMES = { meet: "meeting table", pong: "ping-pong table", chess: "chess table", coffee: "coffee machine", cooler: "water cooler",
     printer: "printer", armchair: "armchair", plant: "plant", board: "whiteboard", window: "window", clock: "clock", add: "project cabinet", pair: "pair room", bench: "bench", settings: "switchboard", manager: "reception",
     booth: "booth", neuralyzer: "neuralyzer", door: "door", doghouse: "dog house" };
@@ -595,6 +595,12 @@ function startRoom(cv, app) {
   // they are cleared). With no booth it walks into the fire. Taking one out of the line, or its undo, keeps it,
   // and a burnt desk with it: the desk goes (`forget`) only once the last of its bots has
   const DOOMED = new Set(["doom", "queue", "condemned"]);
+  // the booth's five seconds, by how far in they are (an undo runs them back): the door slides shut, a light rises
+  // through the cabin and takes the bot up with it, feet first, the cabin glowing more and more; then it is all
+  // light, and at the end the bot is gone. No countdown shows: the booth is the clock
+  const BOOTH = 5;
+  const boothT = (f) => (f && f.act.kind === "doom" ? Math.max(0, Math.min(BOOTH, BOOTH - f.act.left)) : -1);
+  const boothShut = (t) => Math.min(1, t / 0.4), boothRise = (t) => Math.max(0, Math.min(1, (t - 0.6) / 3.4)), boothGlow = (t) => Math.max(0, Math.min(1, (t - 0.3) / 3.9));
   // kept from them (taken from her on the way, out of the booth, put back together): they leave it alone, and if
   // an office manager's session asked for it to go, it is told (the server's `kept`)
   function spare(w, id) {
@@ -627,7 +633,7 @@ function startRoom(cv, app) {
       return;
     }
     line.forEach((f, n) => { if (f.act.kind !== "queue") f.act = { kind: "queue", n }; else f.act.n = n; });
-    if (line[0] && line[0].act.there && ![...folk.values()].some((g) => g.act.kind === "doom" && g.act.at === bo.key)) line[0].act = { kind: "doom", at: bo.key, left: 5 };
+    if (line[0] && line[0].act.there && ![...folk.values()].some((g) => g.act.kind === "doom" && g.act.at === bo.key)) line[0].act = { kind: "doom", at: bo.key, left: BOOTH };
   }
   // hardcore: the condemned are shot. By an office manager if there is one in the room (each takes her own), else by
   // you: a gun from the gun closet, up to the nearest, levelled a moment, the shot, the next; the gun back
@@ -707,7 +713,7 @@ function startRoom(cv, app) {
         return true;
       case "walk":                           // to the booth, the bot behind her
         if (!g || g.held || g.act.kind !== "escort") { spare(w, c.id); return finish(3); }
-        if (walk(f, front, 22, dt)) { f.dir = -1; f.legs = "stand"; g.act = { kind: "doom", at: bo.key, left: 5 }; c.phase = "booth"; }
+        if (walk(f, front, 22, dt)) { f.dir = -1; f.legs = "stand"; g.act = { kind: "doom", at: bo.key, left: BOOTH }; c.phase = "booth"; }
         return true;
       case "booth":                          // beside it while its seconds run
         f.legs = "stand"; f.dir = -1; f.arms = "down";
@@ -834,14 +840,28 @@ function startRoom(cv, app) {
         f.carry = null; f.act = pickBreak(w, f, L, others);
         break;
       }
-      case "pet": {                          // you, petting the dog (a click on it)
+      case "pet": {                          // you, petting the dog (a click on it or its house); afraid, it stays in, and you reach in at its door
         const g = w.dog;
-        if (!g || g.inside || g.leaving) { f.act = rest(); break; }
+        if (!g || g.leaving || g.held) { f.act = rest(); break; }
         const side = f.x < g.x ? -1 : 1;
-        if (walk(f, { x: g.x + side * 13, y: g.y + 1 }, 36, dt)) {
+        act.there = walk(f, { x: g.x + side * (g.inside ? 9 : 13), y: g.y + 1 }, 36, dt);
+        if (act.there) {
           f.legs = "stand"; f.dir = -side; f.arms = Math.floor(w.T * 4) % 2 ? "reach" : "down";
           if ((act.left -= dt) <= 0) f.act = rest();
         }
+        break;
+      }
+      case "fetch": {                        // you, playing fetch: the throw, then watching the dog run for the stick and bring it back
+        const g = w.dog, st = w.stick;
+        f.legs = "stand";
+        if (!g || !st || g.held || g.act.kind !== "fetch") {      // over: you pick the stick up (if it lies at your feet)
+          if (!st || Math.hypot(st.x - f.x, st.y - f.y) > 20 || (act.done = (act.done || 0) + dt) > 0.4) { w.stick = null; f.act = rest(); }
+          else f.arms = "reach";
+          break;
+        }
+        const k = w.T - act.at;
+        f.arms = k < 0.15 ? "wave" : k < 0.4 ? "reach" : "down";      // the swing and the throw
+        if (k >= 0.4) f.dir = (st.held ? g.x : st.x) < f.x ? -1 : 1;
         break;
       }
       case "meet": {                         // its session opened while it idled: halfway to you, facing you, talking
@@ -1055,12 +1075,14 @@ function startRoom(cv, app) {
         break;
       }
       case "doom": {
-        // put in the booth: it stands inside, behind the glass; the sign over the booth counts down, a click
-        // on it (or on the bot) is the undo, and so is carrying it out. Then the light, and it is gone:
-        // `claude stop` and `claude rm` (its transcript stays, for `claude --resume`)
+        // put in the booth: it stands inside, the door slides shut, a light rises through the cabin and the
+        // bot goes up in it (boothT, drawFigure). A click on the booth (or on the bot) all that while takes it
+        // back: the light runs down again, the door opens, it steps out; so does carrying it out. At the end it
+        // is gone: `claude stop` and `claude rm` (its transcript stays, for `claude --resume`)
         const bo = L.booths.find((p) => p.key === act.at);
         if (!bo) { f.act = resume(f); break; }
         f.x = bo.x; f.y = bo.y - 3; f.dir = -1; f.arms = "down"; f.legs = "stand";
+        if (act.back) { if ((act.left += dt * 6) >= BOOTH) f.act = resume(f); break; }
         if ((act.left -= dt) <= 0 && !f.gone) {
           app.act({ kind: "stop", id: f.id, rm: true });
           w.stopped.set(f.id, performance.now()); w.boothFlash = { key: bo.key, t0: performance.now() };
@@ -1237,12 +1259,13 @@ function startRoom(cv, app) {
 
   // ---- drawing, and what is under the pointer: hot spots are collected while drawing
   let pointer = null, hots = [], hovered = null, tip = null, lastL = null, moving = null, held = null, hoverId = null, lastHp = null, dangerNow = false;
+  let dogHeld = false, dogRect = null;      // the dog in your hand; where it stands (a press there is on the dog, not on what is under it)
   let fps = null, view = null;              // hardcore: the gun taken from the gun closet, the office in the first person (fps.js); the scene it renders
   let pics = [], wallPics = [];              // what was just drawn, each piece by itself, for that view (scene3)
   const hardcore = () => !!app.settings().hardcore;
   let screenHover = null, hoverScreen = null;    // the screen (or laptop) under the pointer: {m, dir}; the one told to the page
   const over = (x0, y0, x1, y1) => !!pointer && pointer.x >= x0 && pointer.x < x1 && pointer.y >= y0 && pointer.y < y1;
-  const hot = (x0, y0, x1, y1, action) => { hots.push({ x0, y0, x1, y1, action }); return over(x0, y0, x1, y1) && !moving && !held; };
+  const hot = (x0, y0, x1, y1, action) => { hots.push({ x0, y0, x1, y1, action }); return over(x0, y0, x1, y1) && !moving && !held && !dogHeld; };
   const box = (ctx, x, y, w, h, fill, edge = INK) => { ctx.fillStyle = edge; ctx.fillRect(x - 1, y - 1, w + 2, h + 2); ctx.fillStyle = fill; ctx.fillRect(x, y, w, h); };
   const rect = (ctx, x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
   const clip = (t, room) => { const n = Math.max(0, Math.floor((room + 1) / 4)), m = t.replace(/\s+/g, " "); return m.length > n ? m.slice(0, n - 1) + "-" : m; };
@@ -1268,7 +1291,7 @@ function startRoom(cv, app) {
     const L = layout(shown.length < s.desks.length ? { ...s, desks: shown } : s, all.filter((b) => !b.over), moving, gone);
     // the piece under the pointer: outlined if a click does something there (the rest only reacts in
     // its own way, a plant sways)
-    const hp = !moving && !held && !carrying ? pieceAt(pointer) : null;
+    const hp = !moving && !held && !carrying && !dogHeld && !(dogRect && over(...dogRect)) ? pieceAt(pointer) : null;   // (the dog in front of it: the dog)
     lastHp = hp;
     const on = (key) => !!hp && hp.key === key, lit = (key) => on(key) && CLICK.has(KIND(key));
     // what is being dragged over the fire (a desk without bots, a piece, a bot) is about to burn, a bot
@@ -1492,16 +1515,26 @@ function startRoom(cv, app) {
         else if (h) tip = { text: "gun closet: take a gun", x: bo.x, y: bo.y - 34 };
         continue;
       }
-      const inside = [...w.folk.values()].some((f) => f.act.kind === "doom" && f.act.at === bo.key);
+      // a bot in it: the whole of its five seconds a click on the booth (or on the bot) takes it back out
+      const inside = [...w.folk.values()].find((f) => f.act.kind === "doom" && f.act.at === bo.key && f.b && !f.gone), t = boothT(inside);
       const fl = w.boothFlash && w.boothFlash.key === bo.key ? (performance.now() - w.boothFlash.t0) / 1200 : -1, flagged = !!boothUnder && boothUnder.key === bo.key;
-      items.push([bo.y - 3.5, () => outlined(ctx, foot("booth", [bo.x, bo.y]), danger(bo.key) || flagged, (c) => drawBooth(c, bo, false, inside || flagged, fl), RED, tintOf(bo.key))]);
-      items.push([bo.y - 2.5, () => drawBooth(ctx, bo, true, inside, fl)]);
-      pics.push({ key: bo.key, kind: "booth", x: bo.x, y: bo.y, fn: (c) => { drawBooth(c, bo, false, inside, fl); drawBooth(c, bo, true, inside, fl); } });
+      const h = !!inside && !inside.act.back && hot(bo.x - 9, bo.y - 32, bo.x + 9, bo.y + 2, { kind: "undo", id: inside.id });
+      items.push([bo.y - 3.5, () => outlined(ctx, foot("booth", [bo.x, bo.y]), danger(bo.key) || flagged || h, (c) => drawBooth(c, bo, false, t, fl, flagged), danger(bo.key) || flagged ? RED : GOLD, tintOf(bo.key))]);
+      items.push([bo.y - 2.5, () => drawBooth(ctx, bo, true, t, fl, flagged)]);
+      pics.push({ key: bo.key, kind: "booth", x: bo.x, y: bo.y, fn: (c) => { drawBooth(c, bo, false, t, fl, false); drawBooth(c, bo, true, t, fl, false); } });
       if (flagged) tip = { text: "bye " + heldBot.b.name, x: bo.x, y: bo.y - 34 };
+      else if (h) tip = { text: "keep " + inside.b.name, x: bo.x, y: bo.y - 34 };
       else if (on(bo.key) && !inside) tip = { text: "booth: a bot in it is deleted", x: bo.x, y: bo.y - 34 };
     }
-    for (const dh of L.doghouses) piece(dh, "doghouse", (c) => drawDoghouse(c, dh));
-    const dog = w.dog;
+    // the dog: a click on it (or on its house, where it naps) and you go and pet it, out of its house it comes to you;
+    // a click while you pet it, or while it sits at your feet with the stick, throws the stick. It can be picked up
+    const dog = w.dog, dogHots = [], dogTip = () => (canThrow(w) ? "throw the stick" : !dog.inside ? (dog.act.kind === "fetch" ? null : "pet the dog") : dog.act.hide ? "comfort the dog" : dog.asleep ? "wake the dog" : "call the dog");
+    dogRect = null;
+    for (const dh of L.doghouses) {
+      const r = foot("doghouse", [dh.x, dh.y]);
+      piece(dh, "doghouse", (c) => drawDoghouse(c, dh));
+      if (dog && !dog.leaving && !dog.held && dh === L.doghouses[0]) dogHots.push([r, () => ({ text: dogTip(), x: dh.x, y: dh.y - 23 })]);
+    }
     if (dog && !dog.leaving && dog.inside && L.doghouses[0]) {   // at home: its head out of the door (only its eyes, afraid), z's asleep
       const dh = L.doghouses[0];
       items.push([dh.y - 0.4, () => {
@@ -1510,22 +1543,29 @@ function startRoom(cv, app) {
         ctx.drawImage(im, 10, 0, 8, 6, dh.x - 4, dh.y - 6, 8, 6);
         if (dog.act.left > 1e8 || dog.asleep) zzz(ctx, dog, dh.x + 3, dh.y - 9);
       }]);
-    } else if (dog && !dog.held) {
-      const im = dogPic(dog.pose, dog.wag), x0 = Math.round(dog.x - im.width / 2), y0 = Math.round(dog.y - im.height + 1);
-      const h = !dog.leaving && hot(x0, y0, x0 + im.width, y0 + im.height + 1, { kind: "pet" });
-      if (h) tip = { text: "pet the dog", x: dog.x, y: y0 - 2 };
-      items.push([dog.y, () => {
-        rect(ctx, x0 + 2, y0 + im.height - 1, im.width - 4, 1, "rgba(0,0,0,0.3)");
+    } else if (dog) {
+      const im = dogPic(dog.pose, dog.wag), x0 = Math.round(dog.x - im.width / 2) + (dog.act.kind === "shake" && !still ? (Math.floor(w.T * 20) % 2 ? 1 : -1) : 0), y0 = Math.round(dog.y - im.height + 1);
+      const r = [x0, y0, x0 + im.width, y0 + im.height + 1], h = !dog.leaving && !dog.held && over(...r) && !moving && !held;
+      const you = w.folk.get("you"), by = you && Math.abs(you.x - dog.x) < 24 && Math.abs(you.y - dog.y) < 10 ? Math.round(Math.min(you.y, dog.y)) - 29 : y0 - 2;   // over your head when you are by it
+      if (!dog.leaving && !dog.held) { dogRect = r; dogHots.push([r, () => ({ text: dogTip(), x: dog.x, y: by })]); }
+      const st = w.stick, mouth = st && st.held && MOUTH[dog.pose];
+      items.push([dog.held ? 1e9 : dog.y, () => {
+        if (!dog.held) rect(ctx, x0 + 2, y0 + im.height - 1, im.width - 4, 1, "rgba(0,0,0,0.3)");
         ctx.save();
         if (dog.dir < 0) { ctx.translate(x0 * 2 + im.width, 0); ctx.scale(-1, 1); }
         if (h) ctx.drawImage(halo(im, GOLD), x0, y0);
         ctx.drawImage(im, x0, y0);
+        if (mouth) { rect(ctx, x0 + mouth[0] - 2, y0 + mouth[1], 10, 2, INK); rect(ctx, x0 + mouth[0] - 1, y0 + mouth[1], 8, 1, STICK); }   // the stick, across its mouth
         ctx.restore();
         if (dog.barking && Math.floor(w.T * 5) % 2) {        // a bark: three short lines off its snout
           const sx = dog.dir < 0 ? x0 - 1 : x0 + im.width, d = dog.dir < 0 ? -1 : 1;
           ctx.fillStyle = INK; for (const [ox, oy] of [[1, -2], [2, 0], [1, 2]]) ctx.fillRect(sx + d * ox, y0 + 3 + oy, 1, 1);
         }
-      }]);
+      }, dog.held ? null : [[x0 + 1, y0 + 1, x0 + im.width - 1, y0 + im.height]]]);
+    }
+    if (w.stick && !w.stick.held) {           // the stick: tumbling through the air over its shadow, or lying on the floor
+      const st = w.stick, sx = Math.round(st.x), sy = Math.round(st.y), sh = Math.round(st.h || 0), turn = st.t < 1 && !still ? Math.floor(st.t * 10) % 4 : 0;
+      items.push([st.y + 0.2, () => { if (sh > 0) rect(ctx, sx - 2, sy, 5, 1, "rgba(0,0,0,0.3)"); drawStick(ctx, sx, sy - sh - 1, turn); }]);
     }
     if (dog) for (const ht of dog.hearts) {                 // hearts, rising and gone
       const k = (performance.now() - ht.t0) / 1200;
@@ -1593,6 +1633,7 @@ function startRoom(cv, app) {
     const c0 = L.coffeeAt;
     if (c0 && hot(c0.x, c0.y - 22, c0.x + 20, c0.y + 1, { kind: "limits" })) tip = { text: say(usage.session, "5h"), x: c0.x + 10, y: c0.y - 24 };
     if (L.cooler && hot(L.cooler.x - 5, L.cooler.y - 26, L.cooler.x + 5, L.cooler.y + 1, { kind: "limits" })) tip = { text: say(usage.week, "1w"), x: L.cooler.x, y: L.cooler.y - 24 };
+    for (const [r, t] of dogHots) if (hot(...r, { kind: "pet" })) { const tt = t(); if (tt.text) tip = tt; }   // the dog's last: it stands in front of the pieces
     hovered = null;
     for (const f of w.folk.values()) if (f.lying) drawSleeper(ctx, f, f.b, T, hl);
     items.sort((a, b) => a[0] - b[0]);
@@ -1657,16 +1698,6 @@ function startRoom(cv, app) {
       const bx = Math.round(f.x) + 3, by = Math.round(f.y) - (f.lying ? 20 : 27) - 6;
       rect(ctx, bx - 1, by - 1, 11, 7, INK); rect(ctx, bx, by, 9, 5, C.steel4); rect(ctx, bx, by + 5, 1, 1, C.steel4);
       for (let i = 0; i < 3; i++) if ((Math.floor(f.chat * 4) + i) % 3) rect(ctx, bx + 2 + i * 2, by + 2, 1, 1, INK);
-    }
-    // in the booth: a sign over it counts the seconds down; a click on it (or on the bot) is the undo, and
-    // so is carrying the bot out
-    for (const f of w.folk.values()) if (f.act.kind === "doom" && f.b && !f.gone) {
-      const text = "bye " + f.b.name + " - undo", tw = tinyW(text), lx = Math.round(Math.max(2, Math.min(W - tw - 2, f.x - tw / 2)));
-      const ly = f.y - 42 < 2 ? Math.round(f.y) + 5 : Math.round(f.y) - 42;     // over the booth's roof, or under it at the top of the room
-      const h = hot(lx - 2, ly - 2, lx + tw + 2, ly + 9, { kind: "undo", id: f.id }) || (!!hovered && hovered.b.id === f.id);
-      box(ctx, lx - 2, ly - 2, tw + 4, 11, h ? GOLD : INK2);
-      tiny(ctx, text, lx, ly, h ? INK : C.steel4);
-      rect(ctx, lx, ly + 7, Math.round(tw * Math.max(0, f.act.left) / 5), 1, h ? INK : RED);
     }
     // the bot under the pointer: its name over its head, and a click opens it
     // (one about to be stopped has its sign instead of a name, and a click on it is the undo)
@@ -1832,7 +1863,7 @@ function startRoom(cv, app) {
       if (p.img) things.push({ ...who, c: p.img, sx: p.sx, sy: p.sy, sw: p.sw, sh: p.sh, ax: p.sw / 2, ay: p.sh });
       else { const c = bitOf(p); things.push({ ...who, c, sx: 0, sy: 0, sw: c.width, sh: c.height, ax: c.width / 2, ay: c.height }); }
     });
-    if (w.dog && !w.dog.inside && !w.dog.leaving) { const im = dogPic(w.dog.pose, w.dog.wag); things.push({ key: "dog", x: w.dog.x, y: w.dog.y, z: 0, c: im, sx: 0, sy: 0, sw: im.width, sh: im.height, ax: im.width / 2, ay: im.height - 1, face: w.dog.dir < 0 ? -1 : 1 }); }
+    if (w.dog && !w.dog.inside && !w.dog.leaving && !w.dog.held) { const im = dogPic(w.dog.pose, w.dog.wag); things.push({ key: "dog", x: w.dog.x, y: w.dog.y, z: 0, c: im, sx: 0, sy: 0, sw: im.width, sh: im.height, ax: im.width / 2, ay: im.height - 1, face: w.dog.dir < 0 ? -1 : 1 }); }
     if (w.ball) things.push({ key: "ball", x: w.ball.x, y: w.ball.y, z: w.ball.h, c: small("ball", 3, 3, (x) => { rect(x, 0, 0, 3, 3, INK); rect(x, 1, 1, 1, 1, C.white); }), sx: 0, sy: 0, sw: 3, sh: 3, ax: 1.5, ay: 3 });
     return { v: (view ? view.v : 0) + 1, W, H, WALL, floor: fc, wall: wc, plain: pc, boxes, things, solid };
   }
@@ -1937,6 +1968,30 @@ function startRoom(cv, app) {
   function heart(ctx, x, y) {
     rect(ctx, x - 2, y - 1, 2, 1, RED); rect(ctx, x + 1, y - 1, 2, 1, RED); rect(ctx, x - 2, y, 5, 1, RED); rect(ctx, x - 1, y + 1, 3, 1, RED); rect(ctx, x, y + 2, 1, 1, RED);
   }
+  // the stick you throw for it: tumbling (four turns) on the way, lying on the floor, across its mouth on the way back
+  const STICK = "#e0bd84", MOUTH = { stand: [12, 4], walk1: [12, 4], walk2: [12, 4], sit: [8, 4], lie: [12, 4] };
+  function drawStick(ctx, x, y, turn) {
+    const pts = [[[-3, 0], [-2, 0], [-1, 0], [0, 0], [1, 0], [2, 0]], [[-2, -2], [-1, -1], [0, 0], [1, 1], [2, 2]], [[0, -3], [0, -2], [0, -1], [0, 0], [0, 1], [0, 2]], [[-2, 2], [-1, 1], [0, 0], [1, -1], [2, -2]]][turn];
+    for (const [i, j] of pts) rect(ctx, x + i - 1, y + j - 1, 3, 3, INK);
+    for (const [i, j] of pts) rect(ctx, x + i, y + j, 1, 1, STICK);
+  }
+  // a throw: when you are petting it, or it sits at your feet with the stick it brought back
+  function canThrow(w) {
+    const you = w.folk.get("you"), g = w.dog;
+    return !!you && !!g && !g.inside && !g.held && !g.leaving && ((you.act.kind === "pet" && you.act.there) || (you.act.kind === "fetch" && g.act.kind === "fetch" && g.act.stage === "wait"));
+  }
+  function throwStick(w, you, g, L) {
+    const fl = L.floor, mid = (fl.x0 + fl.x1) / 2;
+    let to = { x: Math.round(mid), y: Math.round((fl.y0 + fl.y1) / 2) };
+    for (let k = 0; k < 40; k++) {           // out into the room, somewhere clear 40 to 80 dots off
+      const a = (you.x > mid ? Math.PI : 0) + rnd(-0.9, 0.9), d = rnd(40, 80);
+      const x = Math.round(you.x + Math.cos(a) * d), y = Math.round(you.y + Math.sin(a) * d * 0.7);
+      if (x > fl.x0 + 6 && x < fl.x1 - 6 && y > fl.y0 + 8 && y < fl.y1 - 2 && L.free(x, y)) { to = { x, y }; break; }
+    }
+    end(you); you.dir = to.x < you.x ? -1 : 1; you.act = { kind: "fetch", at: w.T, chosen: true };
+    w.stick = { x: you.x + you.dir * 6, y: you.y, x0: you.x + you.dir * 6, y0: you.y, x1: to.x, y1: to.y, t: 0, h: 12, held: false };
+    g.act = { kind: "fetch", stage: "run" };
+  }
   function walkDog(g, to, v, dt) {
     const dx = to.x - g.x, dy = to.y - g.y, d = Math.hypot(dx, dy);
     if (d <= v * dt) { g.x = to.x; g.y = to.y; return true; }
@@ -1959,6 +2014,7 @@ function startRoom(cv, app) {
     let g = w.dog;
     if (!h) {                                // its house is gone: out through the door
       if (!g) return;
+      if (g.held) { g.held = false; dogHeld = false; }
       g.inside = false; g.leaving = true; g.barking = false;
       if (walkDog(g, { x: doorX(""), y: WALL + 2 }, 40, dt)) w.dog = null;
       return;
@@ -1970,22 +2026,57 @@ function startRoom(cv, app) {
     const folk = w.folk, T = w.T, hour = new Date().getHours();
     const sleepy = hour >= 23 || hour < 7 || app.away() > 60, afraid = (w.fear || 0) > 0.4;
     const love = (x, y) => { if (!g.loveAt || T - g.loveAt > 0.7) { g.loveAt = T; g.hearts.push({ x: x + rnd(-3, 3), y: y, t0: performance.now() }); } };
-    if ((sleepy || afraid) && !(g.act.kind === "home" && g.act.left > 1e8)) g.act = { kind: "home", left: 1e9, hide: afraid };
+    const st = w.stick;
+    if (st && !st.held && st.t < 1) {         // the stick in the air: from your hand, in an arc, down on the floor
+      st.t = Math.min(1, st.t + dt / 0.8);
+      st.x = st.x0 + (st.x1 - st.x0) * st.t; st.y = st.y0 + (st.y1 - st.y0) * st.t; st.h = 12 * (1 - st.t) + Math.sin(Math.PI * st.t) * 22;
+    }
+    if (g.held) { g.pose = "stand"; g.wag = Math.floor(T * 8) % 2; g.inside = false; return; }   // in your hand: dangling, wagging
+    // with you (petted, a game of fetch) it stays up at night as well; afraid, it stays in its house whatever you do
+    const withYou = !afraid && ["petted", "fetch", "shake"].includes(g.act.kind);
+    if ((sleepy || afraid) && !withYou && !(g.act.kind === "home" && g.act.left > 1e8)) g.act = { kind: "home", left: 1e9, hide: afraid };
     else if (!sleepy && !afraid && g.act.kind === "home" && g.act.left > 1e8) g.act = { kind: "home", left: rnd(1, 4) };
-    if (!sleepy && !afraid && g.act.kind !== "petted") {
+    if (!sleepy && !afraid && !withYou) {
       if (w.ball && g.act.kind !== "chase") g.act = { kind: "chase" };
       else if (w.dogNews && g.act.kind !== "bark") { const n = folk.get(w.dogNews); if (n) g.act = { kind: "bark", to: n.id, left: 3 }; }
     }
     w.dogNews = null;
     const a = g.act;
-    if (a.kind !== "home") g.inside = false;
-    g.wag = Math.floor(T * (["visit", "petted", "follow", "chase"].includes(a.kind) ? 8 : 1.5)) % 2;
+    if (a.kind !== "home") { g.inside = false; g.asleep = false; }
+    g.wag = Math.floor(T * (["visit", "petted", "follow", "chase", "fetch"].includes(a.kind) ? 8 : 1.5)) % 2;
     switch (a.kind) {
-      case "home":                           // in its house: in through the door, a nap there
+      case "home": {                         // in its house: in through the door, a nap there; you reaching in to it, afraid: hearts
         if (!g.inside && !walkDog(g, door, 34, dt)) break;
         g.inside = true; g.pose = "lie"; g.dir = 1; g.asleep = a.left > 1e8 || sleepy;
+        const p = folk.get("you");
+        if (a.hide && p && p.act.kind === "pet" && p.act.there) love(h.x, h.y - 12);
         if ((a.left -= dt) <= 0) { g.inside = false; g.asleep = false; g.act = nextDog(w, g, L); }
         break;
+      }
+      case "shake":                          // put down: a shake, then about its business (into its house, if it was put down there)
+        g.pose = "stand";
+        if ((a.left -= dt) <= 0) g.act = a.next || nextDog(w, g, L);
+        break;
+      case "fetch": {                        // after the stick you threw, back with it to your feet, then sitting there for the next throw
+        const f = folk.get("you");
+        if (!f || !st || f.held || f.act.kind !== "fetch") { if (st && st.held) { st.held = false; st.x = g.x; st.y = g.y; st.t = 1; st.h = 0; } g.act = nextDog(w, g, L); break; }
+        if (a.stage === "run") {             // off as soon as it flies, to where it comes down; there first, it watches it come
+          const to = { x: st.x1 + (g.x < st.x1 ? -7 : 7), y: st.y1 + 1 }, there = walkDog(g, to, 62, dt);
+          if (there && st.t >= 1) { a.stage = "pick"; a.wait = 0; }
+          else if (there) { g.pose = "stand"; g.dir = st.x < g.x ? -1 : 1; }
+        } else if (a.stage === "pick") {
+          g.pose = "stand"; g.dir = st.x < g.x ? -1 : 1;
+          if ((a.wait += dt) > 0.3) { st.held = true; a.stage = "back"; }
+        } else if (a.stage === "back") {     // to your feet, the stick across its mouth; dropped there
+          const side = g.x < f.x ? -1 : 1;
+          if (walkDog(g, { x: f.x + side * 13, y: f.y + 1 }, 48, dt)) { st.held = false; st.x = g.x - side * 6; st.y = g.y + 1; st.t = 1; st.h = 0; a.stage = "wait"; a.left = 12; }
+        } else {                             // at your feet: sitting, wagging, now and then a heart; another throw, or it wanders off
+          g.pose = "sit"; g.dir = f.x < g.x ? -1 : 1;
+          if (Math.random() < dt * 0.7) love(g.x, g.y - 10);
+          if ((a.left -= dt) <= 0) g.act = nextDog(w, g, L);
+        }
+        break;
+      }
       case "wander":                         // somewhere on the floor, a sniff there
         if (!walkDog(g, a.to, 26, dt)) break;
         g.pose = "stand";
@@ -2029,6 +2120,8 @@ function startRoom(cv, app) {
       case "petted": {                       // sitting for you while you pet it
         const f = folk.get("you");
         if (!f || f.act.kind !== "pet") { g.act = nextDog(w, g, L); break; }
+        if (a.out && !walkDog(g, { x: door.x, y: Math.min(L.floor.y1, door.y + 10) }, 30, dt)) break;   // called out of its house: a few steps out first
+        a.out = false;
         g.pose = "sit"; g.dir = f.x < g.x ? -1 : 1;
         if (Math.hypot(f.x - g.x, f.y - g.y) < 16) love(g.x, g.y - 10);
         break;
@@ -2129,8 +2222,8 @@ function startRoom(cv, app) {
     // its outline: terracotta while the pointer is on it or on its session, faint while its session is open;
     // held over the fire or at its door (let go and it stops): a red outline and a red flashing wash
     const lit = hl.has(f.id) || (hovered && hovered.b.id === f.id) || (!hovered && over(x0 + 4, y0, x0 + 18, y + 1));
-    const doomed = f.held && dangerNow;
-    const ring = f.leaving ? null : doomed ? RED : lit ? GOLD : app.opens().includes(f.id) ? OPEN : null;
+    const doomed = f.held && dangerNow, bt = f.held ? -1 : boothT(f);    // in the booth: the booth lights up for it, not the bot
+    const ring = f.leaving || bt >= 0 ? null : doomed ? RED : lit ? GOLD : app.opens().includes(f.id) ? OPEN : null;
     const fear = !b.human && !b.staff && !f.held ? world().fear || 0 : 0;
     const shake = fear > 0.2 && Math.floor(T * 15 + f.z * 7) % (fear > 0.6 ? 2 : 4) === 0 ? (Math.floor(T * 30) % 2 ? 1 : -1) : 0;   // trembling
     if (im) {
@@ -2139,14 +2232,14 @@ function startRoom(cv, app) {
       if (f.dir < 0) { ctx.translate(x0 + SW, 0); ctx.scale(-1, 1); }
       const dx = f.dir < 0 ? 0 : x0;
       if (ring) ctx.drawImage(halo(im, ring), dx, y0);
-      ctx.drawImage(doomed ? tinted(im, RED, flashA(T)) : im, dx, y0);
+      ctx.drawImage(doomed ? tinted(im, RED, flashA(T)) : bt > 0 ? dissolve(im, boothRise(bt)) : im, dx, y0);
       ctx.restore();
     }
     if (fear > 0.45) {                        // a drop of sweat running down beside its head
       const ph = (T * 1.4 + f.z) % 1, sx = x + (f.dir < 0 ? -8 : 7);
       if (ph < 0.8) { rect(ctx, sx, y0 + 5 + Math.floor(ph * 6), 1, 2, C.blue3); rect(ctx, sx, y0 + 5 + Math.floor(ph * 6), 1, 1, C.steel4); }
     }
-    if (b.rc && !f.held && Math.floor(T) % 2 === 0) rect(ctx, f.dir < 0 ? x - 1 : x, y0 + 3, 1, 1, C.steel4);   // in the Claude app too: a signal light over its antenna, blinking slowly
+    if (b.rc && !f.held && bt < 0 && Math.floor(T) % 2 === 0) rect(ctx, f.dir < 0 ? x - 1 : x, y0 + 3, 1, 1, C.steel4);   // in the Claude app too: a signal light over its antenna, blinking slowly
     if ((f.act.kind === "sleep" || f.act.kind === "doze") && f.act.there) zzz(ctx, f, x + 2, y0 + 4);
     if (f.act.kind === "neuralyze" && f.act.stage === 2) for (let k = 0; k < 3; k++) {   // dazed: little stars round its head
       const a = T * 4 + k * 2.1; rect(ctx, x - 1 + Math.round(Math.cos(a) * 6), y0 + 3 + Math.round(Math.sin(a) * 2), 1, 1, SP.Y);
@@ -2533,6 +2626,29 @@ function startRoom(cv, app) {
     x.globalCompositeOperation = "source-atop"; x.globalAlpha = a; x.fillStyle = col; x.fillRect(0, 0, c.width, c.height);
     return c;
   }
+  // a figure going up in the booth's light: a front of light rises from its feet (d 0 to 1); what it has passed
+  // turns to light and thins out in an ordered dither until nothing is left
+  const BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
+  function dissolve(im, d) {
+    const c = document.createElement("canvas"); c.width = im.width; c.height = im.height;
+    const x = c.getContext("2d");
+    x.drawImage(im, 0, 0);
+    if (d <= 0) return c;
+    const img = x.getImageData(0, 0, c.width, c.height), p = img.data, top = 3, foot = c.height - 1;
+    for (let j = 0; j < c.height; j++) {
+      const a = Math.max(0, Math.min(1, (d * 1.4 - (foot - j) / (foot - top)) / 0.4));
+      if (!a) continue;
+      for (let i = 0; i < c.width; i++) {
+        const k = (j * c.width + i) * 4;
+        if (!p[k + 3]) continue;
+        if (BAYER[j % 4][i % 4] / 16 < a) { p[k + 3] = 0; continue; }
+        const m = Math.min(1, a * 1.6) * 0.85;
+        p[k] += (255 - p[k]) * m; p[k + 1] += (244 - p[k + 1]) * m; p[k + 2] += (214 - p[k + 2]) * m;
+      }
+    }
+    x.putImageData(img, 0, 0);
+    return c;
+  }
   // the danger's flash: the wash goes between two strengths, five times a second
   function flashA(T) { return Math.floor(T * 5) % 2 ? 0.5 : 0.3; }
   // something goes into the fire: a picture of it, to be tossed in and sink (drawFire)
@@ -2560,7 +2676,7 @@ function startRoom(cv, app) {
       case "pair": drawPair(ctx, pt, true, T, false); break;
       case "add": drawAdd(ctx, { x0: x, y0: y - 15, x1: x + ADD_W, y1: y }, false); break;
       case "bench": drawBench(ctx, pt); break;
-      case "booth": drawBooth(ctx, pt, false, false, -1); drawBooth(ctx, pt, true, false, -1); break;
+      case "booth": drawBooth(ctx, pt, false, -1, -1); drawBooth(ctx, pt, true, -1, -1); break;
       case "neuralyzer": drawNeuralyzer(ctx, pt, false); break;
       case "doghouse": drawDoghouse(ctx, pt); break;
       case "door": { const ms = (app.state() || {}).machines || []; drawDoor(ctx, x, PAINT[Math.max(0, ms.length - 1) % PAINT.length], false, false, y); break; }   // in the paint the next machine gets
@@ -2748,24 +2864,42 @@ function startRoom(cv, app) {
     rect(ctx, m.x - 15, m.y - 16, 30, 1, MAT.hi);
     rect(ctx, m.x - 15, m.y - 3, 30, 1, MAT.d);
   }
-  // the booth (Futurama's): a tall glass cabin on a plinth, a lit sign on its roof. A bot put in it stands
-  // behind the glass while its sign counts down (red while in use); then a soft light fills the cabin and it
-  // is gone (`claude stop`, `claude rm`). Two layers: the cabin, and its glass in front of whoever is inside
-  function drawBooth(ctx, bo, front, busy, flash) {
-    const x0 = bo.x - 9, y = bo.y, top = y - 32, gy = top + 5, gh = y - 3 - gy;
+  // the booth (Futurama's): a tall glass cabin on a plinth, a lit sign on its roof. A bot put in it (t: seconds in,
+  // -1 while empty) stands behind the glass: the door slides shut, the sign goes red, a light rises from its floor
+  // and takes the bot with it (dissolve), the cabin glows brighter and brighter, the sign flickers in the last
+  // second; then the bot is gone (`claude stop`, `claude rm`) and the light fades (flash). Two layers: the cabin,
+  // and its glass door in front of whoever is inside
+  function drawBooth(ctx, bo, front, t, flash, armed) {
+    const x0 = bo.x - 9, y = bo.y, top = y - 32, gy = top + 5, gh = y - 3 - gy, busy = t >= 0 || armed;
+    const glow = t >= 0 ? boothGlow(t) : 0, rise = t >= 0 ? boothRise(t) : 0, lh = Math.round(gh * Math.min(1, rise * 1.1)), T = world().T;
     if (!front) {
       rect(ctx, x0 + 1, y, 16, 1, SHADOW);
       rect(ctx, x0, top, 18, 5, SP.F); rect(ctx, x0 + 1, top + 1, 16, 3, SP.E); rect(ctx, x0 + 1, top + 1, 16, 1, SP.D);   // the roof
-      rect(ctx, x0 + 4, top + 1, 10, 3, INK); rect(ctx, x0 + 5, top + 2, 8, 1, busy ? SP.r : SP.Y);                      // its sign
+      const flick = t > BOOTH - 1 && !still && Math.floor(T * 8) % 2;
+      rect(ctx, x0 + 4, top + 1, 10, 3, INK); rect(ctx, x0 + 5, top + 2, 8, 1, busy && !flick ? SP.r : SP.Y);           // its sign
       rect(ctx, x0, gy, 18, gh, SP.F); rect(ctx, x0 + 1, gy, 1, gh, SP.D); rect(ctx, x0 + 16, gy, 1, gh, SP.D);              // the posts
       rect(ctx, x0 + 2, gy, 14, gh, busy ? "#3b3428" : "#222a37");                                                       // inside, warm while in use
       rect(ctx, x0 + 2, y - 5, 14, 2, busy ? "#4a412f" : "#2b3442");                                                     // its floor
+      if (glow) {                                                                                                        // the light, behind the bot
+        ctx.globalAlpha = 0.15 + 0.3 * glow; rect(ctx, x0 + 2, gy, 14, gh - lh, "#fff4d6");
+        ctx.globalAlpha = 0.45 + 0.5 * glow; rect(ctx, x0 + 2, gy + gh - lh, 14, lh, "#fff4d6"); ctx.globalAlpha = 1;
+      }
       rect(ctx, x0, y - 3, 18, 3, SP.F); rect(ctx, x0 + 1, y - 3, 16, 1, SP.C); rect(ctx, x0 + 1, y - 2, 16, 1, SP.D);       // the plinth
       return;
     }
-    ctx.globalAlpha = 0.25; rect(ctx, x0 + 2, gy, 14, gh, "#bfe3ff"); ctx.globalAlpha = 1;                                // the glass
-    for (let k = 0; k < 4; k++) { rect(ctx, x0 + 4 + k, gy + 4 + k, 1, 1, "rgba(255,255,255,0.5)"); rect(ctx, x0 + 10 + k, gy + 11 + k, 1, 1, "rgba(255,255,255,0.3)"); }
-    rect(ctx, x0 + 2, gy, 14, 1, SP.D); rect(ctx, x0 + 13, gy + 10, 1, 4, SP.B);                                          // the door's rail and handle
+    if (glow) {                                                                                                          // the light, before it
+      ctx.globalAlpha = 0.35 * glow; rect(ctx, x0 + 2, gy, 14, gh, "#fff4d6"); ctx.globalAlpha = 1;
+      if (rise > 0 && rise < 1) rect(ctx, x0 + 2, gy + gh - lh, 14, 1, "#fffaf0");                                      // its rising edge
+      if (rise > 0 && !still) for (let k = 0; k < 7; k++) {                                                             // motes going up in it
+        const ph = (T * 0.8 + k / 7) % 1, my = y - 5 - Math.round(ph * (gh - 3));
+        if (my < gy + gh - lh - 1 && rise < 1) continue;                                                                 // only where the light has been
+        ctx.globalAlpha = 1 - ph; rect(ctx, x0 + 3 + ((k * 5 + 2) % 12), my, 1, 1, k % 2 ? "#ffffff" : SP.Y); ctx.globalAlpha = 1;
+      }
+    }
+    const off = t >= 0 ? Math.round(13 * (1 - boothShut(t))) : 0, dx = x0 + 2 + off, dw = 14 - off;                     // the door, sliding in from the right
+    ctx.globalAlpha = 0.25; rect(ctx, dx, gy, dw, gh, "#bfe3ff"); ctx.globalAlpha = 1;                                    // its glass
+    for (let k = 0; k < 4; k++) { if (4 + k >= off + 2) rect(ctx, x0 + 4 + k, gy + 4 + k, 1, 1, "rgba(255,255,255,0.5)"); if (10 + k >= off + 2) rect(ctx, x0 + 10 + k, gy + 11 + k, 1, 1, "rgba(255,255,255,0.3)"); }
+    rect(ctx, x0 + 2, gy, 14, 1, SP.D); rect(ctx, dx, gy + 1, 1, gh - 1, SP.D); rect(ctx, dx + 1, gy + 10, 1, 4, SP.B);  // the rail; the door's edge and handle
     if (flash >= 0 && flash < 1) { ctx.globalAlpha = 0.95 * (1 - flash); rect(ctx, x0 + 2, gy, 14, gh, "#fff4d6"); ctx.globalAlpha = 1; }   // the light, fading
   }
   // the neuralyzer (Men in Black's): a black pedestal, the silver flasher on it. A bot put to it is flashed:
@@ -2915,14 +3049,20 @@ function startRoom(cv, app) {
     if (e.button !== 0) return;
     pointer = dots(e); draw();
     const h = [...hots].reverse().find((h) => over(h.x0, h.y0, h.x1, h.y1));
-    press = { x: pointer.x, y: pointer.y, action: h && h.action, bot: hovered && !hovered.seat && !hovered.b.staff && hovered.b.id, piece: pieceAt(pointer), shift: e.shiftKey };
+    const dog = !!dogRect && over(...dogRect) && !hovered;      // on the dog (a figure drawn in front of it would be hovered)
+    press = { x: pointer.x, y: pointer.y, action: h && h.action, bot: !dog && hovered && !hovered.seat && !hovered.b.staff && hovered.b.id, piece: dog ? null : pieceAt(pointer), dog, shift: e.shiftKey };
     cv.setPointerCapture(e.pointerId);
   });
   cv.addEventListener("pointermove", (e) => {
     pointer = dots(e);
-    if (press && !moving && !held && Math.hypot(pointer.x - press.x, pointer.y - press.y) > 1) {
-      const f = press.bot && world().folk.get(press.bot);
-      if (f && f.b && !f.lying) {                      // picked up; one about to be stopped is rescued by that
+    if (press && !moving && !held && !dogHeld && Math.hypot(pointer.x - press.x, pointer.y - press.y) > 1) {
+      const f = press.bot && world().folk.get(press.bot), g = press.dog && world().dog;
+      if (g) {                                         // the dog, picked up (by the scruff): what it carried drops where it was
+        const st = world().stick;
+        if (st && st.held) { st.held = false; st.x = g.x; st.y = g.y; st.t = 1; st.h = 0; }
+        dogHeld = true; g.held = true; g.act = { kind: "held" };
+      }
+      else if (f && f.b && !f.lying) {                      // picked up; one about to be stopped is rescued by that
         if (f.act.kind === "doom") f.act = resume(f);
         held = f; f.held = true; f.sat = false; f.lying = false;
       }
@@ -2940,6 +3080,7 @@ function startRoom(cv, app) {
       const loose = onWall(moving.key) && !fixed(moving.key) && [Math.round(Math.max(2 - (r[0] - at[0]), Math.min(W - 2 - (r[2] - at[0]), at[0]))), Math.round(Math.max(0, Math.min(H - 1 - (r[3] - at[1]), at[1])))];
       moving.at = loose && lastL && inFire(lastL, moving.key, loose, moving.u) ? loose : clampAt(moving.key, at, moving.u);
     }
+    if (dogHeld && world().dog) { const g = world().dog; g.x = Math.max(8, Math.min(W - 8, pointer.x)); g.y = Math.max(WALL, Math.min(H - 2, pointer.y + 7)); }   // it hangs from the pointer
     if (held) {
       held.x = Math.max(0, Math.min(W, pointer.x)); held.y = Math.max(WALL, Math.min(H - 2, pointer.y + 24)); held.dir = -1;   // it hangs under the pointer, but never past the floor's bottom edge
       app.carry(held.id, pointer.x >= W || pointer.x < 0 || pointer.y < 0 || pointer.y >= H ? e.clientX : null, e.clientY);
@@ -2980,7 +3121,7 @@ function startRoom(cv, app) {
       else if (bot && pointer && dropAt(lastL, f) === "booth") {
         const bo = boothAt(lastL, f);
         if (hardcore()) { f.x = Math.max(lastL.floor.x0, bo.x - 16); f.y = Math.min(lastL.floor.y1, bo.y + 3); condemn([f.id]); }   // by the gun closet, hands up: someone takes a gun
-        else { end(f); f.act = { kind: "doom", at: bo.key, left: 5 }; }   // into the booth: five seconds, then gone
+        else { end(f); f.act = { kind: "doom", at: bo.key, left: BOOTH }; }   // into the booth: five seconds, then gone
       }
       else {
         const p = pointer && pieceAt(spot(f));             // what it stands on, not what the pointer is on
@@ -2988,16 +3129,30 @@ function startRoom(cv, app) {
         else f.act = (pointer && !f.work && useAt(f, p)) || back();
       }
       f.legs = "stand";
-    } else if (press && press.action && press.action.kind === "undo") { const f = world().folk.get(press.action.id); if (f && f.act.kind === "doom") f.act = resume(f); }
+    } else if (dogHeld) {                    // the dog let go of: on the floor (never in the fire: in front of it), a shake, off it goes; at its house, in
+      dogHeld = false;
+      const g = world().dog, L = lastL;
+      if (g && L) {
+        g.held = false;
+        g.x = Math.max(L.floor.x0, Math.min(L.floor.x1, g.x)); g.y = Math.max(L.floor.y0, Math.min(L.floor.y1, g.y));
+        const F = L.fire, dh = L.doghouses[0];
+        if (F && g.x >= F.x0 - 4 && g.x < F.x1 + 4 && g.y >= F.y0 && g.y < F.y1 + 6) g.y = Math.min(L.floor.y1, F.y1 + 8);
+        const home = dh && inRect(g, foot("doghouse", [dh.x, dh.y + 4]));
+        g.act = { kind: "shake", left: 0.6, next: home ? { kind: "home", left: rnd(20, 60) } : null };
+      }
+    } else if (press && press.action && press.action.kind === "undo") { const f = world().folk.get(press.action.id); if (f && f.act.kind === "doom") f.act.back = true; }   // the booth runs back, it steps out
     else if (press && press.action && press.action.kind === "unshoot") unshoot(press.action.id);
     else if (press && press.action && press.action.kind === "aim") firstPerson(press.action.key);     // a gun from the gun closet
     else if (press && press.action && press.action.kind === "water") {     // you go and water the plant
       const you = world().folk.get("you");
       if (you && !you.held) { end(you); you.act = { kind: "plant", at: press.action.key, wait: 0, chosen: true }; }
     }
-    else if (press && press.action && press.action.kind === "pet") {       // you go and pet the dog
-      const w = world(), you = w.folk.get("you");
-      if (you && !you.held && w.dog) { end(you); you.act = { kind: "pet", left: 5, chosen: true }; w.dog.act = { kind: "petted" }; }
+    else if (press && press.action && press.action.kind === "pet") {       // the dog: you go and pet it (out of its house it comes, unless afraid); petting it, you throw the stick
+      const w = world(), you = w.folk.get("you"), g = w.dog;
+      if (you && !you.held && g && !g.held && !g.leaving && lastL) {
+        if (canThrow(w)) throwStick(w, you, g, lastL);
+        else if (g.act.kind !== "fetch") { end(you); you.act = { kind: "pet", left: 6, chosen: true }; if (!g.act.hide) g.act = { kind: "petted", out: g.inside }; }
+      }
     }
     else if (press && press.action && press.action.kind === "sit") {       // you take the armchair; a bot sitting in it gets up
       const w = world(), you = w.folk.get("you");
@@ -3059,7 +3214,7 @@ function startRoom(cv, app) {
   size();
   requestAnimationFrame(frame);
   window.__room = { world, size: () => ({ W, H, K }), layout: () => lastL, hp: () => lastHp, fps: (key) => firstPerson(key),
-    shoot: (id) => { const f = world().folk.get(id); if (f) shoot(f); }, unshoot, dogPic, fear: (v) => { if (v !== undefined) world().fear = v; return world().fear; } };   // for poking at it from the console
+    shoot: (id) => { const f = world().folk.get(id); if (f) shoot(f); }, unshoot, dogPic, dog: () => world().dog, stick: () => world().stick, fear: (v) => { if (v !== undefined) world().fear = v; return world().fear; } };   // for poking at it from the console
   const stats = () => { const w = world(); return { since: w.born, bots: Object.fromEntries(w.stats), meetings: w.meetings, inked: w.ink ? inked(w) : 0 }; };
   // at(id): where a figure stands, in CSS pixels of the page (for look.mjs, to drive the room from outside)
   const at = (id) => { const f = world().folk.get(id), b = cv.getBoundingClientRect(); return f ? [b.left + f.x * K, b.top + (f.y - 12) * K] : null; };

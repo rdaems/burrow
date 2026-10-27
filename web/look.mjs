@@ -1,5 +1,5 @@
 // node web/look.mjs URL W H steps.json: drive headless Chrome over CDP (no packages) to look at the page.
-// steps: [{wait:ms} | {shot:"file.png"} | {js:"expr"} | {click:[x,y]} | {move:[x,y]} | {moveTo|clickTo:"js giving [x,y]"} | {drag:[[x,y],…], alt:true?} | {dragTo:"js giving [[x,y],…]"} | {drag:…, hold:true} then {release:[x,y]} | {cdp:"Method", params:{}} | {key:"text"} | {press:"Enter", shift:true}]
+// steps: [{wait:ms} | {shot:"file.png", clip:[x,y,w,h]?, clipTo:"js giving [x,y,w,h]"?} | {js:"expr"} | {click:[x,y]} | {move:[x,y]} | {moveTo|clickTo:"js giving [x,y]"} | {drag:[[x,y],…], alt:true?} | {dragTo:"js giving [[x,y],…]"} | {drag:…, hold:true} then {release:[x,y]} | {cdp:"Method", params:{}} | {key:"text"} | {press:"Enter", shift:true}]
 import { spawn } from "node:child_process";
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -60,7 +60,8 @@ for (const s of steps) {
     await send("Input.dispatchKeyEvent", { type: text ? "keyDown" : "rawKeyDown", text, ...ev });
     await send("Input.dispatchKeyEvent", { type: "keyUp", ...ev });
   }
-  if (s.shot) { const r = await send("Page.captureScreenshot", { format: "png" }); writeFileSync(s.shot, Buffer.from(r.result.data, "base64")); console.log("shot:", s.shot); }
+  if (s.clipTo) s.clip = (await send("Runtime.evaluate", { expression: s.clipTo, returnByValue: true })).result.result.value;   // [x, y, w, h] from the page
+  if (s.shot) { const r = await send("Page.captureScreenshot", { format: "png", ...(s.clip ? { clip: { x: s.clip[0], y: s.clip[1], width: s.clip[2], height: s.clip[3], scale: 1 } } : {}) }); writeFileSync(s.shot, Buffer.from(r.result.data, "base64")); console.log("shot:", s.shot); }
 }
 ws.close(); chrome.kill(); await sleep(300); rmSync(dir, { recursive: true, force: true });
 process.exit(0);

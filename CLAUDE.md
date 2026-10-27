@@ -1477,6 +1477,39 @@ read it; agent view itself shows Completed; the docs say to poll `--all`. Blocke
   a desk). The office managers' manual says so; `do: start` no longer puts up a kept desk (the session brings its
   own), `do: desk` does; `/api/office` desks carry `kept`. The notes cover every session again.
 
+## The booth without a countdown; the dog to play with (2026-10-27)
+
+He: "When I delete a bot in normal mode, in the booth. NO progress bar! I've said that before. There's a removal
+animation that takes some time, about the same as the progress bar now, and all the time I can click the booth to
+cancel." (The "before" was the gravestone round.) And: "I should be able to click on the dog, interact with it."
+- **The booth is the clock**: the countdown sign over it is gone. Its five seconds (`BOOTH`, `boothT(f)`: seconds
+  in) are drawn: the glass door slides shut from the right (0.4 s, `boothShut`), a light rises from the cabin's
+  floor (`boothRise`, 0.6 to 4 s) and the bot goes up in it feet first (`dissolve`: what the light has passed
+  turns pale and thins out through a 4x4 ordered dither, `BAYER`), motes rising in the light, the cabin glowing
+  more and more (`boothGlow`), the roof sign flickering in the last second; then `claude stop` + `rm` and the old
+  fading light. The whole time the booth is a hot spot (gold outline, tip "keep NAME"): a click, or on the bot,
+  sets `act.back`, the seconds run back six times as fast (the light goes down, the bot comes back, the door
+  opens) and it steps out (`resume`). Carrying it out still undoes at once. `drawBooth(ctx, bo, front, t, flash,
+  armed)` takes the seconds in (-1 empty).
+- **The dog was unclickable at night**: from 23:00 to 07:00 it sleeps in its house, and nothing there was a hot
+  spot (he tried at 1 a.m.). Now the house is in `CLICK` and its footprint is the dog's hot spot too: asleep, a
+  click wakes it ("wake the dog"), it walks a few steps out (`petted` with `out`) and sits for you; afraid (fear
+  in hardcore) it stays in and you reach in at the door, hearts there ("comfort the dog"). With you it stays up
+  at night (`withYou` in thinkDog) and goes back in after.
+- **Fetch**: while you pet it (`canThrow`), a click throws a stick (`throwStick`: 40 to 80 dots out, clear floor,
+  `w.stick`, a 0.8 s arc, tumbling through four turns, `drawStick`); it runs for it, picks it up, brings it back
+  across its mouth (`MOUTH` per pose, pale wood `STICK` so it shows against the dog), drops it at your feet and
+  sits wagging 12 s for the next throw ("throw the stick"); then it wanders off and you pick the stick up (your
+  `fetch` act). The dog's hot spot is pushed after the pieces' (it stands in front of them), the piece under it
+  is not outlined, and its tip goes over your head when you are beside it.
+- **Picked up**: a drag on the dog lifts it by the scruff (`dogHeld`, `g.held`, drawn over everything, not into
+  a piece move under it); let go, it shakes (`shake`) and goes about its business, into its house if let go
+  there, never in the fire (put down in front of it).
+- Tested in the demo from a copy of his room (`BURROW_DEMO_ROOM`): the night house click, petting, two throws, the
+  carry, the wait, a pick-up and drop (it went home: night); the booth through its five seconds on clear floor
+  and an undo at 2.8 s (back out, not deleted). look.mjs takes `clip`/`clipTo` on a shot now; `room.at(id)` is on
+  the page's `room`, not `__room` (`__room.dog()`, `__room.stick()` are new).
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

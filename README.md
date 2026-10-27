@@ -64,8 +64,10 @@ have sent it something; then you stand behind its desk), or under the screen whe
   sessions are deleted with it: they walk into the booth one by one (in hardcore they are shot); rescue one
   and the desk stays
 - **a fresh start**: drop an idle robot by the neuralyzer: `/clear`, a new conversation in the same session
-- **delete a session gently**: carry its robot into the booth, or ✕ twice in the bench's list. A sign counts
-  five seconds down (click it, or carry the robot out, to undo), then `claude stop` and `claude rm`
+- **delete a session gently**: carry its robot into the booth, or ✕ twice in the bench's list. The door slides
+  shut and a light rises through the cabin, taking the robot up with it; five seconds, then `claude stop` and
+  `claude rm`. All that while a click on the booth (or carrying the robot out) takes it back: the light runs
+  down again and it steps out
 - **hardcore** (a switch on the switchboard): the booth is a gun closet. A robot dropped on it is shot: it
   stands there with its hands up while an office manager (you, if there is none) takes a gun and comes over.
   Click the closet and you take a shotgun yourself, and the whole window is the office through your own eyes,
@@ -106,8 +108,11 @@ have sent it something; then you stand behind its desk), or under the screen whe
 - **the armchair**: click it and you go and sit there a while, reading (a robot in it gets up)
 - **the dog house** (in the closet) comes with a dachshund: it naps in its house, trots about, visits the
   robots and you (an idle robot pets it), follows you a while, chases the ball when the robots play football,
-  barks at whoever comes in through a door; click it and you go and pet it. At night, while you are away, and
-  while the robots are afraid in hardcore, it stays in its house
+  barks at whoever comes in through a door. Click it (or its house) and you go and pet it; asleep in its
+  house, it wakes and comes out to you. Click it again while you pet it and you throw a stick: it runs for it,
+  brings it back to your feet and waits for the next throw. Pick it up and put it somewhere; let go at its
+  house and in it goes. At night, while you are away, and while the robots are afraid in hardcore, it stays in
+  its house unless you call it (afraid, it won't come out: you reach in at the door)
 - **chess and ping-pong** are games against an idle robot, drawn by lot
 - **a pair room** ([pair](https://github.com/rdaems/pair-prompting)) is a table with a speakerphone, one
   room a table: click it to open a new room (you are in it, with your name and face) or to link one you
