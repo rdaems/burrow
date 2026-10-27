@@ -70,10 +70,15 @@ have sent it something; then you stand behind its desk), or under the screen whe
   down again and it steps out. Its terminal closes the moment it goes in (or is condemned, in hardcore)
 - **hardcore** (a switch on the switchboard): the booth is a gun closet. A robot dropped on it is shot: it
   stands there with its hands up while an office manager (you, if there is none) takes a gun and comes over.
-  Click the closet and you take a shotgun yourself, and the whole window is the office through your own eyes,
-  as Wolf3D drew it: WASD walks, the mouse looks, a click shoots, E at the closet reloads; Doom's status bar
-  under it (your shells, health = the five-hour limit, kills, your face, armor = the week, the doors as keys,
-  the sessions as the ammo table); Esc, and you stand in the room where you walked to. A shot robot goes to
+  Click the closet and you take a shotgun yourself: the screen melts as Doom's did, and the whole window is the
+  office through your own eyes, Doom-style. The robots, the office managers and the dog are little models seen
+  from whichever of their eight sides faces you, the furniture is solid (the reception, the coffee machine with
+  the five-hour limit in its pot, the printer, the cooler, the desks with their screens at work), the fire's
+  light flickers on everything near it and a shot lights the room. WASD walks, the mouse looks, a click shoots
+  (then the pump), E at the closet reloads; Doom's status bar under it (your shells, health = the five-hour
+  limit, the bots at work, waiting, idle and done, your face, armor = the week, the doors as keys, and where
+  Doom lists its ammo, the tokens left: every limit `/usage` has); Esc, and it melts back into the room where
+  you walked to. A shot robot goes to
   pieces; E (or a click in the room) puts it back together until idle robots have cleared the pieces away
   (then `claude stop` and `claude rm`). The others grow afraid with every kill: they tremble, sweat, keep away
   from whoever holds a gun, hide behind the furniture and peek out; it wears off when nobody is shot for a few

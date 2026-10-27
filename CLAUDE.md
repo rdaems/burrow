@@ -1560,6 +1560,62 @@ microtask: `closeTile` draws the room, and `shoot` and `cleanStep` run inside `t
 twice). Kept (undone, rescued, put back together), its terminal stays closed; a click opens it again. Tested in the
 demo: a bot dropped in the booth, a desk burnt with its bot's tile open, a shot; the pane empty at once each time.
 
+## The 3d view made for 3d: Doom, not the room's pixel art (2026-10-27)
+
+He: "add more 3d assets, especially the furniture, like the floor manager, coffee machine, printer, the bots should
+be 8 angle sprites. The style in 2d is great, but you should not simply port that to 3d. The black outlines do not
+work, and it's too low res. Do it more like in doom. Add simple lighting effects, like the fire. The way I hold my
+shotgun should be much more similar to doom. The bottom bar as well. Show how much tokens I have left in the bottom
+bar. Overall, make it resemble doom more. Also when it starts, use the classic 'floating blood' ... transition".
+- **web/props3d.js** (new, before fps.js): everything the view shows, made for it, four texels a dot (`TS`), no ink
+  outlines; a texel at alpha `GLOW` (254) shines (the view does not light it: screens, eyes, lamps, embers, flames).
+  - **Models** (`render`): boxes in a figure's own frame drawn orthographically from eight sides (k 0 its front,
+    counting round to its right), a z-buffer, Lambert light from the front-left, a lit top edge and a dark bottom
+    edge, rounded corners on a box (`round`). `robotBoxes(sp)`: legs (walk1/walk2 strides, sit), the torso in its
+    colour with a chest light, her skirt and bow (`femme`), arms in every pose the room uses (down, sw1/sw2, up,
+    wave, fwd1/fwd2, reach, book, mug, paper, can, roll, gun), the head with the portrait's own face on its front:
+    pixel.js got `pixelAvatar.robot(seed)` (its top, antenna, eyes, teeth, picked in robot()'s order). `dogBoxes`:
+    the dachshund standing, walking, sitting, lying. `figure(sp, k)` is kept per pose and side; `lying` is the side
+    turned a quarter.
+  - **Furniture** (`build(p)`, `desk(d)`): boxes faced with painted textures (wood with grain and bevels, steel,
+    plastic, `over()` for details and the room's letters), kept by what they show (`once`, `tinted`): the coffee
+    corner (counter, brewer, the pot filled to the five-hour limit, a mug), the cooler (its bottle to the week),
+    the printer (a page out while it prints), the reception (panel, posts, the counter with her name plate, her
+    screen or Linda's stack, the bell), the project cabinet, the booth (glass, its back shining as its five seconds
+    run, a light) or in hardcore the gun closet (the guns not taken, a red lamp), the neuralyzer (a light when it
+    flashes), the dog house (stepped roof), the chess table (the game as it stands, stools), the meeting table, the
+    ping-pong table (net), the whiteboard (the dream's ink on its face), a desk (cabinet and plate, desktop with
+    keyboards and mugs, legs, the screen and laptops showing what drawDesk shows, a light while at work, an office
+    chair a seat). Round things are pictures: the pouf, a potted plant (two kinds, drawn), the pair table, the
+    flames (four frames, bigger while something burns), the fire's pit (on the floor overlay).
+  - **The walls**: wainscot panels, a wooden rail, plaster, a cornice (`wallBase`); on the room's wall the doors in
+    their paint (boarded while out of reach), the window (the sky by the hour), the clock (its hands at the time),
+    the closet, the switchboard (`wall()`, one canvas kept until a minute or a door changes). **Floor**: planks five
+    dots wide, staggered, grained (`floorTile`); **ceiling**: tiles and lamp panels that shine (`ceilTile`).
+- **scene3** (room.js) now says what is there rather than cropping the room's pictures: the floor overlay at two
+  texels a dot (soft shadows under the pieces, the rug, the mats, the oil, the pit; redrawn only when its key
+  changes), the wall's items (doors from `L.doors`, the window, clock, closet and switchboard from the layout), a
+  spec per desk (`screenOf` gives what a screen shows), the state per piece, the lights (the fire: `flicker`), a
+  `fig` per figure (an office manager at her counter `facing` the room), the remains cut from the model's front.
+  `pics` no longer has `wallPics` beside it; `sideOf`, `onItsBack`, `backOf`, `panelled` are gone.
+- **fps.js**: square pixels, 480 to 640 across (`resize`), the bar 48 high. Light (`light`, `shade`): the room's
+  own, a pool under each lamp, darker in the corners, the scene's lights (the fire flickers, `LT`), a shot's flash
+  (`flashK`); then Doom's dark by distance (`dimOf`). Mipmaps keep what shines. Models pick their side from the way
+  they walk or face against the way to you. The gun (`gun`, `pump`, `flashes`): Doom's view down the barrel, the
+  pump on it, the receiver; a shot is the muzzle star and a kick, then the pump (the gun dips and turns, the pump
+  comes back and forward), lit by the light where you stand (`ctx.filter` brightness). Doom's messages up left
+  (the keys, "NAME IS DELETED.", "PICKED UP SOME SHELLS."). The bar (`statusBar`, 480 wide in the middle of the
+  stone): AMMO, HEALTH (five-hour limit), BOTS where Doom has ARMS (W ? I D), your face (red after a kill), ARMOR
+  (the week), the doors as keys, and the **tokens left** where Doom lists its ammo: every limit /usage reports
+  (`status().bars`, "5H 36/100", "WEEK 77/100", per model when there are such; the session and the week when /usage
+  gave no list). Big numbers are Doom's red blocks (`BIG`). **The melt** (`startMelt`, `drawMelt`): Doom's wipe, 160
+  columns, each a little after its neighbour, 35 tics a second: going in, the room as it was on the page
+  (`room.snapshot()`) melts off the 3d view; going out, the last 3d frame melts off the room (the canvas stays,
+  transparent, until it is done). Not with reduced motion.
+- Tested in the demo from a copy of his room with hardcore on: every piece looked at from in front, a sheet of a
+  robot's eight sides and its poses (`Props3D.figure`), a shot (flash, pump), both melts, ten seconds turning: no
+  errors, about 5.5 ms a frame at 480 x 300. `__fps.size()`, `__fps.melting()` are new.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

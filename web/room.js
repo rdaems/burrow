@@ -1326,7 +1326,7 @@ function startRoom(cv, app) {
   let pointer = null, hots = [], hovered = null, tip = null, lastL = null, moving = null, held = null, hoverId = null, lastHp = null, dangerNow = false;
   let dogHeld = false, dogRect = null;      // the dog in your hand; where it stands (a press there is on the dog, not on what is under it)
   let fps = null, view = null;              // hardcore: the gun taken from the gun closet, the office in the first person (fps.js); the scene it renders
-  let pics = [], wallPics = [];              // what was just drawn, each piece by itself, for that view (scene3)
+  let pics = [];                             // what was just drawn, each piece by itself, for that view (scene3)
   const hardcore = () => !!app.settings().hardcore;
   let screenHover = null, hoverScreen = null;    // the screen (or laptop) under the pointer: {m, dir}; the one told to the page
   const over = (x0, y0, x1, y1) => !!pointer && pointer.x >= x0 && pointer.x < x1 && pointer.y >= y0 && pointer.y < y1;
@@ -1341,7 +1341,7 @@ function startRoom(cv, app) {
     ctx.setTransform(2, 0, 0, 2, 0, 0);      // drawn in dots; the canvas has two pixels a dot, for dragging
     ctx.imageSmoothingEnabled = false;
     const s = app.state();
-    hots = []; tip = null; screenHover = null; pics = []; wallPics = [];
+    hots = []; tip = null; screenHover = null; pics = [];
     ctx.drawImage(floor(), 0, 0);
     rect(ctx, W - 1, 0, 1, H, INK2);
     if (!s) return;
@@ -1421,7 +1421,6 @@ function startRoom(cv, app) {
     // else (it is in your hand), washed red over the fire
     let aloft = null;
     const onTheWall = (key, r, h, fn) => {
-      wallPics.push(fn);
       if (moving && moving.key === key) aloft = () => outlined(ctx, r, danger(key), fn, RED, tintOf(key));
       else outlined(ctx, r, h, fn);
     };
@@ -1461,14 +1460,12 @@ function startRoom(cv, app) {
       // the closet, against the wall: the furniture that is not in the room; a click opens it (on the right)
       const c = L.closet, h = hot(c.x0, c.y0, c.x1, c.y1, { kind: "closet" });
       outlined(ctx, [c.x0, c.y0, c.x1, c.y1], h, (x) => drawCloset(x, c, app.view() === "closet"));
-      wallPics.push((x) => drawCloset(x, c, false));
       if (h) tip = { text: "furniture", x: c.x0 + 11, y: c.y0 + 4 };
     }
     if (L.settings) {
       // the switchboard on the wall: burrow's own settings, a switch each; a click opens them
       const b = L.settings, h = hot(b.x0, b.y0, b.x1, b.y1, { kind: "settings" });
       outlined(ctx, [b.x0, b.y0, b.x1, b.y1], h, (x) => drawSwitchboard(x, b, app.settings(), app.view() === "settings"));
-      wallPics.push((x) => drawSwitchboard(x, b, app.settings(), false));
       if (h) tip = { text: "settings", x: b.x0 + 7, y: b.y0 + 4 };
     }
     // a bot and its seat at its project's desk are one thing: where the bot is only says what it
@@ -1781,9 +1778,10 @@ function startRoom(cv, app) {
     cv.style.cursor = moving || held ? "grabbing" : onHot ? "pointer" : pieceAt(pointer) ? "grab" : "default";
   }
 
-  // ---- the office in the first person (fps.js), from what the room has just drawn: the floor and what lies on
-  // it, the wall and what hangs on it, the desks as blocks (their faces cut from their own pictures), a sprite
-  // for every piece of furniture, chair, screen, bot and bit of a shot bot, where it is in the room
+  // ---- the office in the first person (fps.js): what is in the room right now, for props3d.js to make its 3d
+  // things of: the floor and what lies on it (an overlay, two texels a dot), what hangs on the wall, every desk and
+  // piece of furniture with what it shows (the coffee left, a screen at work, the game on the chess board, the
+  // dream on the whiteboard), the lights (the fire, a booth in use), and everyone in the pose the room gives them
   const canvases = new Map();
   function canvas(name, w, h) {              // one per name, redrawn in place (its `v` says it was)
     let c = canvases.get(name);
@@ -1792,24 +1790,6 @@ function startRoom(cv, app) {
     x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, w, h); x.imageSmoothingEnabled = false;
     c.v++;
     return [c, x];
-  }
-  const sides = new Map();                   // a desk's ends and back: its paint, outlined
-  function sideOf(p) {
-    if (!sides.has(p)) {
-      const c = document.createElement("canvas"); c.width = c.height = 8;
-      const x = c.getContext("2d"); rect(x, 0, 0, 8, 8, p.k); rect(x, 1, 1, 6, 6, p.d); rect(x, 1, 1, 6, 1, p.hi);
-      sides.set(p, c);
-    }
-    return { c: sides.get(p), sx: 0, sy: 0, sw: 8, sh: 8 };
-  }
-  const backs = new WeakMap();               // a figure on its back, head to the left, as drawSleeper turns it
-  function onItsBack(im) {
-    if (!backs.has(im)) {
-      const c = document.createElement("canvas"); c.width = SH; c.height = SW;
-      const x = c.getContext("2d"); x.translate(0, SW); x.rotate(-Math.PI / 2); x.drawImage(im, 0, 0);
-      backs.set(im, c);
-    }
-    return backs.get(im);
   }
   const smalls = new Map();                  // cogs, bolts, a spring, the ball, the ? of a bot that waits
   function small(k, w, h, paint) {
@@ -1824,125 +1804,122 @@ function startRoom(cv, app) {
       else for (let q = 0; q < 4; q++) rect(x, q % 2, q, 2, 1, C.steel3);
     });
   }
-  // the walls as you see them up close: a rail a third of the way up, panels under it, seams over it
-  function panelled(x, w) {
-    rect(x, 0, 0, w, 1, "#33445c");
-    rect(x, 0, 15, w, 9, "#243245"); rect(x, 0, 14, w, 1, "#3d4f68"); rect(x, 0, 15, w, 1, "#1d2737");
-    for (let i = 0; i < w; i += 32) { rect(x, i, 1, 1, 13, "#223042"); rect(x, i + 16, 16, 1, 8, "#1d2737"); }
+  // what a desk's screen shows (as drawDesk paints it): off, on (its sitter idles), busy, waits; a shell keeps it on
+  function screenOf(d, w, tree) {
+    const seated = (f) => f && f.legs === "sit" && !f.lying && (f.act.kind === "desk" || f.act.kind === "sleep") && f.b && f.b.alive !== false;
+    const f = d.seats.filter((st) => st[2] === tree).map(([id]) => w.folk.get(id)).filter(seated);
+    if (f.some((x) => x.busy)) return "busy";
+    if (f.some((x) => x.waiting)) return "waits";
+    return f.length || app.shells().some((s) => s.m === (d.m || "") && s.dir === (tree || d.dir)) ? "on" : "off";
   }
+  let overlayKey = null;
   function scene3(L, w, s, T) {
-    const things = [], boxes = [], solid = [];
-    // the floor: the planks, the rug, the mats rolled out for a nap, the oil of the shot ones
-    const [fc, fx] = canvas("floor", W, H);
-    fx.drawImage(floor(), 0, 0);
-    if (L.pong) drawRug(fx, L.pong);
-    for (const f of w.folk.values()) if (f.act.kind === "sleep" && f.act.there && f.act.at) drawMat(fx, f.act.at);
-    for (const r of w.remains.values()) {
-      const rx = Math.round(r.puddle * r.parts.length / r.total);
-      if (rx > 1) ELL(rx, 3, 5).forEach((hw, j) => rect(fx, r.x - hw, r.y - 2 + j, 2 * hw, 1, "#17151f"));
-      for (const d of r.drops) rect(fx, d.x, d.y, d.s, d.s, d.hi ? "#4a4766" : "#17151f");
-    }
-    // the wall with the doors, the window, the clock, the closet, the switchboard; the other three plain
-    const [wc, wx] = canvas("wall", W, WALL);
-    wx.drawImage(floor(), 0, 0, W, WALL, 0, 0, W, WALL); panelled(wx, W);
-    for (const fn of wallPics) fn(wx);
-    const pc = canvases.get("plain") || (() => { const [c, x] = canvas("plain", 32, WALL); x.drawImage(floor(), 0, 0, 32, WALL, 0, 0, 32, WALL); panelled(x, 32); return c; })();
-    // a desk: its cabinet and its desktop on legs as blocks, faced with what the room draws of them; its
-    // screen (and laptops) standing on the cabinet, a chair a bot
-    const chair = sprites.get("chair");
-    for (const d of L.desks) {
-      const { x0, y, w: dw, cab } = d, ox = x0 - 2, oy = y - 35;
-      const [c, x] = canvas("d:" + d.key, dw + 4, 37);
-      x.translate(-ox, -oy); drawDesk(x, d, w, T, new Set());
-      const crop = (cx, cy, cw, ch) => ({ c, sx: cx - ox, sy: cy - oy, sw: cw, sh: ch }), side = sideOf(paintOf(d.m)), leg = (lx) => crop(lx, y - 4, 2, 4);
-      boxes.push({ x0, y0: y - 12, x1: x0 + cab, y1: y, z0: 0, z1: 11, front: crop(x0, y - 11, cab, 11), top: crop(x0, y - 15, cab, 4), side, back: side });
-      const tx = x0 + cab - 2;
-      if (d.seats.length) {
-        boxes.push({ x0: tx, y0: y - 11, x1: x0 + dw, y1: y - 4, z0: 5, z1: 9, front: crop(tx, y - 7, x0 + dw - tx, 4), top: crop(tx, y - 12, x0 + dw - tx, 5), side, back: side });
-        for (const lx of [x0 + cab + 1, ...d.seats.map(([, sx]) => sx + 11), x0 + dw - 4]) for (const ly of [y - 6, y - 11])
-          boxes.push({ x0: lx, y0: ly, x1: lx + 2, y1: ly + 2, z0: 0, z1: 5, front: leg(lx), back: leg(lx), side: leg(lx), top: side });
+    const things = [], boxes = [], solid = [], lights = [];
+    const add = (o) => { if (!o) return false; boxes.push(...o.boxes); things.push(...o.things); solid.push(...o.solid); lights.push(...o.lights); return true; };
+    // the floor's overlay: the rug, the mats rolled out for a nap, the oil of the shot ones, the fire's pit, a soft
+    // shadow under each piece; redrawn only when one of them changes
+    const mats = [...w.folk.values()].filter((f) => f.act.kind === "sleep" && f.act.there && f.act.at).map((f) => f.act.at);
+    const pieces = pics.filter((p) => !ON_WALL.has(p.kind));
+    const okey = JSON.stringify([W, H, L.pong && [L.pong.x, L.pong.y], mats, [...w.remains.values()].map((r) => [r.x, r.y, r.parts.length, r.drops.length]), L.fire && [L.fire.x0, L.fire.y0], pieces.map((p) => [p.kind, p.x, p.y]), L.desks.map((d) => [d.x0, d.y, d.w])]);
+    let fc = canvases.get("floor");
+    if (!fc || okey !== overlayKey) {
+      overlayKey = okey;
+      const [c, fx] = canvas("floor", W * 2, H * 2);
+      fc = c; fx.setTransform(2, 0, 0, 2, 0, 0);
+      fx.fillStyle = "rgba(0,0,0,0.3)";
+      const blob = (cx, cy, rx, ry) => { fx.beginPath(); fx.ellipse(cx, cy, rx, ry, 0, 0, 7); fx.fill(); };
+      for (const p of pieces) if (p.kind !== "fire") { const r = foot(p.kind, [p.x, p.y]); blob((r[0] + r[2]) / 2, p.y - 3, (r[2] - r[0]) / 2 + 1, 5); }
+      for (const d of L.desks) blob(d.x0 + d.w / 2, d.y - 6, d.w / 2 + 1, 7);
+      if (L.pong) drawRug(fx, L.pong);
+      for (const m of mats) drawMat(fx, m);
+      for (const r of w.remains.values()) {
+        const rx = Math.round(r.puddle * r.parts.length / r.total);
+        if (rx > 1) ELL(rx, 3, 5).forEach((hw, j) => rect(fx, r.x - hw, r.y - 2 + j, 2 * hw, 1, "#17151f"));
+        for (const d of r.drops) rect(fx, d.x, d.y, d.s, d.s, d.hi ? "#4a4766" : "#17151f");
       }
-      solid.push([x0, y - 12, x0 + dw, y - 3]);
-      const gw = 22 + d.trees.length * LAP, { sx, sy } = screenAt(d);
-      things.push({ x: sx + gw / 2, y: y - 6, z: 10, ...crop(sx, sy, gw, 18), ax: gw / 2, ay: 18 });
-      if (chair) for (const [, cx] of d.seats) things.push({ x: cx - 4 + chair.width / 2, y: y - 0.7, z: 0, c: chair, sx: 0, sy: 0, sw: chair.width, sh: chair.height, ax: chair.width / 2, ay: 17 });
+      if (L.fire) fx.drawImage(Props3D.pit(44, 18), L.fire.x0 + 2, L.fire.y1 - 21, 44, 18);
     }
-    // every other piece standing on the floor, as the room drew it a moment ago; the fire's pit lies on the floor and
-    // only its flames stand up from it; the ping-pong table is a table (a top on four legs, the net across)
+    // the wall: the doors in their paint (boarded while their machine is out of reach), the window, the clock, the
+    // closet, the switchboard, where they hang
+    const now = new Date(), aw = s.awake || {};
+    const items = [
+      ...L.doors.map((d) => ({ kind: "door", x0: d.x0, x1: d.x0 + 16, y0: d.y0, y1: WALL, paint: paintOf(d.mid), ok: !d.m.error })),
+      ...L.windows.map((p) => ({ kind: "window", x0: p.x0, x1: p.x1, y0: p.y0, y1: p.y1, hour: now.getHours() })),
+      ...(L.clock ? [{ kind: "clock", x0: L.clock.x0, x1: L.clock.x0 + 17, y0: L.clock.y0, y1: L.clock.y0 + 17, time: now, awake: !!aw.on }] : []),
+      ...[L.closet && "closet", L.settings && "settings"].filter(Boolean).map((k) => ({ kind: k, x0: L[k].x0, x1: L[k].x1, y0: L[k].y0, y1: L[k].y1 })),
+    ];
+    const wkey = JSON.stringify(items.map((it) => [it.kind, it.x0, it.y0, it.paint && it.paint.top, it.ok])) + now.getHours() + ":" + now.getMinutes() + !!aw.on;
+    // the desks: their cabinet, desktop, screen (and laptops) and chairs, what each screen shows
+    for (const d of L.desks) add(Props3D.desk({ x0: d.x0, y: d.y, w: d.w, cab: d.cab, label: d.label, paint: paintOf(d.m), color: d.color, T,
+      seats: d.seats.map(([id, x, tree]) => ({ x, tree })), mugs: d.seats.filter(([id]) => w.mugs.get(id) > T && w.folk.get(id)).map(([id, x]) => ({ x, color: colorOf(w.folk.get(id).b) })),
+      screen: screenOf(d, w, ""), laptops: d.trees.map((t) => screenOf(d, w, t)) }));
+    // every piece of furniture with what it shows; the fire's flames (a light of their own), its pit on the floor
+    const usage = s.usage || {}, left = (u) => (u && u.used !== undefined ? Math.max(0, 1 - u.used / 100) : 0);
     for (const p of pics) {
-      if (p.pit) {
-        const F = p.F, fw = FIRE.w, fh = FIRE.h + 4, X = (v) => Math.round(v * FIRE.S);
-        p.pit(fx);
-        const [c, x] = canvas("flames", fw, fh);
-        x.translate(-F.x0, -F.y0); p.flames(x);
-        things.push({ x: F.x0 + fw / 2, y: F.y0 + X(21), z: 0, c, sx: 0, sy: 0, sw: fw, sh: fh, ax: fw / 2, ay: X(22) });
-        solid.push([F.x0 + X(3), F.y0 + X(16), F.x1 - X(3), F.y1 - 2]);
+      if (ON_WALL.has(p.kind)) continue;
+      if (p.kind === "fire") {
+        const F = L.fire, fl = Props3D.flames(Math.floor(T * 8) % 4, w.burning.length > 0 || performance.now() - w.flare < 1500);
+        things.push({ x: F.x0 + 24, y: F.y1 - 12, z: 0, c: fl.c, sx: 0, sy: 0, sw: fl.c.width, sh: fl.c.height, ax: fl.ax, ay: fl.ay, res: fl.res, piece: p.key });
+        lights.push({ x: F.x0 + 24, y: F.y1 - 12, z: 9, r: 140, col: [1, 0.58, 0.26], k: 1.05, flicker: true });
+        solid.push([F.x0 + 3, F.y1 - 20, F.x1 - 3, F.y1 - 3]);
         continue;
       }
-      const pg = p.kind === "pong" && sprites.get("pong");
-      if (pg) {
-        const x0 = p.x - 16, y0 = p.y - 19, crop = (sy, sh) => ({ c: pg, sx: 0, sy, sw: 32, sh }), dark = { c: pg, sx: 0, sy: 15, sw: 32, sh: 1 };
-        boxes.push({ x0, y0: y0 + 1, x1: x0 + 32, y1: y0 + 14, z0: 5, z1: 7, top: crop(1, 13), front: crop(14, 2), back: crop(14, 2), side: dark });
-        boxes.push({ x0: p.x - 0.5, y0: y0 + 1, x1: p.x + 0.5, y1: y0 + 14, z0: 7, z1: 9, top: { c: pg, sx: 15, sy: 2, sw: 2, sh: 1 }, front: { c: pg, sx: 15, sy: 2, sw: 2, sh: 4 }, back: { c: pg, sx: 15, sy: 2, sw: 2, sh: 4 }, side: { c: pg, sx: 15, sy: 2, sw: 2, sh: 4 } });
-        for (const lx of [x0 + 2, x0 + 29]) for (const ly of [y0 + 2, y0 + 12]) boxes.push({ x0: lx, y0: ly, x1: lx + 1, y1: ly + 1, z0: 0, z1: 5, top: dark, front: dark, back: dark, side: dark });
-        solid.push([x0, y0 + 1, x0 + 32, y0 + 14]);
-        continue;
+      const st = { kind: p.kind, key: p.key, x: p.x, y: p.y, T };
+      if (p.kind === "coffee") { st.level = left(usage.session); st.brewing = [...w.folk.values()].some((f) => f.act.kind === "coffee" && f.act.stage === 1); }
+      if (p.kind === "cooler") st.level = left(usage.week);
+      if (p.kind === "printer") { const job = [...w.folk.values()].find((f) => f.act.kind === "print" && f.act.stage === 1), since = (performance.now() - w.print) / 1000; st.printing = job ? job.act.wait : since < 3 ? since : undefined; }
+      if (p.kind === "manager") {
+        const M = (s.managers || []).find((x) => x.key === p.key) || {}, dg = app.digest(), live = new Set((s.bots || []).map((b) => b.id));
+        Object.assign(st, { name: M.name, color: M.color, screen: M.session ? (M.busy ? "busy" : M.waiting ? "asks" : M.alive ? "on" : "off") : null, notes: M.style === "notes" && dg ? Object.keys(dg.sessions || {}).filter((id) => live.has(id)).length : 0 });
       }
+      if (p.kind === "add") st.w = ADD_W;
+      if (p.kind === "booth") {
+        const inside = [...w.folk.values()].find((f) => f.act.kind === "doom" && f.act.at === p.key);
+        Object.assign(st, { gun: hardcore(), out: [...w.folk.values()].filter((f) => f.carry === "gun").length + (fps ? 1 : 0), t: boothT(inside) });
+      }
+      if (p.kind === "neuralyzer") st.flash = !!w.flash && performance.now() - w.flash.t0 < 400;
+      if (p.kind === "chess") { const g = s.chess && !s.chess.result ? s.chess : null; st.board = g ? g.board : START; st.seats = [L.chessSeat(0), L.chessSeat(1)]; }
+      if (p.kind === "meet") st.seats = [L.meetSeat(0), L.meetSeat(1)];
+      if (p.kind === "board") { st.ink = ink(w); st.inkV = w.inkV; }
+      if (p.kind === "plant") st.variant = +(p.key.match(/\d+$/) || [0])[0] % 2;
+      if (p.kind === "pair") st.linked = !!(s.pair || {})[p.key];
+      if (add(Props3D.build(st))) continue;
+      // anything else: the room's own picture of it, standing where it stands
       const r = foot(p.kind, [p.x, p.y]), P = 1, cw = r[2] - r[0] + 2 * P, ch = r[3] - r[1] + 2 * P;
-      if (!ON_WALL.has(p.kind)) rect(fx, r[0] + 3, p.y - 2, r[2] - r[0] - 6, 3, "rgba(0,0,0,0.22)");   // its shadow on the floor
       const [c, x] = canvas("p:" + p.key, cw, ch);
       x.translate(P - r[0], P - r[1]); p.fn(x);
       const cx = (r[0] + r[2]) / 2;
       things.push({ piece: p.key, x: cx, y: p.y - 3, z: 0, c, sx: 0, sy: 0, sw: cw, sh: ch, ax: cx - r[0] + P, ay: p.y + 1 - r[1] + P });
       solid.push([r[0] + 2, Math.max(r[1], p.y - 10), r[2] - 2, p.y + 2]);
     }
-    // everyone but you (you are the eyes), walking, sitting, lying on a mat; a ? over one that waits for you. A
-    // figure has three pictures, by the way it faces you: its side (as the room draws it), its front, its back
+    // everyone but you (you are the eyes): a model of each, in the pose the room gives it, seen from whichever of
+    // its eight sides faces you; lying on a mat; in the booth going up in its light; a ? over one that waits
     for (const f of w.folk.values()) {
       if (f.id === "you" || f.held || !f.b) continue;
-      const b = f.b, im = body(seedOf(b), colorOf(b), f.arms, f.legs, b.human, b.staff);
-      if (!im) continue;
+      const b = f.b, fig = { kind: "robot", seed: seedOf(b), color: colorOf(b), femme: !!b.staff, arms: f.arms, legs: f.legs };
       const who = { key: f.id, bot: b.human ? null : b.id, staff: !!b.staff, booth: b.booth, name: b.name };
-      rect(fx, Math.round(f.x) - 5, Math.round(f.y) - 1, 10, 2, "rgba(0,0,0,0.28)");        // its shadow
-      if (f.lying) { things.push({ ...who, x: f.x, y: f.y - 9, z: 0, c: onItsBack(im), sx: 0, sy: 0, sw: SH, sh: SW, ax: SH / 2, ay: SW - 4 }); continue; }
-      const front = body(seedOf(b), colorOf(b), ["up", "wave", "gun"].includes(f.arms) ? (f.arms === "gun" ? "fwd1" : f.arms) : "down", f.legs, b.human, b.staff);
-      things.push({ ...who, x: f.x, y: f.y, z: 0, c: im, sx: 0, sy: 0, sw: SW, sh: SH, ax: 11, ay: 28, face: f.dir < 0 ? -1 : 1, seated: f.legs === "sit",
-        views: front && { front, back: backOf(front, seedOf(b), colorOf(b), b.human) } });
+      if (f.lying) { const l = Props3D.lying(fig); things.push({ ...who, x: f.x, y: f.y - 9, z: 0, c: l.c, sx: 0, sy: 0, sw: l.w, sh: l.h, ax: l.ax, ay: l.ay, res: l.res }); continue; }
+      const bt = boothT(f);
+      const atDesk = b.staff && f.sat && Math.hypot(f.x - managerSeat(boothOf(L, f)).x, f.y - managerSeat(boothOf(L, f)).y) < 2;   // an office manager at her counter faces the room
+      things.push({ ...who, x: f.x, y: f.y, z: 0, fig, face: f.dir < 0 ? -1 : 1, facing: atDesk ? Math.PI / 2 : undefined, seated: f.legs === "sit", dissolve: bt > 0 ? boothRise(bt) : 0 });
       if (f.waiting && f.act.kind !== "doom") {
-        const q = small("?", 9, 10, (x) => { rect(x, 0, 0, 9, 9, INK); rect(x, 1, 1, 7, 7, C.steel4); rect(x, 1, 8, 1, 1, C.steel4); rect(x, 0, 9, 3, 1, INK); tiny(x, "?", 3, 2, INK); });
-        things.push({ key: "?" + f.id, x: f.x, y: f.y + 0.1, z: 28, c: q, sx: 0, sy: 0, sw: 9, sh: 10, ax: 4.5, ay: 10 });
+        const q = small("?3", 27, 30, (x) => { x.scale(3, 3); rect(x, 0, 0, 9, 9, "#2b2433"); rect(x, 1, 1, 7, 7, "#f4f6fb"); rect(x, 1, 8, 1, 1, "#f4f6fb"); rect(x, 0, 9, 3, 1, "#2b2433"); tiny(x, "?", 3, 2, "#2b2433"); });
+        things.push({ key: "?" + f.id, x: f.x, y: f.y + 0.1, z: 28, c: q, sx: 0, sy: 0, sw: 27, sh: 30, ax: 13.5, ay: 30, res: 3 });
       }
     }
-    // what is left of a shot bot: its pieces where they fly and land
+    // what is left of a shot bot: its pieces where they fly and land, cut from its model seen from the front
     for (const [id, r] of w.remains) r.parts.forEach((p, i) => {
       const who = { key: id + "/" + i, rem: r.back ? null : id, name: r.b.name, x: p.x, y: p.y, z: p.z, flip: Math.floor(p.spin) % 2 === 1 };
-      if (p.img) things.push({ ...who, c: p.img, sx: p.sx, sy: p.sy, sw: p.sw, sh: p.sh, ax: p.sw / 2, ay: p.sh });
-      else { const c = bitOf(p); things.push({ ...who, c, sx: 0, sy: 0, sw: c.width, sh: c.height, ax: c.width / 2, ay: c.height }); }
+      if (p.img) {
+        const fr = Props3D.figure({ kind: "robot", seed: seedOf(r.b), color: colorOf(r.b), femme: !!r.b.staff, arms: "down", legs: "stand" }, 0), S = fr.res;
+        const sx = Math.max(0, Math.round(fr.ax + (p.sx - 11) * S)), sy = Math.max(0, Math.round(fr.ay + (p.sy - 27) * S));
+        things.push({ ...who, c: fr.c, sx, sy, sw: Math.min(fr.w - sx, p.sw * S), sh: Math.min(fr.h - sy, p.sh * S), ax: p.sw * S / 2, ay: p.sh * S, res: S });
+      } else { const c = bitOf(p); things.push({ ...who, c, sx: 0, sy: 0, sw: c.width, sh: c.height, ax: c.width / 2, ay: c.height }); }
     });
-    if (w.dog && !w.dog.inside && !w.dog.leaving && !w.dog.held) { const im = dogPic(w.dog.pose, w.dog.wag); things.push({ key: "dog", x: w.dog.x, y: w.dog.y, z: 0, c: im, sx: 0, sy: 0, sw: im.width, sh: im.height, ax: im.width / 2, ay: im.height - 1, face: w.dog.dir < 0 ? -1 : 1 }); }
-    if (w.ball) things.push({ key: "ball", x: w.ball.x, y: w.ball.y, z: w.ball.h, c: small("ball", 3, 3, (x) => { rect(x, 0, 0, 3, 3, INK); rect(x, 1, 1, 1, 1, C.white); }), sx: 0, sy: 0, sw: 3, sh: 3, ax: 1.5, ay: 3 });
-    return { v: (view ? view.v : 0) + 1, W, H, WALL, floor: fc, wall: wc, plain: pc, boxes, things, solid };
-  }
-  // a figure from behind: its head all back of the head (a robot's casing, a person's hair), the rest as in front
-  const behinds = new WeakMap();
-  function backOf(im, seed, color, human) {
-    if (behinds.has(im)) return behinds.get(im);
-    const c = document.createElement("canvas"); c.width = im.width; c.height = im.height;
-    const x = c.getContext("2d", { willReadFrequently: true }); x.drawImage(im, 0, 0);
-    const d = x.getImageData(0, 0, c.width, c.height), p = d.data, f = face(seed, color, human).px;
-    const hair = human && f ? [f[(2 * 20 + 10) * 4], f[(2 * 20 + 10) * 4 + 1], f[(2 * 20 + 10) * 4 + 2]] : null;
-    const ink = [parseInt(INK.slice(1, 3), 16), parseInt(INK.slice(3, 5), 16), parseInt(INK.slice(5, 7), 16)];
-    const steel = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
-    const [hi, mid] = [steel(C.steel3), steel(C.steel2)], from = human ? 1 : 5, to = human ? 15 : 17;
-    for (let y = from; y <= to; y++) for (let i = 0; i < c.width; i++) {
-      const k = (y * c.width + i) * 4;
-      if (p[k + 3] < 128 || (p[k] === ink[0] && p[k + 1] === ink[1] && p[k + 2] === ink[2])) continue;
-      const col = hair || (y < 11 ? hi : mid);
-      p[k] = col[0]; p[k + 1] = col[1]; p[k + 2] = col[2];
-    }
-    x.putImageData(d, 0, 0);
-    behinds.set(im, c);
-    return c;
+    const dg = w.dog;
+    if (dg && !dg.inside && !dg.leaving && !dg.held) things.push({ key: "dog", x: dg.x, y: dg.y, z: 0, fig: { kind: "dog", pose: dg.pose, wag: dg.wag }, face: dg.dir < 0 ? -1 : 1 });
+    if (w.ball) things.push({ key: "ball", x: w.ball.x, y: w.ball.y, z: w.ball.h, c: small("ball4", 12, 12, (x) => { x.fillStyle = "#e8ecf0"; x.beginPath(); x.arc(6, 6, 5.5, 0, 7); x.fill(); x.fillStyle = "#b5bfc7"; x.beginPath(); x.arc(7, 7.5, 3.5, 0, 7); x.fill(); x.fillStyle = "#ffffff"; x.fillRect(3, 3, 2, 2); }), sx: 0, sy: 0, sw: 12, sh: 12, ax: 6, ay: 12, res: 4 });
+    return { v: (view ? view.v : 0) + 1, W, H, WALL, floor: fc, wall: Props3D.wall(W, 40, WALL, items, wkey), plain: Props3D.plain(40), boxes, things, solid, lights };
   }
   // a shot fired: the idle bots near it run off, hands up (the ones at work work on); the more afraid, the
   // further off they hear it and the further they run
@@ -2222,6 +2199,7 @@ function startRoom(cv, app) {
     if (fps || !lastL || !hardcore()) return;
     const p = lastL.pieceOf(key) || lastL.booths[0];
     pointer = null; const me0 = world().folk.get("you"); if (me0) me0.hunt = null;      // a hunt of yours under way in the room is yours to finish in here
+    Props3D.init({ tiny, tinyW });
     view = scene3(lastL, world(), app.state(), world().T);
     fps = startFps({
       scene: () => view,
@@ -2232,6 +2210,7 @@ function startRoom(cv, app) {
       status: () => {
         const s = app.state() || {}, u = s.usage || {}, bots = s.bots || [], left = (x) => (x && x.used !== undefined ? Math.max(0, 100 - x.used) : null);
         return { health: left(u.session), armor: left(u.week), kills: world().kills || 0, fear: world().fear || 0,
+          bars: (u.bars || [u.session && { ...u.session, label: "session" }, u.week && { ...u.week, label: "week (all models)" }].filter(Boolean)).map((b) => ({ label: b.label, left: left(b) })),   // what is left of every limit /usage lists
           keys: (s.machines || []).map((m) => ({ color: paintOf(m.id).top, ok: !m.error })),
           working: bots.filter((b) => b.busy).length, waiting: bots.filter((b) => b.waiting).length, idle: bots.filter((b) => !b.busy && !b.waiting && !b.over).length, done: bots.filter((b) => b.over).length };
       },
@@ -2245,6 +2224,7 @@ function startRoom(cv, app) {
         return k ? NAMES[k] || k : null;
       },
       unshoot, alarm, tiny, tinyW,
+      snapshot: () => ({ canvas: cv, rect: cv.getBoundingClientRect() }),   // the room as it is on the page: what melts away (Doom's wipe)
       hands: () => {                         // your skin and your sleeves, as your figure wears them (its portrait's shoulders)
         const f = world().folk.get("you"), b = f && f.b, seed = b ? seedOf(b) : "you", col = b ? colorOf(b) : YOU, px = face(seed, col, true).px, i = (19 * 20 + 6) * 4;
         return { skin: pixelAvatar.skin(seed), clothes: px && px[i + 3] > 128 ? "#" + [px[i], px[i + 1], px[i + 2]].map((v) => v.toString(16).padStart(2, "0")).join("") : col };

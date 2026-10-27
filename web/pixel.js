@@ -199,6 +199,8 @@ window.pixelAvatar = (() => {
   };
   // the skin a human's face was drawn with (skin is the first thing human() picks), for the hands of a full figure
   avatar.skin = (seed) => pick(rng(String(seed)), SKIN)[1];
+  // a robot's parts, as robot() picks them (in its order), for a model of it (burrow's 3d view)
+  avatar.robot = (seed) => { const r = rng(String(seed)), top = pick(r, [3, 4]), ant = pick(r, ["one", "two", "dish"]), eyes = pick(r, ["dots", "visor", "cyclops", "happy"]); return { top, ant, eyes, teeth: r() < 0.5 }; };
   avatar.C = C;
   return avatar;
 })();
