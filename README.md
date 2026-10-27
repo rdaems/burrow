@@ -67,7 +67,7 @@ have sent it something; then you stand behind its desk), or under the screen whe
 - **delete a session gently**: carry its robot into the booth. The door slides
   shut and a light rises through the cabin, taking the robot up with it; five seconds, then `claude stop` and
   `claude rm`. All that while a click on the booth (or carrying the robot out) takes it back: the light runs
-  down again and it steps out
+  down again and it steps out. Its terminal closes the moment it goes in (or is condemned, in hardcore)
 - **hardcore** (a switch on the switchboard): the booth is a gun closet. A robot dropped on it is shot: it
   stands there with its hands up while an office manager (you, if there is none) takes a gun and comes over.
   Click the closet and you take a shotgun yourself, and the whole window is the office through your own eyes,

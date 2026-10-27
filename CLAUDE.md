@@ -1549,6 +1549,17 @@ countryside, running on a sunny hill. Or on the beach. The drawing is done in pi
   small board in the room shows each dot's middle pixel now (it showed the first inked one). `__room.dream(scene, k)`
   shows a scene k drawn.
 
+## A bot that is to go lets go of its terminal (2026-10-27)
+
+He: "When i delete a desk, its bot walks to the booth, but the terminal should close right away. The same for when i
+delete a bot." The tile closed only when the attach ended, i.e. after `claude stop`, the walk and the booth's five
+seconds (or the gun) later. Now `unopen(id)` (room.js, `act {kind: "close", id}`, every tile of that bot) runs the
+moment it is to go: `condemn` (a burnt desk's bots, a bot on the gun closet, her hardcore clear-out), a bot let go in
+the booth, the office manager taking one to the booth (`escort`), a shot (`shoot`: the gun, 3d). Deferred to a
+microtask: `closeTile` draws the room, and `shoot` and `cleanStep` run inside `think()` (a nested draw would think
+twice). Kept (undone, rescued, put back together), its terminal stays closed; a click opens it again. Tested in the
+demo: a bot dropped in the booth, a desk burnt with its bot's tile open, a shot; the pane empty at once each time.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

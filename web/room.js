@@ -606,12 +606,15 @@ function startRoom(cv, app) {
     w.spared.add(id);
     if (((app.state() || {}).removing || []).includes(id)) app.act({ kind: "kept", id });
   }
+  // one that is to go lets go of its terminal at once (the booth or the gun take a while; kept, it stays closed).
+  // After this frame: closing a tile draws the room, and this may be in the middle of thinking
+  const unopen = (id) => queueMicrotask(() => app.act({ kind: "close", id }));
   function condemn(ids, unit = null) {
     const w = world(), took = [];
     for (const id of ids) {
       const f = w.folk.get(id);
       if (!f || !f.b || f.b.human || f.b.staff || f.held || DOOMED.has(f.act.kind) || w.remains.has(id)) continue;
-      end(f); f.act = { kind: "queue", n: 99 };
+      end(f); f.act = { kind: "queue", n: 99 }; unopen(id);
       w.condemned.set(id, { unit }); w.spared.delete(id); took.push(id);
     }
     if (unit && took.length) w.razed.add(unit);
@@ -708,7 +711,7 @@ function startRoom(cv, app) {
     switch (c.phase) {
       case "fetch":                          // to the bot
         if (!g || g.held || !cu.ids.includes(c.id)) return finish(3);
-        if (walk(f, { x: g.x + 10, y: g.y }, 26, dt)) { f.dir = -1; g.act = { kind: "escort", by: f.id }; c.phase = "walk"; }
+        if (walk(f, { x: g.x + 10, y: g.y }, 26, dt)) { f.dir = -1; g.act = { kind: "escort", by: f.id }; unopen(g.id); c.phase = "walk"; }
         return true;
       case "walk":                           // to the booth, the bot behind her
         if (!g || g.held || g.act.kind !== "escort") { spare(w, c.id); return finish(3); }
@@ -2615,7 +2618,7 @@ function startRoom(cv, app) {
   function shoot(f) {                         // a flash where it hits, and the pieces; the others more afraid, the ones near run
     const w = world();
     w.shots.push({ x: Math.round(f.x), y: Math.round(f.y) - 14, t0: performance.now(), hit: true });
-    scatter(f, [f.x, f.y]);
+    scatter(f, [f.x, f.y]); unopen(f.id);
     w.kills = (w.kills || 0) + 1;
     if (hardcore()) { w.fear = Math.min(1, (w.fear || 0) + FEAR.kill); alarm(f.x, f.y); }
   }
@@ -3187,7 +3190,7 @@ function startRoom(cv, app) {
       else if (bot && pointer && dropAt(lastL, f) === "booth") {
         const bo = boothAt(lastL, f);
         if (hardcore()) { f.x = Math.max(lastL.floor.x0, bo.x - 16); f.y = Math.min(lastL.floor.y1, bo.y + 3); condemn([f.id]); }   // by the gun closet, hands up: someone takes a gun
-        else { end(f); f.act = { kind: "doom", at: bo.key, left: BOOTH }; }   // into the booth: five seconds, then gone
+        else { end(f); f.act = { kind: "doom", at: bo.key, left: BOOTH }; unopen(f.id); }   // into the booth: five seconds, then gone
       }
       else {
         const p = pointer && pieceAt(spot(f));             // what it stands on, not what the pointer is on
