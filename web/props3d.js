@@ -3,7 +3,7 @@
 // drawn from eight sides (Doom's sprite angles), each robot with its own head (its antenna, its eyes, its
 // mouth: pixel.js picks them from its seed, as for its portrait), in its own colour, in the pose the room
 // gives it. The furniture is boxes faced with textures painted here (wood with its grain, steel, plastic, the
-// screens and lamps that shine); what is round (the pouf, a plant, the pair table, the flames) is a picture,
+// screens and lamps that shine); what is round (a plant, the pair table, the flames) is a picture,
 // the same from every side, as Doom's lamps and barrels. The wall, the floor and the ceiling are painted here too.
 //
 // A texel whose alpha is GLOW (254) shines: the view does not light it (screens, eyes, the ceiling's lights,
@@ -242,18 +242,8 @@ window.Props3D = (() => {
   }
 
   // ---- what is round: pictures, the same from every side
-  // the pouf: a short green cylinder, its top lit
-  const pouf = () => memo("pouf", () => {
-    const w = 20 * TS, h = 9 * TS, cx = w / 2, rx = w / 2 - 2, ry = 2.6 * TS, top = 2.8 * TS, side = 5 * TS, g = [[140, 191, 140], [111, 163, 116], [72, 120, 65], [53, 95, 49]];
-    return { c: pix(w, h, (i, j) => {
-      const u = (i + 0.5 - cx) / rx, e = ry * Math.sqrt(Math.max(0, 1 - u * u));
-      if (Math.abs(u) > 1) return null;
-      const n = (hash(i, j, 2) - 0.5) * 0.05;
-      if (Math.abs(j - top) <= e) { const k = 1 - (j - top + e) / (2 * e + 1) * 0.15 - Math.abs(u) * 0.12 + n; const b = (i - cx) ** 2 + (j - top) ** 2 < 5 ? 0.75 : 1; return mul(g[1], k * b); }
-      if (j > top && j <= top + side + e) { const k = 0.92 - 0.25 * ((j - top) / (side + e)) - u * 0.25 + n; return mul(g[2], k); }
-      return null;
-    }), ax: w / 2, ay: h - 1, res: TS };
-  });
+  // the pouf's top (the pouf is a box, square as in the room): its green, a button in the middle
+  const poufTop = () => memo("poufTop", () => face(over(plainTex(7, 7, "#6fa374", 0.06), (r) => r(3, 3, 1, 1, hex("#355f31")))));
   // a potted plant: a terracotta pot, long leaves (a snake plant) or broad ones on stems
   function plant(kind) {
     return memo("plant" + kind, () => {
@@ -521,7 +511,8 @@ window.Props3D = (() => {
         solid(x - 15, y - 4.5, x + 15, y - 1.5);
         break;
       }
-      case "armchair": pic(pouf(), x, y - 4, 0); solid(x - 9, y - 8, x + 9, y); break;
+      case "armchair":                       // under whoever sits on it (at y - 2), as high as a seated robot's thighs; its shins hang over the edge
+        B(x - 3.5, y - 5.5, x + 3.5, y + 1.5, 0, 3.4, M.plain("#487841", 0.06), { top: poufTop() }); solid(x - 3.5, y - 5.5, x + 3.5, y + 1.5); break;
       case "plant": pic(plant(p.variant || 0), x, y - 3, 0); solid(x - 6, y - 7, x + 6, y); break;
       case "pair": pic(pairTable(!!p.linked), x, y - 4, 0); solid(x - 12, y - 8, x + 12, y); break;
       default: return null;
@@ -670,5 +661,5 @@ window.Props3D = (() => {
     }));
   }
 
-  return { TS, GLOW, init: (f) => { font = f; }, figure, lying, build, desk, wall, plain, floorTile, ceilTile, flames, pit, plant, pouf };
+  return { TS, GLOW, init: (f) => { font = f; }, figure, lying, build, desk, wall, plain, floorTile, ceilTile, flames, pit, plant };
 })();

@@ -297,7 +297,7 @@ function startRoom(cv, app) {
       case "coffee": return [x, y - 22, x + 20, y + 1];
       case "cooler": return [x - 5, y - 26, x + 5, y + 1];
       case "printer": return [x - 7, y - 15, x + 7, y + 1];
-      case "armchair": return [x - 10, y - 13, x + 10, y + 1];
+      case "armchair": return [x - 8, y - 12, x + 8, y + 1];
       case "board": return [x - 16, y - 26, x + 16, y + 1];
       case "window": return [x, y, x + 21, y + 18];
       case "clock": return [x, y, x + 17, y + 17];
@@ -3016,31 +3016,35 @@ function startRoom(cv, app) {
     put(ctx, "printer", pr.x - 7, pr.y - 14);
     if (wait !== undefined) { const k = Math.min(4, Math.floor(wait * 2)); box(ctx, pr.x - 4, pr.y - 8, 8, k + 1, C.steel4, SP.D); }
   }
-  // the pouf (the kind is still "armchair"): a round green cushion, a short cylinder seen from above at a slant, so
-  // it looks the same from every side; a tufted button in the middle of its top. In Pixel Agents' armchair greens
-  const POUF = { k: "#173115", hi: "#8cbf8c", top: "#6fa374", side: "#487841", d: "#355f31" };
+  // the pouf (the kind is still "armchair"): a square green cushion seen from above at a slant, as the furniture
+  // is, so it is the same from each of its four sides; its top lit along the front edge, a button in the middle.
+  // Pixel Agents' armchair, its seat without the back
+  const POUF = { k: "#173115", h: "#8cbf8c", t: "#6fa374", s: "#487841", d: "#355f31" };
+  const POUF_ROWS = [
+    ".kkkkkkkkkkkkkk.",
+    "kttttttttttttttk",
+    "kttttttttttttttk",
+    "kttttttttttttttk",
+    "kttttttssttttttk",
+    "kttttttttttttttk",
+    "kttttttttttttttk",
+    "khhhhhhhhhhhhhhk",
+    "kssssssssssssssk",
+    "kssssssssssssssk",
+    "kddddddddddddddk",
+    ".kkkkkkkkkkkkkk.",
+  ];
   let poufPic = null;
   function pouf() {
     if (poufPic) return poufPic;
-    const w = 20, h = 13, cx = 9.5, rx = 8.5, ry = 3.6, top = 4.2, side = 4, px = new Map();
-    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
-      const u = (i - cx) / rx, e = ry * Math.sqrt(Math.max(0, 1 - u * u));
-      if (Math.abs(u) > 1) continue;
-      if (Math.abs(j - top) <= e) px.set(j * w + i, j - top < -e * 0.45 ? POUF.hi : POUF.top);              // its top
-      else if (j > top && j <= top + side + e) px.set(j * w + i, j > top + side + e - 1.5 ? POUF.d : POUF.side);   // its side, darker at the bottom
-    }
-    px.set(Math.round(top) * w + 9, POUF.side); px.set(Math.round(top) * w + 10, POUF.side);                  // the button
-    const c = document.createElement("canvas"); c.width = w; c.height = h;
+    const c = document.createElement("canvas"); c.width = 16; c.height = POUF_ROWS.length;
     const x = c.getContext("2d");
-    x.fillStyle = POUF.k;
-    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++)
-      if (!px.has(j * w + i) && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => i + dx >= 0 && i + dx < w && j + dy >= 0 && j + dy < h && px.has((j + dy) * w + i + dx))) x.fillRect(i, j, 1, 1);
-    for (const [k, col] of px) { x.fillStyle = col; x.fillRect(k % w, Math.floor(k / w), 1, 1); }
+    POUF_ROWS.forEach((r, j) => [...r].forEach((ch, i) => { if (POUF[ch]) { x.fillStyle = POUF[ch]; x.fillRect(i, j, 1, 1); } }));
     return (poufPic = c);
   }
   function drawArmchair(ctx, c) {
-    rect(ctx, c.x - 8, c.y, 16, 1, SHADOW);
-    ctx.drawImage(pouf(), c.x - 10, c.y - 13);
+    rect(ctx, c.x - 7, c.y, 14, 1, SHADOW);
+    ctx.drawImage(pouf(), c.x - 8, c.y - 12);
   }
   const poufSeat = (ch) => ({ x: ch.x, y: ch.y - 2 });      // on its top, drawn over it
   const poufFace = (ch) => (ch.x < W / 2 ? 1 : -1);          // facing the middle of the room

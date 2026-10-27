@@ -1534,6 +1534,10 @@ countryside, running on a sunny hill. Or on the beach. The drawing is done in pi
 - **The pouf** (the kind stays `armchair`, named "pouf"): a round green cushion drawn as a short cylinder from above
   (`pouf()`, Pixel Agents' armchair greens), the same from any side; no lamp, no back. Whoever sits on it is drawn
   over it (`piece(…, dz)`: its depth 2.5 dots behind its front), facing the middle of the room (`poufFace`).
+  Then he: "You took the rotation invariance quite literally. In the style of the tool, I actually meant Z_4
+  invariance :) Keep them square like they where". So it is square: the old armchair's seat without its back, a
+  16 x 12 letter grid (`POUF_ROWS`), its top lit along the front edge, a button in the middle; in 3d (props3d.js)
+  a 7-dot box under whoever sits on it, as high as a seated robot's thighs (3.4), its top `poufTop()`.
 - **Quieter robots**: no blinking `rc` light over the antenna (the APP button on the tile stays); no z's over a
   sleeping or dozing robot (you still get them, and the dog in its house); no talk bubble on a robot at the chess
   board, and no random chatter there.
