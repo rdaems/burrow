@@ -994,7 +994,7 @@ const needsYou = (b) => b.waiting || b.tempo === "blocked";
 const STATE = (b) => needsYou(b) ? ["needs", "needs you"] : b.busy ? ["busy", "working"] : b.over ? [b.over, b.over] : b.alive === false ? ["off", "process off"] : ["idle", "idle"];
 const firstSentence = (t) => { const m = String(t || "").match(/^.*?[.!?](?=\s|$)/); return (m ? m[0] : String(t || "")).trim(); };
 const headline = (e) => (e && (e.headline || firstSentence(e.now))) || "";
-const deskName = (desk) => (desk ? desk.name || desk.dir.replace(/\/+$/, "").split("/").pop() || "~" : "?");
+const deskName = (desk) => (!desk ? "?" : desk.name || (/^(~|\/root|\/(Users|home)\/[^/]+)\/*$/.test(desk.dir) ? "home" : desk.dir.replace(/\/+$/, "").split("/").pop()));   // as the room names it (projectLabel)
 const blocking = (b, q) => (q.blocking === undefined ? needsYou(b) : !!q.blocking);   // notes from before the flag: what a waiting session asks
 // deciding in the notes: an explainer of the decision (Claude, kept with the notes), an option picked into
 // the answer, the answer sent: typed into the session by the server (deliver), the decision then answered

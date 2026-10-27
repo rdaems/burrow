@@ -1648,6 +1648,28 @@ request's `note()` until the next push, or this computer's poll error) is gone; 
 view's Doom messages ("NAME IS DELETED.", "PICKED UP SOME SHELLS.") are gone too; its key help, the first six seconds, is
 grey.
 
+## The README, short; a demo with nothing of his (2026-10-27)
+
+He: "update the readme. It's not up to date. Do new screenshots, do not share any info of mine, use a demo room. Make
+it much less verbose. Don't list all the furniture, rather explain the high level concept! ... '.., and much more.'
+... the list of floor managers, keep it simple". So the README is the principles, what the room shows, what you do,
+the furniture in one sentence, the three office managers a line each, a short table, how to run it. Supersedes the
+long one of "README with pictures".
+- **The demo was not his-free**: it read his real notes (`digest.json`; a desk's paragraph is keyed by directory, and
+  the demo's `~/projects/burrow` is his), its projects were four real folders of his (romuald, hexant, football,
+  website), its second machine was named odyssey. Now `load_digest()` is empty in the demo (demo_notes makes them
+  up), the projects are made up (orbit, recipes, garden, atlas, weather; burrow stays, it is this repo), the machine
+  is "lab", and the made-up notes no longer ask about the bench. Still real in the demo: `~` itself (its paths show
+  as `~/…`), the login name (YOU panel only), `~/.ssh/config` and Claude Code's recent directories in the forms.
+- **The notes named the home desk after the user** (the folder's last name): `deskName` now says "home", as the
+  room's `projectLabel` does.
+- **The pictures** (1280 x 820 through look.mjs, demo on its own port): the hero is the room with Linda's notes
+  open on a waiting session, its decision explained (a real session's tile would show Claude Code's own header with
+  the account); `room.png` the top of the room at device pixels (`clip`), staged: a `waiting` forced on a bot (the
+  defineProperty trick), a nap (`act {kind: "sleep"}`), you kept aside by an interval, `room.talk` fired 0.38 s
+  before each of six shots and the best one kept (a beam is a dash in flight); the closet and the limits are the
+  `#view` panel clipped (`clipTo` its rect).
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

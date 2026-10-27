@@ -174,6 +174,8 @@ def condense(raw, cap=STORY):
 
 
 def load_digest():
+    if DEMO:                                 # made up as it goes (demo_notes); never the real ones
+        return {"sessions": {}, "desks": {}}
     try:
         d = json.load(open(DIGEST))
         return {"sessions": d.get("sessions") or {}, "desks": d.get("desks") or {}}
@@ -203,7 +205,7 @@ def machines():
     """this computer (id ""), then each of `sshConfigs` in ~/.claude/settings.json ({id, name, sshHost,
     sshPort?, sshIdentityFile?}, the Desktop app's SSH environments)"""
     if DEMO:
-        return [m for m in [{"id": "", "name": "mac", "ssh": "@demo"}, {"id": "odyssey", "name": "odyssey", "ssh": "@demo"}] + DEMO_ADDED if m["id"] not in DEMO_GONE]
+        return [m for m in [{"id": "", "name": "mac", "ssh": "@demo"}, {"id": "lab", "name": "lab", "ssh": "@demo"}] + DEMO_ADDED if m["id"] not in DEMO_GONE]
     ms = [{"id": "", "name": HOSTNAME}]
     for c in claude_settings().get("sshConfigs") or []:
         if isinstance(c, dict) and c.get("id") and c.get("sshHost"):
@@ -624,7 +626,7 @@ def load_room():
     if DEMO:                                 # made up, or a copy of a real room.json to try things on (never saved)
         if os.environ.get("BURROW_DEMO_ROOM"):
             return furnish({"desks": [], "layout": {}, **json.load(open(os.environ["BURROW_DEMO_ROOM"]))})
-        return furnish({"desks": [HOME + "/projects/romuald"], "layout": {}})
+        return furnish({"desks": [HOME + "/projects/atlas"], "layout": {}})
     try:
         return furnish({"desks": [], "layout": {}, **json.load(open(ROOM))})
     except Exception:
@@ -1334,9 +1336,9 @@ class Hub:
         try:
             if m.get("ssh") == "@demo":
                 time.sleep(1.5)
-                x = {"what": "Whether the finished sessions sit on a bench in the room or only show in a list.", "why": "The bench fills up; nothing breaks if it waits.",
-                     "options": [{"option": o, "means": "The room shows it that way.", "pro": "Simple.", "con": "Less to see."} for o in q.get("options") or ["Keep it"]],
-                     "recommendation": "Keep the bench: it shows how the sessions ended at a glance."}
+                x = {"what": "Whether the change goes to main as one commit or as the steps it was made in.", "why": "The log is how the change is read later; nothing breaks either way.",
+                     "options": [{"option": o, "means": "The log shows it that way.", "pro": "Simple.", "con": "Less to see."} for o in q.get("options") or ["Keep it"]],
+                     "recommendation": "Squash: one commit a feature, as main has had so far."}
             else:
                 _, _, raw = self.slice(m, b)
                 notes = json.dumps({k: e.get(k) for k in NOTE_KEYS}, ensure_ascii=False)
@@ -1449,12 +1451,12 @@ class Hub:
         self.writing = b["id"]
         self.push_digest()
         time.sleep(1.2)
-        ask = [{"question": "Keep the bench, or show the finished sessions only in the list?", "context": "The bench fills up with more than six finished sessions; agent view folds them into “… N more”.",
-                "options": ["Keep the bench, three a seat", "Only the COMPLETED list"], "blocking": True},
-               {"question": "Rename the demo machine to something friendlier?", "context": "It shows as “mac” on its door.", "options": [], "blocking": False}] if b["waiting"] else []
+        ask = [{"question": "Squash the four commits before pushing, or keep them as they are?", "context": "They tell the change step by step; so far main has one commit a feature.",
+                "options": ["Squash into one", "Keep the four"], "blocking": True},
+               {"question": "Rename the settings key now, or with the next release?", "context": "Older rooms still have the old key; moving it over is one line.", "options": [], "blocking": False}] if b["waiting"] else []
         with self.lock:
             self.digest["sessions"][b["id"]] = {
-                "headline": "Waits for your call on the bench" if b["waiting"] else "Running the tests on its change" if b["busy"] else "Change in and tested, not pushed",
+                "headline": "Waits for your call on the commits" if b["waiting"] else "Running the tests on its change" if b["busy"] else "Change in and tested, not pushed",
                 "goal": f"Work on {b['cwd'].rsplit('/', 1)[-1] or 'home'}: {b['name']} was asked to tidy up and finish the open edges.",
                 "now": ("It is waiting for your answer before it goes on." if b["waiting"] else "It is in the middle of a change and running the tests." if b["busy"]
                         else "It finished its turn: the change is in and tested, nothing is pushed yet."),
@@ -1528,10 +1530,10 @@ class Hub:
 
     def demo(self, mid, poke):
         i = list(self.machines).index(mid)
-        bots = [("burrow", "burrow"), ("burrow", "talk-ui"), ("burrow/.claude/worktrees/icons", "icons"), ("hexant", "hexant"),
-                ("hexant/.claude/worktrees/ants-2", "ants-2"), ("website", "website"), ("", "home"), ("football", "football")]
+        bots = [("burrow", "burrow"), ("burrow", "talk-ui"), ("burrow/.claude/worktrees/icons", "icons"), ("orbit", "orbit"),
+                ("orbit/.claude/worktrees/moons", "moons"), ("recipes", "recipes"), ("", "home"), ("garden", "garden")]
         if i == 1:
-            bots = [("train", "train"), ("train/.claude/worktrees/eval", "eval"), ("", "home")]
+            bots = [("weather", "weather"), ("weather/.claude/worktrees/eval", "eval"), ("", "home")]
         self.usage = {"session": {"used": 64, "resets": "3:20pm"}, "week": {"used": 23, "resets": "Oct 24 at 9am"}}
         now = int(time.time() * 1000)
         bots = [{"id": f"demo{i}{k:03}", "name": n, "cwd": f"{HOME}/projects/{d}" if d else HOME, "busy": k % 3 == 0, "waiting": k % 5 == 1,
@@ -1540,10 +1542,10 @@ class Hub:
                 for k, (d, n) in enumerate(bots)]
         bots[-1].update(alive=False, busy=True, state="working", pid=0)      # a /loop between runs: its process is off
         # and some that are over: done, failed, stopped, as agent view's Completed group
-        over = [("burrow", "tidy-tess", "done", "the bench built and tested, 4 seats"), ("hexant", "zany-zoe", "failed", "the ants got out of the sandbox"),
-                ("website", "posh-pam", "stopped", ""), ("burrow", "merry-max", "done", "README brought up to date"), ("football", "lucky-lou", "done", "the league table rebuilt")]
+        over = [("burrow", "tidy-tess", "done", "the booth built and tested"), ("orbit", "zany-zoe", "failed", "a moon got out of its orbit"),
+                ("recipes", "posh-pam", "stopped", ""), ("burrow", "merry-max", "done", "README brought up to date"), ("garden", "lucky-lou", "done", "the planting calendar rebuilt")]
         if i == 1:
-            over = [("train", "nimble-ned", "done", "eval run 12 scored, the report in out/"), ("train", "witty-wes", "failed", "CUDA out of memory on the big batch")]
+            over = [("weather", "nimble-ned", "done", "forecast run 12 scored, the report in out/"), ("weather", "witty-wes", "failed", "CUDA out of memory on the big batch")]
         bots += [{"id": f"demo{i}over{k}", "name": n, "cwd": f"{HOME}/projects/{d}", "busy": False, "waiting": False, "alive": False, "state": st,
                   "over": st, "endedAt": now - 1800000 * (k + 1), "detail": det, "started": now - 1800000 * (k + 3), "pid": 0, "session": f"demo{i}o{k}", "rc": ""}
                  for k, (d, n, st, det) in enumerate(over)]
