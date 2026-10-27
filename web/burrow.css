@@ -253,7 +253,7 @@ img.sm { width:20px; height:20px; }
 .pg-pl small { color:var(--gold); font-size:12px; }
 .pg-score { font:16px/16px "Burrow Pixel", monospace; color:var(--gold); letter-spacing:2px; white-space:nowrap; }
 .pg-close { display:none; }
-.pong canvas { display:block; width:100%; image-rendering:pixelated; image-rendering:crisp-edges; touch-action:none; cursor:none; border-radius:4px; }
+.pong canvas { display:block; width:100%; image-rendering:pixelated; image-rendering:crisp-edges; border-radius:4px; }
 .pong canvas[hidden] { display:none; }
 .pg-msg h2 { margin:0 0 6px; font-size:14px; color:var(--me); }
 .pg-msg p { margin:8px 0; color:var(--dim); }

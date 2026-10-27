@@ -31,11 +31,12 @@ const pongIcon = (() => {
 function pongTable(el, room) {
   const C = pixelAvatar.C;
   const FW = 200, FH = 120, FACE = 10, HALF = 12, R = 2, TO = 11, M = 8;  // field units: paddle faces at x 10 and 190
+  const PAD = 125;                           // burrow: your paddle's speed on the keys, field units a second (pair's 170 made it easy)
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   el.innerHTML = `<div class="pg-card"><div class="pg-head"><span class="pg-pl" data-side="0"></span><b class="pg-score"></b>` +
     `<span class="pg-pl r" data-side="1"></span><button class="x pg-close" title="close" aria-label="close"><i class="ico">&#xF0156;</i></button></div>` +
     `<canvas width="${FW + 2 * M}" height="${FH + 2 * M}"></canvas><div class="pg-msg"></div>` +
-    `<div class="pg-hint">move with the mouse, a finger, or ↑ ↓ · to 11, two clear</div></div>`;
+    `<div class="pg-hint">move with ↑ ↓ · to 11, two clear</div></div>`;
   const cv = el.querySelector("canvas"), ctx = cv.getContext("2d"), msg = el.querySelector(".pg-msg");
   const head = el.querySelectorAll(".pg-pl"), scoreEl = el.querySelector(".pg-score");
 
@@ -82,8 +83,8 @@ function pongTable(el, room) {
   }
   function step(dt) {
     if (watching && mach0 && !over) machine0(dt);
-    if (keys.up && !watching) myY -= 170 * dt;
-    if (keys.down && !watching) myY += 170 * dt;
+    if (keys.up && !watching) myY -= PAD * dt;
+    if (keys.down && !watching) myY += PAD * dt;
     if (auto !== null && ball && (ball.vx < 0 ? 0 : 1) === side) myY = yAt(ball, contact(ball, side)) + auto;   // the test rig plays
     myY = clamp(myY, HALF, FH - HALF);
     const t = now();
@@ -305,18 +306,16 @@ function pongTable(el, room) {
       mode = null; over = null; connect(); await room.post({ invite: other }); return;
     }
   });
-  const toField = (e) => { const r = cv.getBoundingClientRect(); return (e.clientY - r.top) * cv.height / r.height - M; };
-  cv.addEventListener("pointermove", (e) => { if (!watching) myY = clamp(toField(e), HALF, FH - HALF); });
-  cv.addEventListener("pointerdown", (e) => { if (watching) return; myY = clamp(toField(e), HALF, FH - HALF); cv.setPointerCapture(e.pointerId); e.preventDefault(); });
+  // burrow: the paddle goes with ↑ ↓ only (the mouse and a finger steered it too; that made it too easy)
   addEventListener("keydown", (e) => {
     if (!isOpen()) return;
     if (e.key === "Escape" && (!mode || over || mode === "machine")) return close();
-    const k = { ArrowUp: "up", w: "up", W: "up", ArrowDown: "down", s: "down", S: "down" }[e.key];
+    const k = { ArrowUp: "up", ArrowDown: "down" }[e.key];
     if (k && mode) { keys[k] = true; e.preventDefault(); }
   });
-  addEventListener("keyup", (e) => { const k = { ArrowUp: "up", w: "up", W: "up", ArrowDown: "down", s: "down", S: "down" }[e.key]; if (k) keys[k] = false; });
+  addEventListener("keyup", (e) => { const k = { ArrowUp: "up", ArrowDown: "down" }[e.key]; if (k) keys[k] = false; });
 
-  window.__pong = { get: () => ({ mode, score, side, over, serveBy, ball: !!ball, hits, open: isOpen() }), auto: (o) => { auto = o; } };
+  window.__pong = { get: () => ({ mode, score, side, over, serveBy, ball: !!ball, hits, open: isOpen(), my: myY }), auto: (o) => { auto = o; } };
   return {
     update(v) {
       view = v;

@@ -435,7 +435,7 @@ function startRoom(cv, app) {
   // the chess board as pair keeps it: 64 squares from a1, upper case white, "." empty
   const START = "RNBQKBNRPPPPPPPP" + ".".repeat(32) + "pppppppprnbqkbnr";
   const newBoard = () => START;
-  const rest = (r = Math.random()) => ({ kind: "stand", left: 2 + r * 5 });   // a pause, before the next break
+  const rest = (r = Math.random()) => ({ kind: "stand", left: 6 + r * 10 });   // a pause, before the next break
   function end(f) { f.lying = false; f.carry = null; f.act = rest(0.06); }
   function wake(f) { f.lying = false; f.legs = "stand"; f.carry = "roll"; f.act = { kind: "stand", left: 1.5 }; }   // up, the mat rolled up under its arm
   // a clear bit of floor for a mat: inside the floor, off every piece (with a margin), off the other mats
@@ -909,7 +909,6 @@ function startRoom(cv, app) {
         if (!g || !s) { f.act = rest(); break; }
         if (walk(f, s, v, dt)) {
           f.dir = act.side ? -1 : 1; f.arms = "down";
-          if (Math.abs(g.x - f.x) < 24 && Math.abs(g.y - f.y) < 4 && Math.random() < dt * 0.4) f.chat = 1.2;
           if ((act.left -= dt) <= 0) f.act = rest();
         }
         break;
@@ -971,10 +970,8 @@ function startRoom(cv, app) {
         if (walk(f, spot, v + 6, dt)) {
           f.dir = spot.x > g.x ? -1 : 1;
           f.arms = (act.wave -= dt) > 0 ? "wave" : "down";
-          if (f.chat <= 0 && Math.random() < dt * 1.5) f.chat = 1;
-          // visited: an idle one stops and faces the visitor, and talks back now and then
+          // visited: an idle one stops and faces the visitor
           if (!g.work && (g.act.kind === "stand" || g.act.kind === "loiter")) { g.act = { kind: "stand", left: 2 }; g.legs = "stand"; g.dir = -f.dir; }
-          if (g.chat <= 0 && Math.random() < dt * 1.2) g.chat = 1;
           if ((act.left -= dt) <= 0) f.act = f.work ? { kind: "desk" } : rest();
         }
         break;
@@ -1009,13 +1006,12 @@ function startRoom(cv, app) {
         if (!w.meeting || w.meeting.host !== f.id || !L.board) { f.act = rest(); break; }
         if (walk(f, { x: L.board.x0 - 6, y: L.board.y + 1 }, v, dt)) {
           f.dir = 1; f.arms = Math.floor(w.T * 2) % 3 ? "reach" : "down"; act.drawing = true;   // drawing the dream on (dreamStep)
-          if (Math.random() < dt * 0.3) f.chat = 1;
         }
         break;
       case "meeting": {
         const s = L.meetSeat(act.seat);
         if (!s || (!w.meeting && !act.free)) { f.act = rest(); break; }
-        if (sitAt(f, s, v, dt)) { f.dir = s.dir; f.legs = "sit"; f.arms = "down"; if (Math.random() < dt * 0.08) f.chat = 1; if (act.free && (act.left = (act.left ?? rnd(30, 60)) - dt) <= 0) f.act = rest(); }
+        if (sitAt(f, s, v, dt)) { f.dir = s.dir; f.legs = "sit"; f.arms = "down"; if (act.free && (act.left = (act.left ?? rnd(30, 60)) - dt) <= 0) f.act = rest(); }
         break;
       }
       case "sleep": {
@@ -1048,7 +1044,6 @@ function startRoom(cv, app) {
           f.legs = "stand";
           f.dir = chess ? (Math.floor(w.T * 0.5 + f.z) % 2 ? 1 : -1) : w.pong.from ? -1 : 1;
           f.arms = chess && performance.now() - (w.chessAt || 0) < 600 ? "up" : "down";
-          if (Math.random() < dt * 0.1) f.chat = 0.8;
           if ((act.left -= dt) <= 0) f.act = rest();
         }
         break;
@@ -1139,7 +1134,9 @@ function startRoom(cv, app) {
     if (f.legs !== "sit") f.lying = false;
   }
 
-  // a break, chosen by a bot with nothing to do (pair's pickBreak, and chess)
+  // a break, chosen by a bot with nothing to do (pair's pickBreak, and chess). Long spells, so the room is calm: a bot
+  // keeps at one thing a while (a minute in the pouf, a long nap) rather than walking from one to the next; and no
+  // chatter: a bubble is a real message (talk) or you
   function pickBreak(w, f, L, others) {
     const r = Math.random();
     if (w.fear > 0.5 && Math.random() < w.fear) { const at = hideSpot(w, f, L); if (at) return { kind: "hide", ...at, left: rnd(15, 35) }; }
@@ -1149,12 +1146,12 @@ function startRoom(cv, app) {
     // someone waits at the chess board: most likely, it gets a game
     const waiter = others.find((g) => g.act.kind === "chess" && !g.act.with && !g.act.you && g.act.there);
     if (waiter && r < 0.7) {
-      const left = rnd(40, 90);
+      const left = rnd(90, 180);
       waiter.act.with = f.id; waiter.act.left = left;
       return { kind: "chess", side: 1 - waiter.act.side, with: waiter.id, left, there: false };
     }
-    if (L.meet && L.board && mates.length >= 2 && !w.meeting && w.T - w.lastMeeting > 60 && r < 0.08) {
-      w.meeting = { host: f.id, left: rnd(22, 38) }; w.lastMeeting = w.T; w.meetings++;
+    if (L.meet && L.board && mates.length >= 2 && !w.meeting && w.T - w.lastMeeting > 180 && r < 0.08) {
+      w.meeting = { host: f.id, left: rnd(45, 75) }; w.lastMeeting = w.T; w.meetings++;
       if (w.dream && w.dream.done !== null && w.T - w.dream.done > 240) nextDream(w);   // a dream done a while: wiped, the host starts the next
       mates.slice(0, 4).forEach((g, i) => { g.carry = null; g.act = { kind: "meeting", seat: i }; });
       return { kind: "present", wait: 0 };
@@ -1162,12 +1159,12 @@ function startRoom(cv, app) {
     if (r < 0.16 && L.coffee && !taken("coffee")) return { kind: "coffee", stage: 0, wait: 0 };
     if (r < 0.22 && L.printer && !taken("print")) return { kind: "print", stage: 0, wait: 0 };
     if (r < 0.3 && mate && L.cooler) {
-      const left = rnd(10, 22);
+      const left = rnd(25, 50);
       mate.carry = null; mate.act = { kind: "cooler", side: 1, left, with: f.id };
       return { kind: "cooler", side: 0, left, with: mate.id };
     }
     if (r < 0.4 && mate && L.pong && !taken("pong") && !app.pong()) {
-      const left = rnd(15, 35);
+      const left = rnd(40, 80);
       mate.carry = null; mate.act = { kind: "pong", side: 1, left, with: f.id, there: false };
       return { kind: "pong", side: 0, left, with: mate.id, there: false };
     }
@@ -1175,25 +1172,25 @@ function startRoom(cv, app) {
       const game = football(w, L, [f, ...mates.slice(0, 2)]);
       if (game) return game;
     }
-    if (r < 0.48 && L.chess && !taken("chess") && !(app.state().chess && !app.state().chess.result)) return { kind: "chess", side: Math.random() < 0.5 ? 0 : 1, with: null, left: rnd(20, 45), there: false };
+    if (r < 0.48 && L.chess && !taken("chess") && !(app.state().chess && !app.state().chess.result)) return { kind: "chess", side: Math.random() < 0.5 ? 0 : 1, with: null, left: rnd(45, 90), there: false };
     // a coffee for a busy colleague at its desk; a game to watch; the fire; a stretch; a nap
     const busy = others.filter((g) => g.work && g.legs === "sit" && g.act.kind === "desk" && !w.mugs.has(g.id));
     if (r < 0.54 && busy.length && L.coffee && !taken("coffee") && !taken("serve")) return { kind: "serve", to: any(busy).id, stage: 0, wait: 0 };
     const game = ["chess", "pong"].find((k) => others.filter((g) => g.act.kind === k && g.act.there && (g.act.with || g.act.you)).length >= 2 && !others.some((g) => g.act.kind === "watch" && g.act.game === k));
-    if (r < 0.6 && game) return { kind: "watch", game, left: rnd(10, 25) };
-    if (r < 0.65 && mate) return { kind: "visit", to: mate.id, left: rnd(6, 12), wave: 0.8 };
-    if (r < 0.7 && L.fire && !(moving && KIND(moving.key) === "fire")) { const side = others.some((g) => g.act.kind === "warm" && !g.act.side) ? 1 : 0; if (!others.some((g) => g.act.kind === "warm" && g.act.side === side)) return { kind: "warm", side, left: rnd(8, 16) }; }
+    if (r < 0.6 && game) return { kind: "watch", game, left: rnd(25, 50) };
+    if (r < 0.65 && mate) return { kind: "visit", to: mate.id, left: rnd(15, 30), wave: 0.8 };
+    if (r < 0.7 && L.fire && !(moving && KIND(moving.key) === "fire")) { const side = others.some((g) => g.act.kind === "warm" && !g.act.side) ? 1 : 0; if (!others.some((g) => g.act.kind === "warm" && g.act.side === side)) return { kind: "warm", side, left: rnd(20, 40) }; }
     if (r < 0.74) return { kind: "stretch", left: rnd(4, 8) };
-    if (r < 0.8 && !f.human) return { kind: "sleep", there: false, left: rnd(25, 50) };
+    if (r < 0.8 && !f.human) return { kind: "sleep", there: false, left: rnd(60, 150) };
     // one of a kind there can be many of, not in use: a plant to water, a window, an armchair
     const spare = (kind, ps) => ps.filter((p) => !others.some((g) => g.act.kind === kind && g.act.at === p.key));
     const plants = spare("plant", L.plants), wins = spare("window", L.windows), chairs = spare("chair", L.chairs);
     if (r < 0.86 && plants.length) return { kind: "plant", at: any(plants).key, wait: 0 };
-    if (r < 0.91 && wins.length) return { kind: "window", at: any(wins).key, left: rnd(4, 9) };
-    if (r < 0.96 && chairs.length) return { kind: "chair", at: any(chairs).key, left: rnd(15, 35) };
+    if (r < 0.91 && wins.length) return { kind: "window", at: any(wins).key, left: rnd(12, 25) };
+    if (r < 0.96 && chairs.length) return { kind: "chair", at: any(chairs).key, left: rnd(45, 90) };
     for (let k = 0; k < 8; k++) {             // somewhere free to stand about
       const x = rnd(L.floor.x0, L.floor.x1), y = rnd(L.floor.y0, L.floor.y1);
-      if (L.free(x, y)) return { kind: "loiter", x, y, left: rnd(3, 8) };
+      if (L.free(x, y)) return { kind: "loiter", x, y, left: rnd(8, 20) };
     }
     return rest();
   }
@@ -1214,7 +1211,7 @@ function startRoom(cv, app) {
   function football(w, L, team) {
     const at = footballPitch(L, team[0]);
     if (!at) return null;
-    const left = rnd(25, 50), ids = team.map((g) => g.id);
+    const left = rnd(40, 80), ids = team.map((g) => g.id);
     team.forEach((g, i) => { g.carry = null; g.act = { kind: "football", at, slot: i, n: team.length, left, there: false, team: ids }; });
     w.ball = { x: at.x, y: at.y, x0: at.x, y0: at.y, from: ids[0], to: ids[1], t: 1, h: 0 };
     return team[0].act;

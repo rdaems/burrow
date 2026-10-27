@@ -1685,6 +1685,24 @@ long one of "README with pictures".
   aside by an interval, `room.talk` fired 0.38 s before each of six shots and the best one kept (a beam is a dash in
   flight); the closet and the limits are the `#view` panel clipped (`clipTo` its rect).
 
+## A calmer room; ping-pong on the keys (2026-10-27)
+
+He: "The pong table should only be controlled with arrow keys, and make them move a bit slower to make it harder. Do
+not hide the mouse"; "Text bubbles between bots: don't do it as an idle thing. It draws too much attention"; "the idle
+behaviour, make it a bit less busy. The robots [should] longer just keep doing the same thing, sitting somewhere etc."
+- **Ping-pong** (pong.js): ↑ ↓ only (the pointer and a finger steered it, and W/S), `PAD` 125 field units a second
+  (pair's 170), the pointer visible over the field (`.pong canvas` lost `cursor:none` and `touch-action:none`).
+  `__pong.get().my` is your paddle, for tests.
+- **No chatter**: the chance bubbles of idle robots are gone (cooler, both sides of a visit, a meeting's host and its
+  seats, watching a game). A bubble is a real message between sessions (`talk`: the sender, the receiver when the
+  beam lands), or you typing and the robot you talk to answering.
+- **Long spells** (`pickBreak`, `rest`): two to three times as long as pair's: the pause between breaks 6-16 s (2-7),
+  the pouf 45-90 s, a nap 60-150, the cooler 25-50, ping-pong 40-80, football 40-80, chess alone 45-90 and with a
+  partner 90-180, a visit 15-30, the fire 20-40, the window 12-25, standing about 8-20, a meeting 45-75 and at most
+  every three minutes (one). Measured over three minutes in the demo after a 30 s warm-up: an idle robot changed what
+  it did 2.0 times a minute (3.4 before); bubbles away from the desks in 36 samples of 250 ms (686 before), all from
+  the demo's made-up messages.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a
