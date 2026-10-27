@@ -24,9 +24,10 @@ its robot to the bench, and your usage limits are the coffee pot and the water b
 room. Nothing of Claude Code is re-implemented, so whatever it can do, you can do here.
 
 **One room, all your machines.** The machines are Claude Code's ssh connections (`sshConfigs` in
-`~/.claude/settings.json`), one door each in the wall. The desks are the directories you put on the
-floor; a session is in the room while its directory has a desk. A remote machine's door and desks are
-painted its colour.
+`~/.claude/settings.json`), one door each in the wall. Every session `claude agents --all` lists is in the
+room, at the desk of its directory: a directory with sessions gets a desk, and loses it with the last of
+them unless you keep it. A full room is a full room; clearing out sessions is what frees it. A remote
+machine's door and desks are painted its colour.
 
 **It is an office.** Idle robots take breaks: coffee, chess, a stretch, a nap on a mat they roll out, a
 meeting at the whiteboard. You arrange the furniture (wherever you like, over each other too), the closet
@@ -39,16 +40,14 @@ holds more of it, and the fire burns the furniture you drag into it.
 - **working**: at its desk, typing; its project's screen scrolls
 - **needs input** (a question for you, a permission prompt): at its desk, hand up
 - **idle**: on a break somewhere in the room
-- **process off** (Claude Code stops an idle session's process after an hour; a `/loop` between runs):
-  asleep on a mat; opening it starts it again
 - **talking**: a message to another session is a beam, antenna to antenna
-- **over** (done, failed or stopped, as agent view's *Completed*; Claude Code stops a finished session's
-  process after an hour unattended and lists it as completed): switched off on the bench, a light on its
-  chest for how it ended; a click resumes it. With no bench in the room the over sessions are not shown
-  at all (the closet has a bench; `claude --resume` knows them)
+- **completed** (done, failed or stopped, agent view's *Completed*; Claude Code stops a finished session's
+  process after an hour unattended): idle like the rest, without a chair at its desk; a click starts it
+  again where it left off. A click on the bench lists them
 
-Sessions started in the same directory share a desk, named after the folder. A session in a git worktree
-sits at its repository's desk, the worktree a laptop beside the big screen. You are in the room too:
+Sessions in the same directory share a desk, named after the folder. A session in a git worktree sits at
+its repository's desk, the worktree a laptop beside the big screen; one that moves to another directory
+gets up and walks to that one's desk. You are in the room too:
 with the robot whose session is open (an idle one comes to meet you halfway and goes to its desk once you
 have sent it something; then you stand behind its desk), or under the screen when your own terminal is.
 
@@ -59,9 +58,9 @@ have sent it something; then you stand behind its desk), or under the screen whe
   to an edge of the pane to put it along that whole side; drag the gap between two to resize them.
   ✕, a click on the floor or `exit` closes a tile, and the session runs on
 - **start a session**: the `+` beside a desk's screen
-- **a desk**: the project cabinet puts one down: pick its folder as in a file dialog (the folders where Claude
-  Code ran lately first, those with sessions not in the room yet on top). A click on a desk's name plate
-  opens its panel: its name (yours to give), its folder, its sessions, its terminal. Burn a desk and its
+- **a desk**: the project cabinet puts one down, kept: pick its folder as in a file dialog (the folders where
+  Claude Code ran lately first). A click on a desk's name plate opens its panel: its name (yours to give),
+  its folder, its sessions, its terminal, and KEEP for a desk that came with its sessions. Burn a desk and its
   sessions are deleted with it: they walk into the booth one by one (in hardcore they are shot); rescue one
   and the desk stays
 - **a fresh start**: drop an idle robot by the neuralyzer: `/clear`, a new conversation in the same session

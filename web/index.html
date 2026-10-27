@@ -58,7 +58,7 @@
           <input class="field" name="name" maxlength="40" autocomplete="off" spellcheck="false">
           <p class="where"><code class="path"></code> <span class="on"></span></p>
           <ul class="sessions"></ul>
-          <div class="row"><button class="btn">RENAME</button><button type="button" class="btn shell">TERMINAL</button></div>
+          <div class="row"><button class="btn">RENAME</button><button type="button" class="btn shell">TERMINAL</button><button type="button" class="btn keep" title="it came with its sessions and goes with the last of them; kept, it stays">KEEP</button></div>
           <div class="err"></div>
         </form>
         <div id="vManager" class="managers" hidden><p>Who sits at the reception? Pick one; burn her booth to let her go.</p><div class="styles"></div></div>
@@ -338,10 +338,10 @@ function completes(inp, list, choices) {
   list.addEventListener("dblclick", (e) => { if (e.target.closest("li")) inp.form.requestSubmit(); });
   inp.form.addEventListener("submit", () => { items = []; show(); });
 }
-// A desk is yours to put down: a session is in the room only while its directory has one. Its folder is picked
-// as VS Code's own dialog picks one (Remote-SSH's "Open Folder"): the field is a path, the list under it the
-// folders in it, ".." first; in the folder it starts in (home), first where Claude Code ran lately, those with
-// sessions that are not in the room on top (how many, whether one waits for you). A click goes into a folder,
+// A desk put down here is yours: it stays when it has no sessions (one that came with its sessions goes with
+// them). Its folder is picked as VS Code's own dialog picks one (Remote-SSH's "Open Folder"): the field is a
+// path, the list under it the folders in it, ".." first; in the folder it starts in (home), first where Claude
+// Code ran lately and there is no desk now. A click goes into a folder,
 // typing narrows the list, ↑ ↓ pick, Enter or Tab goes into the one picked (Enter with none picked adds the
 // folder in the field, as ADD DESK does), a double click adds the one clicked
 const browse = (() => {
@@ -361,7 +361,6 @@ const browse = (() => {
     if (!kids.has(key)) kids.set(key, api("/api/complete", { m, dir }).then((r) => (r.dirs || []).map((d) => short(d.replace(/\/+$/, "")) + "/")));
     return kids.get(key);
   };
-  const noteOf = (path) => { const e = recent.find((x) => x.path + "/" === path); return e ? e.note : ""; };
   async function refresh() {
     const v = inp.value, n = ++seq, cut = v.lastIndexOf("/"), dir = v.slice(0, cut + 1), tail = v.slice(cut + 1).toLowerCase();
     let out = [];
@@ -369,13 +368,13 @@ const browse = (() => {
       if (dir !== "/") out.push({ label: "..", go: up(dir) });
       const ks = await children(dir);
       if (n !== seq) return;
-      out = out.concat(ks.filter((k) => k.slice(dir.length).toLowerCase().startsWith(tail)).map((k) => ({ label: k.slice(dir.length), go: k, note: noteOf(k) })));
+      out = out.concat(ks.filter((k) => k.slice(dir.length).toLowerCase().startsWith(tail)).map((k) => ({ label: k.slice(dir.length), go: k })));
     }
-    if (v === start()) out = recent.map((e) => ({ label: e.path, go: e.path + "/", note: e.note, recent: true })).concat(out);
+    if (v === start()) out = recent.map((p) => ({ label: p, go: p + "/", recent: true })).concat(out);
     items = out; pick = -1; draw();
   }
   function draw() {
-    list.innerHTML = items.map((x, i) => `<li class="${i === pick ? "on " : ""}${x.recent ? "recent" : ""}">${esc(x.label)}${x.note ? `<small>${esc(x.note)}</small>` : ""}</li>`).join("");
+    list.innerHTML = items.map((x, i) => `<li class="${i === pick ? "on " : ""}${x.recent ? "recent" : ""}">${esc(x.label)}</li>`).join("");
     const on = list.children[pick];
     if (on) on.scrollIntoView({ block: "nearest" });
   }
@@ -386,8 +385,7 @@ const browse = (() => {
     const r = await api("/api/recent", { m });
     if ((form.querySelector("input[name=m]").value || "") !== m) return;
     home = r.home || "";
-    const bots = (k) => k + (k === 1 ? " bot" : " bots");
-    recent = (r.dirs || []).map((e) => ({ path: short(e.dir), note: e.bots ? bots(e.bots) + (e.waiting ? ", waits for you" : "") : "" }));
+    recent = (r.dirs || []).map((e) => short(e.dir));
     inp.value = start();
     refresh();
   }
@@ -426,6 +424,12 @@ function openDesk(unit) {
   ul.hidden = !bots.length;
   for (const li of ul.children) li.onclick = () => { const b = byId(li.dataset.id); if (b) openBot(b.m, b.id); };
   el.querySelector(".shell").onclick = () => openShell(d.m || "", d.dir);
+  const keep = el.querySelector(".keep");    // a desk that came with its sessions: kept, it stays without them
+  keep.hidden = !!d.kept;
+  keep.onclick = async () => {
+    const r = await api("/api/desk", { unit, keep: true });
+    if (r.error) el.querySelector(".err").textContent = r.error; else keep.hidden = true;
+  };
   inp.focus(); inp.select();
 }
 $("#vDesk").addEventListener("submit", async (e) => {

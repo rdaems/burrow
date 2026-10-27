@@ -1262,7 +1262,10 @@ function startRoom(cv, app) {
     // would otherwise keep a chair for good: a desk a dozen chairs long). Opening one restarts it, and its chair comes
     const bots = all;
     const gone = new Set([...w.remains.keys(), ...w.stopped.keys(), ...[...w.folk.values()].filter((f) => f.act.kind === "doom").map((f) => f.id)]);   // killed: no chair
-    const L = layout(w.razed.size ? { ...s, desks: s.desks.filter((d) => !w.razed.has(d.unit)) } : s, all.filter((b) => !b.over), moving, gone);   // (a burnt desk whose bots are on their way out)
+    // a burnt desk whose bots are on their way out is not drawn; nor one that came with its sessions once the
+    // last of them is deleted from here (the feed still lists it a moment)
+    const shown = s.desks.filter((d) => !w.razed.has(d.unit) && (d.kept || all.some((b) => b.unit === d.unit && !w.stopped.has(b.id))));
+    const L = layout(shown.length < s.desks.length ? { ...s, desks: shown } : s, all.filter((b) => !b.over), moving, gone);
     // the piece under the pointer: outlined if a click does something there (the rest only reacts in
     // its own way, a plant sways)
     const hp = !moving && !held && !carrying ? pieceAt(pointer) : null;

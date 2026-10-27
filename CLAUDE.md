@@ -1204,7 +1204,7 @@ are his choice now instead of a record of every directory a session was seen in.
   hardcore, a ✕✕, and a rescue from the line that brought the desk back.
 - Decided myself (his to overrule): a session waiting for input in a directory without a desk is hidden like the
   rest; only the cabinet's list says so. README brought up to date (desks, the booth instead of the door, a door
-  from the closet).
+  from the closet). (Superseded 2026-10-27: every session has a desk, see "Desks follow the sessions".)
 
 ## Seats in arrival order; the gun closet in the first person (2026-10-26)
 
@@ -1450,6 +1450,32 @@ He: "the clock is not optional, it's just there. shouldn't be in the furniture c
   the hours as dots (the quarters darker), the hour hand short and black, the minute hand long, a red seconds hand
   ticking (not with reduced motion). The awake wedges and the hatching are on its face as before. The hover says the
   time ("00:52"), then the awake state. `__room.clock(awake)` returns a 17 x 17 face.
+
+## Desks follow the sessions (2026-10-27)
+
+He lost a conversation: lucky-lou (started at odyssey's `~` desk) ran EnterWorktree into
+`~/docker/.claude/worktrees/immich-ml`; `claude agents --json` reports the current directory, so its unit became
+`odyssey:~/docker`, which had no desk, and it walked out of the room mid-conversation while it waited on him. He
+then started cozy-cora at the `~` desk (the +) and asked it where the chat went. He: "Maybe it's because we're not
+showing bots that don't have desk. That might have been a bad decision, from first principle"; torn, then: "Once,
+I saw a bot initializing a new desk and walking between the two. I loved that actually! The fact it gets
+cluttered fits the design philosophy: it means it *is* cluttered and you should free up space to maintain a
+healthy concentration level and focus". And whether to drop `--all` ("I've been fighting the 'complete' state
+all this time"): no, argued and he agreed. Without `--all` a done session drops out once the supervisor stops
+its process (an hour unattached, or sooner when memory is low: docs, agent-view), i.e. when you come back to
+read it; agent view itself shows Completed; the docs say to poll `--all`. Blocked/working rows stay either way.
+- **Every session is in the room** (`state()` carries `hub.bots()`; `on_floor` is gone). `Hub.desks()` = the kept
+  desks (room.json `desks`), then one per other unit a session is in, in the order its first one started; each
+  has `kept`. A bot whose directory changes gets up and walks to the new desk (tested in the demo by faking a unit).
+- **A desk that came with its sessions goes with the last of them**: the page stops drawing it as soon as its
+  last bot is deleted from here (`w.stopped`, in `draw()`'s `shown`); the server's list loses it at the next poll;
+  two minutes later `fade(mid)` (every poll, `self.absent`) drops its place from the layout, so it comes back at
+  a free spot. Its name stays in `names`. Burnt (`/api/forget`), place and name go at once, as before.
+- **Kept** desks stay empty: put down from the project cabinet (`/api/dir`), or KEEP in a desk's panel
+  (`/api/desk {unit, keep: true}`; the button only shows on a desk that isn't kept). His five desks were kept already.
+- The cabinet's list is only where Claude Code ran lately with no desk now (no session counts: every session has
+  a desk). The office managers' manual says so; `do: start` no longer puts up a kept desk (the session brings its
+  own), `do: desk` does; `/api/office` desks carry `kept`. The notes cover every session again.
 
 ## Next
 
