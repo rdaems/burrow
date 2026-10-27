@@ -1860,7 +1860,7 @@ function startRoom(cv, app) {
       if (p.kind === "fire") {
         const F = L.fire, fl = Props3D.flames(Math.floor(T * 8) % 4, w.burning.length > 0 || performance.now() - w.flare < 1500);
         things.push({ x: F.x0 + 24, y: F.y1 - 12, z: 0, c: fl.c, sx: 0, sy: 0, sw: fl.c.width, sh: fl.c.height, ax: fl.ax, ay: fl.ay, res: fl.res, piece: p.key });
-        lights.push({ x: F.x0 + 24, y: F.y1 - 12, z: 9, r: 140, col: [1, 0.58, 0.26], k: 1.05, flicker: true });
+        lights.push({ x: F.x0 + 24, y: F.y1 - 12, z: 9, r: 140, col: [1, 0.8, 0.58], k: 0.9, flicker: true });   // warm, not orange: Doom's light has hardly a colour
         solid.push([F.x0 + 3, F.y1 - 20, F.x1 - 3, F.y1 - 3]);
         continue;
       }

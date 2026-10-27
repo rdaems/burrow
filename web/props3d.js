@@ -18,15 +18,23 @@ window.Props3D = (() => {
   let font = null;                           // the room's 3x5 letters: { tiny(ctx, s, x, y, col), tinyW(s) }
   const cache = new Map(), memo = (k, f) => { let v = cache.get(k); if (v === undefined) { v = f(); cache.set(k, v); } return v; };
 
-  // a picture texel by texel: fn(i, j) gives [r, g, b] (or [r, g, b, a]), or nothing for clear
-  function pix(w, h, fn) {
+  // Doom's grain: a texel's light varies, speckle over blotches a few texels across over stains larger still,
+  // now and then a pit; k how much
+  let seeds = 0;
+  function grit(i, j, s, k = 1) {
+    const stain = hash(i >> 3, j >> 3, s + 3), blot = hash(i >> 2, j >> 2, s) * 0.6 + hash(i >> 1, j >> 1, s + 1) * 0.4, f = hash(i, j, s + 2);
+    return 1 + k * ((stain - 0.5) * 0.1 + (blot - 0.5) * 0.18 + (f - 0.5) * 0.16 - (f < 0.035 ? 0.2 : 0));
+  }
+  // a picture texel by texel: fn(i, j) gives [r, g, b] (or [r, g, b, a]), or nothing for clear; grained (what shines
+  // less)
+  function pix(w, h, fn, k = 1) {
     const c = document.createElement("canvas"); c.width = Math.max(1, w); c.height = Math.max(1, h); c.v = 1;
-    const x = c.getContext("2d", { willReadFrequently: true }), d = x.createImageData(c.width, c.height), p = d.data;
+    const x = c.getContext("2d", { willReadFrequently: true }), d = x.createImageData(c.width, c.height), p = d.data, s = ++seeds * 7;
     for (let j = 0; j < c.height; j++) for (let i = 0; i < c.width; i++) {
       const v = fn(i, j);
       if (!v) continue;
-      const k = (j * c.width + i) * 4;
-      p[k] = v[0]; p[k + 1] = v[1]; p[k + 2] = v[2]; p[k + 3] = v[3] === undefined ? 255 : v[3];
+      const q = (j * c.width + i) * 4, a = v[3] === undefined ? 255 : v[3], g = grit(i, j, s, a === GLOW ? k * 0.35 : k);
+      p[q] = v[0] * g; p[q + 1] = v[1] * g; p[q + 2] = v[2] * g; p[q + 3] = a;
     }
     x.putImageData(d, 0, 0);
     return c;
@@ -43,6 +51,9 @@ window.Props3D = (() => {
       x.drawImage(b, 0, 0, w, 5, Math.round(px * TS), Math.round(py * TS), w * k, 5 * k);
     };
     paint(r, t, x);
+    const d = x.getImageData(0, 0, c.width, c.height), p = d.data, s = ++seeds * 7;   // what was painted on gets the grain too
+    for (let q = 0, n = 0; q < p.length; q += 4, n++) if (p[q + 3] === 255) { const g = grit(n % c.width, (n / c.width) | 0, s, 0.35); p[q] *= g; p[q + 1] *= g; p[q + 2] *= g; }
+    x.putImageData(d, 0, 0);
     c.v++;
     return c;
   }
@@ -59,7 +70,7 @@ window.Props3D = (() => {
       if (y === 0) k *= 0.72; else if (y === 1) k *= 1.1;
       if (i < 2 || j < 2) k *= 1.12; else if (i >= w * TS - 2 || j >= h * TS - 2) k *= 0.75;
       return mul(b, k);
-    });
+    }, 0.75);
   }
   // metal or plastic: smooth, a fine brushed noise, the bevel
   function plainTex(w, h, base, rough = 0.05) {
@@ -68,7 +79,7 @@ window.Props3D = (() => {
       let k = 1 + (hash(0, j, 3) - 0.5) * rough + (hash(i, j, 5) - 0.5) * rough * 0.6;
       if (i < 1 || j < 1) k *= 1.18; else if (i >= w * TS - 1 || j >= h * TS - 1) k *= 0.7;
       return mul(b, k);
-    });
+    }, 0.5);                                   // (metal and plastic: less grain than wood)
   }
   const M = {
     wood: (base, board) => (w, h) => face(memo(`w${base}${board}:${w}x${h}`, () => woodTex(w, h, base, board))),
@@ -110,7 +121,7 @@ window.Props3D = (() => {
           let rgb = col, glow = b.glow;
           if (paint) { const q = paint(u, v); if (!q) continue; rgb = q; glow = q[3] === GLOW; }
           let k2 = glow ? 1 : shade * (Y - Y0 < 1 ? 1.16 : Y1 - Y <= 1 ? 0.84 : 1) * (X - X0 < 1 || X1 - X <= 1 ? 0.93 : 1);
-          if (!glow) k2 *= 0.97 + hash(X, Y, 11) * 0.06;
+          if (!glow) k2 *= grit(X, Y, 11, 0.55) * (b.metal ? 1.12 - 0.32 * v + (v > 0.12 && v < 0.2 ? 0.14 : 0) : 1);
           zb[i] = dep;
           p[i * 4] = Math.min(255, rgb[0] * k2); p[i * 4 + 1] = Math.min(255, rgb[1] * k2); p[i * 4 + 2] = Math.min(255, rgb[2] * k2); p[i * 4 + 3] = glow ? GLOW : 255;
         }
@@ -125,8 +136,9 @@ window.Props3D = (() => {
   const ROBOT = { S: 4, R: 9, Z: 27 };
   function robotBoxes(sp) {
     const P = pixelAvatar.robot(sp.seed), col = hex(sp.color), light = col, lightD = mul(col, 0.62);
-    const s1 = hex(C.steel1), s2 = hex(C.steel2), s3 = hex(C.steel3), s4 = hex(C.steel4), dark = hex(C.steel0), screen = hex(C.blue0), ink2 = hex(C.ink2);
-    const B = [], box = (f0, f1, r0, r1, z0, z1, c, o = {}) => B.push({ f0, f1, r0, r1, z0, z1, col: c, ...o });
+    // its casing a cool steel, darker than the room's steel3 (lit warm, that went the colour of skin)
+    const s1 = hex("#3f4660"), s2 = hex("#6c7590"), s3 = hex("#8f9ab2"), s4 = hex("#c3cbdb"), dark = hex("#2a2d3d"), screen = hex(C.blue0), ink2 = hex(C.ink2);
+    const B = [], box = (f0, f1, r0, r1, z0, z1, c, o = {}) => B.push({ f0, f1, r0, r1, z0, z1, col: c, metal: !o.flat && c !== col, ...o });
     const legs = sp.legs, sit = legs === "sit";
     if (sit) for (const r of [-2.5, 0.7]) { box(-1.2, 4.6, r, r + 1.8, 3.4, 5.2, s1); box(3.2, 5, r, r + 1.8, 0.8, 3.6, s1); box(3.2, 6, r - 0.1, r + 1.9, 0, 0.8, dark); }
     else {
@@ -335,7 +347,7 @@ window.Props3D = (() => {
   // ---- the furniture, by kind: boxes (and pictures, and what you can't walk through, and lights) at its place
   const WOODP = { hi: "#cfa86d", top: "#b38857", d: "#885c47", k: "#532e3d" };
   const once = (k, f) => memo("b:" + k, f);                  // a face painted once (for what it shows)
-  const tinted = (k, fn) => (w, h) => once(k + w + "x" + h, () => face(pix(w * TS, h * TS, (i, j) => fn(i, j, w, h))));   // a material whose texels depend on a state
+  const tinted = (k, fn, g = 0.35) => (w, h) => once(k + w + "x" + h, () => face(pix(w * TS, h * TS, (i, j) => fn(i, j, w, h), g)));   // a material whose texels depend on a state (glass, water: little grain)
   const steel = M.plain("#8b93ad", 0.06), darkSteel = M.plain("#3f4452", 0.08), black = M.plain("#26242c", 0.08), white = M.plain("#e8ecf0", 0.03);
   const wood = M.wood(WOODP.top), woodD = M.wood(WOODP.d), woodHi = M.wood(WOODP.hi, 6);
   function build(p) {

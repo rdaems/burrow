@@ -1616,6 +1616,19 @@ bar. Overall, make it resemble doom more. Also when it starts, use the classic '
   robot's eight sides and its poses (`Props3D.figure`), a shot (flash, pump), both melts, ten seconds turning: no
   errors, about 5.5 ms a frame at 480 x 300. `__fps.size()`, `__fps.melting()` are new.
 
+## Doom's grain; robots of steel (2026-10-27)
+
+He: "More like doom grain ofcourse!! They have a weirdly human color now btw." The casing was steel3 (#c2c9d9), lit by
+an orange fire it went the colour of skin.
+- **Grain** (`grit(i, j, s, k)` in props3d.js): speckle over blotches two and four texels across over stains of eight,
+  now and then a dark pit. `pix()` grains every texture it makes (k: wood 0.75, metal and plastic 0.5 in `plainTex`,
+  glass and water 0.35 in `tinted`, what shines a third), `over()` grains what is painted on (0.35), the models get it
+  per texel (0.55), the gun in fps.js's `crisp`.
+- **Robots of steel**: their casing #8f9ab2 (edges #c3cbdb and #3f4660), and a model box of metal is lit from the top
+  with a highlight band (`metal`, all but the torso in its colour).
+- **Doom's light**: in steps (`STEP` 18 in fps.js's `shade`, its colormaps: bands into the dark), the fire's light
+  warm rather than orange (col 1, 0.8, 0.58; k 0.9).
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

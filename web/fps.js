@@ -97,10 +97,11 @@ function startFps(room, done) {
     lr[0] = r; lr[1] = g; lr[2] = b;
   }
   const dimOf = (d) => Math.max(0.08, Math.min(1, 1.2 - d / 360));
+  const STEP = 18, step = (v) => Math.floor(v * STEP + 0.5) / STEP;   // Doom's light comes in steps (its colormaps): bands into the dark
   function shade(c, k) {                      // a texel under the light in lr, k the distance's dimming
     const a = c >>> 24;
     if (a === GLOW) return c | 0xff000000;    // it shines
-    const r = (c & 255) * lr[0] * k, g = ((c >>> 8) & 255) * lr[1] * k, b = ((c >>> 16) & 255) * lr[2] * k;
+    const r = (c & 255) * step(lr[0] * k), g = ((c >>> 8) & 255) * step(lr[1] * k), b = ((c >>> 16) & 255) * step(lr[2] * k);
     return 0xff000000 | (b > 255 ? 255 : b) << 16 | (g > 255 ? 255 : g) << 8 | (r > 255 ? 255 : r);
   }
 
@@ -395,9 +396,14 @@ function startFps(room, done) {
   // ---- the shotgun, as Doom's: seen from behind it, down the barrel toward the middle of the view, the pump on
   // it, the receiver nearest you. A shot: the flash at the muzzle (it lights the room), a kick; then the pump:
   // the gun dips and turns, the pump comes back and goes forward again. Lit by the light where you stand
-  function crisp(c) {                         // hard edges: a texel is there or not
+  function crisp(c) {                         // hard edges: a texel is there or not; Doom's grain on it
     const x = c.getContext("2d", { willReadFrequently: true }), d = x.getImageData(0, 0, c.width, c.height), p = d.data;
-    for (let i = 3; i < p.length; i += 4) p[i] = p[i] < 110 ? 0 : 255;
+    for (let i = 3, n = 0; i < p.length; i += 4, n++) {
+      p[i] = p[i] < 110 ? 0 : 255;
+      const px = n % c.width, py = (n / c.width) | 0, h1 = Math.sin(px * 12.9898 + py * 78.233) * 43758.5453, h2 = Math.sin((px >> 1) * 39.3468 + (py >> 1) * 11.135) * 24634.6345;
+      const g = 1 + ((h1 - Math.floor(h1)) - 0.5) * 0.14 + ((h2 - Math.floor(h2)) - 0.5) * 0.12;
+      p[i - 3] *= g; p[i - 2] *= g; p[i - 1] *= g;
+    }
     x.putImageData(d, 0, 0);
     return c;
   }
