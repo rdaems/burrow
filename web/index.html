@@ -53,7 +53,6 @@
         <div id="vLimits" hidden></div>
         <div id="vSettings" class="settings" hidden></div>
         <div id="vDoors" class="settings doors" hidden></div>
-        <div id="vDone" class="done" hidden></div>
         <form id="vDesk" class="vform desk" hidden>
           <input class="field" name="name" maxlength="40" autocomplete="off" spellcheck="false">
           <p class="where"><code class="path"></code> <span class="on"></span></p>
@@ -171,7 +170,6 @@ async function act(a) {
   else if (a.kind === "limits") { openView("limits"); fillLimits(); }
   else if (a.kind === "settings") { openView("settings"); fillSettings(); }
   else if (a.kind === "doors") { openView("doors"); fillDoors(); }
-  else if (a.kind === "completed") { openView("completed"); fillDone(); }
   else if (a.kind === "clock") { openView("clock"); fillClock(); }
   else if (a.kind === "notes") openNotes(a.shift);
   else if (a.kind === "manager") openManager(a.key, a.shift);
@@ -216,7 +214,6 @@ es.addEventListener("state", (e) => {
   if (viewKind === "limits") fillLimits();
   if (viewKind === "settings") fillSettings();
   if (viewKind === "doors") fillDoors();
-  if (viewKind === "completed") fillDone();
   if (viewKind === "clock") fillClock();
   // a bot that gets work, or a question for you, leaves the ping-pong table
   const pp = viewKind === "pong" && pongUI.playing(), idle = (id) => state.bots.some((b) => b.id === id && !b.busy && !b.waiting);
@@ -245,8 +242,8 @@ addEventListener("focus", focus); addEventListener("blur", focus); document.addE
 }
 
 // ---- the view: one thing at a time on the right, in place of the tiles, framed like one
-const PANELS = { dir: "#vDir", machine: "#vMachine", you: "#vYou", closet: "#vCloset", chess: "#chess", pong: "#pong", report: "#vReport", pair: "#vPair", board: "#vBoard", limits: "#vLimits", outside: "#vOutside", completed: "#vDone", settings: "#vSettings", clock: "#vClock", doors: "#vDoors", manager: "#vManager", desk: "#vDesk" };
-const TITLES = { dir: "NEW DESK", machine: "A MACHINE", you: "YOU", closet: "THE CLOSET", chess: "CHESS", pong: "PING-PONG", report: "REPORT", pair: "PAIR ROOM", board: "WHITEBOARD", limits: "LIMITS", outside: "OUTSIDE", completed: "COMPLETED", settings: "SETTINGS", clock: "CLOCK", doors: "DOORS", manager: "OFFICE MANAGER", desk: "DESK" };
+const PANELS = { dir: "#vDir", machine: "#vMachine", you: "#vYou", closet: "#vCloset", chess: "#chess", pong: "#pong", report: "#vReport", pair: "#vPair", board: "#vBoard", limits: "#vLimits", outside: "#vOutside", settings: "#vSettings", clock: "#vClock", doors: "#vDoors", manager: "#vManager", desk: "#vDesk" };
+const TITLES = { dir: "NEW DESK", machine: "A MACHINE", you: "YOU", closet: "THE CLOSET", chess: "CHESS", pong: "PING-PONG", report: "REPORT", pair: "PAIR ROOM", board: "WHITEBOARD", limits: "LIMITS", outside: "OUTSIDE", settings: "SETTINGS", clock: "CLOCK", doors: "DOORS", manager: "OFFICE MANAGER", desk: "DESK" };
 function openView(kind) {
   if (viewKind && viewKind !== kind) closeView(true);
   for (const t of tiles.all()) closeTile(t);
@@ -474,7 +471,7 @@ function askYou() {
 
 // ---- the closet: the furniture there is, drawn as it stands in the room; drag a piece into the
 // room to put it there, as many as you like. The fireplace takes a piece back out (it burns)
-const CATALOGUE = ["plant", "armchair", "window", "board", "meet", "chess", "pong", "coffee", "cooler", "printer", "add", "pair", "bench", "manager", "booth", "neuralyzer", "doghouse", "door"];
+const CATALOGUE = ["plant", "armchair", "window", "board", "meet", "chess", "pong", "coffee", "cooler", "printer", "add", "pair", "manager", "booth", "neuralyzer", "doghouse", "door"];
 // Built when it opens, and again on a state update only while its pictures were still loading: never while
 // something is being carried out of it. Rebuilding it on every update (each second or two in a room with
 // many bots) took the picture being held away mid-drag, and the piece never arrived
@@ -648,7 +645,7 @@ function fillSettings() {                  // rebuilt only when a setting change
 // ---- the doors: a line a machine, its door in its paint, its name, how it is reached and how it is, and
 // the paints to pick from (its door and its desks wear it; wood or one of the room's paints). Another
 // machine's door can be taken out: out of Claude Code's sshConfigs (the machine and its sessions are left as
-// they are), asked twice as a completed session's ✕ is: "remove", then "sure? remove" within three seconds
+// they are), asked twice: "remove", then "sure? remove" within three seconds
 let doorArmed = null;                       // {m, t}: a door's remove pressed once
 function fillDoors() {
   const el = $("#vDoors"), ms = (state && state.machines) || [], { wood, list } = room.paints();
@@ -671,37 +668,9 @@ function fillDoors() {
     fillDoors();
   };
 }
-// ---- the sessions that are over, as agent view's Completed group: how each ended, its name, where, when
-// and how long it ran, its last line; the newest first. A click opens one (Claude Code restarts it), its ✕
-// deletes it (asked twice, as agent view's Ctrl+X): in the room it walks into the booth, or you shoot it
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const projOf = (b) => (b.tree ? b.tree.split("/").pop() + " (worktree)" : (b.cwd || "").replace(/^\/(Users|home)\/[^/]+$/, "~").split("/").pop() || "~");
 const ago = (sec) => sec < 90 ? `${Math.round(sec)} s` : sec < 5400 ? `${Math.round(sec / 60)} min` : sec < 48 * 3600 ? `${(sec / 3600).toFixed(1)} h` : `${Math.round(sec / 86400)} d`;
-function fillDone() {
-  const el = $("#vDone"), t = new Date(), pad = (n) => String(n).padStart(2, "0");
-  const when = (ms) => { if (!ms) return ""; const d = new Date(ms); return (d.toDateString() === t.toDateString() ? "" : `${pad(d.getDate())}/${pad(d.getMonth() + 1)} `) + `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
-  const bots = ((state && state.bots) || []).filter((b) => b.over).sort((a, b) => (b.endedAt || b.started) - (a.endedAt || a.started));
-  const key = bots.map((b) => b.id + b.over + b.endedAt).join();   // redrawn only when the list changes (a ✕ being pressed twice stays put)
-  if (el.dataset.key === key) return;
-  el.dataset.key = key;
-  el.innerHTML = bots.length ? bots.map((b) => {
-    const m = machine(b.m || ""), where = (m && state.machines.length > 1 ? m.name + " · " : "") + projOf(b);
-    const ran = b.endedAt && b.started && b.endedAt > b.started ? ago((b.endedAt - b.started) / 1000) : "";
-    return `<div class="drow" data-id="${esc(b.id)}" title="open it"><span class="st ${b.over}">${b.over}</span><span class="nm">${esc(b.name)}</span><span class="where">${esc(where)}</span>` +
-      `<span class="when">${esc(when(b.endedAt))}${ran ? " · ran " + ran : ""}</span><button type="button" class="btn small rm" title="delete it from the list (claude rm)">✕</button>` +
-      (b.detail ? `<div class="detail">${esc(b.detail)}</div>` : "") + `</div>`;
-  }).join("") : `<p>Nobody is done yet.</p>`;
-  for (const row of el.querySelectorAll(".drow")) {
-    const b = byId(row.dataset.id), x = row.querySelector(".rm");
-    row.onclick = (e) => { if (e.target.closest(".rm")) return; if (b) openBot(b.m, b.id, e.shiftKey); };
-    let armed = 0;
-    x.onclick = () => {
-      if (performance.now() - armed < 2500) { x.textContent = "…"; if (b && !room.condemn([b.id]).length) stopBot(b.m, b.id, true); return; }   // to the booth (hardcore: you shoot it), as a burnt desk's bots
-      armed = performance.now(); x.textContent = "delete?"; x.classList.add("warn");
-      setTimeout(() => { if (performance.now() - armed >= 2500) { x.textContent = "✕"; x.classList.remove("warn"); } }, 2600);
-    };
-  }
-}
 // ---- the clock: this computer kept awake (caffeinate): while bots work, for a while, or not. The server
 // runs the inhibitor; the buttons show the choice, the clock's face and tip show what it does
 const AWAKE = [["off", "off", 0], ["work", "when local bots work", 0], ["for", "1 h", 60], ["for", "3 h", 180], ["for", "8 h", 480]];
@@ -810,8 +779,8 @@ async function askManager(at) {
   openView("manager");
   const el = $("#vManager .styles"), r = await api("/api/manager", {});
   if (viewKind !== "manager") return;
-  el.innerHTML = (r.styles || []).map((st) => `<button type="button" class="style" data-key="${st.key}"${st.here ? " disabled" : ""}><img alt="" data-seed="${esc(st.seed)}" data-color="${st.color}">` +
-    `<span class="who"><b style="color:${st.color}">${esc(st.name.toUpperCase())}</b><span class="line">${esc(st.line)}</span><small>${st.here ? "at a reception already" : esc(st.how)}</small></span></button>`).join("");
+  el.innerHTML = (r.styles || []).map((st) => `<button type="button" class="style" data-key="${st.key}" style="--c:${st.color}"${st.here ? " disabled" : ""}><img alt="" data-seed="${esc(st.seed)}" data-color="${st.color}">` +
+    `<span class="who"><b>${esc(st.name.toUpperCase())}</b><span class="line">${esc(st.line)}</span><small>${st.here ? "at a reception already" : esc(st.how)}</small></span></button>`).join("");
   const faces = () => { let left = 0; for (const im of el.querySelectorAll("img:not([src])")) { const u = room.figure(im.dataset.seed, im.dataset.color, 3); if (u) im.src = u; else left++; } if (left && viewKind === "manager") setTimeout(faces, 100); };
   faces();
   for (const b of el.querySelectorAll(".style")) b.onclick = async () => {

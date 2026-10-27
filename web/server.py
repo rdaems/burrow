@@ -312,7 +312,7 @@ def split_unit(u):
 # the first room's pieces have no number). There can be any number of a kind. The closet in the
 # room adds a piece, the fireplace burns one; the fire, the closet and the switchboard themselves stay.
 FURNITURE = ["meet", "pong", "chess", "coffee", "cooler", "printer", "armchair",
-             "plant0", "plant1", "board", "window", "clock", "fire", "closet", "add", "bench0", "settings0", "manager0", "booth0", "neuralyzer0"]
+             "plant0", "plant1", "board", "window", "clock", "fire", "closet", "add", "settings0", "manager0", "booth0", "neuralyzer0"]
 # (a new machine is a door taken from the closet and hung on the wall; the doors themselves are no furniture:
 # one a machine in Claude Code's sshConfigs, their places in the layout as door:<machine id>)
 FIXED = {"fire", "closet", "settings", "clock"}
@@ -328,7 +328,7 @@ OPTIONS = {
 
 def options(room):
     return {**OPTIONS, **{k: bool(v) for k, v in (room.get("settings") or {}).items() if k in OPTIONS}}
-KINDS = {"meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "add", "pair", "bench", "manager",
+KINDS = {"meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "add", "pair", "manager",
          "booth", "neuralyzer", "doghouse"}
 
 
@@ -608,7 +608,9 @@ def furnish(room):
     for k in [k for k in ms if k not in room["furniture"]]:
         ms.pop(k)
     room["v"] = max(room["v"], 13)
-    room["furniture"] = [k for k in room["furniture"] if kind_of(k) != "goggles"]   # the 3d goggles: the first person is the gun closet's only
+    room["furniture"] = [k for k in room["furniture"] if kind_of(k) not in ("goggles", "bench")]   # the 3d goggles: the first person is the gun closet's only; the bench: every session is at its desk
+    for k in [k for k in room["layout"] if kind_of(k) == "bench"]:
+        room["layout"].pop(k)
     if not any(kind_of(k) == "clock" for k in room["furniture"]):   # the clock is always there (it can't be burnt any more)
         room["furniture"].append("clock")
     for k in [k for k in room["layout"] if kind_of(k) == "goggles"]:
@@ -682,7 +684,7 @@ def parse_agents(out, jobs={}):
     A row without a tempo (an old record) gets Claude Code's own fallback from the process's status.
     `over` (done, failed or stopped with its process gone: agent view's Completed group, listed with
     --all only) says which, `endedAt` when (its record's last write), `detail` is agent view's one-line
-    summary: the bench's list shows them, `claude rm` deletes one."""
+    summary, `claude rm` deletes one."""
     bots = []
     for x in json.loads(out.strip() or "[]"):
         if x.get("kind") != "background" or not x.get("id"):

@@ -1510,6 +1510,45 @@ cancel." (The "before" was the gravestone round.) And: "I should be able to clic
   and an undo at 2.8 s (back out, not deleted). look.mjs takes `clip`/`clipTo` on a shot now; `room.at(id)` is on
   the page's `room`, not `__room` (`__room.dog()`, `__room.stick()` are new).
 
+## No bench; desks walked to; the pouf; the robots' dream (2026-10-27)
+
+He: "just remove the bench"; "a bot spawning another desk, and then going back to its first desk, does not walk
+there, it just teleports"; "SUSAN is hard to read, the name on her desk ... the UI to select one ... low contrast
+background, make it happier, each has a color"; "the green sofa more rotation invariant: remove the lamp, remove the
+backrest"; "I don't want the blinking dot above a working robot's head. I don't want the floating zzzz's above a
+sleeping robot. No talking bubbles on a robot playing chess"; and the whiteboard: "it's messy, just a bunch of
+arrows. Make it more cozy, a bit funny. It represents robot's dreams ... two happy robots, in love, in the
+countryside, running on a sunny hill. Or on the beach. The drawing is done in pixel art."
+- **The bench is gone**: the kind, its break, the closet entry, its click and the COMPLETED panel (`fillDone`, `#vDone`,
+  its CSS). `furnish` drops `bench*` from every room on load. A desk's panel lists a desk's sessions, completed too;
+  the booth deletes.
+- **Teleporting to a desk**: `sitAt` snapped a seated bot onto its seat whenever the seat was within 40 dots (meant for
+  the chairs closing up along a desk), so a bot whose directory changed to a desk close by jumped there and back.
+  Reproduced in the demo (a fake unit and a fake desk 30 dots below, via a `JSON.parse` wrapper on the page: jumps of
+  30 dots both ways). Now a seat carries its desk (`L.seat(id).desk`) and the snap is only for the same desk
+  (`f.satAt`); another desk is walked to, however close.
+- **Her name on the counter** is a desk's plate (`plate()`): dark (her colour at 26%), the letters in her colour
+  lightened; it was ink on her colour with a highlight row through the letters. **The picker** (`#vManager`): each card
+  in her own colour (`--c` on the button: a pastel card, a bevel in her colour, her figure on a swatch of it, her name
+  in it with an ink shadow); the one at a reception already is desaturated, not grey.
+- **The pouf** (the kind stays `armchair`, named "pouf"): a round green cushion drawn as a short cylinder from above
+  (`pouf()`, Pixel Agents' armchair greens), the same from any side; no lamp, no back. Whoever sits on it is drawn
+  over it (`piece(…, dz)`: its depth 2.5 dots behind its front), facing the middle of the room (`poufFace`).
+- **Quieter robots**: no blinking `rc` light over the antenna (the APP button on the tile stays); no z's over a
+  sleeping or dozing robot (you still get them, and the dog in its house); no talk bubble on a robot at the chess
+  board, and no random chatter there.
+- **The robots' dream** (`dreamScene`, `DREAMS`, `w.dream`): the meeting host's random boxes and arrows (`stroke`)
+  are gone. A scene is 65 x 27 dream pixels, two by two of the board's ink: the hill (sun, clouds, birds, the grass
+  with flowers, a tree) or the beach (sun, gulls, the sea with little waves, sand, a palm, a crab); in both the two
+  of them running hand in hand, him teal, her pink with a bow, blushing, motion lines behind, a heart over them and
+  two small ones. It comes in layer by layer (sky, ground, things, the two, the hearts), outlines first, left to
+  right with a jitter (`paintDream`), at 0.6 pixels a second, 1.5 more for every robot napping (it is their dream),
+  8 more while a meeting's host draws at the board (`act.drawing`). A page opens on a dream 30% drawn. Done, it stays;
+  a meeting four minutes later, or twenty minutes, wipes it and starts the other. Each layer keeps its own pixels and
+  paints over the dream's earlier ones (`mine`), never over your marker; the view's wipe starts the dream again. The
+  small board in the room shows each dot's middle pixel now (it showed the first inked one). `__room.dream(scene, k)`
+  shows a scene k drawn.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

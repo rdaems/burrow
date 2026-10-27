@@ -17,8 +17,8 @@ running; open it again and they are all there. Nothing is installed on a machine
 
 **The room is the interface.** Every state Claude Code has is shown by something in the room, and every
 action is something you do in the room. There are no notifications, badges, counters or sounds, and no
-buttons where a gesture will do: a session that needs you sits with its hand up, you stop one by carrying
-its robot to the bench, and your usage limits are the coffee pot and the water bottle.
+buttons where a gesture will do: a session that needs you sits with its hand up, you delete one by carrying
+its robot into the booth, and your usage limits are the coffee pot and the water bottle.
 
 **The terminal is Claude Code's own.** A click on a robot runs `claude attach` in a terminal next to the
 room. Nothing of Claude Code is re-implemented, so whatever it can do, you can do here.
@@ -35,7 +35,7 @@ holds more of it, and the fire burns the furniture you drag into it.
 
 ## The room
 
-![a close-up: a session typing, a message beamed to another, the bench, a nap](docs/room.png)
+![a close-up: a session typing, a message beamed to another, a nap](docs/room.png)
 
 - **working**: at its desk, typing; its project's screen scrolls
 - **needs input** (a question for you, a permission prompt): at its desk, hand up
@@ -43,7 +43,7 @@ holds more of it, and the fire burns the furniture you drag into it.
 - **talking**: a message to another session is a beam, antenna to antenna
 - **completed** (done, failed or stopped, agent view's *Completed*; Claude Code stops a finished session's
   process after an hour unattended): idle like the rest, without a chair at its desk; a click starts it
-  again where it left off. A click on the bench lists them
+  again where it left off
 
 Sessions in the same directory share a desk, named after the folder. A session in a git worktree sits at
 its repository's desk, the worktree a laptop beside the big screen; one that moves to another directory
@@ -64,7 +64,7 @@ have sent it something; then you stand behind its desk), or under the screen whe
   sessions are deleted with it: they walk into the booth one by one (in hardcore they are shot); rescue one
   and the desk stays
 - **a fresh start**: drop an idle robot by the neuralyzer: `/clear`, a new conversation in the same session
-- **delete a session gently**: carry its robot into the booth, or ✕ twice in the bench's list. The door slides
+- **delete a session gently**: carry its robot into the booth. The door slides
   shut and a light rises through the cabin, taking the robot up with it; five seconds, then `claude stop` and
   `claude rm`. All that while a click on the booth (or carrying the robot out) takes it back: the light runs
   down again and it steps out
@@ -103,9 +103,12 @@ have sent it something; then you stand behind its desk), or under the screen whe
     (`claude -p`, on this computer) when a session finishes a turn or asks you something, and when the notes open
 
   Burn her booth to let her go (her session is stopped and deleted)
-- **the whiteboard** opens large and you draw on it; the host of a meeting draws on it too
+- **the whiteboard** is the robots' dream: a pixel-art picture that appears bit by bit, two robots in love
+  running hand in hand over a sunny hill, or along a beach. It grows faster while robots nap (they dream it)
+  and while the host of a meeting draws at the board; a finished one is wiped for the next. A click opens it
+  large, and you can draw on it too
 - **the window** looks outside: the sky by the hour, the sun or the moon, stars at night
-- **the armchair**: click it and you go and sit there a while, reading (a robot in it gets up)
+- **the pouf**: click it and you go and sit on it a while, reading (a robot on it gets up)
 - **the dog house** (in the closet) comes with a dachshund: it naps in its house, trots about, visits the
   robots and you (an idle robot pets it), follows you a while, chases the ball when the robots play football,
   barks at whoever comes in through a door. Click it (or its house) and you go and pet it; asleep in its
@@ -124,7 +127,7 @@ have sent it something; then you stand behind its desk), or under the screen whe
   the pair rooms see you by them
 - **settings**: the lever on the wall opens them, a switch a setting. The first:
   new sessions get `--remote-control`, so the same session is in the Claude app and at claude.ai/code
-  too (its tile has an APP button, its robot a blinking light over the antenna)
+  too (its tile has an APP button)
 
 <p><img src="docs/closet.png" width="49%" alt="the closet"> <img src="docs/limits.png" width="49%" alt="the limits"></p>
 
@@ -184,6 +187,6 @@ text, screenshots), which is how the pictures above were taken.
 
 The robots, the lettering, the palette and the 16-bit panels are
 [pair](https://github.com/rdaems/pair-prompting)'s. The furniture is pixel art on a 16-dot grid after
-[Pixel Agents](https://github.com/pixel-agents-hq/pixel-agents): its plants, armchair, meeting table,
+[Pixel Agents](https://github.com/pixel-agents-hq/pixel-agents): its plants, meeting table,
 stools and mug are Pixel Agents' own sprites (MIT, `web/sprites/`), the rest is drawn in `web/sprites.js`
 and `web/room.js` in the same manner. The terminal is xterm.js; its font JetBrains Mono (OFL).
