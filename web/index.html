@@ -901,8 +901,13 @@ function openTerminal(t, at) {
   // over it (SGR or X10), a colour or size answer
   const REPORT = /^(?:\x1b\[[IO]|\x1b\[<[\d;]*[Mm]|\x1b\[M[\s\S]{3}|\x1b\][\d;]*[^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[\d;?]*[Rcn])+$/;
   term.onData((d) => { if (t.ws && t.ws.readyState === 1) { t.ws.send(enc.encode(d)); if (!REPORT.test(d)) room.typed(t.kind === "bot" ? asFolk(t.id) : null, d.includes("\r")); } });
-  // shift+enter is a new line, as in the Rust pane: ESC CR, which claude reads as meta+enter (xterm.js sends a bare CR)
+  const CMD_KEYS = { ArrowLeft: "\x01", ArrowRight: "\x05", Backspace: "\x15" };
+  // shift+enter is a new line, as in the Rust pane: ESC CR, which claude reads as meta+enter (xterm.js sends a bare CR).
+  // ⌘← ⌘→ ⌘⌫ as Ghostty sends them: Ctrl+A, Ctrl+E, Ctrl+U (the line's start, its end, delete to its start), which
+  // Claude Code's prompt and the shells know (xterm.js sends nothing for ⌘ keys)
   term.attachCustomKeyEventHandler((e) => {
+    const cmd = e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && CMD_KEYS[e.key];
+    if (cmd) { e.preventDefault(); if (e.type === "keydown") term.input(cmd); return false; }
     if (e.key !== "Enter" || !e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return true;
     e.preventDefault();
     if (e.type === "keydown") term.input("\x1b\r");
