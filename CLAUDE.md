@@ -1707,6 +1707,21 @@ behaviour, make it a bit less busy. The robots [should] longer just keep doing t
   it did 2.0 times a minute (3.4 before); bubbles away from the desks in 36 samples of 250 ms (686 before), all from
   the demo's made-up messages.
 
+## Panic at the gun closet; ⌘ keys in the terminals (2026-10-27)
+
+He: "When I drag a bot on the gun booth, it's a bit weird just standing there. Let it wander about, somewhat panicked,
+confused." And: "In the browser, can we catch cmd+left arrow? ... I use that in ghostty to go to the beginning of the line".
+- **Condemned** (hardcore, `condemned` act, also a burnt desk's bots): it scurries 44 dots away from the gun closet
+  (`act.home`), then dithers there: a stop of 0.5-1.6 s looking this way and that (`f.dir` flips every 0.25-0.6 s), a
+  few hurried steps (18-28 dots a second, the shooter walks 34) to a clear spot near home (`L.free`, further each try,
+  else a shuffle), hands flailing (`up`/`wave`). When the gun is levelled at it (its hunter's `aim`) it freezes, hands
+  up, facing it. It trembles fast and sweats whatever the room's fear (`drawFigure`). Tested in the demo: dropped,
+  away, looking about, off again, frozen, shot; about 5 s with the office manager at hand.
+- **⌘← ⌘→ ⌘⌫** (index.html, `CMD_KEYS` in the terminal's custom key handler): the browser does give a page ⌘←
+  while the terminal has the focus (only ⌘W, ⌘T, ⌘Q and the like never reach it); xterm.js sends nothing for ⌘ keys.
+  Now they send what Ghostty sends: Ctrl+A, Ctrl+E, Ctrl+U. Tested in a shell tile in the demo (a line fixed at its
+  start, at its end, and wiped); not in a Claude Code prompt (the demo's bots have none).
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

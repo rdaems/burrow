@@ -1093,9 +1093,33 @@ function startRoom(cv, app) {
         if (act.there) { f.legs = "stand"; f.dir = -side; f.arms = "down"; }
         break;
       }
-      case "condemned":                      // hardcore: where it is, hands up, until someone with a gun gets to it
+      case "condemned": {                    // hardcore: someone takes a gun for it. Meanwhile it wanders about where it was put, at a
+        // loss: a few hurried steps flailing its hands, a stop to look this way and that, off again (slower than the one with
+        // the gun walks, so it is caught). The gun levelled at it: it freezes, hands up, facing it
+        const by = [...folk.values()].find((g) => g.hunt && g.hunt.id === f.id && g.carry === "gun");
+        if (by && by.hunt.phase === "aim") { act.to = null; f.legs = "stand"; f.arms = "up"; f.dir = by.x < f.x ? -1 : 1; break; }
+        if (!act.home) {                     // first away from the gun closet, as far as it dares; then it dithers there
+          const bo = L.booths[0], d = bo ? Math.hypot(f.x - bo.x, f.y - bo.y) || 1 : 1;
+          act.home = bo ? { x: Math.max(L.floor.x0, Math.min(L.floor.x1, f.x + (f.x - bo.x) / d * 44)), y: Math.max(L.floor.y0, Math.min(L.floor.y1, f.y + (f.y - bo.y) / d * 24)) } : { x: f.x, y: f.y };
+          act.to = { ...act.home }; act.v = 30;
+        }
+        if (act.to) {
+          if (walk(f, act.to, act.v, dt)) { act.to = null; act.pause = rnd(0.5, 1.6); }
+          f.arms = Math.floor(w.T * 6) % 2 ? "up" : "wave";
+          break;
+        }
         f.legs = "stand"; f.arms = "up";
+        if ((act.look = (act.look || 0) - dt) <= 0) { f.dir = -(f.dir || 1); act.look = rnd(0.25, 0.6); }   // this way, that way
+        if ((act.pause = (act.pause ?? rnd(0.3, 1)) - dt) <= 0) {
+          for (let k = 0; k < 10 && !act.to; k++) {          // somewhere clear near it (further the more it tries), else a shuffle
+            const r = 30 + k * 6, x = Math.max(L.floor.x0, Math.min(L.floor.x1, act.home.x + rnd(-r, r))), y = Math.max(L.floor.y0, Math.min(L.floor.y1, act.home.y + rnd(-r / 2, r / 2)));
+            if (L.free(x, y)) act.to = { x, y };
+          }
+          if (!act.to) act.to = { x: Math.max(L.floor.x0, Math.min(L.floor.x1, f.x + rnd(-8, 8))), y: f.y };
+          act.v = rnd(18, 28); act.pause = rnd(0.5, 1.6);
+        }
         break;
+      }
       case "sweep": {                        // clearing away what is left of a bot: to the nearest piece that landed, bent down for it
         const r = w.remains.get(act.at);
         if (!r || r.back || !r.parts.length) { f.act = rest(); break; }
@@ -2254,7 +2278,7 @@ function startRoom(cv, app) {
     const lit = hl.has(f.id) || (hovered && hovered.b.id === f.id) || (!hovered && over(x0 + 4, y0, x0 + 18, y + 1));
     const doomed = f.held && dangerNow, bt = f.held ? -1 : boothT(f);    // in the booth: the booth lights up for it, not the bot
     const ring = f.leaving || bt >= 0 ? null : doomed ? RED : lit ? GOLD : app.opens().includes(f.id) ? OPEN : null;
-    const fear = !b.human && !b.staff && !f.held ? world().fear || 0 : 0;
+    const fear = !b.human && !b.staff && !f.held ? (f.act.kind === "condemned" ? 1 : world().fear || 0) : 0;   // (one waiting to be shot: all of it)
     const shake = fear > 0.2 && Math.floor(T * 15 + f.z * 7) % (fear > 0.6 ? 2 : 4) === 0 ? (Math.floor(T * 30) % 2 ? 1 : -1) : 0;   // trembling
     if (im) {
       ctx.save();
