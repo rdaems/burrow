@@ -529,7 +529,7 @@ function startRoom(cv, app) {
     }
     // a move on the board (yours against a bot, or the bots' own game): the one who moved reaches out
     const sg = app.state().chess;
-    if (sg && sg.sans.length !== w.plies && w.plies !== undefined) { w.chessAt = performance.now(); sfx("clack", L.chess ? L.chess.x : W / 2); const mover = folk.get(sg.toMove === sg.white.id ? sg.black.id : sg.white.id); if (mover) mover.moved = 0.9; }
+    if (sg && sg.sans.length !== w.plies && w.plies !== undefined) { w.chessAt = performance.now(); if (app.view() === "chess") sfx("clack", L.chess ? L.chess.x : W / 2); const mover = folk.get(sg.toMove === sg.white.id ? sg.black.id : sg.white.id); if (mover) mover.moved = 0.9; }
     w.plies = sg ? sg.sans.length : undefined;
     // the bot you play ping-pong with stands at the table, at the far end
     const pp = app.pong(), pv = pp && !pp.watch && pp.id;   // the bot you play (none while you watch two)
@@ -547,13 +547,7 @@ function startRoom(cv, app) {
     // messages under way: the beam reaches the other, who takes it in
     for (const bm of w.beams) { const was = bm.t; bm.t += dt; if (was < BEAM && bm.t >= BEAM) { const g = folk.get(bm.to); if (g) g.chat = Math.max(g.chat, 1); } }
     w.beams = w.beams.filter((bm) => bm.t < BEAM + 0.4 && folk.has(bm.from) && folk.has(bm.to));
-    // heard: the keyboards of the ones at work (a key now and then), the fire's crackle, the booth's hum stopping when
-    // the bot in it is taken back
-    if (Sound.on()) {
-      const typing = [...folk.values()].filter((f) => f.busy && f.sat && f.act.kind === "desk");
-      if (typing.length && Math.random() < dt * Math.min(3, 1.2 * typing.length)) sfx("key", any(typing).x);
-      if (L.fire && Math.random() < dt * 2.5) sfx("crackle", (L.fire.x0 + L.fire.x1) / 2);
-    }
+    // heard: the booth's hum stopping when the bot in it is taken back
     for (const [id, h] of w.hums) {
       const f = folk.get(id);
       if (f && f.act.kind === "doom" && !f.act.back) continue;
@@ -608,7 +602,7 @@ function startRoom(cv, app) {
     }
     const playing = (kind) => [...folk.values()].filter((f) => f.act.kind === kind && f.act.there && f.act.with).length === 2;
     // the ball goes back and forth while two are at the table
-    if ((playing("pong") || (app.pong() && app.pong().ball)) && (w.pong.t += dt / 0.8) >= 1) { w.pong.t = 0; w.pong.from = 1 - w.pong.from; if (playing("pong") && L.pong) sfx("pock", L.pong.x + (w.pong.from ? 30 : -30)); }
+    if ((playing("pong") || (app.pong() && app.pong().ball)) && (w.pong.t += dt / 0.8) >= 1) { w.pong.t = 0; w.pong.from = 1 - w.pong.from; }
     // the football, if one is in play
     kickabout(w, dt);
     dreamStep(w, dt);
@@ -962,7 +956,7 @@ function startRoom(cv, app) {
       case "print":
         if (!L.printer) { f.act = rest(); break; }
         if (!walk(f, { x: L.printer.x - 9, y: L.printer.y, on: L.printer.key }, v, dt)) break;
-        if (act.stage === 0) { f.dir = 1; f.arms = "down"; act.stage = 1; sfx("print", L.printer.x); }
+        if (act.stage === 0) { f.dir = 1; f.arms = "down"; act.stage = 1; }
         else if ((act.wait += dt) > 2.4) { f.carry = "paper"; f.act = rest(); }
         break;
       case "cooler": {
@@ -1328,7 +1322,7 @@ function startRoom(cv, app) {
       ball.x = to.x + (to.dir < 0 ? -4 : 4); ball.y = to.y; ball.h = 0;
       if (ball.wait <= 0) {
         const next = any(players.filter((g) => g !== to));
-        to.kick = 0.3; sfx("kick", to.x); ball.from = to.id; ball.to = next.id; ball.t = 0; ball.x0 = ball.x; ball.y0 = ball.y; ball.wait = undefined;
+        to.kick = 0.3; ball.from = to.id; ball.to = next.id; ball.t = 0; ball.x0 = ball.x; ball.y0 = ball.y; ball.wait = undefined;
       }
     } else {
       ball.t = Math.min(1, ball.t + dt / PASS);
@@ -2245,7 +2239,7 @@ function startRoom(cv, app) {
         if (!f) { g.act = nextDog(w, g, L); break; }
         if (Math.hypot(f.x - g.x, f.y - g.y) > 24) { walkDog(g, { x: f.x + (g.x < f.x ? -20 : 20), y: f.y + 1 }, 50, dt); break; }
         g.pose = "stand"; g.dir = f.x < g.x ? -1 : 1; g.barking = true;
-        if ((a.yap = (a.yap || 0) - dt) <= 0) { sfx("bark", g.x); a.yap = 1.1; }
+        if (!a.yap) { sfx("bark", g.x); a.yap = true; }   // once: a newcomer is the event
         if ((a.left -= dt) <= 0) g.act = nextDog(w, g, L);
         break;
       }

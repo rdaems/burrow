@@ -2009,13 +2009,17 @@ to toggle sound." (Until now burrow had no sound at all, by his first principle;
   default, not on the switchboard: the radio is the switch); putting a radio down switches it on. No radio, no sound.
   In 3d (props3d) the same face, a warm light while on.
 - **web/sound.js** (`Sound.set/play/doom/on`): Web Audio, nothing recorded. The room's sounds are synthesised, short and
-  quiet, panned by where in the room they happen (`sfx(name, x)` in room.js; not while you are in the first person):
-  a key now and then for the ones typing at their desks (three a second at most), a rising two-note "?" when a hand
-  goes up (a change, not on page load), a beam's zap, a door as a bot comes in or leaves, the booth's rising hum (it
-  stops, with a falling tone, when the bot is taken back) and a poof at the end, a shot and the clank of the parts,
-  the neuralyzer's flash, the dog's bark, a chessman put down, the bots' ping-pong, a football kick, the dot-matrix
-  printer, the fire's crackle, a whoosh for what goes into it. A browser plays sound only after a click or a key on
-  the page (`navigator.userActivation`): until then nothing.
+  quiet, panned by where in the room they happen (`sfx(name, x)` in room.js; not while you are in the first person).
+  Then he: "there's a constant ticking of working bots. Get rid of the ambient noise. Only use sound for real events."
+  So nothing is a background any more: no keys at the desks, no fire crackle, and the idle bots' pastimes are not
+  heard (their ping-pong, football, printing on a break, their chess unless you watch it). What is heard: a rising
+  two-note "?" when a hand goes up (a change, not on page load), a message's beam, a door as a session comes in or
+  goes, the booth's rising hum (it stops, with a falling tone, when the bot is taken back) and a poof at the end, a
+  shot and the clank of the parts, the neuralyzer's flash, the dog's one bark at a newcomer, a chessman put down in
+  the game you play or watch, the printer when you click it, a whoosh for what you put in the fire, the radio itself,
+  and the duel outside the window (outside.js: the gun, the whistle of a shell coming down, timed to its landing, the
+  blast, a gun hit, the gunner's thud, a tune for the round won or lost). A browser plays sound only after a click or
+  a key on the page (`navigator.userActivation`): until then nothing.
 - **Doom's sounds** from the WAD (DMX: format 3, rate, count, 8-bit samples padded 16 each side), as Doom places them
   (S_AdjustSoundParams: full within 160 units, gone at 1200, panned to the side; one sound an origin, Doom's
   channels). level.js queues what is heard (`level.sounds`, `snd`): a monster's sight, its odd grunt while it hunts

@@ -3,7 +3,8 @@
 // happen (left or right by where in the room: pan -1..1); Doom's come out of its WAD (fps.js), in Doom's own format
 // (DMX: a rate, then 8-bit samples), placed as Doom places them.
 //
-// Sound.set(on); Sound.play(name, pan, vol) → a handle {stop()} or null; Sound.doom(wad, lump, vol, pan, origin).
+// Sound.set(on); Sound.play(name, pan, vol, force, opt) → a handle {stop()} or null (opt goes to the sound, the whistle's
+// length); Sound.doom(wad, lump, vol, pan, origin). Only what happens is heard, never a background: no keyboards, no fire.
 // A browser lets a page make sound only after a click or a key on it: until then nothing plays (and nothing is kept).
 window.Sound = (() => {
   let ac = null, master = null, on = false, noiseBuf = null;
@@ -58,7 +59,6 @@ window.Sound = (() => {
 
   // ---- the room's sounds: each draws into dest from t, says how loud it is, and how long it lasts
   const SOUNDS = {
-    key: { vol: 0.07, make: (d, t) => { hiss(d, t, { dur: 0.016, f: rnd(2600, 4200), q: 2.5, vol: 1 }); tone(d, t, { f: rnd(1500, 2100), dur: 0.01, type: "square", vol: 0.12 }); } },   // a key down
     ask: { vol: 0.16, make: (d, t) => { tone(d, t, { f: 659, dur: 0.18, type: "triangle", vol: 0.8 }); tone(d, t + 0.13, { f: 988, dur: 0.3, type: "triangle", vol: 0.8 }); } },   // a hand goes up: "?"
     beam: { vol: 0.1, make: (d, t) => { tone(d, t, { f: 1900, f2: 420, dur: 0.3, vol: 0.9 }); tone(d, t, { f: 950, f2: 260, dur: 0.22, type: "square", vol: 0.1 }); } },
     door: { vol: 0.2, make: (d, t) => { tone(d, t, { f: 120, f2: 70, dur: 0.14, vol: 1 }); hiss(d, t, { dur: 0.05, type: "lowpass", f: 900, vol: 0.6 }); tone(d, t + 0.09, { f: 2200, dur: 0.03, type: "square", vol: 0.05 }); } },
@@ -89,8 +89,6 @@ window.Sound = (() => {
       return 0.4;
     } },
     clack: { vol: 0.2, make: (d, t) => { hiss(d, t, { dur: 0.045, f: 1900, q: 3, vol: 0.9 }); tone(d, t, { f: 720, dur: 0.05, vol: 0.4 }); } },   // a chessman put down
-    pock: { vol: 0.15, make: (d, t) => { tone(d, t, { f: rnd(1150, 1350), dur: 0.07, vol: 0.8 }); hiss(d, t, { dur: 0.015, f: 3200, q: 2, vol: 0.5 }); } },   // a ping-pong ball
-    kick: { vol: 0.2, make: (d, t) => { tone(d, t, { f: 150, f2: 60, dur: 0.13, vol: 1 }); hiss(d, t, { dur: 0.06, type: "lowpass", f: 700, vol: 0.5 }); } },
     print: { vol: 0.09, make: (d, t) => {   // a dot-matrix printer: lines of needles, a line feed after each
       for (let line = 0; line < 6; line++) {
         for (let k = 0; k < 16; k++) hiss(d, t + line * 0.34 + k * 0.016, { dur: 0.011, f: rnd(2400, 3200), q: 4, vol: 0.8 });
@@ -98,19 +96,39 @@ window.Sound = (() => {
       }
       return 2.1;
     } },
-    crackle: { vol: 0.07, make: (d, t) => { hiss(d, t, { dur: rnd(0.006, 0.02), type: "highpass", f: rnd(1800, 5200), vol: rnd(0.3, 1) }); } },
     whoosh: { vol: 0.2, make: (d, t) => { hiss(d, t, { dur: 0.8, type: "lowpass", f: 280, f2: 2600, vol: 0.9, a: 0.15 }); tone(d, t, { f: 70, dur: 0.6, vol: 0.4, a: 0.1 }); } },
     tune: { vol: 0.14, make: (d, t) => { hiss(d, t, { dur: 0.35, f: 500, f2: 3000, q: 8, vol: 0.7 }); tone(d, t + 0.28, { f: 784, dur: 0.2, type: "triangle", vol: 0.6 }); tone(d, t + 0.4, { f: 1047, dur: 0.35, type: "triangle", vol: 0.6 }); } },   // the radio on
     click: { vol: 0.2, make: (d, t) => { hiss(d, t, { dur: 0.02, type: "highpass", f: 3000, vol: 0.7 }); tone(d, t, { f: 190, dur: 0.04, vol: 0.5 }); } },   // the radio off
     paper: { vol: 0.1, make: (d, t) => { hiss(d, t, { dur: 0.25, f: 4500, f2: 2500, q: 0.7, vol: 0.6, a: 0.04 }); } },
+    // the duel outside the window (outside.js): a gun fired, the whistle of a shell coming down (o.dur: until it lands),
+    // where it lands, a gun hit, a gunner landing on its back, the round won or lost
+    cannon: { vol: 0.3, make: (d, t) => { hiss(d, t, { dur: 0.7, type: "lowpass", f: 2400, f2: 140, vol: 1, a: 0.001 }); tone(d, t, { f: 72, f2: 34, dur: 0.5, vol: 1 }); tone(d, t, { f: 190, f2: 70, dur: 0.12, type: "square", vol: 0.25 }); } },
+    whistle: { vol: 0.05, make: (d, t, h, o) => {
+      const dur = Math.max(0.3, Math.min(4, (o && o.dur) || 1.5)), osc = ac.createOscillator(), g = ac.createGain(), lfo = ac.createOscillator(), lg = ac.createGain();
+      osc.type = "sine"; osc.frequency.setValueAtTime(1750, t); osc.frequency.exponentialRampToValueAtTime(620, t + dur);
+      lfo.frequency.value = 7; lg.gain.value = 18; lfo.connect(lg); lg.connect(osc.frequency);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(1, t + Math.min(0.25, dur / 3)); g.gain.setValueAtTime(1, t + dur - 0.05); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      osc.connect(g); g.connect(d); osc.start(t); lfo.start(t); osc.stop(t + dur + 0.05); lfo.stop(t + dur + 0.05);
+      h.stop = () => { const n = ac.currentTime; g.gain.cancelScheduledValues(n); g.gain.setValueAtTime(g.gain.value, n); g.gain.exponentialRampToValueAtTime(0.0001, n + 0.04); try { osc.stop(n + 0.06); lfo.stop(n + 0.06); } catch (_) { /* over already */ } };
+      return dur;
+    } },
+    blast: { vol: 0.32, make: (d, t) => { hiss(d, t, { dur: 0.9, type: "lowpass", f: 1500, f2: 90, vol: 1, a: 0.002 }); tone(d, t, { f: 58, f2: 30, dur: 0.65, vol: 1 }); hiss(d, t + 0.05, { dur: 0.35, f: 700, q: 0.8, vol: 0.35 }); } },
+    wreck: { vol: 0.38, make: (d, t) => {
+      hiss(d, t, { dur: 1.4, type: "lowpass", f: 1800, f2: 70, vol: 1, a: 0.002 }); tone(d, t, { f: 50, f2: 26, dur: 1, vol: 1 });
+      for (const [at, f] of [[0.18, 830], [0.32, 1270], [0.5, 640]]) tone(d, t + at, { f: f * rnd(0.9, 1.1), dur: 0.2, vol: 0.18 });   // the gun's iron
+      return 1.5;
+    } },
+    thud: { vol: 0.16, make: (d, t) => { tone(d, t, { f: 120, f2: 52, dur: 0.12, vol: 1 }); hiss(d, t, { dur: 0.07, type: "lowpass", f: 600, vol: 0.6 }); } },
+    win: { vol: 0.13, make: (d, t) => { [523, 659, 784, 1047].forEach((f, i) => tone(d, t + i * 0.11, { f, dur: i === 3 ? 0.45 : 0.14, type: "square", vol: 0.35 })); return 0.9; } },
+    lose: { vol: 0.12, make: (d, t) => { [392, 349, 262].forEach((f, i) => tone(d, t + i * 0.22, { f, f2: i === 2 ? 200 : undefined, dur: i === 2 ? 0.6 : 0.2, type: "triangle", vol: 0.8 })); return 1.1; } },
   };
-  function play(name, pan = 0, vol = 1, force) {
+  function play(name, pan = 0, vol = 1, force, opt) {
     const s = SOUNDS[name];
     if (!s || !(on || force)) return null;
     const was = on; on = true; const a = ctx(); on = was;
     if (!a) return null;
     const h = { stop() {} }, t = a.currentTime + 0.01, dest = out(pan, s.vol * vol);
-    const len = s.make(dest, t, h) || 0.6;
+    const len = s.make(dest, t, h, opt) || 0.6;
     live.add(h);
     setTimeout(() => live.delete(h), (len + 0.2) * 1000);
     return h;

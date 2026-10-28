@@ -5,6 +5,8 @@
 // Gorillas): you against an idle bot drawn by lot, or two bots' duel to watch. Angle and power, a wind that
 // changes each round (the clouds, the smoke and the pennants go with it), craters where the shells come down,
 // pines blown away; a gun hit is the round. A bot knows the physics and aims less well its first shots of a round.
+// With the room's radio on it is heard (sound.js): the gun, the whistle of the shell coming down, the blast, a gun hit,
+// the gunner landing, a tune for the round.
 //
 // outsideView(canvas, app), app = { shown(), wears(seed) }; returns { open(a, b, at), close(), playing(), left(id) }.
 // a and b are { id, name, color, human, seed }; with b null it is only the outside. Everything is in dots, the
@@ -18,6 +20,7 @@ function outsideView(cv, app) {
   const hash = (s) => { let h = 2166136261; for (const ch of String(s)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return (h >>> 0) / 4294967296; };
   const mixc = (a, b, k) => "#" + [1, 3, 5].map((i) => { const x = parseInt(a.slice(i, i + 2), 16), y = parseInt(b.slice(i, i + 2), 16); return Math.round(x + (y - x) * k).toString(16).padStart(2, "0"); }).join("");
   const r = (x, y, w, h, col) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
+  const hear = (name, x, opt) => (window.Sound ? Sound.play(name, clamp((x / W) * 1.6 - 0.8, -1, 1), 1, false, opt) : null);   // left or right by where
   const disc = (x, y, rad, col, g = c) => { x = Math.round(x); y = Math.round(y); g.fillStyle = col; for (let j = -Math.floor(rad); j <= rad; j++) { const h = Math.floor(Math.sqrt(rad * rad - j * j)); g.fillRect(x - h, y + j, 2 * h + 1, 1); } };
   // dots with an ink outline round them: [x, y, colour] each; the outline first, so it never covers a dot
   function inked(pts, g = c) {
@@ -139,10 +142,12 @@ function outsideView(cv, app) {
     duel.shell = launch(P, P.ang, P.pow);
     duel.phase = "fly"; P.shots++; P.kick = 1; P.flash = 0.12; P.trail = [];
     duel.fired[P.side] = performance.now() / 1000;
+    hear("cannon", P.x);
   }
   function boom(d) {
     const s = duel.shell, P = duel.p[s.by];
     duel.shell = null; duel.phase = "boom"; duel.t = 0.9;
+    if (s.whistle && s.whistle.stop) s.whistle.stop();
     if (d.out) return;
     const hit = duel.p.filter((Q) => !Q.dead && (d.gun === Q.side || Math.hypot(d.x - Q.x, d.y - (ground(Q.x) - 4)) <= BOOM));
     duel.booms.push({ x: d.x, y: d.y, t: 0, R: hit.length ? 13 : 8 });
@@ -159,9 +164,11 @@ function outsideView(cv, app) {
     land.pines = land.pines.filter((p) => !p.gone);
     for (const Q of hit) { Q.dead = true; Q.body = { x: Q.x - 15 * Q.f, y: ground(Q.x) - 1, vx: -Q.f * rnd(22, 38), vy: -rnd(48, 66), down: false }; }
     crater(d.x, d.y, BOOM);
+    hear(hit.length ? "wreck" : "blast", d.x);
     if (hit.length) {
       const win = hit.length === 2 ? null : 1 - hit[0].side;
       if (win !== null) duel.score[win]++;
+      duel.won = win; duel.tune = 1.1;
       duel.phase = "over"; duel.t = 3.6; duel.next = hit.length === 2 ? 1 - P.side : hit[0].side;   // the loser starts the next round
     }
   }
@@ -174,8 +181,12 @@ function outsideView(cv, app) {
     for (const P of duel.p) {
       P.kick = Math.max(0, P.kick - dt * 5); P.flash = Math.max(0, P.flash - dt);
       const b = P.body;
-      if (b && !b.down) { b.vy += G * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.x = clamp(b.x, 7, W - 8); if (b.vy > 0 && b.y >= ground(b.x) - 1) { b.y = ground(b.x) - 1; b.down = true; } }
+      if (b && !b.down) { b.vy += G * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.x = clamp(b.x, 7, W - 8); if (b.vy > 0 && b.y >= ground(b.x) - 1) { b.y = ground(b.x) - 1; b.down = true; hear("thud", b.x); } }
       if (P.leaving) P.walk = (P.walk || 0) + dt * 22;
+    }
+    if (duel.tune > 0 && (duel.tune -= dt) <= 0 && duel.won !== null) {   // the round's tune: yours won, or lost (a duel you watch: won)
+      const mine = duel.p.find((P) => P.human);
+      hear(!mine || mine.side === duel.won ? "win" : "lose", W / 2);
     }
     for (const bm of duel.booms) bm.t += dt;
     duel.booms = duel.booms.filter((bm) => bm.t < 1.8);
@@ -185,7 +196,13 @@ function outsideView(cv, app) {
       acc += dt;
       while (duel.shell && acc >= DT) {
         acc -= DT; fly(duel.shell);
-        const P = duel.p[duel.shell.by];
+        const P = duel.p[duel.shell.by], sh = duel.shell;
+        if (!sh.whistle && sh.vy > 0) {      // over the top: it whistles on the way down, until it lands
+          const cp = { ...sh };
+          let n = 0;
+          while (n < 1500 && !down(cp)) { fly(cp); n++; }
+          sh.whistle = hear("whistle", sh.x, { dur: n * DT }) || true;
+        }
         if (Math.round(duel.shell.age / DT) % 3 === 0) P.trail.push([duel.shell.x, duel.shell.y]);
         const d = down(duel.shell);
         if (d) boom(d);
@@ -419,7 +436,7 @@ function outsideView(cv, app) {
       else { duel = null; land = hills(false); wind = 0.3; }
       if (!last) requestAnimationFrame(frame);
     },
-    close() { duel = null; at = null; },
+    close() { const w = duel && duel.shell && duel.shell.whistle; if (w && w.stop) w.stop(); duel = null; at = null; },
     // the duel at the window for the room: the bot you play (or the two you watch), when each last fired
     playing: () => duel && duel.phase !== "left" ? { id: duel.p[1].id, ids: duel.watch ? [duel.p[0].id, duel.p[1].id] : null, watch: duel.watch, at, fired: duel.fired.slice() } : null,
     left(id) {                               // a bot that gets work walks off; the duel is over

@@ -18,8 +18,8 @@ machine but Claude Code.
 **The room is the interface.** Every state is something in the room, every action something you do in it.
 No notifications, badges or counters: a session that needs you raises its hand, you delete one by carrying
 its robot into a booth, and your usage limits are the coffee pot and the water bottle. Even sound is a thing
-in the room: a radio. Put one down and you hear the office (keys, a hand going up, a message beamed, the
-fire); click it for silence.
+in the room: a radio. Put one down and you hear what happens (a hand going up, a message beamed, a session
+coming in, a robot leaving through the booth), never a background; click it for silence.
 
 **The terminal is Claude Code's own.** Nothing of it is re-implemented, so whatever Claude Code can do, you
 can do here.
