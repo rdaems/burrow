@@ -118,9 +118,9 @@ button, input, select { font:inherit; color:inherit; }
 .vform.desk .sessions li { padding:3px 0; cursor:pointer; }
 .vform.desk .sessions li:hover b { text-decoration:underline; }
 .vform.desk .sessions small { color:var(--steel3); }
-/* the outside, four pixels a dot, a little wider than the other panels; the duel's keys under it */
-#view[data-kind="outside"] { width:min(688px, calc(100% - 48px)); }
-.outside { display:block; width:644px; max-width:100%; aspect-ratio:160/96; border:2px solid var(--ink); image-rendering:pixelated; }
+/* the outside, as big as the pane lets it be (four pixels a dot at most), the duel's line over it, its keys under it */
+#view[data-kind="outside"] { width:min(1068px, calc(100% - 48px)); }
+.outside { display:block; margin:0 auto; width:min(100%, calc((100vh - 210px) * 16 / 9)); aspect-ratio:256/144; border:2px solid var(--ink); image-rendering:pixelated; }
 #vOutside .duel { display:grid; grid-template-columns:1fr auto 1fr; gap:12px; margin:0 0 8px; color:var(--steel3); white-space:nowrap; }
 #vOutside .duel .pl { overflow:hidden; text-overflow:ellipsis; min-width:0; }
 #vOutside .duel .r { text-align:right; }

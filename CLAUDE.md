@@ -1809,14 +1809,22 @@ it was called vgabomb on our old DOS pc". VGABomb (1989, Turbo Basic, VGA): two 
 of a mountain under a night sky, angle and speed, a wind, as QBasic's Gorillas. Built in that genre on the window's
 own landscape, not a copy of VGABomb.
 - **web/outside.js** (`outsideView(canvas, app)`): the outside moved out of index.html (sky by the hour, sun or moon,
-  stars, clouds, the other machines as cottages, fireflies), now 160 x 96 dots at four pixels a dot (644 px, the view
-  688 px wide for it). The hills are a heightmap (`land.g`, the top per column) at two levels with a mountain between;
-  the cottages and pines stand in the meadow in front (`M` 78, `BASE` 89) and are never hit.
+  stars, clouds). The hills are a heightmap (`land.g`, the top per column) at two levels with a mountain between.
+- Then he: "Remove the houses. Make it bigger, a little bit higher resolution, it's hard to see now." The cottages (the
+  other machines) and the meadow are gone. The outside is 256 x 144 dots, as wide as the pane allows up to four pixels
+  a dot (`width:min(100%, (100vh - 210px) * 16/9)`, the view up to 1068 px; 670 px in a 1280 window, 1024 in a 1728
+  one; not a whole number of pixels a dot, which is fine on a retina screen). Everything that moves has an ink
+  outline (`inked`, `grid`, `beam`): the guns (a spoked wheel, a trail, a barrel with a lit top), the gunners (7 x 13),
+  the pennants, the pines, the shell. The sky's bands are dithered where they meet, the hills have dithered strata,
+  hazy hills behind, puffy clouds with a shaded underside, a crescent moon; sky and land are painted into canvases
+  of their own when they change (`paintSky`, `paintLand`). Pines stand on the hills and go up in a blast. The
+  physics is the first version's scaled by `S` (W / 160), so the feel and the bot's aim are the same. The pads
+  slope into the hill round them (no cliffs).
 - **The duel**: two guns on level pads, a gunner each (you as your portrait wears it, `room.wears(seed)`; a bot a
   robot in its project colour), a pennant each. ↑ ↓ the angle, ← → the power (a step a press, faster while held), space
-  or Enter fires. Shells step at 1/120 s (`fly`, `down`): gravity 60, power × 1.1 dots/s, the wind pushes up to 9
-  dots/s²; a round's wind is shown by the clouds, the chimney smoke and the pennants, never a number. A shell that
-  comes down makes a crater (earth on top where it hit), within 5 dots of a gun (or on it) it wrecks it: the gunner is
+  or Enter fires. Shells step at 1/120 s (`fly`, `down`): gravity 60 S, power × 1.1 S dots/s, the wind pushes up to
+  9 S dots/s²; a round's wind is shown by the clouds, the smoke and the pennants, never a number. A shell that
+  comes down makes a crater (earth on top where it hit), within 8 dots of a gun (or on it) it wrecks it: the gunner is
   thrown on its back, the winner hops, the score goes up, and after 3.6 s a new land and wind, the loser to start.
   Each player's last shot stays as a dotted line in its colour until its next. The names, the score and the angle and
   power of whose turn it is are a line over the picture in the view's lettering (the 3x5 lettering at four pixels a

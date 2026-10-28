@@ -1,49 +1,82 @@
 // burrow: the window's view. Outside, by this computer's clock: the sky by the hour, the sun or the moon on
-// their arc, stars after dark, clouds going with the wind; in the meadow in front the other machines (each a
-// door in the room) as cottages in their door's paint: lit and smoking while their bots work, one lamp while
-// they idle, dark with none, boarded up while out of reach; fireflies at night.
+// their arc, stars after dark, clouds going with the wind, hills in the haze behind.
 //
 // And it is a game: on the hills two guns, an artillery duel in the manner of the old DOS games (VGABomb,
 // Gorillas): you against an idle bot drawn by lot, or two bots' duel to watch. Angle and power, a wind that
-// changes each round (the clouds, the smoke and the pennants go with it), craters where the shells come down;
-// a gun hit is the round. A bot knows the physics and aims less well its first shots of a round.
+// changes each round (the clouds, the smoke and the pennants go with it), craters where the shells come down,
+// pines blown away; a gun hit is the round. A bot knows the physics and aims less well its first shots of a round.
 //
-// outsideView(canvas, app), app = { state(), room, shown(), wears(seed) }; returns
-// { open(a, b, at), close(), playing(), left(id) }. a and b are { id, name, color, human, seed }; with b null
-// it is only the outside. Everything is in dots, the canvas's pixels (the page shows four pixels a dot).
+// outsideView(canvas, app), app = { shown(), wears(seed) }; returns { open(a, b, at), close(), playing(), left(id) }.
+// a and b are { id, name, color, human, seed }; with b null it is only the outside. Everything is in dots, the
+// canvas's pixels (the page scales it to the pane); S is a dot of the first, coarser version, kept for the physics.
 function outsideView(cv, app) {
-  const W = cv.width, H = cv.height, c = cv.getContext("2d"), C = pixelAvatar.C;
-  const M = 78, BASE = 89;                   // the meadow's top (the hills come down to it); the cottages' ground
-  const G = 60, VK = 1.1, PUSH = 9, DT = 1 / 120, BOOM = 5;   // gravity (dots/s²), dots/s a power point, the wind's push at full strength, a step, a shell's reach
+  const W = cv.width, H = cv.height, c = cv.getContext("2d"), C = pixelAvatar.C, S = W / 160;
+  const G = 60 * S, VK = 1.1 * S, PUSH = 9 * S, DT = 1 / 120, BOOM = 8;   // gravity (dots/s²), dots/s a power point, the wind's push at full strength, a step, a shell's reach
   const rnd = (a, b) => a + Math.random() * (b - a);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const gauss = () => Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random());
   const hash = (s) => { let h = 2166136261; for (const ch of String(s)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return (h >>> 0) / 4294967296; };
   const mixc = (a, b, k) => "#" + [1, 3, 5].map((i) => { const x = parseInt(a.slice(i, i + 2), 16), y = parseInt(b.slice(i, i + 2), 16); return Math.round(x + (y - x) * k).toString(16).padStart(2, "0"); }).join("");
   const r = (x, y, w, h, col) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
-  const disc = (x, y, rad, col) => { x = Math.round(x); y = Math.round(y); for (let j = -Math.floor(rad); j <= rad; j++) { const h = Math.floor(Math.sqrt(rad * rad - j * j)); r(x - h, y + j, 2 * h + 1, 1, col); } };
+  const disc = (x, y, rad, col, g = c) => { x = Math.round(x); y = Math.round(y); g.fillStyle = col; for (let j = -Math.floor(rad); j <= rad; j++) { const h = Math.floor(Math.sqrt(rad * rad - j * j)); g.fillRect(x - h, y + j, 2 * h + 1, 1); } };
+  // dots with an ink outline round them: [x, y, colour] each; the outline first, so it never covers a dot
+  function inked(pts, g = c) {
+    g.fillStyle = C.ink;
+    for (const [x, y] of pts) { g.fillRect(x - 1, y, 3, 1); g.fillRect(x, y - 1, 1, 3); }
+    for (const [x, y, col] of pts) { g.fillStyle = col; g.fillRect(x, y, 1, 1); }
+  }
+  // a letter grid at x0, y0: flip mirrors it, turn lays it on its back (its head where its top-left was)
+  function grid(rows, pal, x0, y0, flip, turn, out = []) {
+    const h = rows.length, w = rows[0].length;
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+      const ch = rows[j][i];
+      if (ch === "." || !pal[ch]) continue;
+      out.push(turn ? [x0 + (flip ? h - 1 - j : j), y0 + w - 1 - i, pal[ch]] : [x0 + (flip ? w - 1 - i : i), y0 + j, pal[ch]]);
+    }
+    return out;
+  }
+  // a thick line from (x0, y0) to (x1, y1), th dots across, with a lighter row along its top
+  function beam(x0, y0, x1, y1, th, col, hi, out = []) {
+    const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) * 2), seen = new Set();
+    for (let k = 0; k <= n; k++) {
+      const x = x0 + (x1 - x0) * k / n, y = y0 + (y1 - y0) * k / n;
+      for (let j = 0; j < th; j++) for (let i = 0; i < th; i++) {
+        const px = Math.round(x - th / 2 + i + 0.5), py = Math.round(y - th / 2 + j + 0.5), key = px + "," + py;
+        if (!seen.has(key)) { seen.add(key); out.push([px, py, j === 0 && hi ? hi : col]); }
+      }
+    }
+    return out;
+  }
 
   let land = hills(false), wind = 0.3, duel = null, at = null, last = 0, acc = 0, T = 0;
-  const clouds = [0, 1, 2].map((i) => ({ x: i * 57 + 10, y: 8 + i * 11, k: 0.8 + 0.2 * i }));
+  const clouds = [0, 1, 2, 3].map((i) => ({ x: i * 71 + 20, y: 12 + (i % 3) * 15, k: 0.7 + 0.15 * i, s: i % 2 }));
   const held = {};                           // the arrow keys held down: since when, and what of a step is owed
 
-  // ---- the land: rolling hills at two levels, a mountain between them (a gentle rise without a duel)
+  // ---- the land: rolling hills at two levels, a mountain between them (a gentle rise without a duel), the far
+  // hills in the haze behind, a few pines
   function hills(mountain) {
-    const g = new Float32Array(W), a = rnd(0, 7), b = rnd(0, 7), l = rnd(-7, 7), rt = rnd(-7, 7);
-    const xm = rnd(66, 94), hm = mountain ? rnd(16, 32) : rnd(4, 9), wm = rnd(14, 24);
+    const g = new Float32Array(W), far = new Float32Array(W), a = rnd(0, 7), b = rnd(0, 7), l = rnd(-11, 11), rt = rnd(-11, 11);
+    const xm = rnd(0.41, 0.59) * W, hm = mountain ? rnd(32, 58) : rnd(6, 14), wm = rnd(22, 38), fa = rnd(0, 7), fb = rnd(0, 7);
     for (let x = 0; x < W; x++) {
-      const u = x / (W - 1), lvl = 62 + l + (rt - l) * u * u * (3 - 2 * u);
-      g[x] = clamp(lvl + 3 * Math.sin(x / 11 + a) + 2 * Math.sin(x / 5.3 + b) - hm * Math.exp(-(((x - xm) / wm) ** 2)), 22, M - 2);
+      const u = x / (W - 1), lvl = 0.7 * H + l + (rt - l) * u * u * (3 - 2 * u);
+      g[x] = clamp(lvl + 5 * Math.sin(x / 17 + a) + 3 * Math.sin(x / 8.5 + b) - hm * Math.exp(-(((x - xm) / wm) ** 2)), 0.24 * H, H - 4);
+      far[x] = 0.58 * H + 9 * Math.sin(x / 29 + fa) + 5 * Math.sin(x / 11 + fb);
     }
-    return { g, scar: new Uint8Array(W) };
+    const pines = [];
+    for (let k = 0; k < 40 && pines.length < 6; k++) {
+      const x = Math.round(rnd(4, W - 5));
+      if (!pines.some((p) => Math.abs(p.x - x) < 14)) pines.push({ x, h: Math.round(rnd(13, 20)) });
+    }
+    return { g, far, pines, scar: new Uint8Array(W), v: Math.random() };
   }
   const ground = (x) => land.g[clamp(Math.round(x), 0, W - 1)];
   function crater(x, y, rad) {
     for (let i = Math.ceil(x - rad); i <= x + rad; i++) {
       if (i < 0 || i >= W) continue;
       const low = y + Math.sqrt(Math.max(0, rad * rad - (i - x) ** 2));
-      if (land.g[i] < low) { land.g[i] = Math.min(M - 1, low); land.scar[i] = 1; }
+      if (land.g[i] < low) { land.g[i] = Math.min(H - 2, low); land.scar[i] = 1; }
     }
+    land.v = Math.random();
   }
 
   // ---- a duel: two guns, a turn each, the round to whoever hits the other's gun
@@ -53,26 +86,33 @@ function outsideView(cv, app) {
     const s = Math.random() < 0.5 ? -1 : 1;
     wind = s * Math.pow(Math.random(), 1.4);
     for (const P of duel.p) {
-      P.x = P.f > 0 ? Math.round(rnd(14, 32)) : W - 1 - Math.round(rnd(14, 32));
-      const span = [P.x - 9 * P.f, P.x + 3 * P.f].sort((a, b) => a - b), h = Math.round(land.g.slice(span[0], span[1] + 1).reduce((a, b) => a + b, 0) / (span[1] - span[0] + 1));
-      for (let x = span[0]; x <= span[1]; x++) land.g[x] = h;   // a level pad for the gun, its gunner and its pennant
+      P.x = P.f > 0 ? Math.round(rnd(24, 50)) : W - 1 - Math.round(rnd(24, 50));
+      const span = [P.x - 23 * P.f, P.x + 7 * P.f].sort((a, b) => a - b), h = Math.round(land.g.slice(span[0], span[1] + 1).reduce((a, b) => a + b, 0) / (span[1] - span[0] + 1));
+      for (let x = span[0]; x <= span[1]; x++) land.g[x] = h;   // a level pad for the gun, its gunner and its pennant,
+      for (let d = 1; d <= 14; d++) for (const x of [span[0] - d, span[1] + d]) {   // sloping into the hill round it
+        if (x < 0 || x >= W) continue;
+        const k = d / 15, s = k * k * (3 - 2 * k);
+        land.g[x] = h + (land.g[x] - h) * s;
+      }
+      land.pines = land.pines.filter((p) => p.x < span[0] - 5 || p.x > span[1] + 5);
       Object.assign(P, { shots: 0, kick: 0, flash: 0, dead: false, body: null, trail: [], plan: null });
     }
     Object.assign(duel, { turn: starter, phase: "aim", t: 0, shell: null, booms: [], bits: [] });
   }
-  // a shell from P's muzzle: angle a in degrees over the ground toward the other side, power p
+  // the gun's pivot, and its muzzle at angle a in degrees over the ground toward the other side
+  const pivot = (P) => [P.x, ground(P.x) - 6];
   function launch(P, a, p) {
-    const rad = a * Math.PI / 180, dx = P.f * Math.cos(rad), dy = -Math.sin(rad), y0 = ground(P.x) - 3;
-    return { x: P.x + dx * 6, y: y0 + dy * 6, vx: dx * p * VK, vy: dy * p * VK, by: P.side, age: 0 };
+    const rad = a * Math.PI / 180, dx = P.f * Math.cos(rad), dy = -Math.sin(rad), [x0, y0] = pivot(P);
+    return { x: x0 + dx * 11, y: y0 + dy * 11, vx: dx * p * VK, vy: dy * p * VK, by: P.side, age: 0 };
   }
   function fly(s) { s.vx += wind * PUSH * DT; s.vy += G * DT; s.x += s.vx * DT; s.y += s.vy * DT; s.age += DT; }
   // where it comes down: { x, y, gun } (gun: the side whose gun it hits), { out } off the side; null in the air
   function down(s) {
-    if (s.x < -4 || s.x > W + 3 || s.y > H + 4) return { out: true };
+    if (s.x < -6 || s.x > W + 5 || s.y > H + 6) return { out: true };
     for (const Q of duel.p) {
       if (Q.dead || (Q.side === s.by && s.age < 0.25)) continue;
       const gy = ground(Q.x);
-      if (Math.abs(s.x - Q.x) < 2.5 && s.y > gy - 5 && s.y < gy + 1) return { x: s.x, y: s.y, gun: Q.side };
+      if (Math.abs(s.x - Q.x) < 5 && s.y > gy - 9 && s.y < gy + 1) return { x: s.x, y: s.y, gun: Q.side };
     }
     if (s.x >= 0 && s.x < W && s.y >= ground(s.x)) return { x: s.x, y: ground(s.x) };
     return null;
@@ -81,8 +121,8 @@ function outsideView(cv, app) {
   // a bot's aim: for every angle the power that comes closest, then its own way of shooting (an angle it
   // likes, seeded by its id), then the hand: far off the first shot of a round, closer with every shot
   function plan(P) {
-    const Q = duel.p[1 - P.side], tx = Q.x, ty = ground(Q.x) - 2;
-    const miss = (d) => (d.out ? 1e9 : d.gun === Q.side ? 0 : Math.hypot(d.x - tx, d.y - ty) + (d.gun === P.side ? 80 : 0));
+    const Q = duel.p[1 - P.side], tx = Q.x, ty = ground(Q.x) - 4;
+    const miss = (d) => (d.out ? 1e9 : d.gun === Q.side ? 0 : Math.hypot(d.x - tx, d.y - ty) + (d.gun === P.side ? 120 : 0));
     const best = [];
     for (let a = 20; a <= 80; a += 4) {
       let b = null;
@@ -90,7 +130,7 @@ function outsideView(cv, app) {
       for (let p = b.p - 1.5; p <= b.p + 1.5; p += 0.25) { const d = miss(sim(P, a, p)); if (d < b.d) b = { a, p, d }; }
       best.push(b);
     }
-    const likes = 30 + 40 * hash(P.id + "a"), ok = best.filter((b) => b.d < 3);
+    const likes = 30 + 40 * hash(P.id + "a"), ok = best.filter((b) => b.d < 5);
     const b = (ok.length ? ok : best).reduce((x, y) => (ok.length ? (Math.abs(y.a - likes) < Math.abs(x.a - likes) ? y : x) : y.d < x.d ? y : x));
     const k = P.shots, sp = (9 * Math.pow(0.55, k) + 0.5) * P.skill, sa = 2 * Math.pow(0.6, k) * P.skill;
     return { a: clamp(Math.round(b.a + gauss() * sa), 5, 85), p: clamp(Math.round(b.p + gauss() * sp), 5, 100), wait: rnd(0.6, 1.3) };
@@ -104,13 +144,20 @@ function outsideView(cv, app) {
     const s = duel.shell, P = duel.p[s.by];
     duel.shell = null; duel.phase = "boom"; duel.t = 0.9;
     if (d.out) return;
-    const hit = duel.p.filter((Q) => !Q.dead && (d.gun === Q.side || Math.hypot(d.x - Q.x, d.y - (ground(Q.x) - 2)) <= BOOM));
-    duel.booms.push({ x: d.x, y: d.y, t: 0, R: hit.length ? 8 : 5 });
-    for (let k = 0; k < (hit.length ? 26 : 14); k++) {
-      const a = rnd(Math.PI * 1.05, Math.PI * 1.95), v = rnd(18, 46);
-      duel.bits.push({ x: d.x, y: d.y - 1, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t: 0, col: k % 3 ? (land.scar[Math.round(d.x)] ? "#6b4a2b" : "#4a7a3e") : "#3f3740" });
+    const hit = duel.p.filter((Q) => !Q.dead && (d.gun === Q.side || Math.hypot(d.x - Q.x, d.y - (ground(Q.x) - 4)) <= BOOM));
+    duel.booms.push({ x: d.x, y: d.y, t: 0, R: hit.length ? 13 : 8 });
+    const xi = clamp(Math.round(d.x), 0, W - 1), soil = land.scar[xi] ? ["#8a6239", "#6b4a2b"] : ["#6aa84f", "#6b4a2b"];
+    for (let k = 0; k < (hit.length ? 40 : 22); k++) {
+      const a = rnd(Math.PI * 1.05, Math.PI * 1.95), v = rnd(26, 70);
+      duel.bits.push({ x: d.x, y: d.y - 1, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t: 0, col: k % 4 === 0 ? "#3f3740" : soil[k % 2] });
     }
-    for (const Q of hit) { Q.dead = true; Q.body = { x: Q.x - 5 * Q.f, y: ground(Q.x) - 1, vx: -Q.f * rnd(14, 24), vy: -rnd(30, 42), down: false }; }
+    // pines nearby go up in the blast
+    for (const p of land.pines.filter((p) => Math.abs(p.x - d.x) < BOOM + 2 && Math.abs(ground(p.x) - d.y) < BOOM + 4)) {
+      for (let k = 0; k < 10; k++) duel.bits.push({ x: p.x, y: ground(p.x) - rnd(2, p.h), vx: rnd(-30, 30), vy: -rnd(20, 50), t: 0, col: k % 3 ? "#1f4a2e" : "#5a3a22" });
+      p.gone = true;
+    }
+    land.pines = land.pines.filter((p) => !p.gone);
+    for (const Q of hit) { Q.dead = true; Q.body = { x: Q.x - 15 * Q.f, y: ground(Q.x) - 1, vx: -Q.f * rnd(22, 38), vy: -rnd(48, 66), down: false }; }
     crater(d.x, d.y, BOOM);
     if (hit.length) {
       const win = hit.length === 2 ? null : 1 - hit[0].side;
@@ -122,18 +169,18 @@ function outsideView(cv, app) {
   // ---- the time going by: a step of the duel, then the clouds and the bits in the air
   function update(dt) {
     T += dt;
-    for (const cl of clouds) { cl.x += wind * 8 * cl.k * dt; if (cl.x > W + 20) cl.x -= W + 40; if (cl.x < -20) cl.x += W + 40; }
+    for (const cl of clouds) { cl.x += wind * 13 * cl.k * dt; if (cl.x > W + 30) cl.x -= W + 60; if (cl.x < -30) cl.x += W + 60; }
     if (!duel) return;
     for (const P of duel.p) {
       P.kick = Math.max(0, P.kick - dt * 5); P.flash = Math.max(0, P.flash - dt);
       const b = P.body;
-      if (b && !b.down) { b.vy += G * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.x = clamp(b.x, 2, W - 3); if (b.vy > 0 && b.y >= ground(b.x) - 1) { b.y = ground(b.x) - 1; b.down = true; } }
-      if (P.leaving) P.walk = (P.walk || 0) + dt * 14;
+      if (b && !b.down) { b.vy += G * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.x = clamp(b.x, 7, W - 8); if (b.vy > 0 && b.y >= ground(b.x) - 1) { b.y = ground(b.x) - 1; b.down = true; } }
+      if (P.leaving) P.walk = (P.walk || 0) + dt * 22;
     }
     for (const bm of duel.booms) bm.t += dt;
     duel.booms = duel.booms.filter((bm) => bm.t < 1.8);
     for (const b of duel.bits) { b.t += dt; b.vy += G * dt; b.x += b.vx * dt; b.y += b.vy * dt; }
-    duel.bits = duel.bits.filter((b) => b.t < 2 && b.x > -2 && b.x < W + 2 && b.y < ground(b.x));
+    duel.bits = duel.bits.filter((b) => b.t < 2.5 && b.x > -2 && b.x < W + 2 && b.y < ground(b.x));
     if (duel.shell) {
       acc += dt;
       while (duel.shell && acc >= DT) {
@@ -194,46 +241,94 @@ function outsideView(cv, app) {
   // ---- the picture
   const SKY = [[0, "#0d1430"], [5, "#141d3f"], [6.5, "#d9775a"], [8, "#7fb2e0"], [17, "#7fb2e0"], [19, "#e07a4a"], [20.5, "#2a2550"], [22, "#0d1430"], [24, "#0d1430"]];
   function skyAt(h) { for (let i = 1; i < SKY.length; i++) if (h <= SKY[i][0]) { const [h0, c0] = SKY[i - 1], [h1, c1] = SKY[i]; return mixc(c0, c1, (h - h0) / (h1 - h0)); } return SKY[0][1]; }
-  const STARS = [...Array(64)].map((_, i) => [(i * 37) % W, (i * 53) % 62, i % 3]);
-  // the gunners, a letter a dot, facing right: you as the portrait wears it, a bot a robot with its colour on
-  // its antenna and chest
-  const PERSON = [".hh.", "hss.", ".cc.", "cccs", ".cd.", ".ll.", ".l.l"];
-  const ROBOT = ["..a.", "..m.", ".mm.", ".me.", "mmmm", "mkmd", ".mm.", ".m.m"];
-  function figure(P, x, y, lying, hop) {     // x: its middle, y: the ground under it
-    const w = app.wears && P.human ? app.wears(P.seed) : null;
-    const pal = P.human ? { h: (w && w.hair) || C.ink2, s: (w && w.skin) || "#f7c59a", c: (w && w.shirt) || P.color, d: (w && w.shade) || P.color, l: C.ink2 }
-      : { a: P.color, m: C.steel2, e: C.steel4, k: P.color, d: C.steel1 };
-    const rows = P.human ? PERSON : ROBOT, h = rows.length, x0 = Math.round(x), y0 = Math.round(y) - hop;
-    for (let j = 0; j < h; j++) for (let i = 0; i < 4; i++) {
-      const ch = rows[j][i];
-      if (ch === ".") continue;
-      if (!lying) r(x0 - 2 + (P.f > 0 ? i : 3 - i), y0 - h + j, 1, 1, pal[ch]);   // facing its gun
-      else r(x0 - (h >> 1) + (P.f > 0 ? j : h - 1 - j), y0 - 1 - i, 1, 1, pal[ch]);   // on its back, the head away from its gun
+  const STARS = [...Array(110)].map((_, i) => [(i * 37 + (i >> 3) * 11) % W, (i * 53) % Math.round(H * 0.62), i % 4]);
+  // the sky and the land are drawn into canvases of their own, again only when they change
+  const skyCv = document.createElement("canvas"), landCv = document.createElement("canvas");
+  skyCv.width = landCv.width = W; skyCv.height = landCv.height = H;
+  let skyWas = "", landWas = "";
+  function paintSky(sky, dark) {
+    if (skyWas === sky) return;
+    skyWas = sky;
+    const g = skyCv.getContext("2d"), n = 7, bh = Math.ceil(H * 0.8 / n);
+    const band = (b) => mixc(sky, "#ffffff", Math.min(b, n - 1) * (0.028 * (1 - dark) + 0.01));   // lighter toward the horizon
+    for (let b = 0; b <= n; b++) { g.fillStyle = band(b); g.fillRect(0, b * bh, W, b === n ? H : bh); }
+    for (let b = 1; b <= n; b++) for (let x = 0; x < W; x++) {   // dithered where two bands meet, as a 16-bit sky would be
+      const y = b * bh;
+      g.fillStyle = band(b - 1);
+      if (x % 2 === 0) g.fillRect(x, y, 1, 1);
+      if (x % 4 === 1) g.fillRect(x, y + 1, 1, 1);
     }
   }
+  const PINE = (h) => {                      // a pine h dots high: three tiers on a trunk, lit from the left
+    const rows = [];
+    for (let k = 0; k < h - 2; k++) { const t = Math.floor(k / ((h - 2) / 3)), q = k - t * ((h - 2) / 3), half = Math.min(4, Math.floor(1 + t + q * 0.55)); rows.push(".".repeat(5 - half) + "l" + "d".repeat(2 * half - 1) + ".".repeat(5 - half)); }
+    rows.push(".....t....", ".....t....");
+    return rows;
+  };
+  function paintLand(sky, dark) {
+    const key = land.v + ":" + skyWas + ":" + land.pines.length;
+    if (landWas === key) return;
+    landWas = key;
+    const g = landCv.getContext("2d");
+    g.clearRect(0, 0, W, H);
+    const p = (x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
+    const haze = mixc(mixc("#3d6b55", sky, 0.5), "#0c1418", dark * 0.55), haze2 = mixc(haze, "#ffffff", 0.12 * (1 - dark));
+    for (let x = 0; x < W; x++) { const t = Math.round(land.far[x]); p(x, t, 1, H - t, haze); p(x, t, 1, 1, haze2); }
+    // the hills: grass along the top (earth where a shell came down), darker strata further in, dithered between
+    const bands = ["#2f5a3c", "#2b4a3a", "#24402f", "#1d3328", "#182b22"].map((b) => mixc(b, "#0c1418", dark * 0.8));
+    const grass = [mixc("#7cc05a", "#1a2a1e", dark), mixc("#4a7a3e", "#122019", dark)], earth = [mixc("#a77a4a", "#1a1410", dark), mixc("#6b4a2b", "#140f0c", dark)];
+    for (let x = 0; x < W; x++) {
+      const top = Math.round(land.g[x]), soil = land.scar[x] ? earth : grass;
+      for (let b = 0; ; b++) {
+        const y0 = top + 3 + b * 10;
+        if (y0 >= H) break;
+        p(x, y0, 1, Math.min(10, H - y0), bands[Math.min(b, bands.length - 1)]);
+        if (b > 0 && b < bands.length) { if ((x + y0) % 2) p(x, y0, 1, 1, bands[b - 1]); if ((x + y0) % 4 === 1) p(x, y0 + 1, 1, 1, bands[b - 1]); }
+      }
+      p(x, top, 1, 1, soil[0]); p(x, top + 1, 1, 2, soil[1]);
+      if (!land.scar[x] && (x * 7 + top) % 6 === 0) p(x, top - 1, 1, 1, soil[1]);   // tufts
+    }
+    const pine = { l: mixc("#3f8a52", "#0c1a12", dark), d: mixc("#1f4a2e", "#08110c", dark), t: mixc("#5a3a22", "#140f0c", dark) };
+    for (const pn of land.pines) { const rows = PINE(pn.h); inked(grid(rows, pine, pn.x - 4, Math.round(ground(pn.x)) - rows.length), g); }
+  }
+  // the gunners, facing right: you as the portrait wears it, a bot a robot with its colour on its antenna and chest
+  const PERSON = ["..hhh..", ".hhhhh.", ".hhsks.", ".hssss.", "..sss..", ".ccccc.", "cccccss", "ccdcc..", ".cdcc..", ".cccc..", ".ll.l..", ".ll.l..", ".bb.bb."];
+  const ROBOT = ["....a..", "....n..", ".mmmmm.", ".mmmee.", ".mmmmm.", "..nnn..", ".mmmmm.", "mmkkmmh", ".mkkmn.", ".mmmmn.", "..n.n..", "..n.n..", ".mm.mm."];
+  function gunner(P, x, y, lying, hop) {     // x: its middle, y: the ground under it
+    const w = app.wears && P.human ? app.wears(P.seed) : null;
+    const pal = P.human ? { h: (w && w.hair) || C.ink2, s: (w && w.skin) || "#f7c59a", k: C.ink, c: (w && w.shirt) || P.color, d: (w && w.shade) || P.color, l: C.ink2, b: C.ink }
+      : { a: P.color, n: C.steel1, m: C.steel2, e: C.steel4, k: P.color, h: C.steel3 };
+    const rows = P.human ? PERSON : ROBOT, h = rows.length, wd = rows[0].length, flip = P.f < 0;
+    const x0 = Math.round(x) - (lying ? h >> 1 : wd >> 1), y0 = Math.round(y) - (lying ? wd : h) - hop;
+    inked(grid(rows, pal, x0, y0, flip, lying));
+  }
+  const WHEEL = ["..rrr..", ".rbsbr.", "rbbsbbr", "rssxssr", "rbbsbbr", ".rbsbr.", "..rrr.."];
   function drawGun(P) {
-    const gy = Math.round(ground(P.x)), f = P.f, x = P.x - Math.round(f * P.kick * 1.5);
+    const gy = Math.round(ground(P.x)), f = P.f, x = P.x - Math.round(f * P.kick * 2), [, py] = pivot(P);
     if (P.dead) {                            // the wreck, smoking
-      r(x - 3, gy - 1, 7, 1, "#2a2420"); r(x - 1, gy - 2, 4, 1, "#3f3740"); r(x + 2 * f, gy - 3, 1, 1, "#5a3a22");
-      for (let k = 0; k < 4; k++) { const ph = (T * 0.35 + k / 4) % 1; c.globalAlpha = 0.6 * (1 - ph); r(Math.round(x + ph * wind * 8 + Math.sin(ph * 6 + k)), Math.round(gy - 3 - ph * 16), 2, 2, "#5d6280"); c.globalAlpha = 1; }
+      inked([...beam(x - 6, gy - 2, x + 5, gy - 2, 2, "#2a2420"), ...grid(WHEEL, { r: "#2a2420", b: "#3f3740", s: "#3f3740", x: "#5d6280" }, x + 3 * f - 3, gy - 6)]);
+      for (let k = 0; k < 5; k++) { const ph = (T * 0.35 + k / 5) % 1; c.globalAlpha = 0.6 * (1 - ph); disc(x + ph * wind * 14 + Math.sin(ph * 6 + k) * 2, gy - 6 - ph * 26, 1.5 + ph * 2.5, "#5d6280"); c.globalAlpha = 1; }
       return;
     }
-    r(x - 4 * f, gy - 1, 1, 1, "#5a3a22"); r(x - 3 * f, gy - 2, 1, 1, "#5a3a22"); r(x - 2 * f, gy - 2, 1, 1, "#5a3a22");   // the trail
-    const rad = P.ang * Math.PI / 180, dx = f * Math.cos(rad), dy = -Math.sin(rad), px = f * Math.sin(rad), py = Math.cos(rad);
-    for (let s = 0; s <= 6; s += 0.5) {      // the barrel, thicker at the breech
-      const bx = Math.round(x + dx * s), by = Math.round(gy - 3 + dy * s);
-      r(bx, by, 1, 1, s > 5 ? C.ink2 : "#3f3740");
-      if (s < 4) r(Math.round(x + dx * s + px), Math.round(gy - 3 + dy * s + py), 1, 1, "#2a2530");
-    }
-    r(x - 1, gy - 3, 3, 3, "#5a3a22"); r(x, gy - 2, 1, 1, C.steel3);   // the wheel and its hub
-    if (P.flash > 0) { const mx = Math.round(x + dx * 7.5), my = Math.round(gy - 3 + dy * 7.5); r(mx - 1, my, 3, 1, C.gold2); r(mx, my - 1, 1, 3, C.gold2); r(mx, my, 1, 1, C.white); }
+    const rad = P.ang * Math.PI / 180, dx = f * Math.cos(rad), dy = -Math.sin(rad);
+    const pts = [
+      ...beam(x, py + 2, x - 12 * f, gy - 1, 2, "#734728", "#885c47"),                                   // the trail
+      ...beam(x - dx * 2, py - dy * 2, x + dx * 9, py + dy * 9, 3, "#3f3740", "#6b6470"),              // the barrel
+      ...beam(x + dx * 9, py + dy * 9, x + dx * 11, py + dy * 11, 2, C.ink2),                          // its muzzle
+      ...grid(WHEEL, { r: "#4a2e1c", b: "#885c47", s: "#b07a4a", x: C.steel3 }, x - 3, gy - 7),         // the wheel
+    ];
+    inked(pts);
+    if (P.flash > 0) { const mx = Math.round(x + dx * 13), my = Math.round(py + dy * 13); disc(mx, my, 3, C.gold1); disc(mx, my, 1.6, C.gold2); r(mx, my, 1, 1, C.white); }
   }
-  function pennant(P, col) {                 // on a pole behind the gunner, streaming with the wind
-    const gy = Math.round(ground(P.x)), x = P.x - 9 * P.f;
-    r(x, gy - 9, 1, 9, C.steel2);
-    const n = Math.abs(wind) < 0.08 ? 0 : 1 + Math.round(Math.abs(wind) * 5), s = Math.sign(wind), wave = Math.floor(T * (3 + Math.abs(wind) * 6)) % 2;
-    if (!n) { r(x + 1, gy - 9, 1, 3, col); return; }
-    for (let k = 0; k < n; k++) { const hh = Math.max(1, 3 - Math.floor((k * 3) / (n + 1))); r(x + s * (k + 1), gy - 9 + (k === n - 1 && wave ? 1 : 0), 1, hh, col); }
+  function pennant(P) {                      // on a pole behind the gunner, streaming with the wind
+    const gy = Math.round(ground(P.x)), x = P.x - 21 * P.f, top = gy - 17, pts = beam(x, top, x, gy - 1, 1, C.steel2);
+    const n = Math.abs(wind) < 0.08 ? 0 : 2 + Math.round(Math.abs(wind) * 8), s = Math.sign(wind), lo = mixc(P.color, "#000000", 0.25);
+    if (!n) for (let j = 0; j < 5; j++) pts.push([x + 1, top + 1 + j, j % 2 ? lo : P.color]);   // calm: it hangs down the pole
+    for (let k = 0; k < n; k++) {
+      const hh = Math.max(1, Math.round(5 * (1 - k / (n + 1)))), wave = Math.round(Math.sin(T * (4 + Math.abs(wind) * 8) - k * 0.9) * (k / n) * 1.4);
+      for (let j = 0; j < hh; j++) pts.push([x + s * (k + 1), top + 1 + j + wave + Math.floor((5 - hh) / 2), j === hh - 1 ? lo : P.color]);
+    }
+    inked(pts);
   }
   // the duel's line over the picture, in the view's lettering: the two, the one whose turn it is in gold with
   // its angle and power, the rounds won between them (rewritten only when it changes)
@@ -253,43 +348,44 @@ function outsideView(cv, app) {
     }
     if (h !== barWas) { barWas = h; bar.innerHTML = h; bar.hidden = !duel; }
   }
+  function cloud(cl, light, shade) {         // puffs on a flat bottom, its underside in shade
+    const x = Math.round(cl.x), y = cl.y, puffs = cl.s ? [[0, 2, 4], [6, -1, 6], [13, 0, 5], [19, 2, 4]] : [[0, 1, 5], [7, -2, 7], [15, 1, 5]];
+    for (const [px, py, pr] of puffs) disc(x + px, y + py + 1, pr, shade);
+    for (const [px, py, pr] of puffs) disc(x + px, y + py, pr - 0.6, light);
+    r(x - 3, y + 4, (cl.s ? 25 : 22), 2, shade);
+  }
   function draw() {
     const now = new Date(), h = now.getHours() + now.getMinutes() / 60, sky = skyAt(h);
     const dark = h < 6 || h > 20.5 ? 1 : h < 8 ? (8 - h) / 2 : h > 18.5 ? (h - 18.5) / 2 : 0;
-    for (let b = 0; b < 5; b++) r(0, b * 16, W, 16, mixc(sky, "#ffffff", (0.03 * b) * (1 - dark) + 0.012 * b));   // the sky, lighter toward the horizon
-    if (dark > 0) for (const [x, y, k] of STARS) if (((Math.floor(T * 2) + k) % 5) || k === 0) r(x, y, 1, 1, dark > 0.5 ? "#f4f6fb" : "#8b93ad");
+    paintSky(sky, dark); c.drawImage(skyCv, 0, 0);
+    if (dark > 0) for (const [x, y, k] of STARS) if (((Math.floor(T * 2) + k) % 6) || k === 0) r(x, y, 1, 1, k === 3 ? "#ffe9a4" : dark > 0.5 ? "#f4f6fb" : "#8b93ad");
     // the sun from 6:30 to 20:30, the moon the rest of the night, on an arc over the hills
     const day = h >= 6.5 && h <= 20.5, p = day ? (h - 6.5) / 14 : ((h + 24 - 20.5) % 24) / 10;
-    const sx = Math.round(12 + p * (W - 24)), sy = Math.round(60 - Math.sin(p * Math.PI) * 50);
-    if (day) { r(sx - 3, sy - 2, 7, 5, "#ffe27a"); r(sx - 2, sy - 3, 5, 7, "#ffe27a"); r(sx - 1, sy - 1, 3, 3, "#fff6c0"); }
-    else { r(sx - 3, sy - 2, 7, 5, "#e8e5ef"); r(sx - 2, sy - 3, 5, 7, "#e8e5ef"); r(sx, sy - 2, 4, 5, sky); }
-    for (const cl of clouds) {               // clouds, going with the wind
-      const cx = Math.round(cl.x) - 15, cy = cl.y, col = mixc("#f4f6fb", sky, 0.25 + dark * 0.6);
-      r(cx, cy + 2, 18, 3, col); r(cx + 3, cy, 8, 2, col); r(cx + 12, cy + 1, 4, 1, col);
+    const sx = Math.round(20 + p * (W - 40)), sy = Math.round(0.62 * H - Math.sin(p * Math.PI) * 0.5 * H);
+    if (day) { c.globalAlpha = 0.25; disc(sx, sy, 10, "#fff6c0"); c.globalAlpha = 1; disc(sx, sy, 6.5, "#ffd34d"); disc(sx, sy, 5.2, "#ffe27a"); disc(sx - 1, sy - 1, 2.5, "#fff6c0"); }
+    else for (let j = -6; j <= 6; j++) for (let i = -6; i <= 6; i++) {   // the moon, a crescent: its disc less the one beside it
+      if (i * i + j * j > 36 || (i - 3) ** 2 + (j + 2) ** 2 <= 30) continue;
+      r(sx + i, sy + j, 1, 1, (i === -4 && j === 1) || (i === -2 && j === -3) ? "#c2c9d9" : "#e8e5ef");
     }
-    // the hills: grass along the top (earth where a shell came down), darker further in
-    const grass = mixc("#4a7a3e", "#142019", dark), turf = mixc("#35603a", "#101a16", dark), earth = mixc("#6b4a2b", "#1a1410", dark);
-    for (let x = 0; x < W; x++) {
-      const top = Math.round(land.g[x]);
-      for (let y = top; y < M; y += 4) r(x, y, 1, Math.min(4, M - y), mixc(mixc("#2b4a3a", "#1d3328", Math.min(1, (y - top) / 22)), "#0c1418", dark * 0.8));
-      r(x, top, 1, 1, land.scar[x] ? earth : grass);
-      r(x, top + 1, 1, 1, land.scar[x] ? mixc(earth, "#000000", 0.25) : turf);
-    }
+    const light = mixc("#f4f6fb", sky, 0.2 + dark * 0.62), shade = mixc("#c2c9d9", sky, 0.35 + dark * 0.5);
+    for (const cl of clouds) cloud(cl, light, shade);   // going with the wind
+    paintLand(sky, dark); c.drawImage(landCv, 0, 0);
     if (duel) {
-      // the last shot of each, a dotted line in its colour until its next; the shell in the air
-      for (const P of duel.p) { c.globalAlpha = 0.45; for (const [x, y] of P.trail) r(Math.round(x), Math.round(y), 1, 1, P.color); c.globalAlpha = 1; }
+      // the last shot of each, a dotted line in its colour until its next; the guns; the shell in the air
+      for (const P of duel.p) { c.globalAlpha = 0.5; for (const [x, y] of P.trail) r(Math.round(x), Math.round(y), 1, 1, P.color); c.globalAlpha = 1; }
       for (const P of duel.p) {
-        pennant(P, P.color); drawGun(P);
-        const lying = P.body && P.body.down, out = P.leaving && P.walk, bx = P.body ? P.body.x : P.x - 5 * P.f - (out ? P.f * P.walk : 0);
+        pennant(P); drawGun(P);
+        const lying = P.body && P.body.down, out = P.leaving && P.walk, bx = P.body ? P.body.x : P.x - 15 * P.f - (out ? P.f * P.walk : 0);
         const won = duel.phase === "over" && !P.dead ? Math.floor(T * 6) % 2 : 0;
-        if (!(out && (bx < -4 || bx > W + 4))) figure(P, bx, P.body ? P.body.y + 1 : ground(bx), lying, won);
+        if (!(out && (bx < -6 || bx > W + 6))) gunner(P, bx, P.body ? P.body.y + 1 : ground(bx), lying, won);
       }
-      const s = duel.shell;                  // the shell; over the top of the picture, a dot on its edge where it is
-      if (s) r(Math.round(s.x), Math.max(0, Math.round(s.y)), 1, 1, s.y < 0 ? C.gold2 : dark > 0.5 ? C.steel4 : C.ink);
-      for (const b of duel.bits) r(Math.round(b.x), Math.round(b.y), 1, 1, b.col);
-      for (const bm of duel.booms) {         // a flash, a ball of fire, then its smoke rising with the wind
+      const s = duel.shell;                  // over the top of the picture, a mark on its edge where it is
+      if (s && s.y < 0) r(Math.round(s.x) - 1, 0, 3, 1, C.gold2);
+      else if (s) { const x = Math.round(s.x), y = Math.round(s.y); inked([[x, y, C.steel1], [x + 1, y, C.steel0], [x, y + 1, C.steel0], [x + 1, y + 1, C.ink2]]); r(x, y, 1, 1, C.steel4); }
+      for (const b of duel.bits) r(Math.round(b.x), Math.round(b.y), b.t < 0.6 ? 2 : 1, b.t < 0.6 ? 2 : 1, b.col);
+      for (const bm of duel.booms) {         // its smoke rising with the wind, a flash, a ball of fire
         const t = bm.t, R = bm.R;
-        if (t > 0.25) { c.globalAlpha = Math.max(0, 0.7 * (1 - (t - 0.25) / 1.55)); disc(bm.x + wind * 6 * (t - 0.25), bm.y - 2 - (t - 0.25) * 7, R * 0.6 * (1 - (t - 0.25) / 2.5), mixc("#8b93ad", "#3b3a55", dark)); c.globalAlpha = 1; }
+        if (t > 0.25) { c.globalAlpha = Math.max(0, 0.7 * (1 - (t - 0.25) / 1.55)); disc(bm.x + wind * 10 * (t - 0.25), bm.y - 3 - (t - 0.25) * 11, R * 0.6 * (1 - (t - 0.25) / 2.5), mixc("#8b93ad", "#3b3a55", dark)); c.globalAlpha = 1; }
         if (t < 0.5) {
           const k = Math.min(1, t / 0.12), fade = t > 0.3 ? 1 - (t - 0.3) / 0.2 : 1;
           disc(bm.x, bm.y, R * (0.5 + 0.5 * k) * (0.6 + 0.4 * fade), t < 0.08 ? C.white : C.red1);
@@ -297,38 +393,6 @@ function outsideView(cv, app) {
           disc(bm.x, bm.y, R * 0.35 * fade, C.gold2);
         }
       }
-    }
-    // the meadow in front, a few pines, the other machines as cottages
-    r(0, M, W, H - M, mixc("#1f3a2c", "#0c1418", dark)); r(0, M, W, 1, mixc("#2f5a3c", "#101a16", dark));
-    const st = app.state(), others = ((st && st.machines) || []).filter((m) => m.id), span = (W - 24) / Math.max(1, others.length);
-    const homes = others.map((m, i) => Math.round(12 + span * (i + 0.5)));
-    const pine = mixc("#122619", "#060c09", dark);
-    for (const [x, hh] of [[5, 16], [12, 12], [W / 2, 13], [W - 13, 15], [W - 6, 11]]) if (!homes.some((hx) => Math.abs(hx - x) < 13)) for (let k = 0; k < hh; k++) r(x - Math.floor(k / 3), BASE - hh + k, 1 + 2 * Math.floor(k / 3), 1, pine);
-    const warm = "#ffd97a", glow = "rgba(255,217,122,0.35)";
-    others.forEach((m, i) => {
-      const p = app.room.paint(m.id), mine = st.bots.filter((b) => (b.m || "") === m.id);
-      const busy = mine.some((b) => b.busy || b.waiting), lamp = mine.length > 0, cx = homes[i], x = cx - 8, base = BASE;
-      const wall = mixc(p.top, "#0c1418", dark * 0.55), roof = mixc(p.d, "#0c1418", dark * 0.5), line = p.k;
-      r(x + 11, base - 17, 3, 6, line); r(x + 12, base - 17, 1, 5, roof);                                  // the chimney
-      for (let k = 0; k < 6; k++) r(x - 1 + k, base - 10 - k, 18 - 2 * k, 1, k === 5 ? line : roof);     // the roof
-      r(x - 1, base - 10, 18, 1, line);
-      r(x, base - 9, 16, 9, line); r(x + 1, base - 9, 14, 8, wall);                                     // the walls
-      r(x + 6, base - 6, 4, 6, line); r(x + 7, base - 5, 2, 5, mixc(p.d, "#000000", 0.3));              // the door
-      for (const [wx, on] of [[x + 2, busy || lamp], [x + 11, busy]]) {
-        if (on && dark > 0.3) r(wx - 1, base - 8, 4, 4, glow);
-        r(wx, base - 7, 2, 2, on ? warm : mixc("#26303c", "#0c1418", dark));
-      }
-      if (m.error) { r(x + 1, base - 7, 14, 1, "#6b4a2b"); r(x + 5, base - 4, 6, 1, "#6b4a2b"); }       // boarded up
-      if (busy && !m.error) for (let k = 0; k < 6; k++) {                                                 // smoke, rising and going with the wind
-        const ph = (T * 0.3 + k / 6) % 1, s = 2 + Math.round(ph * 3), sx = Math.round(x + 12 + ph * (2 + wind * 8) + Math.sin(ph * 5 + k) * 1.5) - (s >> 1), sy = Math.round(base - 18 - ph * 18);
-        c.globalAlpha = 0.75 * (1 - ph); r(sx, sy, s, s - 1, mixc("#f1f3f7", "#8a93a3", dark)); c.globalAlpha = 1;
-      }
-      const name = m.name.slice(0, Math.max(1, Math.floor((span + 1) / 4))).toUpperCase(), tw = app.room.tinyW(name);
-      app.room.tiny(c, name, Math.round(cx - tw / 2), base + 2, mixc("#f4f6fb", "#8b93ad", dark * 0.5));
-    });
-    if (dark > 0.5) for (let k = 0; k < 6; k++) {
-      const fx = Math.round((k * 29 + Math.sin(T * 0.7 + k) * 6 + 7) % W), fy = Math.round(M + 4 + (k % 3) * 3 + Math.sin(T * 1.3 + k * 2) * 2);
-      if (Math.floor(T * 1.5 + k) % 3) r(fx, fy, 1, 1, "#e8f59a");
     }
     hud();
   }

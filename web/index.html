@@ -66,7 +66,7 @@
         </form>
         <div id="vManager" class="managers" hidden><p>Who sits at the reception? Pick one; burn her booth to let her go.</p><div class="styles"></div></div>
         <div id="vClock" class="awake" hidden><p>Keep this computer awake</p><div class="row"></div></div>
-        <div id="vOutside" hidden><canvas class="outside" width="160" height="96"></canvas><p class="hint"><code>↑ ↓</code> angle · <code>← →</code> power · <code>space</code> fires</p></div>
+        <div id="vOutside" hidden><canvas class="outside" width="256" height="144"></canvas><p class="hint"><code>↑ ↓</code> angle · <code>← →</code> power · <code>space</code> fires</p></div>
         <div id="vBoard" hidden><canvas class="board" width="130" height="55"></canvas><div class="row"><button type="button" class="btn" id="wipe">wipe</button></div></div>
         <div id="vPair" hidden>
           <div class="pair-setup">
@@ -535,7 +535,7 @@ async function joinPair(key, b) {
 }
 // ---- the window: the outside (outside.js), and on its hills a duel: yours against an idle bot drawn by lot,
 // or the duel two bots have at the window, to watch. Closing the view gives it up
-const outsideUI = outsideView($("#vOutside canvas"), { state: () => state, room, shown: () => viewKind === "outside", wears: (seed) => room.wears(seed) });
+const outsideUI = outsideView($("#vOutside canvas"), { shown: () => viewKind === "outside", wears: (seed) => room.wears(seed) });
 function openOutside(key) {
   if (viewKind === "outside") return;
   const at = room.playing("window"), bot = (id) => { const x = byId(id) || {}; return { id, name: x.name || id, color: projectColor(x.unit || "") }; };
