@@ -1749,6 +1749,29 @@ The user should talk to the office manager about it."
   rule over her notes is gone, and Joan's rounds remove a session only when asked. A stored `cleanup` in room.json is
   ignored (`options()` keeps the known keys).
 
+## One rule for riding along (2026-10-28)
+
+He: "Dragging the office manager's desk, has that jittering effect again, where she jitters along. We already fixed
+that for normal desk. I don't understand, re-use abstractions in the code! ... Same with the pong table, chess table,
+anything else.." The cause, once: think runs twelve times a second, a drag draws on every pointer move, so whoever
+is at a dragged piece stayed behind between ticks and caught up at the next (a snap, or a walk). The desk and the pouf
+each had a fix of their own in `draw()`; the reception, the tables, the coffee machine and the rest had none.
+- **A spot at a piece carries its key** (`on`): `L.seat`, `L.chessSeat`, `L.pongSpot`, `L.coolerSpot`, `L.meetSeat`,
+  `L.coffee`, `managerSeat`, `poufSeat`, and the spots written in the acts (printer, plant, window, board, watching a
+  game, the booth's queue, the neuralyzer, a desk's screen, the idle bot's place by its desk; beside a figure: that
+  figure's `on`, so you behind a seated bot, a visitor, the office manager writing it up go with it). `walk` (and
+  `sitAt`) set `f.on` on arrival and clear it on the way; thinkOne and thinkManager clear it first, so it is always
+  the piece the figure is at this tick. Acts that waited where they stood (the coffee, the printer, serving, the
+  neuralyzer, the office manager by the booth) walk to their spot every tick like the rest; the booth sets it itself.
+- **`ride(w, L, lastL, key)`** in `draw()`: whoever is `on` the piece being dragged moves by as much as the piece did
+  since the last frame. The desk's and the pouf's own code, and the desk act's, are gone. `sitAt`'s snap is for the
+  same piece (`satAt` is the piece's key now, it was a desk's).
+- The dog inside its house keeps its place at the door (it came out where the house had been).
+- Tested in the demo from a copy of his room, main against the fix: six pieces dragged with their sitter, sampled every
+  4 ms. Main: the office manager 2.2 dots off her seat (five offsets: the jitter), the ping-pong player 4, the coffee
+  drinker 50 behind. The fix: one offset, 0.0, for the reception, ping-pong, chess, pouf, coffee and a desk.
+  The demo keeps a moved layout until it is restarted: take press points from `pieceOf(key).at`, not fixed dots.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a
