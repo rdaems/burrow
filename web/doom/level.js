@@ -13,9 +13,11 @@
 // - the shotgun: seven pellets in a spread, five to fifteen each, puffs on the walls, blood on what is hit.
 // What it leaves out: the other weapons (their ammo is counted), vertical aim (autoaim, as Doom's), sound, saving.
 //
-// level.portal (set by fps.js): the mysterious door out to burrow's office, in a wall of the map. While it is open
-// you, missiles, bullets and sight go through it; beyond it is the office, where no line of the map is. While you are
-// in the office, level.away: the level goes on (monsters see you through the door, come to it, shoot through it).
+// level.portal (set by fps.js): the mysterious door out to burrow's office, in a wall of the map. While it is open you
+// go through it (in its doorway), and so do, while you are in the office (level.away), the monsters' sight, bullets and
+// fireballs on their way to you, and your shots on their way out: beyond the door is the office, where no line of the
+// map is. Elsewhere behind that wall the map is the map. While you are away the level goes on (monsters see you
+// through the door, come to it, shoot through it).
 //
 // new DoomLevel(wad, mapname) → level: level.tic(cmd) a step; level.player, level.mobjs, level.map; level.done
 // ("exit") once it is over; level.sounds what was heard this tic ({name, x, y, o}: Doom's sound, where, from what),
@@ -205,9 +207,9 @@ window.DoomLevel = (() => {
       this.blockLine = null; this.spechit = [];
       // through the open door: under its lintel, between its jambs; the lines on the office's side are not there
       let thru = false;
-      if (P && (o.player || o.missile) && P.open() > 0) {
-        const b = this.beyond(x, y), fits = Math.abs(this.along(x, y)) + r <= P.w / 2 && (o.missile ? o.z >= P.floor && o.z + 8 <= P.floor + P.open() : P.open() >= o.h);
-        thru = fits && b < r * (Math.abs(P.nx) + Math.abs(P.ny));
+      if (P && P.open() > 0 && (o.player ? !this.away : o.missile && this.away)) {   // in the doorway, now
+        const b = this.beyond(x, y), k = r * (Math.abs(P.nx) + Math.abs(P.ny)), fits = Math.abs(this.along(x, y)) + r <= P.w / 2 && (o.missile ? o.z >= P.floor && o.z + 8 <= P.floor + P.open() : P.open() >= o.h);
+        thru = fits && b < k && b > -(k + 16);
       }
       let sec = this.sectorAt(x, y);
       if (thru && this.beyond(x, y) < 0) sec = P.sector;
@@ -287,10 +289,10 @@ window.DoomLevel = (() => {
 
     // ---- what you see along a ray: the first line that stops it (one-sided, or an opening that does not take the
     // height z), within dist; for the shotgun and sight. Through the open door the lines on the office's side are not there
-    trace(x, y, ang, dist, zAt) {
+    trace(x, y, ang, dist, zAt, office) {             // office: the ray goes to you there, or comes from you there
       const dx = Math.cos(ang), dy = Math.sin(ang), x2 = x + dx * dist, y2 = y + dy * dist, P = this.portal;
       let thru = false;
-      if (P && P.open() > 0) {
+      if (office && P && P.open() > 0) {
         const b0 = this.beyond(x, y), b1 = this.beyond(x2, y2);
         if ((b0 > 0) !== (b1 > 0)) {
           const tc = b0 / (b0 - b1) * dist, z = zAt(tc);
@@ -314,7 +316,7 @@ window.DoomLevel = (() => {
     }
     sight(a, b) {                                      // can a see b: nothing in between closes off the line from eye to middle
       const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1, z0 = a.z + (a.player ? a.viewh : a.h * 0.75), z1 = b.z + b.h / 2;
-      return this.trace(a.x, a.y, Math.atan2(dy, dx), d, (t) => z0 + (z1 - z0) * t / d).t >= d - 1;
+      return this.trace(a.x, a.y, Math.atan2(dy, dx), d, (t) => z0 + (z1 - z0) * t / d, this.away && (a.player || b.player)).t >= d - 1;
     }
 
     // ---- specials
@@ -528,7 +530,7 @@ window.DoomLevel = (() => {
     }
     bullet(src, ang, z0, target, dmg) {
       const range = 2048, zAt = target ? (t) => z0 + (target.z + target.h / 2 - z0) * t / Math.max(1, Math.hypot(target.x - src.x, target.y - src.y)) : () => z0;
-      const wall = this.trace(src.x, src.y, ang, range, zAt);
+      const wall = this.trace(src.x, src.y, ang, range, zAt, this.away && (src.player || (target && target.player)));
       let hit = null, ht = wall.t;
       const dx = Math.cos(ang), dy = Math.sin(ang);
       for (const o of [...this.mobjs, this.player]) {
@@ -542,7 +544,7 @@ window.DoomLevel = (() => {
       }
       const x = src.x + dx * (ht - 2), y = src.y + dy * (ht - 2), z = zAt(ht);
       if (hit) { this.damage(hit, dmg, src); if ((!hit.d || !hit.d.barrel) && !(hit.player && this.away)) this.puffs.push({ x, y, z, t: 0, blood: true }); }
-      else if (wall.line && !(this.portal && this.beyond(x, y) < 0)) this.puffs.push({ x, y, z, t: 0, blood: false });
+      else if (wall.line) this.puffs.push({ x, y, z, t: 0, blood: false });
     }
     // a shot's sound (P_NoiseAlert): from the shooter's sector through every opening, past one sound-blocking line at
     // most; a monster there wakes (one lying in ambush only if it sees you)
@@ -685,10 +687,11 @@ window.DoomLevel = (() => {
         else if (!P || !P.inside(o.x, o.y) || o.z < P.floor || o.z + 8 > P.floor + P.height || ++o.life > 200) o.gone = true;
         return;
       }
+      const b0 = P ? this.beyond(o.x, o.y) : 0;
       if (!this.tryMove(o, o.x + o.mx, o.y + o.my)) {
         if (o.hit && o.hit !== o.owner) this.damage(o.hit, ((rnd() % 8) + 1) * o.m.dmg, o.owner);
         o.dying = 1; this.snd("DSFIRXPL", o);
-      } else if (P && this.beyond(o.x, o.y) < 0) o.office = true;
+      } else if (P && this.away && b0 >= 0 && this.beyond(o.x, o.y) < 0 && Math.abs(this.along(o.x, o.y)) < P.w / 2) o.office = true;   // through the door, to you
     }
   }
   const l2side = (l, x, y) => (l.dx * (y - l.v1.y) - l.dy * (x - l.v1.x) > 0 ? 1 : 0);   // 0 in front of the line (its right), as P_PointOnLineSide

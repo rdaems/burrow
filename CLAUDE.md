@@ -2042,3 +2042,19 @@ tall red torch (Doom's TRED, in the shareware too; four frames, fullbright, soli
 as torches do (Doom's FireFlicker: 208, down by up to three steps of 16 every 4 tics). In the level a torch either side
 as well where there is room (`DoomLevel.place`, `inside`: a spot in the map, not the void past a wall; in id's E1M1 the
 door is at the back of the start's niche and has none, in Freedoom's both stand by it under the window).
+
+## Behind the door's wall is still the level (2026-10-28)
+
+He: "the level works good, but if i go a bit further, it's buggy. just a vast empty space, stuff like that". Not the
+renderer this time (no holes from 4000 random standing spots, a contact sheet of the fifteen biggest rooms looked like
+Doom, every texture and flat present): fps.js switched you to the office whenever you were behind the plane of the door's
+wall, anywhere, not only through the doorway. In id's E1M1 that is 29 of its 85 sectors (the whole south: the stairs, the
+exit); going there put you in the office far outside its walls, its floor and ceiling running on: the vast empty space.
+Freedoom's E1M1 has one sector there, so it never showed. Now you go through only by crossing the plane in the open
+doorway (`b0 >= 0`, then behind, `|along| < w/2`); level.js lets the door through only what is in the doorway now (you,
+while in the level), and, while you are in the office (`away`), sight, bullets and fireballs to or from you (`trace(…,
+office)`, a fireball's `office` set as it crosses in the doorway). The door stays open for you only while you stand in
+its doorway (`inDoorway`). Tested in the demo with id's WAD: across the line 394 units into the south, still in the
+level, inside the map, no holes; the door both ways; a zombieman shooting you in the office through it. Test hooks:
+`__fps.cam()` (the level's camera), `__fps.snap(x, y, z, a)` (the level from there as a canvas), `__fps.hom(…)`.
+

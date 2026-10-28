@@ -257,7 +257,7 @@ function startFps(room, done) {
     return true;
   }
   const doorSnd = (name) => { if (P) heard({ name, x: P.cx, y: P.cy, o: door }); };
-  const inDoorway = () => (world === "office" ? me.y > units().H - PR - 2 : !!P && Math.abs(lvl.beyond(lvl.player.x, lvl.player.y)) < PR + 2);
+  const inDoorway = () => (world === "office" ? me.y > units().H - PR - 2 : !!P && Math.abs(lvl.beyond(lvl.player.x, lvl.player.y)) < PR + 2 && Math.abs(lvl.along(lvl.player.x, lvl.player.y)) < DOORW / 2 + PR);
   function doorTic() {
     if (door.dir === 1) { door.open = Math.min(DOORH, door.open + 2); if (door.open >= DOORH) { door.dir = 0; door.wait = 150; } }
     else if (door.wait > 0) { if (--door.wait === 0) { door.dir = -1; doorSnd("DSBDCLS"); } }
@@ -961,11 +961,11 @@ function startFps(room, done) {
     const c = cmd();
     if (world === "level") {
       lvl.away = false;
+      const p = lvl.player, b0 = P ? lvl.beyond(p.x, p.y) : 0;
       lvl.tic(c);
-      const p = lvl.player;
       for (const h of lvl.sounds.splice(0)) heard(h);
       if (lvl.done === "exit") exitLevel();
-      else if (P && lvl.beyond(p.x, p.y) < 0) throughToOffice();
+      else if (P && b0 >= 0 && lvl.beyond(p.x, p.y) < 0 && Math.abs(lvl.along(p.x, p.y)) < DOORW / 2) throughToOffice();   // through the doorway (not anywhere behind its wall)
     } else {
       officeTic(c);
       if (world === "office") { lvl.away = true; lvl.tic(c); for (const h of lvl.sounds.splice(0)) heard(h); }
@@ -1108,6 +1108,15 @@ function startFps(room, done) {
     fire: () => act(), use: () => { useReq = true; }, leave, world: () => world, lvl: () => lvl, ready: () => ready, melting: () => !!melt, keys, door, units, doorX,
     level: () => { door.open = DOORH; door.dir = 0; door.wait = 150; me.x = doorX(); me.y = units().H + 1; me.a = Math.PI / 2; throughToLevel(); },   // straight through the door into the level
     under: () => { const t = under(2); return t && { bot: t.bot, rem: t.rem, name: t.name }; },
+    cam: () => (world === "level" ? levelCam() : null),
+    snap: (x, y, z, a) => {                  // the level from there, as a picture (the view only)
+      renderLevel(performance.now(), { x, y, z, a }, null);
+      const c = document.createElement("canvas"); c.width = SW; c.height = VH;
+      const g = c.getContext("2d"), im = g.createImageData(SW, VH), o = new Uint32Array(im.data.buffer);
+      for (let i = 0; i < SW * VH; i++) o[i] = wad.rgb[0][fb[i]];
+      g.putImageData(im, 0, 0);
+      return c;
+    },
     hom: (x, y, z, a) => {                   // the level from there: how many pixels nothing drew on (a hole in the view)
       renderLevel(performance.now(), { x, y, z, a }, null);
       let n = 0, fx = -1, fy = -1;
