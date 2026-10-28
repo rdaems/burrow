@@ -159,7 +159,13 @@ function startFps(room, done) {
   const units = () => ({ W: sc.W * U, H: sc.H * U, WALL: sc.WALL * U });
   const DOORW = 64, DOORH = 72, CEIL = WALLH * U;   // the mysterious door: Doom's 64 x 72, in the south wall, left of the middle (the printer's default spot)
   const doorX = () => Math.round(sc.W * 0.3) * U;
-  // the office's light in 32-unit cells, as Doom's sectors would have it, once a frame: 192, 224 under a lamp, the fire's flicker
+  // the door with the skulls (BIGDOOR7: id's in the full game, else Freedoom's, doom/door.wad), and either side of it a
+  // tall red torch (Doom's TRED), the light round it flickering
+  let doorWad = null, torchFlick = 0;
+  const skullDoor = () => wad.texture("BIGDOOR7") || (doorWad && doorWad.texture("BIGDOOR7")) || wad.texture("DOOR3");
+  const torches = () => { const { H } = units(); return [-1, 1].map((k) => ({ x: doorX() + k * (DOORW / 2 + 22), y: H - 14 })); };
+  // the office's light in 32-unit cells, as Doom's sectors would have it, once a frame: 192, 224 under a lamp, the fire's
+  // flicker; by the door the torches' (Doom's FireFlicker: up to three steps of 16 down from 208, every 4 tics)
   let lgrid = new Uint8Array(1), lgw = 1, lgh = 1, fireFlick = 32;
   function lightGrid() {
     const { W, H } = units();
@@ -172,6 +178,7 @@ function startFps(room, done) {
         const dx = x - L.x * U, dy = y - L.y * U;
         if (dx * dx + dy * dy < 9000) l = Math.max(l, L.flicker && !still ? 192 + (fireFlick & 48) : 224);
       }
+      if (P && Math.abs(x - doorX()) < 112 && y > H - 112) l = 208 - (still ? 0 : torchFlick * 16);
       lgrid[cy * lgw + cx] = l;
     }
   }
@@ -236,6 +243,7 @@ function startFps(room, done) {
     const { W, H, WALL } = units();
     if (x < R || x > W - R || y < WALL + R) return true;
     if (y > H - R && !(P && door.open >= 56 && Math.abs(x - doorX()) <= DOORW / 2 - PR)) return true;   // the south wall, but the open door
+    if (P && torches().some((t) => Math.abs(x - t.x) < 16 + R && Math.abs(y - t.y) < 16 + R)) return true;
     return sc.solid.some((r) => x > r[0] * U - R && x < r[2] * U + R && y > r[1] * U - R && y < r[3] * U + R);
   };
 
@@ -265,6 +273,10 @@ function startFps(room, done) {
     const spot = lvl.doorSpot(DOORW, DOORH);
     P = lvl.portal = spot && { ...spot, tx: -spot.ny, ty: spot.nx, w: DOORW, h: DOORH, height: CEIL, open: () => door.open, bump,
       inside: (x, y) => { const [ox, oy] = l2o(x, y), { W, H, WALL } = units(); return ox > 0 && ox < W && oy > WALL && oy < H; } };
+    if (P) for (const k of [-1, 1]) {           // in the level too, a torch either side of it where there is room (not in a niche)
+      const x = P.cx + P.tx * k * (DOORW / 2 + 22) + P.nx * 20, y = P.cy + P.ty * k * (DOORW / 2 + 22) + P.ny * 20;
+      if (lvl.inside(x, y) && lvl.sectorAt(x, y).floor === P.floor && lvl.check({ r: 16, h: 56, z: P.floor, d: {} }, x, y)) lvl.place(46, x, y);
+    }
   }
   const winOf = () => {                        // the window's bounds, or null if the door shows nothing through it
     let x0 = SW, x1 = -1, y0 = VH, y1 = -1;
@@ -303,7 +315,7 @@ function startFps(room, done) {
       }
     }
     // the four walls; in the south one the door, risen door.open into the lintel, the level under it
-    const far = farWall(), side = wad.texture("STARTAN3") || far, dt = wad.texture("BIGDOOR7") || wad.texture("DOOR3");
+    const far = farWall(), side = wad.texture("STARTAN3") || far, dt = skullDoor();
     if (!win) { wTop.fill(VH); wBot.fill(-1); }
     for (let x = xs; x <= xe; x++) {
       const ylo = win ? win.top[x] + 1 : 0, yhi = win ? win.bot[x] - 1 : VH - 1;
@@ -359,6 +371,10 @@ function startFps(room, done) {
       officeThing(th, at, drawn.length, px, py, dx, dy, rx, ry, eye, o, win);
     }
     for (const f of puffs) puffVis(f, px, py, dx, dy, rx, ry, eye, (x, y) => (officeLight(x, y) >> 4) + extralight, win);
+    if (P) for (const t of torches()) {        // the torches by the door, their flames burning (four frames, fullbright)
+      const vx = t.x - px, vy = t.y - py, z = vx * dx + vy * dy, sf = z > 8 && wad.spriteFrame("TRED", Math.floor(time / 4) % 4, 1);
+      if (sf && sf.pic) vis.push({ p: sf.pic, flip: sf.flip, sx: CX + (vx * rx + vy * ry) * PROJ / z, sy: CY - (sf.pic.to - eye) * PROJ / z, scale: PROJ / z, z, bright: true, level: 0, clipTop: win && win.top, clipBot: win && win.bot });
+    }
     // the level's fireballs that came through the door
     if (lvl) for (const o of lvl.mobjs) if (o.office) {
       const [ox, oy] = l2o(o.x, o.y), vx = ox - px, vy = oy - py, z = vx * dx + vy * dy, sf = z > 4 && wad.spriteFrame(o.sprite, o.frame.charCodeAt(0) - 65, 1);
@@ -504,7 +520,7 @@ function startFps(room, done) {
         fb[i] = cmap[base + tex.px[((v % tex.h) + tex.h) % tex.h * tex.w + col]]; zb[i] = z;
       }
     }
-    const dt = wad.texture("BIGDOOR7") || wad.texture("DOOR3");
+    const dt = skullDoor();
     function seg(sg0) {
       let sg = sg0;
       if (win) {                                 // seen through the door: what is on the office's side of its wall is not there
@@ -925,7 +941,7 @@ function startFps(room, done) {
       p.x = x; p.y = y; p.z = p.floorz = P.floor; p.angle = a2l(me.a); p.sector = P.sector; p.mx = p.my = 0;
       if (me.y > H && door.open >= 56 && Math.abs(me.x - doorX()) <= DOORW / 2 - PR) throughToLevel();
     }
-    if (time % 4 === 0) fireFlick = Math.random() * 64 | 0;   // the fire flickers (Doom's FireFlicker)
+    if (time % 4 === 0) { fireFlick = Math.random() * 64 | 0; torchFlick = Math.random() * 4 | 0; }   // the fire and the torches flicker (Doom's FireFlicker)
   }
   function use() {
     if (world !== "office") return;
@@ -1048,8 +1064,8 @@ function startFps(room, done) {
   let raf = 0, last = performance.now(), acc = 0, ms = 0, ready = false;
   const first = shot(room.snapshot && room.snapshot());
   mx.drawImage(first, 0, 0);                  // the room, until Doom's data is in and the melt can begin
-  Wad.load("/doom.wad").then((w) => {
-    wad = w; cmap = w.cmap;
+  Promise.all([Wad.load("/doom.wad"), Wad.load("/doom/door.wad").catch(() => null)]).then(([w, dw]) => {
+    wad = w; cmap = w.cmap; doorWad = dw;
     w.rgbOf = (i) => [w.rgb[0][i] & 255, (w.rgb[0][i] >> 8) & 255, (w.rgb[0][i] >> 16) & 255];
     handTrans = hands();
     levelName = DoomLevel.first(w);

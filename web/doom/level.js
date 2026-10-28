@@ -167,6 +167,12 @@ window.DoomLevel = (() => {
       this.mobjs.push(o);
       return o;
     }
+    place(type, x, y) { const d = T[type]; return d ? this.spawn(type, d, x, y, 0, false) : null; }   // a thing put down (a torch by the mysterious door)
+    inside(x, y) {                                    // in the map, not in the void beyond its walls: on the inside of every seg of its subsector
+      const ss = this.subsector(x, y), m = this.map;
+      for (let i = 0; i < ss.n; i++) { const sg = m.segs[ss.first + i]; if ((sg.v2.x - sg.v1.x) * (y - sg.v1.y) - (sg.v2.y - sg.v1.y) * (x - sg.v1.x) > 0) return false; }
+      return true;
+    }
     states(o) { return o.d.barrel ? BAR : STATES[o.d.s] || STATES.POSS; }
     setState(o, name, i = 0) {
       const seq = this.states(o)[name];

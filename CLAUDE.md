@@ -2031,3 +2031,14 @@ to toggle sound." (Until now burrow had no sound at all, by his first principle;
 - Tested in the demo (look.mjs with Sound.play and Sound.doom wrapped to count): nine seconds of the room (keys,
   crackles, chess, a beam), nothing while off, the radio's two pictures, the closet; in 3d the shotgun, a zombieman's
   sight, pistol and pain, your pain, the door closing; no errors. Not heard by me: headless Chrome has no speakers.
+
+## The skull door, always; torches (2026-10-28)
+
+He: "Why is the door boring? it was better with the skulls. I said ominous, not just the black light." With id's shareware
+WAD the door had fallen back to DOOR3: BIGDOOR7 (the door with the skulls) is only in the full game. Now `extract.py`
+also writes `web/doom/door.wad` (38 KB: Freedoom's BIGDOOR7, its patches, the palette) and fps.js loads it beside
+/doom.wad: `skullDoor()` is the WAD's own BIGDOOR7, else Freedoom's, else DOOR3. Either side of the door in the office a
+tall red torch (Doom's TRED, in the shareware too; four frames, fullbright, solid), the light round the door flickering
+as torches do (Doom's FireFlicker: 208, down by up to three steps of 16 every 4 tics). In the level a torch either side
+as well where there is room (`DoomLevel.place`, `inside`: a spot in the map, not the void past a wall; in id's E1M1 the
+door is at the back of the start's niche and has none, in Freedoom's both stand by it under the window).

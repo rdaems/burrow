@@ -8,8 +8,11 @@ when one is put in ~/.config/burrow/ (server.py serves it as /doom.wad), so the 
 What it keeps: the palette and the colormaps; the status bar, its numbers, the arms panel, the keys, the faces;
 the shotgun and its flash; the HUD font; the sound effects the game and the office play (fps.js, level.js); the first level (E1M1) with every texture, flat and sprite it needs (and
 the frames they animate through, the switches' other side, the sky); the office's walls, floor, ceiling and its
-mysterious door. Wall textures are recomposed into one TEXTURE1 over a PNAMES of only the patches they use."""
-import struct, sys
+mysterious door. Wall textures are recomposed into one TEXTURE1 over a PNAMES of only the patches they use.
+
+Beside it, door.wad: the mysterious door's own texture (Freedoom's BIGDOOR7, the door with the skulls), for a WAD that
+has none (id's shareware DOOM1.WAD lacks it); the palette with it, so that wad.js can open it."""
+import os, struct, sys
 
 MAP = "E1M1"
 GRAPHICS = (["PLAYPAL", "COLORMAP", "STBAR", "STARMS", "STTPRCNT", "STTMINUS"]
@@ -33,6 +36,7 @@ SPRITES = ["SHTG", "SHTF", "PUFF", "BLUD", "BEXP", "BAL1", "BAL2", "BAL7", "TFOG
            "COLU", "ELEC", "TRE1", "TRE2", "SMIT", "COL1", "COL2", "COL3", "COL4", "COL5", "COL6", "CEYE", "FSKU", "TBLU", "TGRN", "TRED",
            "SMBT", "SMGT", "SMRT", "CAND", "CBRA", "FCAN", "GOR1", "GOR2", "GOR3", "GOR4", "GOR5", "POL1", "POL2", "POL3", "POL4", "POL5", "POL6", "PLAY"]
 OFFICE_TEXTURES = ["STARTAN2", "STARTAN3", "DOOR3", "DOORTRAK", "DOORBLU", "DOORYEL", "DOORRED", "SW1STRTN", "SW2STRTN", "BIGDOOR7", "SKY1"]
+DOOR_TEXTURES = ["BIGDOOR7"]
 OFFICE_FLATS = ["FLAT5_2", "CEIL3_5", "TLITE6_4", "TLITE6_5", "TLITE6_6", "FLOOR4_8", "F_SKY1"]
 ANIMS = [["NUKAGE1", "NUKAGE2", "NUKAGE3"], ["FWATER1", "FWATER2", "FWATER3", "FWATER4"], ["SWATER1", "SWATER2", "SWATER3", "SWATER4"],
          ["LAVA1", "LAVA2", "LAVA3", "LAVA4"], ["BLOOD1", "BLOOD2", "BLOOD3"], ["RROCK05", "RROCK06", "RROCK07", "RROCK08"],
@@ -123,10 +127,30 @@ def main(src, dst):
             on = False
         elif on and data and name[:4] in SPRITES and name not in sprite_lumps:
             sprite_lumps.append(name)
-    patches = sorted({p for t in keep_t for _, _, p in tex[t][2] if p in L})
+    patches, pnames, texture1 = compose(keep_t, tex, L)
+    out = [(n, L[n]) for n in GRAPHICS + SOUNDS if n in L]
+    out += [(n, d) for n, d in maplumps]
+    out += [("PNAMES", pnames), ("TEXTURE1", texture1)]
+    out += [("P_START", b"")] + [(p, L[p]) for p in patches] + [("P_END", b"")]
+    out += [("S_START", b"")] + [(s, L[s]) for s in sprite_lumps] + [("S_END", b"")]
+    out += [("F_START", b"")] + [(f, L.get(f, b"\0" * 4096)) for f in keep_f] + [("F_END", b"")]
+    missing = [n for n in GRAPHICS + SOUNDS if n not in L] + [t for t in OFFICE_TEXTURES if t not in tex] + [t for t in used_t if t not in tex]
+    size = write(dst, out)
+    print(f"{dst}: {len(out)} lumps, {size} bytes; {MAP}; textures {len(keep_t)}, patches {len(patches)}, flats {len(keep_f)}, "
+          f"sprite lumps {len(sprite_lumps)}; missing {missing}")
+    door = os.path.join(os.path.dirname(dst), "door.wad")
+    dp, dn, dt = compose(DOOR_TEXTURES, tex, L)
+    lumps = [("PLAYPAL", L["PLAYPAL"]), ("COLORMAP", L["COLORMAP"]), ("PNAMES", dn), ("TEXTURE1", dt)] + [("P_START", b"")] + [(q, L[q]) for q in dp] + [("P_END", b"")]
+    print(f"{door}: {len(lumps)} lumps, {write(door, lumps)} bytes; {DOOR_TEXTURES}")
+
+
+def compose(names, tex, L):
+    """a PNAMES of the patches these textures use, and a TEXTURE1 of them (Doom's maptexture: name, masked, width,
+    height, columndirectory, patchcount, patches)"""
+    patches = sorted({p for t in names for _, _, p in tex[t][2] if p in L})
     pnames = struct.pack("<i", len(patches)) + b"".join(p.encode().ljust(8, b"\0") for p in patches)
     defs = []
-    for t in keep_t:                                 # Doom's maptexture: name, masked, width, height, columndirectory, patchcount, patches
+    for t in names:
         w, h, ps = tex[t]
         ps = [(ox, oy, p) for ox, oy, p in ps if p in L]
         defs.append(t.encode().ljust(8, b"\0") + struct.pack("<ihhih", 0, w, h, 0, len(ps))
@@ -135,22 +159,17 @@ def main(src, dst):
     for dd in defs:
         offs.append(pos)
         pos += len(dd)
-    texture1 = struct.pack("<i", len(defs)) + b"".join(struct.pack("<i", o) for o in offs) + b"".join(defs)
-    out = [(n, L[n]) for n in GRAPHICS + SOUNDS if n in L]
-    out += [(n, d) for n, d in maplumps]
-    out += [("PNAMES", pnames), ("TEXTURE1", texture1)]
-    out += [("P_START", b"")] + [(p, L[p]) for p in patches] + [("P_END", b"")]
-    out += [("S_START", b"")] + [(s, L[s]) for s in sprite_lumps] + [("S_END", b"")]
-    out += [("F_START", b"")] + [(f, L.get(f, b"\0" * 4096)) for f in keep_f] + [("F_END", b"")]
-    missing = [n for n in GRAPHICS + SOUNDS if n not in L] + [t for t in OFFICE_TEXTURES if t not in tex] + [t for t in used_t if t not in tex]
+    return patches, pnames, struct.pack("<i", len(defs)) + b"".join(struct.pack("<i", o) for o in offs) + b"".join(defs)
+
+
+def write(dst, lumps):
     body, dirs, off = b"", [], 12
-    for name, data in out:
+    for name, data in lumps:
         dirs.append(struct.pack("<ii8s", off, len(data), name.encode()[:8].ljust(8, b"\0")))
         body += data
         off += len(data)
-    open(dst, "wb").write(struct.pack("<4sii", b"PWAD", len(out), off) + body + b"".join(dirs))
-    print(f"{dst}: {len(out)} lumps, {off + 16 * len(out)} bytes; {MAP}; textures {len(keep_t)}, patches {len(patches)}, flats {len(keep_f)}, "
-          f"sprite lumps {len(sprite_lumps)}; missing {missing}")
+    open(dst, "wb").write(struct.pack("<4sii", b"PWAD", len(lumps), off) + body + b"".join(dirs))
+    return off + 16 * len(lumps)
 
 
 if __name__ == "__main__":
