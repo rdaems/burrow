@@ -689,7 +689,7 @@ window.DoomLevel = (() => {
     const fits = (l, cx, cy) => {
       const fs = l.front.sector, len = Math.hypot(l.dx, l.dy), tx = l.dx / len, ty = l.dy / len;
       const t = (cx - l.v1.x) * tx + (cy - l.v1.y) * ty;
-      if (fs.ceil - fs.floor < h + 8 || (l.back && l.back.sector.floor - fs.floor < h && l.back.sector.ceil > fs.floor)) return null;   // too low, or open below the door's height
+      if (fs.ceil - fs.floor < h || (l.back && l.back.sector.floor - fs.floor < h && l.back.sector.ceil > fs.floor)) return null;   // too low, or open below the door's height
       const c = Math.max(w / 2, Math.min(len - w / 2, t));
       if (len < w) return null;
       return { cx: l.v1.x + tx * c, cy: l.v1.y + ty * c, nx: ty, ny: -tx, lines: new Set([l]), sector: fs, floor: fs.floor };

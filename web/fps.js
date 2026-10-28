@@ -447,7 +447,7 @@ function startFps(room, done) {
     const L = lvl, m = L.map, V = cam, dx = Math.cos(V.a), dy = Math.sin(V.a), rx = dy, ry = -dx;
     let solidN = 0;
     if (win) { for (let x = 0; x < SW; x++) { ceilClip[x] = win.top[x]; floorClip[x] = win.bot[x]; solid[x] = floorClip[x] - ceilClip[x] <= 1 ? 1 : 0; solidN += solid[x]; } }
-    else { ceilClip.fill(-1); floorClip.fill(VH); solid.fill(0); zb.fill(1e9); idb.fill(0); wTop.fill(VH); wBot.fill(-1); }
+    else { ceilClip.fill(-1); floorClip.fill(VH); solid.fill(0); zb.fill(1e9); idb.fill(0); wTop.fill(VH); wBot.fill(-1); fb.fill(0, 0, SW * VH); }   // (what nothing draws on is black, not the last frame)
     const masked = [];
     const anim = L.anims;
     const angTo = (x, y) => Math.atan2(y - V.y, x - V.x) - V.a;
@@ -468,7 +468,9 @@ function startFps(room, done) {
       if (pos === 5) return true;
       const cc = [[3, 0, 2, 1], [3, 0, 2, 0], [3, 1, 2, 0], null, [2, 0, 2, 1], null, [3, 1, 3, 0], null, [2, 0, 3, 1], [2, 1, 3, 1], [2, 1, 3, 0]][pos];
       if (!cc) return true;
-      const r = clipAngles(norm(angTo(b[cc[0]], b[cc[1]])), norm(angTo(b[cc[2]], b[cc[3]])));
+      const a1 = norm(angTo(b[cc[0]], b[cc[1]])), a2 = norm(angTo(b[cc[2]], b[cc[3]]));
+      if (norm(a1 - a2) >= Math.PI) return true;   // you are at its edge: seen (as Doom's; a wall's back is another matter)
+      const r = clipAngles(a1, a2);
       if (!r) return false;
       for (let x = Math.max(0, r[0]); x < Math.min(SW, r[1]); x++) if (!solid[x]) return true;
       return false;
@@ -518,7 +520,7 @@ function startFps(room, done) {
       if (!isDoor && bs && !closed && bs.ceil === fs.ceil && bs.floor === fs.floor && bs.ftex === fs.ftex && bs.ctex === fs.ctex && bs.light === fs.light && sd.mid === "-") return;   // nothing to draw: a line within one floor
       const ex = sg.v2.x - sg.v1.x, ey = sg.v2.y - sg.v1.y, len = Math.hypot(ex, ey), wx0 = sg.v1.x - V.x, wy0 = sg.v1.y - V.y;
       const fake = sg0.v1.y === sg0.v2.y ? -1 : sg0.v1.x === sg0.v2.x ? 1 : 0, ln = (fs.light >> 4) + extralight + fake;
-      const midT = closed && sd.mid !== "-" ? wad.texture(anim(sd.mid)) : null, upT = !closed && sd.upper !== "-" ? wad.texture(anim(sd.upper)) : null, loT = !closed && sd.lower !== "-" ? wad.texture(anim(sd.lower)) : null;
+      const midT = !bs && sd.mid !== "-" ? wad.texture(anim(sd.mid)) : null, upT = bs && sd.upper !== "-" ? wad.texture(anim(sd.upper)) : null, loT = bs && sd.lower !== "-" ? wad.texture(anim(sd.lower)) : null;
       const maskT = !closed && sd.mid !== "-" ? wad.texture(anim(sd.mid)) : null;
       const bothSky = bs && fs.ctex === "F_SKY1" && bs.ctex === "F_SKY1";
       for (let x = Math.max(0, r[0]); x < Math.min(SW, r[1]); x++) {
@@ -527,12 +529,16 @@ function startFps(room, done) {
         if (Math.abs(den) < 1e-9) continue;
         const z = Math.max(1, (wx0 * ey - wy0 * ex) / den), t = (wx0 * rdy - wy0 * rdx) / den;
         const u = sg.offset + sd.xo + Math.max(0, Math.min(1, t)) * len, sc2 = PROJ / z, base = wallLevel(ln, z) * 256;
-        const yc = CY - (fs.ceil - V.z) * sc2, yf = CY - (fs.floor - V.z) * sc2;
+        const yc = CY - ((bothSky ? bs.ceil : fs.ceil) - V.z) * sc2, yf = CY - (fs.floor - V.z) * sc2;   // sky on both sides: the sky comes down to the other side's ceiling (Doom's outdoor hack)
         const top = Math.max(ceilClip[x] + 1, Math.ceil(yc - 0.5)), bot = Math.min(floorClip[x] - 1, Math.floor(yf - 0.5));
         if (fs.ceil > V.z || fs.ctex === "F_SKY1") plane(x, ceilClip[x] + 1, Math.min(top - 1, floorClip[x] - 1), fs, false);
         if (fs.floor < V.z) plane(x, Math.max(bot + 1, ceilClip[x] + 1), floorClip[x] - 1, fs, true);
         if (closed) {
           if (midT) wallRun(x, top, bot, midT, u, line.flags & 16 ? fs.floor + midT.h : fs.ceil, sd.yo, z, base);
+          else if (bs) {                         // two-sided but shut (a closed door, a lift up): its upper and lower textures fill it (R_StoreWallRange)
+            if (bs.ceil < fs.ceil && !bothSky && upT) wallRun(x, top, Math.min(bot, Math.floor(CY - (bs.ceil - V.z) * sc2 - 0.5)), upT, u, line.flags & 8 ? fs.ceil : bs.ceil + upT.h, sd.yo, z, base);
+            if (bs.floor > fs.floor && loT) wallRun(x, Math.max(top, Math.ceil(CY - (bs.floor - V.z) * sc2 - 0.5)), bot, loT, u, line.flags & 16 ? fs.ceil : bs.floor, sd.yo, z, base);
+          }
           if (isDoor) doorColumn(x, sg, t, z, top, bot, base);
           solid[x] = 1; solidN++;
           continue;
@@ -801,7 +807,7 @@ function startFps(room, done) {
     statusBar();
     const p = lvl.player;
     let pal = 0;
-    if (p.damagecount) pal = Math.min(8, (p.damagecount + 7) >> 3);
+    if (p.damagecount) pal = Math.min(7, (p.damagecount + 7) >> 3) + 1;   // (Doom's STARTREDPALS)
     else if (p.bonuscount) pal = 8 + Math.min(4, (p.bonuscount + 7) >> 3);
     const rgb = wad.rgb[pal] || wad.rgb[0];
     for (let i = 0; i < SW * SH; i++) out32[i] = rgb[fb[i]];
@@ -1059,6 +1065,12 @@ function startFps(room, done) {
     set: (x, y, ang) => { if (world === "level") { lvl.player.x = x; lvl.player.y = y; if (ang !== undefined) lvl.player.angle = ang; } else { me.x = x * U; me.y = y * U; if (ang !== undefined) me.a = ang; } },
     fire: () => act(), use: () => { useReq = true; }, leave, world: () => world, lvl: () => lvl, ready: () => ready, melting: () => !!melt, keys, door, units, doorX,
     level: () => { door.open = DOORH; door.dir = 0; door.wait = 150; me.x = doorX(); me.y = units().H + 1; me.a = Math.PI / 2; throughToLevel(); },   // straight through the door into the level
-    under: () => { const t = under(2); return t && { bot: t.bot, rem: t.rem, name: t.name }; } };
+    under: () => { const t = under(2); return t && { bot: t.bot, rem: t.rem, name: t.name }; },
+    hom: (x, y, z, a) => {                   // the level from there: how many pixels nothing drew on (a hole in the view)
+      renderLevel(performance.now(), { x, y, z, a }, null);
+      let n = 0, fx = -1, fy = -1;
+      for (let i = 0; i < SW * VH; i++) if (zb[i] >= 1e9) { n++; if (fx < 0) { fx = i % SW; fy = Math.floor(i / SW); } }
+      return { n, fx, fy };
+    } };
   return { leave };
 }

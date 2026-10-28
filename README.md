@@ -45,8 +45,8 @@ to take it back), a fire that burns the furniture you drag into it, a neuralyzer
 office report, a switchboard for the settings, a whiteboard the robots dream on, a table for a
 [pair](https://github.com/rdaems/pair-prompting) room, a dog, and much more. Switch on hardcore and the
 booth is a gun closet, the office a first-person shooter in a small Doom engine, and in there a mysterious door
-leads to Doom's first level ([Freedoom](https://freedoom.github.io)'s; put id's `DOOM.WAD` in
-`~/.config/burrow/` for the real one).
+leads to Doom's first level ([Freedoom](https://freedoom.github.io)'s; put id's `DOOM1.WAD`, the free
+shareware, or your `DOOM.WAD` in `~/.config/burrow/` for the real one).
 
 An **office manager** sits at a reception. Pick one when you put it down:
 

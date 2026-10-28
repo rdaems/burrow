@@ -339,6 +339,8 @@ def options(room):
 def doom_wad():
     """the Doom data of the gun closet's view: id's own (DOOM.WAD, DOOM1.WAD or DOOM2.WAD in ~/.config/burrow/, any
     case) if you have one, its E1M1 the real one; else the Freedoom extract that comes with burrow (web/doom/)"""
+    if os.environ.get("BURROW_WAD"):           # any WAD, for a try
+        return os.environ["BURROW_WAD"]
     here = os.path.dirname(ROOM)
     try:
         for name in sorted(os.listdir(here)):

@@ -1976,3 +1976,24 @@ just keep it closer to the real game."
   shot from the office killing one in the level; death, respawn; the exit switch). Not tested: the pointer lock in his
   Chrome; id's WAD (its door spot is found the same way).
 Superseded from the round before: the HUD in burrow's terms, the 64 x 80 door, the melt at the door, the blinking dark.
+
+## Holes in the level; id's own E1M1 (2026-10-28)
+
+He: "The level does not look like how i remember the first level? And if go a bit further, towards an enemy, it's
+really buggy, the visuals don't work".
+- **The holes**: a debug hook (`__fps.hom(x, y, z, a)`: the level from there, how many pixels nothing drew on) over
+  every place a player can stand, eight ways each, found half the views broken, many wholly: the screen kept the last
+  frame with this frame's sprites over it (what he saw past the first doors). Two causes, both Doom rules the renderer
+  lacked (R_StoreWallRange): a two-sided line that is shut (a closed door, a lift up) is drawn with its upper and lower
+  textures (it had drawn only a middle texture, which doors do not have, and marked the column solid: every closed
+  door was a hole); and when both sides have a sky ceiling the sky comes down to the other side's ceiling (the band
+  under the start room's window). Also from Doom: a BSP box seen at more than 180 degrees is visible (R_CheckBBox).
+  Now 0 holes in 2688 views of Freedoom's E1M1 and 1208 of id's; the view is cleared to black first, so a hole could
+  not smear anyway. The pain palette was one step short of Doom's (STARTREDPALS).
+- **id's E1M1**: Freedoom's E1M1 is its own map; his memory is id's Hangar. The shareware DOOM1.WAD (1.9, md5
+  f0cefca49926d00903cf57551d901abe; id's licence lets anyone use it and give copies away free) was taken from RPM
+  Fusion's doom-shareware package (download1.rpmfusion.org, nonfree, `usr/share/games/doom/doom1.wad`) and put in his
+  `~/.config/burrow/`, where server.py's `/doom.wad` prefers it. Not in the repo (id's). The engine plays it: its
+  status bar (BULL SHEL RCKT CELL), the door in the back wall of the lit niche behind the start (the start room is 72
+  high: `doorSpot` now takes a room exactly as high as the door), a zombieman shot dead. `BURROW_WAD=<path>` makes
+  the server serve any WAD (for a try).
