@@ -1923,3 +1923,56 @@ there, you can go through, and that starts the first level of DOOM right away (s
   walked, a zombieman shot dead in two shots, monsters woken by the noise and killing you; a door opened with E; a
   click when dead back to the office; walking into the south door back into E1M1; Esc out; hardcore switched off
   closes it. Not tested: the pointer lock in his own Chrome, id's own WAD.
+
+## The door is a door; the level's bugs; Doom's status bar (2026-10-28)
+
+He: "The graphics are quite bad? Is that how it is? The big black shade on the door is confusing, remove that. When
+you go through the door, it should not have that animation of a new level, simply like, you know, going through a door
+on the same level (if possible..). The level behind the door is buggy. You can remove those claude limits on the hud,
+just keep it closer to the real game."
+- **The graphics**: Doom is 320 x 200 and our renderer matched what it should draw (a tour of E1M1 looked like Freedoom);
+  at a window's size that is very coarse. Now drawn at 640 x 400, Crispy Doom's high resolution (`S` in fps.js: the
+  screen, the projection, the psprites, the status bar and the sky at S, the light tables unchanged since they go by
+  distance). Your face in the bar is the avatar at three pixels a pixel, crisp. The office is lit as E1M1's rooms are
+  (192, 224 under a lamp; `lightGrid()` once a frame, 32-unit cells), and the dark that blinked round the door (the
+  "black shade") is gone. About 2 to 4.5 ms a frame.
+- **The door is a portal, both ways, no wipe.** `DoomLevel.doorSpot()` puts it in the wall behind the player start
+  (64 x 72, Doom's door size; in Freedoom's E1M1 under the window of the start room's west wall, line 1045), else the
+  longest wall of that room. The office's south (+y) is the level's way in (`n`), office x along the door is `t` (n
+  turned left): `o2l`, `l2o`, `a2l`, `a2o`. One door (`door`: Doom's 2 units a tic, 150 tics up, down again, back up
+  over you), opened by E within 64 units or by walking into it, from either side. Each renderer takes a camera and an
+  optional window (per column the rows the open door shows): the office draws its south wall, the door panel risen
+  `door.open`, and under it the level (`renderLevel(…, win)`: clips start at the window, segs on the office's side of
+  the door's wall are dropped or cut); the level draws the door in its wall (`doorColumn`) and under it the office
+  (`renderOffice(…, win)`). zb in the window is reset for the other side, then set to the door's distance, so what
+  stands on this side draws over it and what is behind the wall does not. Crossing the plane in the doorway switches
+  `world` with the same place, heading and momentum.
+- **The level goes on while you are in the office** (`level.away`): its player is you mapped behind its door. Through
+  the open door (level.js `portal`: `beyond`, `along`, `officeSide`) you, missiles, bullets and sight pass and the
+  map's lines on the office's side are not there, so monsters see you in the office, come to the door (they cannot go
+  through), shoot you there, their fireballs fly into the office (`o.office`, drawn by renderOffice); you shoot into
+  the level from the office (the crosshair over the window: `aimThrough`, `lvl.fire`); a shot in the office with the
+  door open wakes the level (`noise`).
+- **One player, Doom's status bar**: the level's player is you in the office too: AMMO the shells, HEALTH, ARMOR,
+  the keys you picked up, the arms (3), the ammo table (bullets, shells, rockets, cells, cur / max; Freedoom's bar
+  has icons for them, no letters). burrow's limits are off the bar (room.status is only the bots you shot, for the
+  grin). The gun closet's E: a box of shells (+20). You start with 20. Dead (anywhere): a click, Doom's respawn: the
+  level from its start, you as you began, back in the office at the door, with the melt. The exit: the same with
+  what you carry. The melt is only for those and for going in and out of the closet.
+- **The level's bugs** (doom/level.js): no item was ever picked up (the `I()` helper put an item's stats in its `pick`
+  argument), so no health, armour, shells or keys, and no keyed door could open; the decorations were walk-through
+  (a height test vanilla Doom does not have); monsters attacked far more often than Doom lets them (now A_Chase:
+  movecount, justattacked, P_CheckMissileRange's distance, melee at 44 + your radius, reaction time, justHit); a shot
+  woke every monster within 1200 units through walls (now P_NoiseAlert: through the openings, one sound-blocking line);
+  monsters could not open doors (now P_Move's spechit: plain doors); walls stopped you dead instead of sliding along
+  them (now along the blocking line, long moves halved); you dropped off ledges at once (now Doom's gravity, a squat
+  on a hard landing, steps up smoothed by `dviewh`); lines could be used from behind; the strobe lights had the wrong
+  periods; clips, rockets, cells and the backpack are counted (only the shotgun shoots); the weapons and power-ups you
+  cannot use stay where they lie.
+- Tested: node (`/tmp`-style scripts loading wad.js and level.js: the door's spot, pickups, 700 tics, sliding 107 units
+  along a wall at 30 degrees, a fall over 4 tics, a zombieman opening four doors to reach you, one with sight attacking
+  7 times in 30 s while closing in), and the demo with look.mjs (the door closed, E out of reach and within, walking in,
+  looking back at the office from the level, walking back; a zombieman seeing you through the door and attacking; one
+  shot from the office killing one in the level; death, respawn; the exit switch). Not tested: the pointer lock in his
+  Chrome; id's WAD (its door spot is found the same way).
+Superseded from the round before: the HUD in burrow's terms, the 64 x 80 door, the melt at the door, the blinking dark.

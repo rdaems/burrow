@@ -2276,14 +2276,7 @@ function startRoom(cv, app) {
       },
       move: (x, y, a, walking) => { const f = world().folk.get("you"); if (f && !f.held) { f.x = x; f.y = y; f.dir = Math.cos(a) < 0 ? -1 : 1; f.walking = walking; } },
       shoot: (id) => { const f = world().folk.get(id); if (!f || f.held || !f.b || f.b.human) return false; shoot(f); return true; },   // an office manager too: a bot like the others
-      armed: () => true,
-      status: () => {
-        const s = app.state() || {}, u = s.usage || {}, bots = s.bots || [], left = (x) => (x && x.used !== undefined ? Math.max(0, 100 - x.used) : null);
-        return { health: left(u.session), armor: left(u.week), kills: world().kills || 0, fear: world().fear || 0,
-          bars: (u.bars || [u.session && { ...u.session, label: "session" }, u.week && { ...u.week, label: "week (all models)" }].filter(Boolean)).map((b) => ({ label: b.label, left: left(b) })),   // what is left of every limit /usage lists
-          keys: (s.machines || []).map((m) => ({ color: paintOf(m.id).top, ok: !m.error })),
-          working: bots.filter((b) => b.busy).length, waiting: bots.filter((b) => b.waiting).length, idle: bots.filter((b) => !b.busy && !b.waiting && !b.over).length, done: bots.filter((b) => b.over).length };
-      },
+      status: () => ({ kills: world().kills || 0 }),   // the bots you shot (the face grins)
       face: () => { const f = world().folk.get("you"), b = f && f.b; return b ? pixelAvatar(seedOf(b), "human", colorOf(b)) : null; },
       // what E does to what is under the crosshair (the gun closet: more shells), and what it says it would do
       use: (th) => !!th && !!th.piece && KIND(th.piece) === "booth" && "reload",
