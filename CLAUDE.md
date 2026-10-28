@@ -1772,6 +1772,31 @@ each had a fix of their own in `draw()`; the reception, the tables, the coffee m
   drinker 50 behind. The fix: one offset, 0.0, for the reception, ping-pong, chess, pouf, coffee and a desk.
   The demo keeps a moved layout until it is restarted: take press points from `pieceOf(key).at`, not fixed dots.
 
+## A stopped session after a /clear: its conversation and folder from the record (2026-10-28)
+
+Susan (his office manager's session) passed on his report: he could not find last night's bot. nifty-nate (b5d0862e,
+arthroid) had a /clear at 18:07 (a new conversation, 365ab4c3), moved into a worktree and worked till 21:35; overnight
+the room showed it with its first conversation, its starting folder, "ended 17:32", process off. Her reading, that
+burrow takes those from state.json where `claude agents` has them right, was not it: burrow takes `cwd` and
+`sessionId` from the `claude agents` row. Tested with a throwaway Haiku session in a made-up git repo (one task, which
+moved it into a worktree by background isolation; /clear; a second task; `claude stop`): while its process runs,
+`claude agents --json --all` gives the new conversation and the worktree; once it is gone it gives the record's first
+fields, the first conversation and the starting folder, though the record has `resumeSessionId` (what attaching
+resumes) and `worktreePath`. So burrow mirrored `claude agents`, which forgets.
+- Now a row without a process takes `resumeSessionId` and `worktreePath` from the record (`JOBS` greps them,
+  `parse_jobs`, `parse_agents`): the bot keeps its conversation and desk when the supervisor stops its process, the
+  notes read the conversation that goes on (`SLICE` by `session`), `/api/office` says it. A plain session is as before.
+- Not burrow's: nifty-nate's record was not written between 17:32 and his reattach this morning although it worked
+  till 21:35 (`updatedAt`, `lastTerminalAt`, `detail` all from 17:32; in the test the record was written after every
+  turn), so "ended" and the summary were the old ones; agent view reads the same record.
+- jumpy-jade (`claude --bg --resume <id> -n jumpy-jade` on arthroid, never prompted): no job record was made, and it
+  was in the room about 30 minutes. The room has a figure only for a row of `claude agents --json --all`
+  (`parse_agents`), so `claude agents` listed it while its process lived; without a record `--all` cannot list it once
+  the process is gone. Over a plain `ssh host 'claude agents …'`, `claude` is not on the PATH ("command not found"):
+  burrow prefixes `PATH` (`PATH` in server.py); a check without it sees nothing.
+- To trust a new git repo for a test from inside a session: the trust prompt's cursor starts on "No, exit" (↓ then
+  Enter), and the `CLAUDE_*` variables of the calling session must be unset, or the child session does not save it.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a

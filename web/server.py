@@ -47,8 +47,10 @@ PEERS = r'''find ~/.claude/projects -maxdepth 2 -name '*.jsonl' -mmin -1 2>/dev/
 # that is over: when it ended) and agent view's one-line summary of it; one grep, a `<path>:"<key>": "<value>"`
 # a line. And its Remote Control session (bridgeSessionId, cse_…) when it was started with --remote-control:
 # the same session is then in the Claude app and at claude.ai/code/session_<id>. And its tempo: whether a turn
-# runs (active), or not, waiting for you (blocked) or for nothing (idle); not in `claude agents --json`
-JOBS = r'''grep -o -E '"(updatedAt|detail|bridgeSessionId|tempo)": *"([^"\\]|\\.)*"' ~/.claude/jobs/*/state.json 2>/dev/null || true'''
+# runs (active), or not, waiting for you (blocked) or for nothing (idle); not in `claude agents --json`. And the
+# conversation it goes on with (resumeSessionId: a /clear starts a new one) and the worktree it moved into
+# (worktreePath): what `claude agents` shows while its process runs, and forgets once it is gone (parse_agents)
+JOBS = r'''grep -o -E '"(updatedAt|detail|bridgeSessionId|tempo|resumeSessionId|worktreePath)": *"([^"\\]|\\.)*"' ~/.claude/jobs/*/state.json 2>/dev/null || true'''
 # where Claude Code ran lately, for the project cabinet's form: its home, then the working directory of the newest
 # transcript of each of its projects (~/.claude/projects/<the path, encoded>/<session>.jsonl), the latest first
 RECENT = r'''echo "$HOME"; cd ~/.claude/projects 2>/dev/null || exit 0
@@ -686,24 +688,33 @@ def parse_agents(out, jobs={}):
     A row without a tempo (an old record) gets Claude Code's own fallback from the process's status.
     `over` (done, failed or stopped with its process gone: agent view's Completed group, listed with
     --all only) says which, `endedAt` when (its record's last write), `detail` is agent view's one-line
-    summary, `claude rm` deletes one."""
+    summary, `claude rm` deletes one.
+    Its conversation and its folder: `claude agents` gives the live ones while its process runs (after a /clear
+    the new conversation, after a move into a worktree the worktree), but with the process gone it falls back to
+    the record's first fields, the conversation it started with and the folder it started in (tested 2026-10-28:
+    a /clear, a worktree, stopped). The record keeps where it was: resumeSessionId (what attaching resumes) and
+    worktreePath. So a row without a process takes those, and a bot doesn't jump back to its old conversation and
+    desk when Claude Code's supervisor stops it after an idle hour."""
     bots = []
     for x in json.loads(out.strip() or "[]"):
         if x.get("kind") != "background" or not x.get("id"):
             continue
         state, status, j = x.get("state"), x.get("status"), jobs.get(x["id"], {})
         alive = "pid" in x
+        session, cwd = x.get("sessionId") or "", x.get("cwd") or ""
+        if not alive:
+            session, cwd = j.get("resumeSessionId") or session, j.get("worktreePath") or cwd
         tempo = j.get("tempo") or ("active" if status == "busy" else "blocked" if status == "waiting" else "idle")
         waiting = alive and status == "waiting"
         over = not alive and state in ("done", "failed", "stopped")
         bots.append({
-            "id": x["id"], "name": x.get("name") or x["id"], "cwd": x.get("cwd") or "",
+            "id": x["id"], "name": x.get("name") or x["id"], "cwd": cwd,
             "busy": alive and not waiting and tempo == "active", "waiting": waiting, "alive": alive,
             "state": state or "", "tempo": tempo,
             "dialog": waiting,               # a prompt open in its session: nothing can be typed to it (the notes send you there)
             "over": state if over else "", "endedAt": when(j.get("updatedAt")) if over else 0, "detail": j.get("detail") or "",
             "updated": when(j.get("updatedAt")),       # its record's last write: the notes on it are older, or not
-            "started": x.get("startedAt") or 0, "pid": x.get("pid") or 0, "session": x.get("sessionId") or "",
+            "started": x.get("startedAt") or 0, "pid": x.get("pid") or 0, "session": session,
             "rc": j.get("bridgeSessionId") or "",      # its Remote Control session (cse_…): in the Claude app and at claude.ai/code too
         })
     bots.sort(key=lambda b: b["started"])
@@ -719,10 +730,10 @@ def when(iso):
 
 
 def parse_jobs(out):
-    """{id: {updatedAt, detail, bridgeSessionId, tempo}} from the records' lines"""
+    """{id: {updatedAt, detail, bridgeSessionId, tempo, resumeSessionId, worktreePath}} from the records' lines"""
     jobs = {}
     for line in out.splitlines():
-        m = re.match(r'(?:.*/)?([^/:]+)/state\.json:"(updatedAt|detail|bridgeSessionId|tempo)": *"(.*)"$', line)
+        m = re.match(r'(?:.*/)?([^/:]+)/state\.json:"(updatedAt|detail|bridgeSessionId|tempo|resumeSessionId|worktreePath)": *"(.*)"$', line)
         if not m:
             continue
         try:
