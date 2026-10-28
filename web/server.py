@@ -325,9 +325,9 @@ FIXED = {"fire", "closet", "settings", "clock"}
 OPTIONS = {
     "rc": True,     # a bot started here gets --remote-control: the same session is in the Claude app and at claude.ai/code
     "yolo": False,  # a bot started here gets --dangerously-skip-permissions: it never asks, it just does
-    "cleanup": False,   # she clears out finished sessions (Linda: completed, nothing open in her notes, an hour gone; Joan: on her rounds): to the booth
     "hardcore": False,  # the booth is a gun closet: she clears them out with a shotgun, and a click on it gives you a crosshair
 }
+# (no switch for clearing out sessions: you ask an office manager, and she removes them through /api/office)
 
 
 def options(room):
@@ -354,7 +354,7 @@ MANAGERS = {
 what goes on at a desk, who is stuck and on what, start a bot on something, put up a desk, clear out old
 sessions, pass a message on. Look things up yourself before you ask back."""},
     "rounds": {"name": "Joan", "seed": "joan-10", "color": "#9a74d6", "session": True, "first": "/loop " + ROUNDS + " Do your round of the office (CLAUDE.md, your style).",
-               "line": "As Susan, and every half hour she goes round by herself: who is stuck, who is done. She nudges bots, clears out, asks you what is yours.",
+               "line": "As Susan, and every half hour she goes round by herself: who is stuck, who is done. She nudges bots and asks you what is yours.",
                "how": "a Claude Code session with a /loop: a turn every half hour",
                "brief": """You do the rounds: a /loop in your session starts one every """ + ROUNDS + """, and %(you)s may also talk to you
 in your terminal. A round:
@@ -364,10 +364,8 @@ in your terminal. A round:
 3. A session waiting for an answer: if it is %(you)s's to decide, ask %(you)s (AskUserQuestion: the session, the
    question in a line, the options). Never answer for %(you)s.
 4. A session stuck or going in circles: message it (SendMessage) with what you see, or tell %(you)s.
-5. Only if `settings.cleanup` is true: remove completed sessions that ended more than a day ago with nothing
-   left to do (their summary says done, no open question); three a round at most, and say which.
-6. Write the round into rounds.md (three lines at most, newest on top). End with one line for %(you)s; a quiet
-   round is one line."""},
+5. Write the round into rounds.md (three lines at most, newest on top). End with one line for %(you)s; a quiet
+   round is one line. You remove a session only when %(you)s asks you to."""},
     "notes": {"name": "Linda", "seed": "manager-16", "color": "#f06b72", "session": False,
               "line": "Keeps the notes on every session: what it does, the decisions it leaves you, what it built. Explains a decision, sends your answer.",
               "how": "Stijn's notes: Claude writes them up when a session finishes a turn (a few cents each)"},

@@ -682,8 +682,8 @@ function startRoom(cv, app) {
     f.hunt = null; f.carry = null; f.act = rest();
     return false;
   }
-  // clearing out (app.cleanup(): what an office manager's session asked to remove, then, with the switch on,
-  // Linda's: completed, nothing open in her notes, an hour gone; never one you rescued), one at a time each. She
+  // clearing out (app.cleanup(): what an office manager's session was asked to remove; never one you rescued), one
+  // at a time each. She
   // fetches it and walks it to the booth, a step behind her, where its five seconds run as for any bot put in.
   // Hardcore: it is condemned where it stands (hands up) and shot (huntStep). Taking one from her, or its undo,
   // spares it for good. A pause between them, so it can be watched
@@ -1367,14 +1367,15 @@ function startRoom(cv, app) {
     rect(ctx, W - 1, 0, 1, H, INK2);
     if (!s) return;
     const w = world(), all = s.bots || [], usage = s.usage || {};
-    // every session is a bot about the room; a chair at its desk only while its process runs (a completed one
-    // would otherwise keep a chair for good: a desk a dozen chairs long). Opening one restarts it, and its chair comes
+    // every session is a bot about the room, with a chair at its desk, whether its process runs or not (Claude
+    // Code's supervisor stops an idle one after an hour; opening it starts it again). Many finished sessions make a
+    // long desk: a full room is a full room, the booth clears it
     const bots = all;
     const gone = new Set([...w.remains.keys(), ...w.stopped.keys(), ...[...w.folk.values()].filter((f) => f.act.kind === "doom").map((f) => f.id)]);   // killed: no chair
     // a burnt desk whose bots are on their way out is not drawn; nor one that came with its sessions once the
     // last of them is deleted from here (the feed still lists it a moment)
     const shown = s.desks.filter((d) => !w.razed.has(d.unit) && (d.kept || all.some((b) => b.unit === d.unit && !w.stopped.has(b.id))));
-    const L = layout(shown.length < s.desks.length ? { ...s, desks: shown } : s, all.filter((b) => !b.over), moving, gone);
+    const L = layout(shown.length < s.desks.length ? { ...s, desks: shown } : s, all, moving, gone);
     // the piece under the pointer: outlined if a click does something there (the rest only reacts in
     // its own way, a plant sways)
     const hp = !moving && !held && !carrying && !dogHeld && !(dogRect && over(...dogRect)) ? pieceAt(pointer) : null;   // (the dog in front of it: the dog)
@@ -1509,7 +1510,6 @@ function startRoom(cv, app) {
     for (const f of w.folk.values()) if (!f.lying && !f.held) items.push([f.y, () => drawFigure(ctx, f, f.b, T, hl)]);
     for (const d of L.desks) {
       const sc = screenAt(d);
-      if (!moving && !held && over(sc.sx, sc.sy, sc.sx + 22, sc.sy + 18)) for (const b of bots) if (b.over && b.unit === d.unit) hl.add(b.id);   // its completed ones too (no chair)
       const gw = 22 + d.trees.length * LAP;     // what of it is solid: its screen (and laptops), the cabinet, the desktop
       items.push([danger(d.key) ? 1e9 : d.y - 1, () => outlined(ctx, foot(d.key, d.at, d.u), danger(d.key), (c) => drawDesk(c, d, w, T, hl), RED, tintOf(d.key)),
         [[sc.sx, sc.sy, sc.sx + gw, sc.sy + 18], [d.x0, d.y - 15, d.x0 + d.cab, d.y + 1], [d.x0 + d.cab - 2, d.y - 12, d.x0 + d.w, d.y - 3]]]);

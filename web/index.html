@@ -131,20 +131,11 @@ const room = startRoom($("#room"), {
   view: () => viewKind,
   settings: () => (state && state.settings) || {},
   digest: () => digest,
-  // the office manager clearing out (switchboard: cleanup): the sessions she would let go, oldest first:
-  // completed, her notes on them have nothing open (no decision left to you, nothing next: empty, or a line that
-  // says so, "Nothing left in this session …", as the notes often do), ended over an hour ago
-  // and first, the ones her session asked to be removed (/api/office remove: Susan, Joan)
+  // the office manager clearing out: the sessions her session was asked to remove (/api/office remove: you asked
+  // Susan or Joan); nothing goes on its own
   cleanup: () => {
-    const cfg = (state && state.settings) || {}, ss = (digest && digest.sessions) || {};
-    const none = (t) => !(t || "").trim() || /^\s*(nothing|none|no further|no next)\b/i.test(t);
-    const asked = ((state && state.removing) || []).filter((id) => byId(id));
-    const ids = cfg.cleanup && state && lindaFolk() ? state.bots.filter((b) => {   // (the rule reads Linda's notes)
-      const e = ss[b.id];
-      if (!b.over || !e || !b.endedAt || Date.now() - b.endedAt < 3600e3) return false;
-      return !(e.decisions || []).some((q) => !(e.answered || {})[q.question]) && none(e.next);
-    }).sort((a, b) => a.endedAt - b.endedAt).map((b) => b.id) : [];
-    return { on: !!cfg.cleanup || asked.length > 0, hardcore: !!cfg.hardcore, ids: [...asked, ...ids.filter((id) => !asked.includes(id))] };
+    const cfg = (state && state.settings) || {}, asked = ((state && state.removing) || []).filter((id) => byId(id));
+    return { on: asked.length > 0, hardcore: !!cfg.hardcore, ids: asked };
   },
   away: () => (blurAt ? (performance.now() - blurAt) / 1000 : 0),
   hl: () => (hoverTile && hoverTile.kind === "bot" ? asFolk(hoverTile.id) : hoverTile && hoverTile.kind === "notes" ? lindaFolk() : null),
@@ -626,24 +617,26 @@ function fillLimits() {
     : `<p>Not known yet: Claude Code's /usage is asked every five minutes.</p>`)
     + (u.text ? `<pre class="more">${esc(u.text)}</pre>` : "");
 }
-// ---- the switchboard: burrow's own settings, a switch a line (kept in room.json `settings`; the
-// server knows the keys, OPTIONS there)
+// ---- the switchboard: burrow's own settings, a slider a line and a sentence that says how it is now (kept in
+// room.json `settings`; the server knows the keys, OPTIONS there). Clearing out sessions is not a setting: you ask
+// an office manager
 const OPTIONS = [
-  { key: "rc", name: "New bots are in the Claude app too",
-    what: "Started with <code>claude --bg --remote-control</code>: the same session can be continued on your phone or at claude.ai/code, and is in the app's list of sessions. Its tile gets an APP button, its antenna a blinking light." },
-  { key: "yolo", name: "New bots skip permissions (yolo)",
-    what: "Started with <code>--dangerously-skip-permissions</code>: the bot never waits for an answer, it runs every command and edit. Bots already running keep their mode." },
-  { key: "cleanup", name: "The office manager clears out finished sessions",
-    what: "Linda: a session that is completed, has nothing open in her notes (no decision left to you, nothing next) and ended over an hour ago. Joan: on her rounds, the ones done for a day with nothing left. She walks it to the booth, one at a time. The booth's five seconds still let you take it out; one you rescue she leaves alone. Gone means <code>claude rm</code>: off Claude Code's list, its conversation still there for <code>claude --resume</code>." },
-  { key: "hardcore", name: "Hardcore",
-    what: "The booth is a gun closet. The office manager clears sessions out with a shotgun, and a click on the closet gives you a crosshair to do it yourself (Esc puts it away). A shot bot goes to pieces: click them to put it back together, until the idle bots have cleared them away (then it is deleted)." },
+  { key: "rc", on: "New bots are in the Claude app too.", off: "New bots are only here." },
+  { key: "yolo", on: "New bots skip permission prompts.", off: "New bots ask for permission." },
+  { key: "hardcore", on: "Hardcore. Good luck.", off: "Hardcore is off." },
 ];
 function fillSettings() {                  // rebuilt only when a setting changed (an update mid-click swallowed the click)
   const cfg = (state && state.settings) || {}, el = $("#vSettings"), key = JSON.stringify(cfg);
   if (el.dataset.key === key) return;
   el.dataset.key = key;
-  el.innerHTML = OPTIONS.map((o) => `<div class="opt"><button type="button" class="btn sw${cfg[o.key] ? " on" : ""}" data-key="${o.key}" title="${cfg[o.key] ? "on: click to switch it off" : "off: click to switch it on"}">${cfg[o.key] ? "ON" : "OFF"}</button><div><div class="nm">${o.name}</div><div class="what">${o.what}</div></div></div>`).join("");
-  for (const bt of el.querySelectorAll(".sw")) bt.onclick = () => api("/api/settings", { [bt.dataset.key]: !cfg[bt.dataset.key] });
+  // both sentences in one spot, the other one invisible: the panel is as wide as the longest and keeps its width
+  const say = (o, v) => `<span class="say"><i${v ? "" : ' class="hide"'}>${o.on}</i><i${v ? ' class="hide"' : ""}>${o.off}</i></span>`;
+  el.innerHTML = OPTIONS.map((o) => `<label class="opt"><button type="button" class="slide${cfg[o.key] ? " on" : ""}" role="switch" aria-checked="${!!cfg[o.key]}" data-key="${o.key}"></button>${say(o, !!cfg[o.key])}</label>`).join("");
+  el.querySelectorAll(".slide").forEach((bt, i) => bt.onclick = () => {   // it slides at once; the push that follows agrees
+    const o = OPTIONS[i], v = !bt.classList.contains("on"), [a, b] = bt.nextElementSibling.children;
+    bt.classList.toggle("on", v); bt.setAttribute("aria-checked", v); a.classList.toggle("hide", !v); b.classList.toggle("hide", v);
+    api("/api/settings", { [o.key]: v });
+  });
 }
 // ---- the doors: a line a machine, its door in its paint, its name, how it is reached and how it is, and
 // the paints to pick from (its door and its desks wear it; wood or one of the room's paints). Another

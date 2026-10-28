@@ -1722,6 +1722,33 @@ confused." And: "In the browser, can we catch cmd+left arrow? ... I use that in 
   Now they send what Ghostty sends: Ctrl+A, Ctrl+E, Ctrl+U. Tested in a shell tile in the demo (a line fixed at its
   start, at its end, and wiped); not in a Claude Code prompt (the demo's bots have none).
 
+## The Mac awake all night; a chair for every session; the switchboard's sliders (2026-10-28)
+
+He: "I opened my mac, and it had been on all night, since the stay awake for local bots was enabled. The only local
+bot is you, but you where idle"; "your chair dissapeared at your desk? Once I clicked you, the chair reappeared";
+"all bots should have chairs"; the settings "horizontal sliders ... way too much text ... one small sentence ... changes
+with the toggle ... Keep the description of hardcore mode vague. And remove the option 'floor manager deletes sessions'.
+The user should talk to the office manager about it."
+- **Not burrow** (`pmset -g log`, `pmset -g assertions`): burrow's `caffeinate -i -s -w <server>` died at 17:18, when
+  the last local turn ended; no caffeinate overnight, no sleep entry all night, no "Wake from" when the lid opened.
+  What held it: `pmset -g` says `sleep 0` (on the charger the Mac never sleeps by itself: System Settings, Battery,
+  "Prevent automatic sleeping on power adapter when the display is off"), and sharingd's "AirDrop"
+  PreventUserIdleSystemSleep, held for 532 hours. Claude Code itself runs `caffeinate -i -t 300` beside a session while
+  it works (`claude bg-spare` its parent). Nothing changed in burrow; his settings are his.
+- **Chairs**: the supervisor stops an idle session's process after an hour, and only a live process had a chair (so
+  that finished sessions would not make long desks). Now every session has its chair (`layout(…, all, …)`); a long
+  desk is a full room, the booth clears it. The screen's hover lights its seats, so the extra light for chairless
+  completed ones is gone.
+- **Settings** (`OPTIONS` in index.html: `{key, on, off}`): a slider a line (`.slide`, `role="switch"`: a sunken steel
+  track, gold when on, the steel knob stepping across in 0.12 s, not with reduced motion) and one sentence saying how
+  it is now; both sentences sit in one grid cell, the other invisible, so the panel (as narrow as its content now,
+  like YOU) keeps its width. A click (on the sentence too: it is a label) slides at once; the push agrees after.
+  Hardcore says only "Hardcore is off." / "Hardcore. Good luck.".
+- **No `cleanup` switch** (server `OPTIONS`, the page): nothing is cleared out on its own any more. `app.cleanup()` is
+  only what an office manager's session was asked to remove (`/api/office remove`: you ask Susan or Joan); Linda's
+  rule over her notes is gone, and Joan's rounds remove a session only when asked. A stored `cleanup` in room.json is
+  ignored (`options()` keeps the known keys).
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a
