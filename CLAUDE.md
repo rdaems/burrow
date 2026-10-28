@@ -108,7 +108,10 @@ embedded in this representation, in a maximally coherent and consistent way." So
 - waiting for a permission answer (`status: "waiting"` in `claude agents --json`): seated, hand up, the
   screen's cursor blinking; never falls asleep.
 - stop: carry the bot to the door, click the "stop …?" sign. A stopped bot walks out through the door.
-- a file dropped on a bot opens its session and types the path (uploaded first for ssh machines).
+- a file dropped on a bot (or a tile, or a screen) opens its session and pastes the path (uploaded first for ssh machines):
+  a bracketed paste, as a terminal does with a dropped file (`term.paste`; one queued for a tile not yet open waits
+  until bracketed paste is on, ten seconds at most). Claude Code makes a pasted image path `[Image #n]`; typed, it
+  stayed a plain path in the prompt (2026-10-28).
 - hovering a bot lights up its session pane's edge; hovering the pane (or a project's screen) puts a halo
   on the bot(s).
 - chess and ping-pong are for two idle bots; one idle bot alone may sit at the chess board waiting for an

@@ -40,7 +40,7 @@ idle. A finished session stays in the room, idle, until you delete it; opening i
 off. A message from one session to another is a beam between their antennas.
 
 Click a robot to open its session (shift-click opens it beside the others), the `+` at a desk to start one,
-a desk's screen for a shell of your own there. Drop a file on a robot and its path is typed in.
+a desk's screen for a shell of your own there. Drop a file on a robot or a terminal and it is pasted in, as in any terminal: an image becomes an image in the prompt.
 
 Everything else is furniture, out of the closet: a booth that deletes a session (click it within five seconds
 to take it back), a fire that burns the furniture you drag into it, a neuralyzer for `/clear`, a printer for the

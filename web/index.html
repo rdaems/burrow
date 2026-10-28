@@ -907,7 +907,14 @@ function connect(t, term) {
     : `ws://${location.host}/term?m=${encodeURIComponent(t.m)}&id=${encodeURIComponent(t.id)}`);
   s.binaryType = "arraybuffer";
   const since = performance.now();
-  s.onopen = () => { s.send(JSON.stringify({ size: [term.cols, term.rows] })); setTimeout(() => { for (const x of t.typed.splice(0)) if (t.ws === s) s.send(enc.encode(x)); }, 1000); };
+  // what was handed to it before it was there (a dropped file, a pair link) goes once the program in it is up,
+  // i.e. has turned bracketed paste on (a session being restarted takes a few seconds): one second at least, ten at most
+  const flush = (n) => {
+    if (t.ws !== s) return;
+    if (!term.modes.bracketedPasteMode && n < 18) return setTimeout(flush, 500, n + 1);
+    for (const x of t.typed.splice(0)) if (x.paste) term.paste(x.paste); else s.send(enc.encode(x));
+  };
+  s.onopen = () => { s.send(JSON.stringify({ size: [term.cols, term.rows] })); setTimeout(flush, 1000, 0); };
   s.onmessage = (e) => { const b = new Uint8Array(e.data); t.active = performance.now(); if (!shell && agentView(t, b)) closeTile(t); else term.write(b); };
   // the attach ended: `exit` in the session, or the session stopped (a shell: `exit` ended it). The
   // tile goes with it (the session keeps running if it does). One that ends at once failed to
@@ -1127,12 +1134,14 @@ function showChess() {
 // ping-pong's own ✕ hides its card: then the game is over here too
 new MutationObserver(() => { if ($("#pong").hidden && viewKind === "pong") closeView(); }).observe($("#pong"), { attributes: true, attributeFilter: ["hidden"] });
 
-// drop a file on a session: its path gets typed in, as in a terminal (copied over first for a remote machine)
+// drop a file on a session: its path gets pasted in, as a terminal does with a file dropped on it (copied over
+// first for a remote machine). A paste, not keys: Claude Code makes a pasted image's path an [Image #n], a
+// typed one stays text
 async function hand(file, t) {
   const r = await (await fetch(`/api/upload?m=${encodeURIComponent(t.m)}&name=${encodeURIComponent(file.name)}`, { method: "POST", body: file })).json();
   if (r.error) return note(r.error);
   const x = (/[\s'"\\]/.test(r.path) ? "'" + r.path.replace(/'/g, "'\\''") + "'" : r.path) + " ";
-  if (t.ws && t.ws.readyState === 1) t.ws.send(enc.encode(x)); else t.typed.push(x);
+  if (t.ws && t.ws.readyState === 1) t.term.paste(x); else t.typed.push({ paste: x });
   t.term.focus();
 }
 const pane = $("#pane");
