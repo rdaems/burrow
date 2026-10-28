@@ -1997,3 +1997,33 @@ really buggy, the visuals don't work".
   status bar (BULL SHEL RCKT CELL), the door in the back wall of the lit niche behind the start (the start room is 72
   high: `doorSpot` now takes a room exactly as high as the door), a zombieman shot dead. `BURROW_WAD=<path>` makes
   the server serve any WAD (for a try).
+
+## The radio: sound (2026-10-28)
+
+He: "Can you add a furniture piece that represents sound. When it's on the floor, there is sound, you can click on it
+to toggle sound." (Until now burrow had no sound at all, by his first principle; this keeps it a thing in the room.)
+- **The radio** (`radio` kind, from the closet; `drawRadio`: a midcentury set on splayed legs, the dial a strip across
+  its top, lit amber with a red needle while on, the speaker's cloth behind three slats, two knobs; `drawNotes`: two
+  notes drifting up from it while on, not with reduced motion). A click (`{kind: "sound"}`, the page's `act`) switches
+  it: a little tune going on, a click going off. Its state is room.json `settings.sound` (server `OPTIONS`, on by
+  default, not on the switchboard: the radio is the switch); putting a radio down switches it on. No radio, no sound.
+  In 3d (props3d) the same face, a warm light while on.
+- **web/sound.js** (`Sound.set/play/doom/on`): Web Audio, nothing recorded. The room's sounds are synthesised, short and
+  quiet, panned by where in the room they happen (`sfx(name, x)` in room.js; not while you are in the first person):
+  a key now and then for the ones typing at their desks (three a second at most), a rising two-note "?" when a hand
+  goes up (a change, not on page load), a beam's zap, a door as a bot comes in or leaves, the booth's rising hum (it
+  stops, with a falling tone, when the bot is taken back) and a poof at the end, a shot and the clank of the parts,
+  the neuralyzer's flash, the dog's bark, a chessman put down, the bots' ping-pong, a football kick, the dot-matrix
+  printer, the fire's crackle, a whoosh for what goes into it. A browser plays sound only after a click or a key on
+  the page (`navigator.userActivation`): until then nothing.
+- **Doom's sounds** from the WAD (DMX: format 3, rate, count, 8-bit samples padded 16 each side), as Doom places them
+  (S_AdjustSoundParams: full within 160 units, gone at 1200, panned to the side; one sound an origin, Doom's
+  channels). level.js queues what is heard (`level.sounds`, `snd`): a monster's sight, its odd grunt while it hunts
+  (3 in 256), pain, death, its pistol, shotgun, fireball, claw, bite; fireballs and barrels exploding; doors opening and
+  closing (blazing ones too), lifts starting and stopping, floors moving, switches, the exit switch; your pain, your
+  death, a hard landing, a use on a plain wall, a locked door, pickups (an item, a weapon, a power-up). fps.js plays
+  them where you are (from the office through the door, muffled while it is shut), its shotgun, the mysterious door
+  (blazing), the gun closet's shells. `extract.py` now keeps 49 of Freedoom's sound lumps (freedoom.wad 3.7 MB).
+- Tested in the demo (look.mjs with Sound.play and Sound.doom wrapped to count): nine seconds of the room (keys,
+  crackles, chess, a beam), nothing while off, the radio's two pictures, the closet; in 3d the shotgun, a zombieman's
+  sight, pistol and pain, your pain, the door closing; no errors. Not heard by me: headless Chrome has no speakers.

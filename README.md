@@ -16,8 +16,10 @@ burrow and every session keeps running; open it again and they are all there. No
 machine but Claude Code.
 
 **The room is the interface.** Every state is something in the room, every action something you do in it.
-No notifications, badges, counters or sounds: a session that needs you raises its hand, you delete one by
-carrying its robot into a booth, and your usage limits are the coffee pot and the water bottle.
+No notifications, badges or counters: a session that needs you raises its hand, you delete one by carrying
+its robot into a booth, and your usage limits are the coffee pot and the water bottle. Even sound is a thing
+in the room: a radio. Put one down and you hear the office (keys, a hand going up, a message beamed, the
+fire); click it for silence.
 
 **The terminal is Claude Code's own.** Nothing of it is re-implemented, so whatever Claude Code can do, you
 can do here.
@@ -42,7 +44,7 @@ a desk's screen for a shell of your own there. Drop a file on a robot and its pa
 
 Everything else is furniture, out of the closet: a booth that deletes a session (click it within five seconds
 to take it back), a fire that burns the furniture you drag into it, a neuralyzer for `/clear`, a printer for the
-office report, a switchboard for the settings, a whiteboard the robots dream on, a table for a
+office report, a switchboard for the settings, a radio for the sound, a whiteboard the robots dream on, a table for a
 [pair](https://github.com/rdaems/pair-prompting) room, a dog, and much more. Switch on hardcore and the
 booth is a gun closet, the office a first-person shooter in a small Doom engine, and in there a mysterious door
 leads to Doom's first level ([Freedoom](https://freedoom.github.io)'s; put id's `DOOM1.WAD`, the free

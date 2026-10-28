@@ -458,6 +458,18 @@ window.Props3D = (() => {
         solid(x - 9, y - 12, x + 9, y);
         break;
       }
+      case "radio": {                            // a midcentury set on four legs: the dial across its top (lit while the sound is on), the speaker's cloth behind three slats, two knobs
+        const on = !!p.on, front = once("radio" + on, () => face(over(woodTex(14, 15, WOODP.top, 15), (r) => {
+          r(1, 1.5, 12, 3, on ? [255, 226, 122] : [58, 44, 38], on); r(7.6, 1.5, 0.6, 3, on ? [235, 76, 63] : [42, 32, 38], on);
+          r(1, 5.5, 12, 6, [216, 196, 154]); for (const sx of [3.8, 6.6, 9.4]) r(sx, 5.5, 0.8, 6, hex(WOODP.d));
+          r(1.2, 12.3, 2, 2, [63, 55, 64]); r(10.8, 12.3, 2, 2, [63, 55, 64]);
+        })));
+        B(x - 7, y - 5, x + 7, y, 4, 19, M.wood(WOODP.top, 15), { front });
+        for (const [lx, ly] of [[x - 6, y - 5], [x + 5, y - 5], [x - 6, y - 1], [x + 5, y - 1]]) B(lx, ly, lx + 1, ly + 1, 0, 4, M.wood(WOODP.d, 4));
+        if (on) out.lights.push({ x, y: y - 3, z: 15, r: 60, col: [1, 0.85, 0.5], k: 0.8 });
+        solid(x - 7, y - 5, x + 7, y);
+        break;
+      }
       case "chess": {                            // a table with the game on it as it stands (white plays from the west), a stool each side
         const board = p.board || "", top = once("chess" + board, () => face(pix(16 * TS, 14 * TS, (i, j) => {
           const bx = i - 2 * TS, by = j - TS, cell = 1.5 * TS;

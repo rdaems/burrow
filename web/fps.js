@@ -16,6 +16,9 @@
 // the status bar is your avatar, in Doom's states (bloodier as your health goes, a grin after a kill, dead); the hands
 // on the shotgun have your skin.
 //
+// Sound (sound.js, while the room's radio is on): Doom's own, from the WAD, placed as Doom places them; the level's from
+// level.sounds, heard where you are (from the office, through the door; muffled while it is shut).
+//
 // The mysterious door is only here, in the first person: the room seen from above has none. It is a Doom door: use it
 // or walk into it and it rises, stays up a while, comes down again (not on you). In the level it is in the wall behind
 // where you would start (DoomLevel's doorSpot).
@@ -242,14 +245,15 @@ function startFps(room, done) {
   function bump() {
     if (door.dir === 1) return true;
     if (door.open >= DOORH) { door.wait = 150; return true; }
-    door.dir = 1; door.wait = 0;
+    door.dir = 1; door.wait = 0; doorSnd("DSBDOPN");
     return true;
   }
+  const doorSnd = (name) => { if (P) heard({ name, x: P.cx, y: P.cy, o: door }); };
   const inDoorway = () => (world === "office" ? me.y > units().H - PR - 2 : !!P && Math.abs(lvl.beyond(lvl.player.x, lvl.player.y)) < PR + 2);
   function doorTic() {
     if (door.dir === 1) { door.open = Math.min(DOORH, door.open + 2); if (door.open >= DOORH) { door.dir = 0; door.wait = 150; } }
-    else if (door.wait > 0) { if (--door.wait === 0) door.dir = -1; }
-    else if (door.dir === -1) { if (inDoorway()) door.dir = 1; else { door.open = Math.max(0, door.open - 2); if (!door.open) door.dir = 0; } }
+    else if (door.wait > 0) { if (--door.wait === 0) { door.dir = -1; doorSnd("DSBDCLS"); } }
+    else if (door.dir === -1) { if (inDoorway()) { door.dir = 1; doorSnd("DSBDOPN"); } else { door.open = Math.max(0, door.open - 2); if (!door.open) door.dir = 0; } }
   }
   // the office and the level, one space through the door: the office's south (+y) is the level's way in from the
   // door (n), the office's x along the door is the level's t (n turned left)
@@ -659,6 +663,7 @@ function startFps(room, done) {
     const p = lvl.player;
     if (p.ammo.shells <= 0) return;
     flash = 0; flashTics = 4; extralight = 1;
+    Sound.doom(wad, "DSSHOTGN", 1, 0, "gun");
     if (world === "level") { lvl.fire(p); return; }
     // the office: the bot nearest you within a few degrees of where you look (Doom's autoaim) goes to pieces; else,
     // through the open door, the shot goes into the level (you are there in its terms, behind its door)
@@ -676,7 +681,10 @@ function startFps(room, done) {
     if (P && door.open > 0) lvl.noise(p);       // the door open: the level hears it
     if (!best && P && aimThrough) { lvl.fire(p); room.alarm(me.x / U, me.y / U); return; }
     p.ammo.shells--;
-    if (best && room.shoot(best.bot)) return void room.alarm(me.x / U, me.y / U);
+    if (best && room.shoot(best.bot)) {         // in pieces: its parts come down
+      for (let k = 0; k < 3; k++) setTimeout(() => Sound.play("clank", 0, 0.9), 200 + k * 160 + Math.random() * 120);
+      return void room.alarm(me.x / U, me.y / U);
+    }
     const d = Math.min(zb[CY * SW + CX], 3000) * 0.97;
     puffs.push({ x: me.x + dx * d, y: Math.max(WALL + 2, me.y + dy * d), z: 41, t: 0 });
     room.alarm(me.x / U, me.y / U);
@@ -926,7 +934,7 @@ function startFps(room, done) {
     const th = under(3);
     if (th && th.rem) return room.unshoot(th.rem);
     if (th && room.use(th) === "reload") {   // the gun closet: a box of shells
-      if (p.ammo.shells < p.max.shells) { p.ammo.shells = Math.min(p.max.shells, p.ammo.shells + 20); p.bonuscount = Math.min(p.bonuscount + 6, 40); }
+      if (p.ammo.shells < p.max.shells) { p.ammo.shells = Math.min(p.max.shells, p.ammo.shells + 20); p.bonuscount = Math.min(p.bonuscount + 6, 40); Sound.doom(wad, "DSWPNUP", 1, 0, "pickup"); }
       return;
     }
     const r = near();
@@ -939,11 +947,12 @@ function startFps(room, done) {
       lvl.away = false;
       lvl.tic(c);
       const p = lvl.player;
+      for (const h of lvl.sounds.splice(0)) heard(h);
       if (lvl.done === "exit") exitLevel();
       else if (P && lvl.beyond(p.x, p.y) < 0) throughToOffice();
     } else {
       officeTic(c);
-      if (world === "office") { lvl.away = true; lvl.tic(c); }
+      if (world === "office") { lvl.away = true; lvl.tic(c); for (const h of lvl.sounds.splice(0)) heard(h); }
     }
     doorTic();
     // the weapon: Doom's bob while ready (A_WeaponReady), then its frames
@@ -952,6 +961,23 @@ function startFps(room, done) {
     gunTic();
     for (const f of puffs) f.t++;
     puffs = puffs.filter((f) => f.t < 16);
+  }
+
+  // a sound in the level, as Doom places it (S_AdjustSoundParams): from what made it to you (in the office: you behind
+  // the door, the door shut muffles it); loud within 160 units, gone at 1200, to the side it is on. Yours, full and
+  // in the middle
+  function heard(h) {
+    if (!Sound.on()) return;
+    const p = lvl.player;
+    let vol = 1, pan = 0;
+    if (h.o !== p) {
+      const dx = Math.abs(h.x - p.x), dy = Math.abs(h.y - p.y), d = dx + dy - Math.min(dx, dy) / 2;
+      if (d > 1200) return;
+      vol = d < 160 ? 1 : (1200 - d) / 1040;
+      pan = d < 1 ? 0 : -0.75 * Math.sin(Math.atan2(h.y - p.y, h.x - p.x) - p.angle);
+    }
+    if (world === "office" && h.o !== door && door.open < 8) vol *= 0.3;
+    Sound.doom(wad, h.name, vol, pan, h.o);
   }
 
   // ---- through the door, either way: the same place, the same way you look and move, no wipe

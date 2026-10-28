@@ -278,10 +278,10 @@ function startRoom(cv, app) {
   // This computer's door (`door:`) only slides along the wall
   const KIND = (key) => key.startsWith("door:") ? "door" : key.replace(/\d+$/, "");
   const FIXED = new Set(["fire", "closet", "settings", "clock"]), fixed = (key) => FIXED.has(KIND(key)) || key === "door:";
-  const CLICK = new Set(["doghouse", "add", "closet", "chess", "pong", "printer", "pair", "board", "coffee", "cooler", "window", "armchair", "settings", "clock", "plant", "manager", "door"]);   // a click does something there
+  const CLICK = new Set(["radio", "doghouse", "add", "closet", "chess", "pong", "printer", "pair", "board", "coffee", "cooler", "window", "armchair", "settings", "clock", "plant", "manager", "door"]);   // a click does something there
   const NAMES = { meet: "meeting table", pong: "ping-pong table", chess: "chess table", coffee: "coffee machine", cooler: "water cooler",
     printer: "printer", armchair: "pouf", plant: "plant", board: "whiteboard", window: "window", clock: "clock", add: "project cabinet", pair: "pair room", settings: "switchboard", manager: "reception",
-    booth: "booth", neuralyzer: "neuralyzer", door: "door", doghouse: "dog house" };
+    booth: "booth", neuralyzer: "neuralyzer", door: "door", doghouse: "dog house", radio: "radio" };
   // a clear spot on the floor for a figure that has no chair when the page opens (spread by its id, the same each time)
   function freeAt(L, id) {
     let h = fnv(id);
@@ -321,6 +321,7 @@ function startRoom(cv, app) {
       case "door": return [x, y, x + 16, y + 20];
       case "neuralyzer": return [x - 7, y - 19, x + 7, y + 2];
       case "doghouse": return [x - 12, y - 21, x + 12, y + 2];
+      case "radio": return [x - 7, y - 21, x + 7, y + 1];
       default: return [x - 8, y - 31, x + 8, y + 1];     // a plant
     }
   }
@@ -413,7 +414,7 @@ function startRoom(cv, app) {
       windows: all("window").map((p) => ({ key: p.key, x0: p.x, y0: p.y, x1: p.x + 21, y1: p.y + 18 })),
       fire: f0 && { key: f0.key, x0: f0.x, y0: f0.y - FIRE.h, x1: f0.x + FIRE.w, y1: f0.y }, closet: cl && { key: cl.key, x0: cl.x, y0: cl.y, x1: cl.x + 22, y1: cl.y + 24 },
       settings: sw && { key: sw.key, x0: sw.x, y0: sw.y, x1: sw.x + SB_W(), y1: sw.y + SB_H() },
-      managers: all("manager"), meet: one("meet"), pong: one("pong"), chess: one("chess"), pairs: all("pair"), booths: all("booth"), neuralyzers: all("neuralyzer"), doghouses: all("doghouse"),
+      managers: all("manager"), meet: one("meet"), pong: one("pong"), chess: one("chess"), pairs: all("pair"), booths: all("booth"), neuralyzers: all("neuralyzer"), doghouses: all("doghouse"), radios: all("radio"),
       cooler: one("cooler"), plants: all("plant"), printer: one("printer"), chairs: all("armchair"),
       coffeeAt: one("coffee"), floor: { x0: 11, y0: WALL + 8, x1: W - 11, y1: H - 2 }, placed,   // (where a figure may stand: right up to the bottom edge, its body inside the side walls)
     };
@@ -441,7 +442,7 @@ function startRoom(cv, app) {
   function world() {
     if (!everyone) everyone = { condemned: new Map(), razed: new Set(), hunt: null, folk: new Map(), meeting: null, lastMeeting: -60, board: [], pong: { t: 0, from: 0 }, doorAt: {}, stopped: new Map(), flare: 0, sparks: 0, boothFlash: null, flash: null, shots: [], spared: new Set(), clean: null, cleanRest: 0, print: 0, burning: [], stats: new Map(), meetings: 0,
       remains: new Map(), riseAt: new Map(), sway: new Map(), ball: null, mugs: new Map(),
-      beams: [], T: 0, born: performance.now() };
+      beams: [], hums: new Map(), T: 0, born: performance.now() };
     return everyone;
   }
   // the chess board as pair keeps it: 64 squares from a1, upper case white, "." empty
@@ -504,6 +505,7 @@ function startRoom(cv, app) {
     if (!f || !g || f === g) return;
     stat(w, from).sent++; stat(w, to).got++;
     w.beams.push({ from, to, t: 0 });
+    sfx("beam", f.x);
     f.chat = Math.max(f.chat, 1);
   }
   const fresh = new Set();                    // bots you have just started (the + at a desk): to their desk, not to meet you
@@ -527,7 +529,7 @@ function startRoom(cv, app) {
     }
     // a move on the board (yours against a bot, or the bots' own game): the one who moved reaches out
     const sg = app.state().chess;
-    if (sg && sg.sans.length !== w.plies && w.plies !== undefined) { w.chessAt = performance.now(); const mover = folk.get(sg.toMove === sg.white.id ? sg.black.id : sg.white.id); if (mover) mover.moved = 0.9; }
+    if (sg && sg.sans.length !== w.plies && w.plies !== undefined) { w.chessAt = performance.now(); sfx("clack", L.chess ? L.chess.x : W / 2); const mover = folk.get(sg.toMove === sg.white.id ? sg.black.id : sg.white.id); if (mover) mover.moved = 0.9; }
     w.plies = sg ? sg.sans.length : undefined;
     // the bot you play ping-pong with stands at the table, at the far end
     const pp = app.pong(), pv = pp && !pp.watch && pp.id;   // the bot you play (none while you watch two)
@@ -545,6 +547,19 @@ function startRoom(cv, app) {
     // messages under way: the beam reaches the other, who takes it in
     for (const bm of w.beams) { const was = bm.t; bm.t += dt; if (was < BEAM && bm.t >= BEAM) { const g = folk.get(bm.to); if (g) g.chat = Math.max(g.chat, 1); } }
     w.beams = w.beams.filter((bm) => bm.t < BEAM + 0.4 && folk.has(bm.from) && folk.has(bm.to));
+    // heard: the keyboards of the ones at work (a key now and then), the fire's crackle, the booth's hum stopping when
+    // the bot in it is taken back
+    if (Sound.on()) {
+      const typing = [...folk.values()].filter((f) => f.busy && f.sat && f.act.kind === "desk");
+      if (typing.length && Math.random() < dt * Math.min(3, 1.2 * typing.length)) sfx("key", any(typing).x);
+      if (L.fire && Math.random() < dt * 2.5) sfx("crackle", (L.fire.x0 + L.fire.x1) / 2);
+    }
+    for (const [id, h] of w.hums) {
+      const f = folk.get(id);
+      if (f && f.act.kind === "doom" && !f.act.back) continue;
+      w.hums.delete(id);
+      if (h) { h.stop(); sfx("back", f ? f.x : W / 2); }
+    }
     const you = folk.get("you");
     if (you) you.chat = Math.max(0, you.chat - dt);
     const opens = app.opens();
@@ -552,6 +567,7 @@ function startRoom(cv, app) {
       const f = folk.get(b.id), work = b.waiting || b.busy;
       if (!f) continue;
       f.chat = Math.max(0, f.chat - dt);
+      if (b.waiting && f.waiting === false) sfx("ask", f.x);   // a hand goes up
       f.busy = b.busy; f.waiting = b.waiting;
       // a bot whose session is open sits at its desk for you, whatever it was doing; when the
       // session closes it gets up again
@@ -592,7 +608,7 @@ function startRoom(cv, app) {
     }
     const playing = (kind) => [...folk.values()].filter((f) => f.act.kind === kind && f.act.there && f.act.with).length === 2;
     // the ball goes back and forth while two are at the table
-    if ((playing("pong") || (app.pong() && app.pong().ball)) && (w.pong.t += dt / 0.8) >= 1) { w.pong.t = 0; w.pong.from = 1 - w.pong.from; }
+    if ((playing("pong") || (app.pong() && app.pong().ball)) && (w.pong.t += dt / 0.8) >= 1) { w.pong.t = 0; w.pong.from = 1 - w.pong.from; if (playing("pong") && L.pong) sfx("pock", L.pong.x + (w.pong.from ? 30 : -30)); }
     // the football, if one is in play
     kickabout(w, dt);
     dreamStep(w, dt);
@@ -946,7 +962,7 @@ function startRoom(cv, app) {
       case "print":
         if (!L.printer) { f.act = rest(); break; }
         if (!walk(f, { x: L.printer.x - 9, y: L.printer.y, on: L.printer.key }, v, dt)) break;
-        if (act.stage === 0) { f.dir = 1; f.arms = "down"; act.stage = 1; }
+        if (act.stage === 0) { f.dir = 1; f.arms = "down"; act.stage = 1; sfx("print", L.printer.x); }
         else if ((act.wait += dt) > 2.4) { f.carry = "paper"; f.act = rest(); }
         break;
       case "cooler": {
@@ -1130,10 +1146,12 @@ function startRoom(cv, app) {
         const bo = L.booths.find((p) => p.key === act.at);
         if (!bo) { f.act = resume(f); break; }
         f.x = bo.x; f.y = bo.y - 3; f.on = bo.key; f.dir = -1; f.arms = "down"; f.legs = "stand";
+        if (!act.back && !w.hums.has(f.id)) w.hums.set(f.id, sfx("booth", bo.x));   // the light rising, heard
         if (act.back) { if ((act.left += dt * 6) >= BOOTH) f.act = resume(f); break; }
         if ((act.left -= dt) <= 0 && !f.gone) {
           app.act({ kind: "stop", id: f.id, rm: true });
           w.stopped.set(f.id, performance.now()); w.boothFlash = { key: bo.key, t0: performance.now() };
+          w.hums.delete(f.id); sfx("poof", bo.x);
           folk.delete(f.id);
         }
         break;
@@ -1203,7 +1221,7 @@ function startRoom(cv, app) {
         if (!walk(f, { x: n.x + 11, y: n.y + 1, on: n.key }, v, dt)) break;
         if (act.stage === 0) { f.legs = "stand"; f.dir = -1; f.arms = "down"; act.stage = 1; act.wait = 0; }
         else if (act.stage === 1) {
-          if ((act.wait += dt) > 0.6) { app.act({ kind: "clear", id: f.id }); w.flash = { x: n.x - 5, y: n.y - 16, t0: performance.now() }; act.stage = 2; act.wait = 0; }
+          if ((act.wait += dt) > 0.6) { app.act({ kind: "clear", id: f.id }); w.flash = { x: n.x - 5, y: n.y - 16, t0: performance.now() }; sfx("flash", n.x); act.stage = 2; act.wait = 0; }
         } else if ((act.wait += dt) > 2.5) f.act = rest();
         break;
       }
@@ -1310,7 +1328,7 @@ function startRoom(cv, app) {
       ball.x = to.x + (to.dir < 0 ? -4 : 4); ball.y = to.y; ball.h = 0;
       if (ball.wait <= 0) {
         const next = any(players.filter((g) => g !== to));
-        to.kick = 0.3; ball.from = to.id; ball.to = next.id; ball.t = 0; ball.x0 = ball.x; ball.y0 = ball.y; ball.wait = undefined;
+        to.kick = 0.3; sfx("kick", to.x); ball.from = to.id; ball.to = next.id; ball.t = 0; ball.x0 = ball.x; ball.y0 = ball.y; ball.wait = undefined;
       }
     } else {
       ball.t = Math.min(1, ball.t + dt / PASS);
@@ -1407,6 +1425,9 @@ function startRoom(cv, app) {
   let fps = null, view = null;              // hardcore: the gun taken from the gun closet, the office in the first person (fps.js); the scene it renders
   let pics = [];                             // what was just drawn, each piece by itself, for that view (scene3)
   const hardcore = () => !!app.settings().hardcore;
+  // the room's sounds (sound.js), while a radio stands in it and is on, from where they happen (left to right); not
+  // while you are in the first person (fps.js has Doom's there)
+  const sfx = (name, x, vol = 1) => (Sound.on() && !fps ? Sound.play(name, Math.max(-1, Math.min(1, (x / W) * 1.6 - 0.8)), vol) : null);
   let screenHover = null, hoverScreen = null;    // the screen (or laptop) under the pointer: {m, dir}; the one told to the page
   const over = (x0, y0, x1, y1) => !!pointer && pointer.x >= x0 && pointer.x < x1 && pointer.y >= y0 && pointer.y < y1;
   const hot = (x0, y0, x1, y1, action) => { hots.push({ x0, y0, x1, y1, action }); return over(x0, y0, x1, y1) && !moving && !held && !dogHeld; };
@@ -1466,7 +1487,7 @@ function startRoom(cv, app) {
       if (!w.folk.has(b.id)) {
         const at = b.staff && !late ? managerSeat(L.managers.find((m) => m.key === b.booth)) : late || b.human ? w.riseAt.get(b.id) || { x: doorX(b.m), y: WALL + 3 } : L.seat(b.id) || freeAt(L, b.id);   // back from its grave, or in by the door; at first, at its desk or anywhere
         w.riseAt.delete(b.id);
-        if (late && !b.human && !b.staff) w.dogNews = b.id;    // a newcomer: the dog goes and barks at it
+        if (late && !b.human && !b.staff) { w.dogNews = b.id; sfx("door", at.x); }    // a newcomer: the dog goes and barks at it
         const work = !b.human && (b.busy || b.waiting), stand = late || (b.human && !b.staff);
         w.folk.set(b.id, { id: b.id, x: at.x, y: at.y, dir: -1, arms: "down", legs: stand ? "stand" : "sit", step: 0, sat: !stand,
           act: work ? { kind: "desk" } : rest(), carry: null, lying: false, busy: b.busy, waiting: b.waiting, work, human: !!b.human, staff: !!b.staff,
@@ -1478,7 +1499,7 @@ function startRoom(cv, app) {
       w.T += tickDt; think(w, bots, L, tickDt, usage, s.chess);
       for (const f of w.folk.values()) {
         const m = (f.b && f.b.m) || "";
-        if (f.leaving && walk(f, { x: doorX(m), y: WALL + 1 }, 30, tickDt)) { w.folk.delete(f.id); w.doorAt[m] = performance.now(); }
+        if (f.leaving && walk(f, { x: doorX(m), y: WALL + 1 }, 30, tickDt)) { sfx("door", f.x); w.folk.delete(f.id); w.doorAt[m] = performance.now(); }
       }
       tickDt = 0;
     }
@@ -1700,6 +1721,15 @@ function startRoom(cv, app) {
       const k = (performance.now() - ht.t0) / 1200;
       if (k >= 1) continue;
       items.push([1e8, () => { ctx.globalAlpha = 1 - k; heart(ctx, Math.round(ht.x), Math.round(ht.y - k * 10)); ctx.globalAlpha = 1; }]);
+    }
+    // the radio: the room's sound, while one stands here and it is on; a click switches it (its dial lit, notes rising)
+    const soundOn = !!app.settings().sound && L.radios.length > 0;
+    Sound.set(soundOn);
+    for (const ra of L.radios) {
+      const h = hot(...foot("radio", [ra.x, ra.y]), { kind: "sound", pan: Math.max(-1, Math.min(1, (ra.x / W) * 1.6 - 0.8)) });
+      piece(ra, "radio", (c) => drawRadio(c, ra, soundOn));
+      if (soundOn && !still) items.push([ra.y + 0.1, () => drawNotes(ctx, ra, T)]);
+      if (h) tip = { text: soundOn ? "sound on" : "sound off", x: ra.x, y: ra.y - 22 };
     }
     for (const n of L.neuralyzers) {
       const fl = w.flash && performance.now() - w.flash.t0 < 400;
@@ -1945,6 +1975,7 @@ function startRoom(cv, app) {
         Object.assign(st, { gun: hardcore(), out: [...w.folk.values()].filter((f) => f.carry === "gun").length + (fps ? 1 : 0), t: boothT(inside) });
       }
       if (p.kind === "neuralyzer") st.flash = !!w.flash && performance.now() - w.flash.t0 < 400;
+      if (p.kind === "radio") st.on = !!app.settings().sound;
       if (p.kind === "chess") { const g = s.chess && !s.chess.result ? s.chess : null; st.board = g ? g.board : START; st.seats = [L.chessSeat(0), L.chessSeat(1)]; }
       if (p.kind === "meet") st.seats = [L.meetSeat(0), L.meetSeat(1)];
       if (p.kind === "board") { st.ink = ink(w); st.inkV = w.inkV; }
@@ -2214,6 +2245,7 @@ function startRoom(cv, app) {
         if (!f) { g.act = nextDog(w, g, L); break; }
         if (Math.hypot(f.x - g.x, f.y - g.y) > 24) { walkDog(g, { x: f.x + (g.x < f.x ? -20 : 20), y: f.y + 1 }, 50, dt); break; }
         g.pose = "stand"; g.dir = f.x < g.x ? -1 : 1; g.barking = true;
+        if ((a.yap = (a.yap || 0) - dt) <= 0) { sfx("bark", g.x); a.yap = 1.1; }
         if ((a.left -= dt) <= 0) g.act = nextDog(w, g, L);
         break;
       }
@@ -2662,6 +2694,8 @@ function startRoom(cv, app) {
     const w = world();
     w.shots.push({ x: Math.round(f.x), y: Math.round(f.y) - 14, t0: performance.now(), hit: true });
     scatter(f, [f.x, f.y]); unopen(f.id);
+    sfx("shot", f.x);
+    for (let k = 0; k < 3; k++) setTimeout(() => sfx("clank", f.x, 0.8), 220 + k * 170 + Math.random() * 120);   // its parts coming down
     w.kills = (w.kills || 0) + 1;
     if (hardcore()) { w.fear = Math.min(1, (w.fear || 0) + FEAR.kill); alarm(f.x, f.y); }
   }
@@ -2752,7 +2786,7 @@ function startRoom(cv, app) {
   // the danger's flash: the wash goes between two strengths, five times a second
   function flashA(T) { return Math.floor(T * 5) % 2 ? 0.5 : 0.3; }
   // something goes into the fire: a picture of it, to be tossed in and sink (drawFire)
-  function toFire(r, img) { world().burning.push({ img, x: r[0] - 2, y: r[1] - 2, w: img.width, h: img.height, t0: performance.now() }); world().flare = performance.now(); }
+  function toFire(r, img) { sfx("whoosh", r[0]); world().burning.push({ img, x: r[0] - 2, y: r[1] - 2, w: img.width, h: img.height, t0: performance.now() }); world().flare = performance.now(); }
   // any kind of furniture drawn at a spot, at rest: for the closet's pictures and for the ghost of
   // a piece carried into the room (`at` as the layout keeps it: its anchor)
   function drawKind(ctx, kind, [x, y], w, T) {
@@ -2777,6 +2811,7 @@ function startRoom(cv, app) {
       case "add": drawAdd(ctx, { x0: x, y0: y - 15, x1: x + ADD_W, y1: y }, false); break;
       case "booth": drawBooth(ctx, pt, false, -1, -1); drawBooth(ctx, pt, true, -1, -1); break;
       case "neuralyzer": drawNeuralyzer(ctx, pt, false); break;
+      case "radio": drawRadio(ctx, pt, true); break;
       case "doghouse": drawDoghouse(ctx, pt); break;
       case "door": { const ms = (app.state() || {}).machines || []; drawDoor(ctx, x, PAINT[Math.max(0, ms.length - 1) % PAINT.length], false, false, y); break; }   // in the paint the next machine gets
     }
@@ -3022,6 +3057,30 @@ function startRoom(cv, app) {
     ctx.globalAlpha = 0.18; rect(ctx, x0 + 2, gy, 14, gh, "#bfe3ff"); ctx.globalAlpha = 1;                // the glass
     for (let k = 0; k < 4; k++) rect(ctx, x0 + 3 + k, gy + 3 + k, 1, 1, "rgba(255,255,255,0.45)");
     rect(ctx, x0 + 8, gy, 2, gh, SP.F); rect(ctx, x0 + 7, gy + 10, 1, 3, SP.B); rect(ctx, x0 + 10, gy + 10, 1, 3, SP.B);   // where the doors meet, the handles
+  }
+  // the radio: a midcentury set on splayed legs, a woven cloth over its speaker, a dial lit (and notes rising from it,
+  // drawNotes) while the room's sound is on
+  function drawRadio(ctx, p, on) {
+    const x = p.x, y = p.y;
+    rect(ctx, x - 6, y, 12, 1, SHADOW);
+    for (const [lx, d] of [[-5, -1], [4, 1]]) { rect(ctx, x + lx, y - 4, 1, 2, WOOD.k); rect(ctx, x + lx + d, y - 2, 1, 2, WOOD.k); }   // the legs
+    rect(ctx, x - 7, y - 19, 14, 16, WOOD.k); rect(ctx, x - 6, y - 20, 12, 1, WOOD.k);   // the cabinet, its top corners rounded
+    rect(ctx, x - 6, y - 19, 12, 15, WOOD.top); rect(ctx, x - 5, y - 19, 10, 1, WOOD.hi); rect(ctx, x - 6, y - 5, 12, 1, WOOD.d);
+    rect(ctx, x - 5, y - 17, 10, 3, on ? SP.Y : "#3a2c26");                              // the dial across its top: its marks, the needle
+    for (const mx of [x - 4, x - 2, x, x + 3]) rect(ctx, mx, y - 17, 1, 1, on ? "#c98a2c" : "#2a2026");
+    rect(ctx, x + 1, y - 17, 1, 3, on ? SP.r : "#2a2026");
+    for (let j = 0; j < 6; j++) for (let i = 0; i < 10; i++) rect(ctx, x - 5 + i, y - 13 + j, 1, 1, (i + j) % 2 ? "#d8c49a" : "#bfa97e");   // the speaker's cloth
+    for (const sx of [x - 3, x, x + 3]) rect(ctx, sx, y - 13, 1, 6, WOOD.d);           // behind three slats
+    for (const kx of [x - 5, x + 3]) { rect(ctx, kx, y - 7, 2, 2, SP.F); rect(ctx, kx, y - 7, 1, 1, SP.C); }   // the knobs
+  }
+  function drawNotes(ctx, p, T) {              // two notes drifting up from it, fading
+    for (const k of [0, 1]) {
+      const ph = (T * 0.45 + k * 0.5) % 1, a = ph < 0.15 ? ph / 0.15 : 1 - (ph - 0.15) / 0.85;
+      const nx = Math.round(p.x - 3 + k * 5 + Math.sin(ph * 5 + k * 2) * 2), ny = Math.round(p.y - 25 - ph * 14);
+      ctx.globalAlpha = Math.max(0, a);
+      rect(ctx, nx, ny + 3, 2, 2, INK); rect(ctx, nx + 1, ny, 1, 4, INK); rect(ctx, nx + 2, ny, 1, 1, INK);
+      ctx.globalAlpha = 1;
+    }
   }
   function drawNeuralyzer(ctx, n, lit) {
     const x = n.x, y = n.y;
@@ -3285,7 +3344,7 @@ function startRoom(cv, app) {
       for (const g of w.folk.values()) if (g !== you && g.act.kind === "chair" && g.act.at === press.action.key) end(g);
       if (you && !you.held) { end(you); you.act = { kind: "chair", at: press.action.key, left: rnd(180, 360), chosen: true }; }
     }
-    else if (press && press.action) { if (press.action.kind === "report") world().print = performance.now(); app.act({ ...press.action, shift: press.shift }); }
+    else if (press && press.action) { if (press.action.kind === "report") { world().print = performance.now(); if (lastL && lastL.printer) sfx("print", lastL.printer.x); } app.act({ ...press.action, shift: press.shift }); }
     // a plain click on the floor or the wall, on nothing: what is open on the right goes away
     else if (press && !press.bot && !press.piece && pointer && Math.hypot(pointer.x - press.x, pointer.y - press.y) <= 1) {
       app.act({ kind: "blank" });

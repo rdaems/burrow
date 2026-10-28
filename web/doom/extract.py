@@ -6,7 +6,7 @@ when one is put in ~/.config/burrow/ (server.py serves it as /doom.wad), so the 
     python3 web/doom/extract.py freedoom1.wad web/doom/freedoom.wad
 
 What it keeps: the palette and the colormaps; the status bar, its numbers, the arms panel, the keys, the faces;
-the shotgun and its flash; the HUD font; the first level (E1M1) with every texture, flat and sprite it needs (and
+the shotgun and its flash; the HUD font; the sound effects the game and the office play (fps.js, level.js); the first level (E1M1) with every texture, flat and sprite it needs (and
 the frames they animate through, the switches' other side, the sky); the office's walls, floor, ceiling and its
 mysterious door. Wall textures are recomposed into one TEXTURE1 over a PNAMES of only the patches they use."""
 import struct, sys
@@ -18,6 +18,13 @@ GRAPHICS = (["PLAYPAL", "COLORMAP", "STBAR", "STARMS", "STTPRCNT", "STTMINUS"]
             + [f"STFST{p}{k}" for p in range(5) for k in range(3)] + [f"STFTL{p}0" for p in range(5)] + [f"STFTR{p}0" for p in range(5)]
             + [f"STFOUCH{p}" for p in range(5)] + [f"STFEVL{p}" for p in range(5)] + [f"STFKILL{p}" for p in range(5)] + ["STFGOD0", "STFDEAD0"]
             + [f"STCFN{c:03d}" for c in range(33, 96)])
+# the sound effects (Doom's DMX format: 8-bit samples at their rate), what fps.js and level.js play
+SOUNDS = ["DSPISTOL", "DSSHOTGN", "DSPLPAIN", "DSPLDETH", "DSOOF", "DSNOWAY", "DSITEMUP", "DSWPNUP", "DSGETPOW", "DSTELEPT",
+          "DSDOROPN", "DSDORCLS", "DSBDOPN", "DSBDCLS", "DSSWTCHN", "DSSWTCHX", "DSPSTART", "DSPSTOP", "DSSTNMOV",
+          "DSBAREXP", "DSFIRSHT", "DSFIRXPL", "DSCLAW", "DSSGTATK", "DSSKLATK", "DSSLOP", "DSPUNCH",
+          "DSPOSIT1", "DSPOSIT2", "DSPOSIT3", "DSPOSACT", "DSPOPAIN", "DSPODTH1", "DSPODTH2", "DSPODTH3",
+          "DSBGSIT1", "DSBGSIT2", "DSBGACT", "DSBGDTH1", "DSBGDTH2", "DSSGTSIT", "DSSGTDTH", "DSDMPAIN", "DSDMACT",
+          "DSCACSIT", "DSCACDTH", "DSBRSSIT", "DSBRSDTH", "DSSKLDTH"]
 # the sprites (by their four letters): the shotgun, its flash, puffs and blood, and every thing level.js knows (keep in step with its T)
 SPRITES = ["SHTG", "SHTF", "PUFF", "BLUD", "BEXP", "BAL1", "BAL2", "BAL7", "TFOG", "IFOG",
            "POSS", "SPOS", "TROO", "SARG", "SKUL", "HEAD", "BOSS", "BAR1",
@@ -129,13 +136,13 @@ def main(src, dst):
         offs.append(pos)
         pos += len(dd)
     texture1 = struct.pack("<i", len(defs)) + b"".join(struct.pack("<i", o) for o in offs) + b"".join(defs)
-    out = [(n, L[n]) for n in GRAPHICS if n in L]
+    out = [(n, L[n]) for n in GRAPHICS + SOUNDS if n in L]
     out += [(n, d) for n, d in maplumps]
     out += [("PNAMES", pnames), ("TEXTURE1", texture1)]
     out += [("P_START", b"")] + [(p, L[p]) for p in patches] + [("P_END", b"")]
     out += [("S_START", b"")] + [(s, L[s]) for s in sprite_lumps] + [("S_END", b"")]
     out += [("F_START", b"")] + [(f, L.get(f, b"\0" * 4096)) for f in keep_f] + [("F_END", b"")]
-    missing = [n for n in GRAPHICS if n not in L] + [t for t in OFFICE_TEXTURES if t not in tex] + [t for t in used_t if t not in tex]
+    missing = [n for n in GRAPHICS + SOUNDS if n not in L] + [t for t in OFFICE_TEXTURES if t not in tex] + [t for t in used_t if t not in tex]
     body, dirs, off = b"", [], 12
     for name, data in out:
         dirs.append(struct.pack("<ii8s", off, len(data), name.encode()[:8].ljust(8, b"\0")))

@@ -328,6 +328,7 @@ OPTIONS = {
     "rc": True,     # a bot started here gets --remote-control: the same session is in the Claude app and at claude.ai/code
     "yolo": False,  # a bot started here gets --dangerously-skip-permissions: it never asks, it just does
     "hardcore": False,  # the booth is a gun closet: she clears them out with a shotgun, and a click on it gives you a crosshair
+    "sound": True,  # the room makes its sounds while a radio stands in it (no switch on the switchboard: the radio is the switch)
 }
 # (no switch for clearing out sessions: you ask an office manager, and she removes them through /api/office)
 
@@ -350,7 +351,7 @@ def doom_wad():
         pass
     return os.path.join(HERE, "doom", "freedoom.wad")
 KINDS = {"meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "add", "pair", "manager",
-         "booth", "neuralyzer", "doghouse"}
+         "booth", "neuralyzer", "doghouse", "radio"}
 
 
 # The office manager: whoever sits at the reception booth (the `manager` piece; one at a time). Her style is
@@ -2294,6 +2295,8 @@ class Handler(BaseHTTPRequestHandler):
                     key = next(f"{kind}{i}" for i in range(1000) if f"{kind}{i}" not in fs)
                     fs.append(key)
                     hub.room["layout"][key] = [int(b["at"][0]), int(b["at"][1])]
+                    if kind == "radio":                  # a radio put down: the sound is on
+                        hub.room.setdefault("settings", {})["sound"] = True
                 elif b.get("remove"):
                     key = b["remove"]
                     if kind_of(key) in FIXED or key not in fs:

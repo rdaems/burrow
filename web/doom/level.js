@@ -18,7 +18,8 @@
 // in the office, level.away: the level goes on (monsters see you through the door, come to it, shoot through it).
 //
 // new DoomLevel(wad, mapname) → level: level.tic(cmd) a step; level.player, level.mobjs, level.map; level.done
-// ("exit") once it is over. The 3d view (fps.js) draws it.
+// ("exit") once it is over; level.sounds what was heard this tic ({name, x, y, o}: Doom's sound, where, from what),
+// for fps.js to play. The 3d view (fps.js) draws it.
 window.DoomLevel = (() => {
   const RAD = Math.PI / 180;
   const rnd = () => Math.random() * 256 | 0;           // P_Random, near enough
@@ -76,6 +77,13 @@ window.DoomLevel = (() => {
   };
   STATES.SPOS = STATES.POSS;
   const BAR = { idle: [["A", 6], ["B", 6]], die: [[F("C"), 5], [F("D"), 5, "explode"], [F("E"), 10], [F("F"), 10, "gone"]] };   // BAR1 then BEXP
+  // what each monster sounds like (Doom's mobjinfo): when it sees you, now and then while it hunts, hurt, dying
+  const POS = ["DSPOSIT1", "DSPOSIT2", "DSPOSIT3"], PODTH = ["DSPODTH1", "DSPODTH2", "DSPODTH3"];
+  const SEE = { POSS: POS, SPOS: POS, TROO: ["DSBGSIT1", "DSBGSIT2"], SARG: ["DSSGTSIT"], HEAD: ["DSCACSIT"], BOSS: ["DSBRSSIT"], SKUL: [] };
+  const ACTIVE = { POSS: "DSPOSACT", SPOS: "DSPOSACT", TROO: "DSBGACT", SARG: "DSDMACT", HEAD: "DSDMACT", BOSS: "DSDMACT", SKUL: "DSDMACT" };
+  const PAIN = { POSS: "DSPOPAIN", SPOS: "DSPOPAIN", TROO: "DSPOPAIN", SARG: "DSDMPAIN", HEAD: "DSDMPAIN", BOSS: "DSDMPAIN", SKUL: "DSDMPAIN" };
+  const DEATH = { POSS: PODTH, SPOS: PODTH, TROO: ["DSBGDTH1", "DSBGDTH2"], SARG: ["DSSGTDTH"], HEAD: ["DSCACDTH"], BOSS: ["DSBRSDTH"], SKUL: ["DSFIRXPL"] };
+  const pick = (a) => a && a.length ? a[Math.floor(Math.random() * a.length)] : null;
   const MISSILES = { imp: { s: "BAL1", speed: 10, r: 6, dmg: 3, fly: [F("A"), F("B")], die: [F("C"), F("D"), F("E")] },
     caco: { s: "BAL2", speed: 10, r: 6, dmg: 5, fly: [F("A"), F("B")], die: [F("C"), F("D"), F("E")] },
     baron: { s: "BAL7", speed: 15, r: 6, dmg: 8, fly: [F("A"), F("B")], die: [F("C"), F("D"), F("E")] } };
@@ -93,12 +101,17 @@ window.DoomLevel = (() => {
       this.kills = 0;
       this.portal = null;
       this.away = false;
+      this.sounds = [];
       const m = this.map;
       for (const s of m.sectors) { s.lines = []; s.light0 = s.light; s.floor0 = s.floor; s.ceil0 = s.ceil; s.mover = null; s.phase = rnd() & 7; }
       for (const l of m.lines) {
         l.x0 = Math.min(l.v1.x, l.v2.x); l.x1 = Math.max(l.v1.x, l.v2.x); l.y0 = Math.min(l.v1.y, l.v2.y); l.y1 = Math.max(l.v1.y, l.v2.y);
         l.dx = l.v2.x - l.v1.x; l.dy = l.v2.y - l.v1.y;
         for (const sd of [l.front, l.back]) if (sd && !sd.sector.lines.includes(l)) sd.sector.lines.push(l);
+      }
+      for (const s of m.sectors) {                   // where a sector's sounds come from: its middle (Doom's soundorg)
+        const xs = s.lines.flatMap((l) => [l.v1.x, l.v2.x]), ys = s.lines.flatMap((l) => [l.v1.y, l.v2.y]);
+        s.x = xs.length ? (Math.min(...xs) + Math.max(...xs)) / 2 : 0; s.y = ys.length ? (Math.min(...ys) + Math.max(...ys)) / 2 : 0;
       }
       // a grid of the lines, 128 units a cell, for what a box or a ray meets
       const xs = m.vertexes.map((v) => v.x), ys = m.vertexes.map((v) => v.y);
@@ -117,6 +130,7 @@ window.DoomLevel = (() => {
       }
       this.anims = this.animations();
     }
+    snd(name, o) { if (name && o) this.sounds.push({ name, x: o.x, y: o.y, o }); }
     cell(v, o) { return Math.max(0, Math.floor((v - o) / 128)); }
     linesNear(x0, y0, x1, y1) {
       const out = new Set();
@@ -301,7 +315,7 @@ window.DoomLevel = (() => {
     trigger(l, by, how) {
       const sp = l.special, def = SPECIALS[sp];
       if (!def || def.how !== how) return false;
-      if (def.key && by.player && !by.keys[def.key]) return false;   // a locked door
+      if (def.key && by.player && !by.keys[def.key]) { this.snd("DSOOF", by); return false; }   // a locked door
       if (by.d && by.d.mon && !def.monster) return false;
       let did = false;
       if (def.door) {
@@ -311,25 +325,27 @@ window.DoomLevel = (() => {
       else if (def.floor) for (const s of this.tagged(l.tag)) did = this.floorMove(s, def.floor) || did;
       else if (def.exit) { this.done = "exit"; did = true; }
       if (def.once && (did || def.exit)) l.special = 0;
-      if (how === "use" && did) this.switchTex(l, !def.once);
+      if (how === "use" && did) { this.switchTex(l, !def.once); if (def.exit) this.snd("DSSWTCHX", by); }
       return did;
     }
     tagged(tag) { return tag ? this.map.sectors.filter((s) => s.tag === tag) : []; }
     neighbours(s) { return s.lines.map((l) => (l.front.sector === s ? l.back : l.front)).filter(Boolean).map((sd) => sd.sector); }
     door(s, kind, fast) {
       if (s.mover) {                                   // a door going down: back up (DR doors used again)
-        if (s.mover.kind === "door" && s.mover.dir === -1 && kind === "raise") { s.mover.dir = 1; return true; }
+        if (s.mover.kind === "door" && s.mover.dir === -1 && kind === "raise") { s.mover.dir = 1; this.snd(s.mover.speed > 2 ? "DSBDOPN" : "DSDOROPN", s); return true; }
         return false;
       }
       const ns = this.neighbours(s), top = (ns.length ? Math.min(...ns.map((n) => n.ceil)) : s.ceil0) - 4;
       if (kind === "close") s.mover = { kind: "door", dir: -1, top: s.ceil, speed: fast ? 8 : 2, wait: 0, mode: "close" };
       else s.mover = { kind: "door", dir: 1, top, speed: fast ? 8 : 2, wait: 0, mode: kind };
+      this.snd(kind === "close" ? (fast ? "DSBDCLS" : "DSDORCLS") : fast ? "DSBDOPN" : "DSDOROPN", s);
       return true;
     }
     plat(s, fast) {
       if (s.mover) return false;
       const ns = this.neighbours(s), low = Math.min(s.floor, ...ns.map((n) => n.floor));
       s.mover = { kind: "plat", dir: -1, low, high: s.floor, speed: fast ? 8 : 4, wait: 0 };
+      this.snd("DSPSTART", s);
       return true;
     }
     floorMove(s, kind) {
@@ -342,6 +358,7 @@ window.DoomLevel = (() => {
     }
     switchTex(l, back) {
       const sd = l.front;
+      this.snd("DSSWTCHN", { x: (l.v1.x + l.v2.x) / 2, y: (l.v1.y + l.v2.y) / 2 });
       for (const k of ["upper", "mid", "lower"]) {
         const t = sd[k];
         if (/^SW1/.test(t)) { sd[k] = "SW2" + t.slice(3); if (back) this.thinkers.push({ t: 35, fn: () => { sd[k] = t; } }); return; }
@@ -353,24 +370,24 @@ window.DoomLevel = (() => {
         const m = s.mover;
         if (!m) continue;
         if (m.kind === "door") {
-          if (m.wait > 0) { if (--m.wait === 0) m.dir = -1; continue; }
+          if (m.wait > 0) { if (--m.wait === 0) { m.dir = -1; this.snd(m.speed > 2 ? "DSBDCLS" : "DSDORCLS", s); } continue; }
           if (m.dir === 1) {
             s.ceil = Math.min(m.top, s.ceil + m.speed);
             if (s.ceil >= m.top) { if (m.mode === "raise") { m.wait = 150; m.dir = 0; } else s.mover = null; }
           } else if (m.dir === -1) {
             const nc = Math.max(s.floor, s.ceil - m.speed);
-            if (this.crushes(s, nc)) { if (m.mode !== "close") m.dir = 1; continue; }
+            if (this.crushes(s, nc)) { if (m.mode !== "close") { m.dir = 1; this.snd(m.speed > 2 ? "DSBDOPN" : "DSDOROPN", s); } continue; }
             s.ceil = nc;
             if (s.ceil <= s.floor) s.mover = null;
           }
         } else if (m.kind === "plat") {
-          if (m.wait > 0) { if (--m.wait === 0) m.dir = m.dir === -1 ? 1 : -1; continue; }
-          if (m.dir === -1) { s.floor = Math.max(m.low, s.floor - m.speed); if (s.floor <= m.low) { m.wait = 105; m.dir = -1; m.next = 1; } }
-          else { const nf = Math.min(m.high, s.floor + m.speed); if (this.crushes(s, s.ceil, nf)) { m.dir = -1; continue; } s.floor = nf; if (s.floor >= m.high) s.mover = null; }
+          if (m.wait > 0) { if (--m.wait === 0) { m.dir = m.dir === -1 ? 1 : -1; this.snd("DSPSTART", s); } continue; }
+          if (m.dir === -1) { s.floor = Math.max(m.low, s.floor - m.speed); if (s.floor <= m.low) { m.wait = 105; m.dir = -1; m.next = 1; this.snd("DSPSTOP", s); } }
+          else { const nf = Math.min(m.high, s.floor + m.speed); if (this.crushes(s, s.ceil, nf)) { m.dir = -1; continue; } s.floor = nf; if (s.floor >= m.high) { s.mover = null; this.snd("DSPSTOP", s); } }
           if (m.next && m.wait === 0) { m.dir = m.next; m.next = 0; }
         } else if (m.kind === "floor") {
           s.floor += Math.sign(m.to - s.floor) * Math.min(m.speed, Math.abs(m.to - s.floor));
-          if (s.floor === m.to) s.mover = null;
+          if (s.floor === m.to) { s.mover = null; this.snd("DSPSTOP", s); } else if (this.time % 8 === 0) this.snd("DSSTNMOV", s);
         }
         for (const o of [this.player, ...this.mobjs]) {   // what stands on a moving floor rides it (you: the highest floor under you)
           if (!o || o.missile || (o.d && (o.d.fly || o.d.hang)) || (o.player && this.away) || this.sectorAt(o.x, o.y) !== s) continue;
@@ -425,7 +442,7 @@ window.DoomLevel = (() => {
         const sp = Math.hypot(p.mx, p.my);
         if (sp > 30) { p.mx *= 30 / sp; p.my *= 30 / sp; }
         if (p.mx || p.my) this.slide(p, p.mx, p.my);
-        if (p.z > p.floorz) { p.mz = p.mz ? p.mz - 1 : -2; p.z += p.mz; if (p.z <= p.floorz) { if (p.mz < -8) p.dviewh = p.mz / 8; p.z = p.floorz; p.mz = 0; } }   // Doom's gravity; a hard landing squats the view
+        if (p.z > p.floorz) { p.mz = p.mz ? p.mz - 1 : -2; p.z += p.mz; if (p.z <= p.floorz) { if (p.mz < -8) { p.dviewh = p.mz / 8; this.snd("DSOOF", p); } p.z = p.floorz; p.mz = 0; } }   // Doom's gravity; a hard landing squats the view
         if (onGround) { p.mx *= 0.90625; p.my *= 0.90625; }   // friction, 0xE800 (none in the air)
         if (Math.abs(p.mx) < 0.0625 && Math.abs(p.my) < 0.0625 && !cmd.forward && !cmd.side) p.mx = p.my = 0;
         p.bob = Math.min(16, (p.mx * p.mx + p.my * p.my) / 4);
@@ -463,6 +480,7 @@ window.DoomLevel = (() => {
       }
       if (hit === "door") return P.bump && P.bump();
       if (hit && hit.special && (l2side(hit, p.x, p.y) === 0 || hit.special === 124)) return this.trigger(hit, p, "use");
+      if (hit) this.snd("DSNOWAY", p);               // a wall: the grunt
       return false;
     }
     pickup(p) {
@@ -480,7 +498,7 @@ window.DoomLevel = (() => {
         }
         if (d.ammo && p.ammo[d.ammo] < p.max[d.ammo]) { p.ammo[d.ammo] = Math.min(p.max[d.ammo], p.ammo[d.ammo] + d.n); took = true; }
         if (d.key && !p.keys[d.key]) { p.keys[d.key] = true; took = true; }
-        if (took) { o.gone = true; p.bonuscount = Math.min(p.bonuscount + 6, 40); }
+        if (took) { o.gone = true; p.bonuscount = Math.min(p.bonuscount + 6, 40); this.snd(d.s === "SHOT" ? "DSWPNUP" : d.s === "SOUL" || d.s === "PSTR" ? "DSGETPOW" : "DSITEMUP", p); }
       }
     }
 
@@ -538,7 +556,7 @@ window.DoomLevel = (() => {
       for (const o of this.mobjs) {
         if (!o.d.mon || !o.alive || o.state !== "idle" || !heard.has(o.sector)) continue;
         if (o.ambush && !this.sight(o, this.player)) continue;
-        o.target = this.player; this.setState(o, "walk");
+        o.target = this.player; this.snd(pick(SEE[o.d.s]), o); this.setState(o, "walk");
       }
     }
     damage(o, dmg, src) {
@@ -546,7 +564,7 @@ window.DoomLevel = (() => {
         if (o.dead) return;
         if (o.armor) { const save = Math.min(o.armor, Math.floor(dmg / (o.armorClass === 2 ? 2 : 3))); o.armor -= save; dmg -= save; }
         o.health -= dmg; o.damagecount = Math.min(100, o.damagecount + dmg); o.attacker = src; o.hurt = this.time;
-        if (o.health <= 0) { o.health = 0; o.dead = true; o.deadAt = this.time; }
+        if (o.health <= 0) { o.health = 0; o.dead = true; o.deadAt = this.time; this.snd("DSPLDETH", o); } else this.snd("DSPLPAIN", o);
         return;
       }
       if (!o.alive) return;
@@ -574,9 +592,10 @@ window.DoomLevel = (() => {
       if (a === "look") {
         if (p.dead) return;
         const ang = Math.atan2(p.y - o.y, p.x - o.x), da = Math.abs(((ang - o.angle + 3 * Math.PI) % (2 * Math.PI)) - Math.PI);
-        if ((da < Math.PI / 2 || Math.hypot(p.x - o.x, p.y - o.y) < 64) && this.sight(o, p)) { o.target = p; this.setState(o, "walk"); }
+        if ((da < Math.PI / 2 || Math.hypot(p.x - o.x, p.y - o.y) < 64) && this.sight(o, p)) { o.target = p; this.snd(pick(SEE[o.d.s]), o); this.setState(o, "walk"); }
       } else if (a === "chase") {                     // Doom's A_Chase
         if (o.reaction) o.reaction--;
+        if (rnd() < 3) this.snd(ACTIVE[o.d.s], o);
         if (o.movedir >= 0) {                         // turn towards where it walks, 45 degrees a tic
           const want = o.movedir * Math.PI / 4, d = ((want - o.angle + 3 * Math.PI) % (2 * Math.PI)) - Math.PI;
           o.angle = Math.abs(d) <= Math.PI / 4 ? want : o.angle + Math.sign(d) * Math.PI / 4;
@@ -593,14 +612,19 @@ window.DoomLevel = (() => {
         o.angle = Math.atan2(p.y - o.y, p.x - o.x);
         const atk = o.d.atk, d = Math.hypot(p.x - o.x, p.y - o.y);
         if (o.melee || atk === "bite") {
+          this.snd(o.d.s === "SKUL" ? "DSSKLATK" : atk === "bite" ? "DSSGTATK" : "DSCLAW", o);
           if (d < 44 + p.r + 20 && this.sight(o, p)) this.damage(p, atk === "bite" ? ((rnd() % 10) + 1) * 4 : atk === "baron" ? ((rnd() % 8) + 1) * 10 : atk === "caco" ? ((rnd() % 6) + 1) * 10 : ((rnd() % 8) + 1) * 3, o);
         } else if (atk === "pistol" || atk === "shotgun") {
+          this.snd(atk === "shotgun" ? "DSSHOTGN" : "DSPISTOL", o);
           for (let k = 0; k < (atk === "shotgun" ? 3 : 1); k++) this.bullet(o, o.angle + ((rnd() - rnd()) / 255) * 22 * RAD, o.z + 32, p, ((rnd() % 5) + 1) * 3);
-        } else this.missile(o, MISSILES[atk]);
-      } else if (a === "pain" || a === "scream") {
-        /* no sounds */
+        } else { this.snd("DSFIRSHT", o); this.missile(o, MISSILES[atk]); }
+      } else if (a === "pain") {
+        this.snd(PAIN[o.d.s], o);
+      } else if (a === "scream") {
+        this.snd(pick(DEATH[o.d.s]), o);
       } else if (a === "fall") { o.solid = false; }
       else if (a === "explode") {                     // a barrel: everything within 128 units is hurt, less the further
+        this.snd("DSBAREXP", o);
         for (const t of [...this.mobjs, p]) {
           if (!t || t === o || (t.player && this.away)) continue;
           const d = Math.max(0, Math.hypot(t.x - o.x, t.y - o.y) - (t.r || 16));
@@ -651,13 +675,13 @@ window.DoomLevel = (() => {
       const P = this.portal;
       if (o.office) {                                 // through the door: in the office, until it hits you or a wall there
         o.x += o.mx; o.y += o.my;
-        if (this.hitsPlayer(o, o.x, o.y)) { this.damage(this.player, ((rnd() % 8) + 1) * o.m.dmg, o.owner); o.dying = 1; }
+        if (this.hitsPlayer(o, o.x, o.y)) { this.damage(this.player, ((rnd() % 8) + 1) * o.m.dmg, o.owner); o.dying = 1; this.snd("DSFIRXPL", o); }
         else if (!P || !P.inside(o.x, o.y) || o.z < P.floor || o.z + 8 > P.floor + P.height || ++o.life > 200) o.gone = true;
         return;
       }
       if (!this.tryMove(o, o.x + o.mx, o.y + o.my)) {
         if (o.hit && o.hit !== o.owner) this.damage(o.hit, ((rnd() % 8) + 1) * o.m.dmg, o.owner);
-        o.dying = 1;
+        o.dying = 1; this.snd("DSFIRXPL", o);
       } else if (P && this.beyond(o.x, o.y) < 0) o.office = true;
     }
   }

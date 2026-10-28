@@ -6,6 +6,7 @@
 <title>burrow</title>
 <script src="/pixel.js"></script>
 <script src="/sprites.js"></script>
+<script src="/sound.js"></script>
 <script src="/room.js"></script>
 <script src="/tiles.js"></script>
 <script src="/chessboard.js"></script>
@@ -163,6 +164,11 @@ async function act(a) {
   else if (a.kind === "closet") { openView("closet"); fillCloset(); }
   else if (a.kind === "report") { openView("report"); fillReport(); }
   else if (a.kind === "board") openBoard();
+  else if (a.kind === "sound") {              // the radio: the room's sound on or off (it says so as it goes)
+    const on = !(state && state.settings && state.settings.sound);
+    Sound.play(on ? "tune" : "click", a.pan || 0, 1, true);
+    const r = await api("/api/settings", { sound: on }); if (r.error) note(r.error);
+  }
   else if (a.kind === "limits") { openView("limits"); fillLimits(); }
   else if (a.kind === "settings") { openView("settings"); fillSettings(true); }
   else if (a.kind === "doors") { openView("doors"); fillDoors(); }
@@ -472,7 +478,7 @@ function askYou() {
 
 // ---- the closet: the furniture there is, drawn as it stands in the room; drag a piece into the
 // room to put it there, as many as you like. The fireplace takes a piece back out (it burns)
-const CATALOGUE = ["plant", "armchair", "window", "board", "meet", "chess", "pong", "coffee", "cooler", "printer", "add", "pair", "manager", "booth", "neuralyzer", "doghouse", "door"];
+const CATALOGUE = ["plant", "armchair", "window", "board", "meet", "chess", "pong", "coffee", "cooler", "printer", "add", "pair", "manager", "booth", "neuralyzer", "doghouse", "radio", "door"];
 // Built when it opens, and again on a state update only while its pictures were still loading: never while
 // something is being carried out of it. Rebuilding it on every update (each second or two in a room with
 // many bots) took the picture being held away mid-drag, and the piece never arrived
