@@ -14,12 +14,14 @@
 // on the shotgun have your skin. In the office the bar says burrow's: HEALTH what is left of the five-hour limit, ARMOR
 // of the week, the keys your machines, the right panel every limit /usage lists.
 //
-// startFps(room, done, opts): room = { scene(), start(), move(x, y, a, walking), shoot(id), unshoot(id), alarm(x, y),
-// armed(), use(thing), label(thing), status(), face(), tiny(ctx, s, x, y, col), tinyW(s), snapshot() }; opts.level:
-// straight into the first level (the mysterious door taken in the room). scene() is the room at its last tick:
+// The mysterious door is only here, in the first person: the room seen from above has none.
+//
+// startFps(room, done): room = { scene(), start(), move(x, y, a, walking), shoot(id), unshoot(id), alarm(x, y),
+// armed(), use(thing), label(thing), status(), face(), tiny(ctx, s, x, y, col), tinyW(s), snapshot() }. scene() is
+// the room at its last tick:
 //   { v, W, H, WALL, floor: the floor's overlay (2 texels a dot), wall: the far wall's picture (TS texels a dot),
 //     items: what hangs on that wall, wkey, boxes, things, solid, lights }  (in the room's dots; here they are units)
-function startFps(room, done, opts = {}) {
+function startFps(room, done) {
   const SW = 320, SH = 200, VH = 168, CX = 160, CY = 84, PROJ = 160, U = 2.25, TICMS = 1000 / 35, SHELLS = 8, WALLH = 40;
   const TS = Props3D.TS, GLOW = Props3D.GLOW;
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -144,8 +146,8 @@ function startFps(room, done, opts = {}) {
   // the fire, dim and blinking by the door
   let sc = room.scene(), seen = new Map(), sv = -1, drawn = [];
   const units = () => ({ W: sc.W * U, H: sc.H * U, WALL: sc.WALL * U });
-  const DOORW = 64, DOORH = 80;              // the mysterious door, in the south wall where the room has it
-  const doorX = () => (sc.abyss !== undefined ? sc.abyss : sc.W / 2) * U;
+  const DOORW = 64, DOORH = 80;              // the mysterious door, in the south wall, left of the middle (the printer's default spot)
+  const doorX = () => Math.round(sc.W * 0.3) * U;
   const officeLight = (x, y, now) => {
     const { W, H } = units();
     let l = 160;
@@ -892,9 +894,6 @@ function startFps(room, done, opts = {}) {
     handTrans = hands();
     const src = room.face && room.face();
     if (src) faces(src).then((f) => { faceSet = f; });
-    if (opts.level && DoomLevel.first(w)) {
-      levelName = DoomLevel.first(w); lvl = new DoomLevel(w, levelName); lvlView = { z: lvl.player.z + 41 }; world = "level";
-    }
     ready = true;
     melt = startMelt(first);
     last = performance.now();

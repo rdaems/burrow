@@ -1897,12 +1897,11 @@ there, you can go through, and that starts the first level of DOOM right away (s
   and right, the grin after a kill, the ouch, dead); the hands on the gun are the palette's brown ramp recoloured to
   your skin (`hands()`). In the office the bar says burrow's: HEALTH the five-hour limit left, ARMOR the week, the
   keys your machines, the right panel every limit /usage reports; in a level, Doom's.
-- **The mysterious door** (`drawAbyss`; `ABYSS()` = 30% of the room's width, clear of the printer's default spot):
-  hardcore only, in the floor's bottom edge opposite the machines' doors: a dark doorway in black wood, two skulls
-  glowing over it, a red glow breathing in front. A click walks you there (`abyss` act) and through it
-  (`firstPerson(key, {level: true})`): the melt, then E1M1. In the first person it is BIGDOOR7 in the south wall
-  (`doorX()`): walk into it and the level starts. Esc leaves from anywhere, as before.
+- **The mysterious door** is BIGDOOR7 in the first person's south wall, opposite the machines' doors, 30% of the
+  room's width along (`doorX()`, clear of the printer's default spot): walk into it, the melt, E1M1. Esc leaves from
+  anywhere, as before. It is only there: he, when a door showed in the room's bottom edge too (a dark doorway, skulls,
+  a red glow, a click walked you through): "don't show the door in the top-down view, only in 3d!". Taken out.
 - Tested in the demo (look.mjs; `__fps.level()`, `office()`, `world()`, `lvl()`, `ready()`, `keys`): the office; E1M1
   walked, a zombieman shot dead in two shots, monsters woken by the noise and killing you; a door opened with E; a
-  click when dead back to the office; walking into the south door back into E1M1; the 2D door clicked, walked to and
-  through; Esc out; hardcore switched off closes it. Not tested: the pointer lock in his own Chrome, id's own WAD.
+  click when dead back to the office; walking into the south door back into E1M1; Esc out; hardcore switched off
+  closes it. Not tested: the pointer lock in his own Chrome, id's own WAD.
