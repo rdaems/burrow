@@ -169,7 +169,7 @@ button, input, select { font:inherit; color:inherit; }
 #vLimits .more { margin:12px 0 0; padding:8px 10px; background:var(--ink); color:var(--steel3); text-shadow:none; font:12px/1.5 var(--mono); -webkit-font-smoothing:auto; white-space:pre-wrap; border:2px solid var(--ink); box-shadow:inset 2px 2px 0 var(--steel0); max-height:40vh; overflow:auto; }
 #vLimits p { margin:0; }
 /* the switchboard's settings: an on/off slider a line (a sunken steel track, gold when on, a steel knob that steps
-   across), and a sentence saying how it is now */
+   across) and its name, gold while the box under them explains it */
 .settings .opt { display:flex; gap:14px; align-items:center; padding:8px 0; cursor:pointer; }
 .settings .slide { flex:none; position:relative; width:46px; height:24px; padding:0; cursor:pointer; background:var(--steel0);
   border:2px solid var(--ink); box-shadow:inset 2px 2px 0 rgba(0,0,0,0.45); }
@@ -178,9 +178,9 @@ button, input, select { font:inherit; color:inherit; }
 .settings .slide.on { background:var(--f-gold); box-shadow:inset 2px 2px 0 rgba(0,0,0,0.25); }
 .settings .slide.on::after { left:24px; }
 @media (prefers-reduced-motion: reduce) { .settings .slide::after { transition:none; } }
-.settings .say { display:grid; }
-.settings .say i { grid-area:1 / 1; font-style:normal; white-space:nowrap; }
-.settings .say i.hide { visibility:hidden; }
+.settings .nm { white-space:nowrap; }
+.settings .opt.cur .nm { color:var(--gold2); }
+.settings .help { width:440px; max-width:100%; min-height:56px; margin-top:10px; padding-top:10px; border-top:2px solid var(--steel0); color:var(--steel3); }
 /* the doors: a machine a line, its door in its paint, the paints as steel-ringed swatches, the one it wears in gold */
 .doors .door { flex:none; width:48px; height:60px; image-rendering:pixelated; }
 .doors .swatches { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }

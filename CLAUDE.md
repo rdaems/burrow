@@ -1854,6 +1854,16 @@ attach`."; "YOLO: bypass permissions, `--dangerously-skip-permissions`." / "YOLO
 permission mode."; "Hardcore: not for the faint of heart." / "Hardcore off.". The sentences don't wrap (the two of a
 switch share a cell): longer ones overflowed the panel's 640 px, keep them this short.
 
+Then: "I still don't like it. Is it good practice to hide more explanation behind a hover? Call it yolo mode". My
+answer: hover alone is wrong for what you need to decide (not found, no touch, no keyboard), right for detail on top of
+a name that is enough to decide; and the 16-bit way is a game menu's help box, the line under the cursor explained at
+the bottom. So a line is a slider and a name ("Remote Control", "YOLO mode", "Hardcore"; no sentence that changes with
+the toggle any more: the slider says it); the box under them (`.help`, two lines, its height fixed so the panel does
+not jump) explains the line the pointer or the focus is on, its name lit gold, kept until another one is pointed at
+(`settingAt`, reset when the panel opens: `fillSettings(true)`). "New bots start with `--remote-control`: also in the
+Claude app and at claude.ai/code." / "New bots start with `--dangerously-skip-permissions`: bypass permissions, no
+prompts." / "Not for the faint of heart." Two lines at most each.
+
 He: "when I click the gun booth, I should first walk towards it, grab a gun, and only then start doom. If i interupt my
 walk, it is interupted." A click on the gun closet gives you the `arm` act (`chosen`): you walk to the spot where a
 hunter takes her gun (`bo.x + 14, bo.y`), reach in 0.4 s, hold the gun (the closet shows one gone), and only then

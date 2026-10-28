@@ -164,7 +164,7 @@ async function act(a) {
   else if (a.kind === "report") { openView("report"); fillReport(); }
   else if (a.kind === "board") openBoard();
   else if (a.kind === "limits") { openView("limits"); fillLimits(); }
-  else if (a.kind === "settings") { openView("settings"); fillSettings(); }
+  else if (a.kind === "settings") { openView("settings"); fillSettings(true); }
   else if (a.kind === "doors") { openView("doors"); fillDoors(); }
   else if (a.kind === "clock") { openView("clock"); fillClock(); }
   else if (a.kind === "notes") openNotes(a.shift);
@@ -578,27 +578,31 @@ function fillLimits() {
     : `<p>Not known yet: Claude Code's /usage is asked every five minutes.</p>`)
     + (u.text ? `<pre class="more">${esc(u.text)}</pre>` : "");
 }
-// ---- the switchboard: burrow's own settings, a slider a line and a sentence that says how it is now (kept in
-// room.json `settings`; the server knows the keys, OPTIONS there). Clearing out sessions is not a setting: you ask
-// an office manager
+// ---- the switchboard: burrow's own settings, a slider and a name a line; what one does is in the box under them
+// while the pointer (or the focus) is on it, as a game's menu explains the line its cursor is on: the name lit
+// gold, the text kept there until another line is pointed at (kept in room.json `settings`; the server knows the
+// keys, OPTIONS there). Clearing out sessions is not a setting: you ask an office manager
 const OPTIONS = [
-  { key: "rc", on: "Remote Control: <code>--remote-control</code>, in the Claude app too.",
-    off: "Remote Control off: new bots only through <code>claude attach</code>." },
-  { key: "yolo", on: "YOLO: bypass permissions, <code>--dangerously-skip-permissions</code>.",
-    off: "YOLO off: new bots in their configured permission mode." },
-  { key: "hardcore", on: "Hardcore: not for the faint of heart.", off: "Hardcore off." },
+  { key: "rc", name: "Remote Control", help: "New bots start with <code>--remote-control</code>: also in the Claude app and at claude.ai/code." },
+  { key: "yolo", name: "YOLO mode", help: "New bots start with <code>--dangerously-skip-permissions</code>: bypass permissions, no prompts." },
+  { key: "hardcore", name: "Hardcore", help: "Not for the faint of heart." },
 ];
-function fillSettings() {                  // rebuilt only when a setting changed (an update mid-click swallowed the click)
+let settingAt = -1;                         // the line explained (-1: none yet since the panel opened)
+function fillSettings(open) {              // rebuilt only when a setting changed (an update mid-click swallowed the click)
   const cfg = (state && state.settings) || {}, el = $("#vSettings"), key = JSON.stringify(cfg);
+  if (open) { settingAt = -1; el.dataset.key = ""; }
   if (el.dataset.key === key) return;
   el.dataset.key = key;
-  // both sentences in one spot, the other one invisible: the panel is as wide as the longest and keeps its width
-  const say = (o, v) => `<span class="say"><i${v ? "" : ' class="hide"'}>${o.on}</i><i${v ? ' class="hide"' : ""}>${o.off}</i></span>`;
-  el.innerHTML = OPTIONS.map((o) => `<label class="opt"><button type="button" class="slide${cfg[o.key] ? " on" : ""}" role="switch" aria-checked="${!!cfg[o.key]}" data-key="${o.key}"></button>${say(o, !!cfg[o.key])}</label>`).join("");
+  el.innerHTML = OPTIONS.map((o) => `<label class="opt"><button type="button" class="slide${cfg[o.key] ? " on" : ""}" role="switch" aria-checked="${!!cfg[o.key]}" data-key="${o.key}"></button><span class="nm">${o.name}</span></label>`).join("")
+    + `<div class="help"></div>`;
+  const lines = el.querySelectorAll(".opt"), help = el.querySelector(".help");
+  const explain = (i) => { settingAt = i; lines.forEach((l, j) => l.classList.toggle("cur", j === i)); help.innerHTML = i < 0 ? "" : OPTIONS[i].help; };
+  lines.forEach((l, i) => { l.onpointerenter = () => explain(i); l.onfocusin = () => explain(i); });
+  explain(settingAt);
   el.querySelectorAll(".slide").forEach((bt, i) => bt.onclick = () => {   // it slides at once; the push that follows agrees
-    const o = OPTIONS[i], v = !bt.classList.contains("on"), [a, b] = bt.nextElementSibling.children;
-    bt.classList.toggle("on", v); bt.setAttribute("aria-checked", v); a.classList.toggle("hide", !v); b.classList.toggle("hide", v);
-    api("/api/settings", { [o.key]: v });
+    const v = !bt.classList.contains("on");
+    bt.classList.toggle("on", v); bt.setAttribute("aria-checked", v);
+    api("/api/settings", { [OPTIONS[i].key]: v });
   });
 }
 // ---- the doors: a line a machine, its door in its paint, its name, how it is reached and how it is, and
