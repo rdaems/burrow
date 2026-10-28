@@ -586,7 +586,7 @@ function startRoom(cv, app) {
       if (first) homes.set(first[0], { x: Math.min(W - 8, d.x0 + d.w + 8), y: d.y + 1, on: d.key });
     }
     for (const b of bots) { const f = folk.get(b.id); if (f && !f.held) thinkOne(w, f, L, now, dt, homes.get(b.id), usage); }
-    if (you && !you.held && (fps || !huntStep(w, you, L, dt))) thinkOne(w, you, L, now, dt, null, usage);   // (in the first person the shooting is yours)
+    if (you && !you.held && (fps || you.act.kind === "arm" || !huntStep(w, you, L, dt))) thinkOne(w, you, L, now, dt, null, usage);   // (in the first person the shooting is yours)
     for (const f of folk.values()) if (f.staff && !f.leaving && f.b) thinkManager(w, f, L, dt);
     thinkDog(w, L, dt);
     // two standing about in the same place: they step apart
@@ -814,6 +814,17 @@ function startRoom(cv, app) {
       case "fps":                            // the gun in hand, walking as you walk
         f.carry = "gun"; f.arms = "gun"; f.legs = f.walking ? (Math.floor(w.T * 8) % 2 ? "walk1" : "walk2") : "stand";
         break;
+      case "arm": {                          // to the gun closet (where a hunter takes hers), a reach in, the gun, then the first person.
+        // Stopped by hardcore going off, the closet going, a session or a terminal opening (or any other click: pointerup)
+        const bo = L.booths.find((b) => b.key === act.at), sh = app.shell();
+        if (!hardcore() || !bo || app.open() !== act.open || (sh ? sh.m + ":" + sh.dir : null) !== act.shell) { end(f); break; }
+        if (!walk(f, { x: bo.x + 14, y: bo.y, on: bo.key }, 36, dt)) break;
+        f.legs = "stand"; f.dir = -1;
+        if ((act.t = (act.t || 0) + dt) < 0.4) { f.arms = "reach"; break; }
+        f.carry = "gun"; f.arms = "gun";
+        if (!act.went) { act.went = true; const key = bo.key; queueMicrotask(() => firstPerson(key)); }   // (after this drawing: the melt starts from the room with the gun in your hands)
+        break;
+      }
       case "with": {
         // with the bot you talk to, at its desk (it sits down for you): behind the desk, over its shoulder,
         // looking at its screen with it; behind, so a click on the bot (or a neighbour) is on the bot and not
@@ -2218,9 +2229,9 @@ function startRoom(cv, app) {
     }
     return best;
   }
-  // the gun closet clicked (hardcore): a shotgun, and the office through your own eyes (fps.js), from in front
-  // of the closet, looking into the room; in there E on the closet loads the gun again. Esc and you are back,
-  // standing where you went
+  // the gun closet clicked (hardcore): you walk there and take a shotgun (the `arm` act), then the office through
+  // your own eyes (fps.js), from where you stand, looking into the room; in there E on the closet loads the gun
+  // again. Esc and you are back, standing where you went
   function firstPerson(key) {
     if (fps || !lastL || !hardcore()) return;
     const p = lastL.pieceOf(key) || lastL.booths[0];
@@ -2229,7 +2240,10 @@ function startRoom(cv, app) {
     view = scene3(lastL, world(), app.state(), world().T);
     fps = startFps({
       scene: () => view,
-      start: () => { const x = p ? Math.max(14, Math.min(W - 14, (p.r[0] + p.r[2]) / 2)) : W / 2, y = p ? Math.min(H - 8, p.r[3] + 22) : H / 2; return { x, y, a: Math.atan2((WALL + H) / 2 - y, W / 2 - x) }; },
+      start: () => {                         // where you stand (by the closet, the gun just taken), looking into the room
+        const me = world().folk.get("you"), x = me ? me.x : p ? Math.max(14, Math.min(W - 14, (p.r[0] + p.r[2]) / 2)) : W / 2, y = me ? me.y : p ? Math.min(H - 8, p.r[3] + 22) : H / 2;
+        return { x, y, a: Math.atan2((WALL + H) / 2 - y, W / 2 - x) };
+      },
       move: (x, y, a, walking) => { const f = world().folk.get("you"); if (f && !f.held) { f.x = x; f.y = y; f.dir = Math.cos(a) < 0 ? -1 : 1; f.walking = walking; } },
       shoot: (id) => { const f = world().folk.get(id); if (!f || f.held || !f.b || f.b.human) return false; shoot(f); return true; },   // an office manager too: a bot like the others
       armed: () => true,
@@ -3170,6 +3184,10 @@ function startRoom(cv, app) {
     draw();
   });
   cv.addEventListener("pointerup", (e) => {
+    {                                        // on your way to the gun closet: any other click stops you (where it sends you, you go)
+      const you = world().folk.get("you"), a = press && press.action;
+      if (you && you.act.kind === "arm" && press && !moving && !held && pointer && Math.hypot(pointer.x - press.x, pointer.y - press.y) <= 1 && !(a && a.kind === "aim")) end(you);
+    }
     if (moving) {
       const s = app.state(), d = lastL && lastL.desks.find((d) => d.key === moving.key);
       const burn = lastL && inFire(lastL, moving.key, moving.at, moving.u);
@@ -3224,7 +3242,10 @@ function startRoom(cv, app) {
       }
     } else if (press && press.action && press.action.kind === "undo") { const f = world().folk.get(press.action.id); if (f && f.act.kind === "doom") f.act.back = true; }   // the booth runs back, it steps out
     else if (press && press.action && press.action.kind === "unshoot") unshoot(press.action.id);
-    else if (press && press.action && press.action.kind === "aim") firstPerson(press.action.key);     // a gun from the gun closet
+    else if (press && press.action && press.action.kind === "aim") {      // you walk to the gun closet and take a gun; the first person after
+      const you = world().folk.get("you"), sh = app.shell();
+      if (you && !you.held && !fps) { you.hunt = null; end(you); you.act = { kind: "arm", at: press.action.key, open: app.open(), shell: sh && sh.m + ":" + sh.dir, chosen: true }; }
+    }
     else if (press && press.action && press.action.kind === "water") {     // you go and water the plant
       const you = world().folk.get("you");
       if (you && !you.held) { end(you); you.act = { kind: "plant", at: press.action.key, wait: 0, chosen: true }; }

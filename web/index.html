@@ -621,9 +621,11 @@ function fillLimits() {
 // room.json `settings`; the server knows the keys, OPTIONS there). Clearing out sessions is not a setting: you ask
 // an office manager
 const OPTIONS = [
-  { key: "rc", on: "New bots are in the Claude app too.", off: "New bots are only here." },
-  { key: "yolo", on: "New bots skip permission prompts.", off: "New bots ask for permission." },
-  { key: "hardcore", on: "Hardcore. Good luck.", off: "Hardcore is off." },
+  { key: "rc", on: "Remote Control: <code>--remote-control</code>, in the Claude app too.",
+    off: "Remote Control off: new bots only through <code>claude attach</code>." },
+  { key: "yolo", on: "YOLO: bypass permissions, <code>--dangerously-skip-permissions</code>.",
+    off: "YOLO off: new bots in their configured permission mode." },
+  { key: "hardcore", on: "Hardcore: not for the faint of heart.", off: "Hardcore off." },
 ];
 function fillSettings() {                  // rebuilt only when a setting changed (an update mid-click swallowed the click)
   const cfg = (state && state.settings) || {}, el = $("#vSettings"), key = JSON.stringify(cfg);

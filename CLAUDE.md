@@ -1232,7 +1232,7 @@ very simple sprite graphics like wolf3d or doom, of the office, and we can kill 
     table, the fire, the booth or gun closet, the bench, the cabinet), so its state shows (the coffee, the board);
   - figures from `body()` in their pose (flipped by the way they face as you see them), the lying ones turned, a ?
     over one that waits, the pieces of shot ones as they fly and land, the ball. Not you: you are the eyes.
-- **Playing**: you start in front of the gun closet facing the room's middle. WASD or arrows, Shift runs, the mouse
+- **Playing**: you start where you took the gun (beside the gun closet), facing the room's middle. WASD or arrows, Shift runs, the mouse
   looks (the pointer locked; up and down by shifting the horizon), a click (or F, Enter) fires: the nearest bot in a
   spread round the crosshair goes to pieces (the room's `shoot`: remains, sweepers, then `claude stop` + `claude rm`),
   a miss puffs where it hits. E (or Space): the pieces under the crosshair, or the nearest in front within 70 dots,
@@ -1748,7 +1748,7 @@ The user should talk to the office manager about it."
   track, gold when on, the steel knob stepping across in 0.12 s, not with reduced motion) and one sentence saying how
   it is now; both sentences sit in one grid cell, the other invisible, so the panel (as narrow as its content now,
   like YOU) keeps its width. A click (on the sentence too: it is a label) slides at once; the push agrees after.
-  Hardcore says only "Hardcore is off." / "Hardcore. Good luck.".
+  Hardcore says only "Hardcore is off." / "Hardcore. Good luck.". (Rewritten the same day, see below.)
 - **No `cleanup` switch** (server `OPTIONS`, the page): nothing is cleared out on its own any more. `app.cleanup()` is
   only what an office manager's session was asked to remove (`/api/office remove`: you ask Susan or Joan); Linda's
   rule over her notes is gone, and Joan's rounds remove a session only when asked. A stored `cleanup` in room.json is
@@ -1809,3 +1809,21 @@ resumes) and `worktreePath`. So burrow mirrored `claude agents`, which forgets.
 - A room that fills up: more than six projects overflow the default slots into any free spot.
 
 `.app`: `macos/bundle.sh` (ad-hoc signed; icon from `burrow --icon-dots`).
+
+## The settings' sentences; walking to the gun closet (2026-10-28)
+
+He: "I don't like your descriptions. I didn't say ELI5. I said, brief, non-verbose! Keep it technical ofcourse, and
+descriptive. mention remote-control, mention yolo and bypass permissions. Only the hardcore mode is vague ... like
+'not for the faint of heart'". Now (`OPTIONS` in index.html; flags in `<code>`, the terminal's font, `.settings code`):
+"Remote Control: `--remote-control`, in the Claude app too." / "Remote Control off: new bots only through `claude
+attach`."; "YOLO: bypass permissions, `--dangerously-skip-permissions`." / "YOLO off: new bots in their configured
+permission mode."; "Hardcore: not for the faint of heart." / "Hardcore off.". The sentences don't wrap (the two of a
+switch share a cell): longer ones overflowed the panel's 640 px, keep them this short.
+
+He: "when I click the gun booth, I should first walk towards it, grab a gun, and only then start doom. If i interupt my
+walk, it is interupted." A click on the gun closet gives you the `arm` act (`chosen`): you walk to the spot where a
+hunter takes her gun (`bo.x + 14, bo.y`), reach in 0.4 s, hold the gun (the closet shows one gone), and only then
+`firstPerson` (a microtask: the melt starts from the room with the gun in your hands); the 3d view starts where you
+stand. Any other click (pointerup, not a drag), picking you up, a session or terminal opening, hardcore off or the
+closet gone ends the walk; huntStep leaves you alone meanwhile. Tested in the demo: walk, grab, melt; a floor click
+mid-walk sends you there, no gun, no 3d.
