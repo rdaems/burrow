@@ -1861,3 +1861,48 @@ hunter takes her gun (`bo.x + 14, bo.y`), reach in 0.4 s, hold the gun (the clos
 stand. Any other click (pointerup, not a drag), picking you up, a session or terminal opening, hardcore off or the
 closet gone ends the walk; huntStep leaves you alone meanwhile. Tested in the demo: walk, grab, melt; a floor click
 mid-walk sends you there, no gun, no 3d.
+
+## The gun closet is Doom; the mysterious door (2026-10-28)
+
+He: "Make the doom resemble the true doom more!! It doesn't need to follow the 16 bit idea ... maybe even use available
+html code for doom? Start from doom and work towards burrow?"; "Really use DOOM (ok to have a simpler version or
+whatever), and then, add a ominous, mysterious door, on the bottom of the floor (opposite the SSH doors). If you walk
+there, you can go through, and that starts the first level of DOOM right away (should be in the same engine etc.)";
+"Modded so the avatar is the face etc."
+- **Not a port**: the ports on the web (Emscripten builds of Chocolate Doom / PrBoom, js-dos) run Doom as a sealed
+  program in a canvas; the office could not be in their engine, and they are GPL. So a small Doom engine of our own in
+  fps.js, with Doom's numbers: 320 x 200 shown at 4:3, PLAYPAL and COLORMAP (the light in Doom's bands, its
+  scalelight/zlight, the gun's flash as extralight, the fake contrast on straight walls), 90 degrees, 35 tics a second,
+  Doom's thrust, friction and bob, the shotgun's frames and tics, the status bar where Doom has each number, the melt.
+  A level is drawn from its BSP (R_CheckBBox, clipped columns, upper/lower/middle textures with their pegging, flats,
+  the sky, sprites in eight rotations, the spectre's fuzz). About 1.5 ms a frame in the office, 0.5 in E1M1.
+- **The data**: `web/doom/freedoom.wad` (2.7 MB), cut from Freedoom 0.13's freedoom1.wad (BSD, `doom/COPYING.txt`) by
+  `doom/extract.py`: what the bar and the gun need, E1M1, the textures and flats it uses plus the office's (STARTAN2/3,
+  DOOR3, DOORTRAK, the key strips, BIGDOOR7, the ceiling's), the sprites level.js knows. server.py's `/doom.wad` serves
+  id's own instead when one is in `~/.config/burrow/` (DOOM.WAD, DOOM1.WAD or DOOM2.WAD, any case): then E1M1 is the
+  real Hangar (MAP01 for Doom II). id's WADs are not ours to put in a public repo. `doom/wad.js` reads a WAD (lumps,
+  patches, composed textures, flats, sprite frames, a map; a 32-cube nearest colour for burrow's pictures).
+- **The game** (`doom/level.js`, `DoomLevel`): things (zombiemen, shotgun guys, imps, demons, spectres, lost souls,
+  cacodemons, barons; barrels; health, armour, shells, keys; decorations), their states and missiles, collision on a
+  128-unit line grid with steps, dropoffs and openings, walk and use specials (doors, lifts, floors, switches, the
+  exit), sector lights, animated textures, sight, noise that wakes them, Doom's damage and armour. Simpler than Doom:
+  no blockmap of things, no infighting, one weapon (the shotgun, 7 pellets). The exit, or a click when dead, brings you
+  back to the office at the mysterious door, facing the room.
+- **The office, Doom's way**: STARTAN2 on the far wall, the machines' doors DOOR3 in DOORTRAK (a key strip in each,
+  dark when the machine is out of reach), the window, clock, closet and switchboard cropped from props3d's wall;
+  STARTAN3 on the others; FLAT5_2 planks under the room's floor overlay (its shadows in Doom's light), CEIL3_5 with
+  TLITE6_4 lamps; the fire flickering in its cells. Bots, furniture and desks are props3d's models and pictures brought
+  into the palette (`pic`: what shines stays fullbright). A unit is 2.25 dots (`U`).
+- **Yours**: the face on the bar is your avatar (`faces()`: your portrait in Doom's five stages of blood, looking left
+  and right, the grin after a kill, the ouch, dead); the hands on the gun are the palette's brown ramp recoloured to
+  your skin (`hands()`). In the office the bar says burrow's: HEALTH the five-hour limit left, ARMOR the week, the
+  keys your machines, the right panel every limit /usage reports; in a level, Doom's.
+- **The mysterious door** (`drawAbyss`; `ABYSS()` = 30% of the room's width, clear of the printer's default spot):
+  hardcore only, in the floor's bottom edge opposite the machines' doors: a dark doorway in black wood, two skulls
+  glowing over it, a red glow breathing in front. A click walks you there (`abyss` act) and through it
+  (`firstPerson(key, {level: true})`): the melt, then E1M1. In the first person it is BIGDOOR7 in the south wall
+  (`doorX()`): walk into it and the level starts. Esc leaves from anywhere, as before.
+- Tested in the demo (look.mjs; `__fps.level()`, `office()`, `world()`, `lvl()`, `ready()`, `keys`): the office; E1M1
+  walked, a zombieman shot dead in two shots, monsters woken by the noise and killing you; a door opened with E; a
+  click when dead back to the office; walking into the south door back into E1M1; the 2D door clicked, walked to and
+  through; Esc out; hardcore switched off closes it. Not tested: the pointer lock in his own Chrome, id's own WAD.

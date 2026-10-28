@@ -885,6 +885,10 @@ function startRoom(cv, app) {
         f.carry = null; f.act = pickBreak(w, f, L, others);
         break;
       }
+      case "abyss":                          // you, to the mysterious door (hardcore); through it, Doom's first level (fps.js)
+        if (!hardcore() || !L.booths.length) { f.act = rest(); break; }
+        if (walk(f, { x: ABYSS(), y: L.floor.y1 }, 40, dt)) { f.act = rest(); firstPerson(L.booths[0].key, { level: true }); }
+        break;
       case "pet": {                          // you, petting the dog (a click on it or its house); afraid, it stays in, and you reach in at its door
         const g = w.dog;
         if (!g || g.leaving || g.held) { f.act = rest(); break; }
@@ -1631,6 +1635,12 @@ function startRoom(cv, app) {
       else if (feeding && moving && KIND(moving.key) === "door") { const m = s.machines.find((m) => "door:" + m.id === moving.key); tip = { text: "take out " + (m ? m.name : "the door"), x: tx, y: ty }; }
       else if (feeding && moving) tip = { text: "burn the " + (NAMES[KIND(moving.key)] || KIND(moving.key)), x: tx, y: ty };
     }
+    // hardcore: a mysterious door in the bottom edge of the floor, opposite the machines' doors. A click and you walk
+    // to it; through it is Doom's first level, in the gun closet's engine (fps.js)
+    if (hardcore() && L.booths.length) {
+      const ax = ABYSS() - 10, ay = H - 10, r = [ax - 1, ay - 1, ax + 21, H], h = hot(...r, { kind: "abyss" });
+      items.push([H + 1, () => outlined(ctx, r, h, (c) => drawAbyss(c, ax, ay, T), GOLD, 0)]);
+    }
     // the booth: a bot let go over it goes in, and after five seconds out of the list for good; the
     // neuralyzer: a bot let go by it gets `/clear` (the drop is useAt's)
     for (const bo of L.booths) {
@@ -1986,7 +1996,7 @@ function startRoom(cv, app) {
     const dg = w.dog;
     if (dg && !dg.inside && !dg.leaving && !dg.held) things.push({ key: "dog", x: dg.x, y: dg.y, z: 0, fig: { kind: "dog", pose: dg.pose, wag: dg.wag }, face: dg.dir < 0 ? -1 : 1 });
     if (w.ball) things.push({ key: "ball", x: w.ball.x, y: w.ball.y, z: w.ball.h, c: small("ball4", 12, 12, (x) => { x.fillStyle = "#e8ecf0"; x.beginPath(); x.arc(6, 6, 5.5, 0, 7); x.fill(); x.fillStyle = "#b5bfc7"; x.beginPath(); x.arc(7, 7.5, 3.5, 0, 7); x.fill(); x.fillStyle = "#ffffff"; x.fillRect(3, 3, 2, 2); }), sx: 0, sy: 0, sw: 12, sh: 12, ax: 6, ay: 12, res: 4 });
-    return { v: (view ? view.v : 0) + 1, W, H, WALL, floor: fc, wall: Props3D.wall(W, 40, WALL, items, wkey), plain: Props3D.plain(40), boxes, things, solid, lights };
+    return { v: (view ? view.v : 0) + 1, W, H, WALL, floor: fc, wall: Props3D.wall(W, 40, WALL, items, wkey), plain: Props3D.plain(40), items, wkey, abyss: ABYSS(), boxes, things, solid, lights };
   }
   // a shot fired: the idle bots near it run off, hands up (the ones at work work on); the more afraid, the
   // further off they hear it and the further they run
@@ -2262,7 +2272,7 @@ function startRoom(cv, app) {
   // the gun closet clicked (hardcore): you walk there and take a shotgun (the `arm` act), then the office through
   // your own eyes (fps.js), from where you stand, looking into the room; in there E on the closet loads the gun
   // again. Esc and you are back, standing where you went
-  function firstPerson(key) {
+  function firstPerson(key, opts = {}) {   // opts.level: straight into Doom's first level (the mysterious door)
     if (fps || !lastL || !hardcore()) return;
     const p = lastL.pieceOf(key) || lastL.booths[0];
     pointer = null; const me0 = world().folk.get("you"); if (me0) me0.hunt = null;      // a hunt of yours under way in the room is yours to finish in here
@@ -2299,7 +2309,7 @@ function startRoom(cv, app) {
         const f = world().folk.get("you"), b = f && f.b, seed = b ? seedOf(b) : "you", col = b ? colorOf(b) : YOU, px = face(seed, col, true).px, i = (19 * 20 + 6) * 4;
         return { skin: pixelAvatar.skin(seed), clothes: px && px[i + 3] > 128 ? "#" + [px[i], px[i + 1], px[i + 2]].map((v) => v.toString(16).padStart(2, "0")).join("") : col };
       },
-    }, () => { fps = null; view = null; const f = world().folk.get("you"); if (f) { f.hunt = null; end(f); f.carry = null; } });   // (drawn at the next tick: this can come from inside draw)
+    }, () => { fps = null; view = null; const f = world().folk.get("you"); if (f) { f.hunt = null; end(f); f.carry = null; } }, opts);   // (drawn at the next tick: this can come from inside draw)
   }
 
   // the wall and the wooden floor, drawn once for the room's height: Pixel Agents' planks, three
@@ -3012,6 +3022,18 @@ function startRoom(cv, app) {
   // `/clear` in its session, a new conversation; it stands there dazed a moment
   // hardcore: the booth is a gun closet: an olive steel cabinet, two shotguns behind its glass doors (one
   // gone while it is in someone's hands), a red lamp on top
+  // the mysterious door (hardcore), at the bottom edge of the floor: a dark doorway in an iron-banded frame of black
+  // wood, two skulls glowing over it (Doom's BIGDOOR7), a red glow breathing on the floor in front of it
+  const ABYSS = () => Math.round(W * 0.3);   // where it is: left of the middle (the printer's default spot is the middle)
+  function drawAbyss(ctx, x, y, T) {
+    const k = still ? 0.5 : 0.5 + 0.5 * Math.sin(T * 1.7), glow = `rgba(200,32,20,${(0.1 + 0.16 * k).toFixed(3)})`;
+    ELL(14, 4, 5).forEach((hw, j) => rect(ctx, x + 10 - hw, y - 4 + j, 2 * hw, 1, glow));
+    rect(ctx, x, y, 20, 10, "#140c0c"); rect(ctx, x + 1, y + 1, 18, 9, "#3a2418");
+    rect(ctx, x + 3, y + 3, 14, 7, "#050203");
+    for (let j = 0; j < 4; j++) rect(ctx, x + 4, y + 6 + j, 12, 1, `rgba(120,10,8,${(0.12 + j * 0.08 + 0.1 * k).toFixed(3)})`);
+    rect(ctx, x + 1, y + 2, 18, 1, "#4a4a52"); rect(ctx, x + 1, y + 1, 18, 1, "#6a6a72");
+    for (const sx of [x + 5, x + 13]) { rect(ctx, sx, y - 2, 3, 2, "#f2a531"); rect(ctx, sx, y - 2, 1, 1, "#140c0c"); rect(ctx, sx + 2, y - 2, 1, 1, "#140c0c"); rect(ctx, sx + 1, y, 1, 1, "#ffe27a"); }
+  }
   function drawGunCloset(ctx, bo, front, out) {
     const x0 = bo.x - 9, y = bo.y, top = y - 32, gy = top + 5, gh = y - 3 - gy;
     if (!front) {
@@ -3286,6 +3308,10 @@ function startRoom(cv, app) {
         if (canThrow(w)) throwStick(w, you, g, lastL);
         else if (g.act.kind !== "fetch") { end(you); you.act = { kind: "pet", left: 6, chosen: true }; if (!g.act.hide) g.act = { kind: "petted", out: g.inside }; }
       }
+    }
+    else if (press && press.action && press.action.kind === "abyss") {     // the mysterious door: you walk to it, and through
+      const you = world().folk.get("you");
+      if (you && !you.held) { end(you); you.act = { kind: "abyss", chosen: true }; }
     }
     else if (press && press.action && press.action.kind === "sit") {       // you take the armchair; a bot sitting in it gets up
       const w = world(), you = w.folk.get("you");

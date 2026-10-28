@@ -334,6 +334,19 @@ OPTIONS = {
 
 def options(room):
     return {**OPTIONS, **{k: bool(v) for k, v in (room.get("settings") or {}).items() if k in OPTIONS}}
+
+
+def doom_wad():
+    """the Doom data of the gun closet's view: id's own (DOOM.WAD, DOOM1.WAD or DOOM2.WAD in ~/.config/burrow/, any
+    case) if you have one, its E1M1 the real one; else the Freedoom extract that comes with burrow (web/doom/)"""
+    here = os.path.dirname(ROOM)
+    try:
+        for name in sorted(os.listdir(here)):
+            if name.lower() in ("doom.wad", "doom1.wad", "doom2.wad"):
+                return os.path.join(here, name)
+    except OSError:
+        pass
+    return os.path.join(HERE, "doom", "freedoom.wad")
 KINDS = {"meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "add", "pair", "manager",
          "booth", "neuralyzer", "doghouse"}
 
@@ -2138,6 +2151,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.term(q, u.path == "/shell")
         if u.path == "/api/office":          # the office as the office manager sees it (curl from her session)
             return self.reply(200, hub.office())
+        if u.path == "/doom.wad":            # the gun closet's Doom data: id's own WAD if you put one here, else Freedoom's (doom/)
+            return self.reply(200, open(doom_wad(), "rb").read(), "application/octet-stream")
         name = "index.html" if u.path == "/" else u.path.lstrip("/")
         path = os.path.normpath(os.path.join(HERE, name))
         if not path.startswith(HERE + os.sep) or not os.path.isfile(path) or name.endswith(".py"):
