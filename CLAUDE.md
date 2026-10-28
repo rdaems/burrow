@@ -1734,7 +1734,12 @@ The user should talk to the office manager about it."
   What held it: `pmset -g` says `sleep 0` (on the charger the Mac never sleeps by itself: System Settings, Battery,
   "Prevent automatic sleeping on power adapter when the display is off"), and sharingd's "AirDrop"
   PreventUserIdleSystemSleep, held for 532 hours. Claude Code itself runs `caffeinate -i -t 300` beside a session while
-  it works (`claude bg-spare` its parent). Nothing changed in burrow; his settings are his.
+  it works (`claude bg-spare` its parent). His settings are his.
+  But burrow had a leak of its own, found the same morning: two `caffeinate -w <server>` at once (and yesterday,
+  72145 and 72164 from 17:12). `awake_tick` runs on every poll of every machine's thread; two threads that both saw
+  no inhibitor each started one, and only the one kept in `self.caff` was ever stopped: the other held the Mac awake
+  (`-s`: lid closed too, on the charger) until the server stopped. `self.caff_lock` now; tested with three threads
+  and a slow start: before, three started and two outlived the work; now one, stopped with it.
 - **Chairs**: the supervisor stops an idle session's process after an hour, and only a live process had a chair (so
   that finished sessions would not make long desks). Now every session has its chair (`layout(…, all, …)`); a long
   desk is a full room, the booth clears it. The screen's hover lights its seats, so the extra light for chairless

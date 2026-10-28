@@ -807,6 +807,7 @@ class Hub:
         self.demo_bots = {}         # the demo's made-up bots, by machine (stopped and deleted from here)
         self.awake = {"mode": (self.room.get("awake") or {}).get("mode", "off"), "until": 0}   # the clock: this computer kept awake
         self.caff = None            # the sleep inhibitor while it runs
+        self.caff_lock = threading.Lock()   # every machine's poll thread ticks it: two at once started two, and one was never stopped
         self.digest = load_digest()  # the office manager's notes: {sessions: {id: notes}, desks: {unit: paragraph}}
         self.dq = []                # the sessions waiting to be written up, in turn
         self.dcv = threading.Condition()
@@ -1627,19 +1628,21 @@ class Hub:
         self.push("state", self.state())
 
     def awake_tick(self):
-        """the inhibitor runs exactly when the mode and the room say so (called on every poll)"""
-        a = self.awake
-        if a["mode"] == "for" and time.time() * 1000 > a["until"]:
-            a["mode"], a["until"] = "off", 0
-        want = a["mode"] == "for" or (a["mode"] == "work" and any(b["busy"] for b in self.feeds.get("", {}).get("bots", [])))   # local bots: the ones this computer runs
-        on = self.caff is not None and self.caff.poll() is None
-        if want and not on:
-            cmd = inhibitor()
-            if cmd:
-                self.caff = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        elif on and not want:
-            self.caff.terminate()
-            self.caff = None
+        """the inhibitor runs exactly when the mode and the room say so (called on every poll, by every machine's
+        thread: one at a time, or two would start one each and the one not kept would keep the Mac awake for good)"""
+        with self.caff_lock:
+            a = self.awake
+            if a["mode"] == "for" and time.time() * 1000 > a["until"]:
+                a["mode"], a["until"] = "off", 0
+            want = a["mode"] == "for" or (a["mode"] == "work" and any(b["busy"] for b in self.feeds.get("", {}).get("bots", [])))   # local bots: the ones this computer runs
+            on = self.caff is not None and self.caff.poll() is None
+            if want and not on:
+                cmd = inhibitor()
+                if cmd:
+                    self.caff = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            elif on and not want:
+                self.caff.terminate()
+                self.caff = None
 
     # ---- chess against a bot: pair's table (chess.py has the rules), your opponent one of the
     # idle bots. It plays from here, not through Claude: two plies of material and a little chance.
