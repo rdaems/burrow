@@ -10,6 +10,7 @@
 <script src="/tiles.js"></script>
 <script src="/chessboard.js"></script>
 <script src="/pong.js"></script>
+<script src="/outside.js"></script>
 <script src="/props3d.js"></script>
 <script src="/fps.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js"></script>
@@ -63,7 +64,7 @@
         </form>
         <div id="vManager" class="managers" hidden><p>Who sits at the reception? Pick one; burn her booth to let her go.</p><div class="styles"></div></div>
         <div id="vClock" class="awake" hidden><p>Keep this computer awake</p><div class="row"></div></div>
-        <div id="vOutside" hidden><canvas class="outside" width="130" height="70"></canvas></div>
+        <div id="vOutside" hidden><canvas class="outside" width="160" height="96"></canvas><p class="hint"><code>↑ ↓</code> angle · <code>← →</code> power · <code>space</code> fires</p></div>
         <div id="vBoard" hidden><canvas class="board" width="130" height="55"></canvas><div class="row"><button type="button" class="btn" id="wipe">wipe</button></div></div>
         <div id="vPair" hidden>
           <div class="pair-setup">
@@ -128,6 +129,7 @@ const room = startRoom($("#room"), {
   opens: () => botTiles().map((t) => asFolk(t.id)),
   chess: () => (viewKind === "chess" && state && state.chess && !state.chess.result ? state.chess : null),
   pong: () => (viewKind === "pong" ? pongUI.playing() : null),
+  outside: () => (viewKind === "outside" ? outsideUI.playing() : null),
   view: () => viewKind,
   settings: () => (state && state.settings) || {},
   digest: () => digest,
@@ -167,7 +169,7 @@ async function act(a) {
   else if (a.kind === "manager") openManager(a.key, a.shift);
   else if (a.kind === "desk") openDesk(a.unit);
   else if (a.kind === "kept") api("/api/office", { kept: a.id });   // one she was seeing out, kept: her session is told
-  else if (a.kind === "outside") openOutside();
+  else if (a.kind === "outside") openOutside(a.key);
   else if (a.kind === "pairOpen") openPair(a.key);
   else if (a.kind === "pair" && b) joinPair(a.key, b);
   else if (a.kind === "burn") { const r = await api("/api/furniture", { remove: a.key }); if (r.error) note(r.error); }
@@ -212,6 +214,8 @@ es.addEventListener("state", (e) => {
   // a bot that gets work, or a question for you, leaves the ping-pong table
   const pp = viewKind === "pong" && pongUI.playing(), idle = (id) => state.bots.some((b) => b.id === id && !b.busy && !b.waiting);
   if (pp) { const gone = (pp.ids || [pp.id]).find((id) => !idle(id)); if (gone) pongUI.left(gone); }
+  const op = viewKind === "outside" && outsideUI.playing();   // the duel at the window too
+  if (op) { const gone = (op.ids || [op.id]).find((id) => !idle(id)); if (gone) outsideUI.left(gone); }
   room.draw();
 });
 es.addEventListener("digest", (e) => { digest = JSON.parse(e.data); for (const t of notesTiles()) { showWho(t); renderNotes(t); } room.draw(); });
@@ -255,6 +259,7 @@ function closeView(keep) {                 // keep: another view takes its place
   viewKind = null;
   if (was === "chess" && state && state.chess && !state.chess.result && [state.chess.white.id, state.chess.black.id].includes("you")) api("/api/chess", { resign: true });   // your game; the bots' goes on
   if (was === "pong") pongUI.close();
+  if (was === "outside") outsideUI.close();
   if (was === "machine" && machineAt) { machineAt = null; room.pend(null); }   // the new door goes back into the closet
   if (was === "manager" && managerAt) { managerAt = null; room.pend(null); }   // the booth too, with nobody picked
   if (!keep) { view.hidden = true; $("#pane").classList.toggle("empty", !tiles.all().length); room.draw(); }
@@ -526,69 +531,23 @@ async function joinPair(key, b) {
   const t = openBot(b.m, b.id, true), x = r.bring + "\r";
   if (t.ws && t.ws.readyState === 1) t.ws.send(enc.encode(x)); else t.typed.push(x);
 }
-// ---- the window: the outside, by this computer's clock: the sky by the hour, the sun or the moon on
-// their arc, stars at night, clouds drifting, the hills, and the other machines as cottages
-const ocv = $("#vOutside canvas"), octx = ocv.getContext("2d");
-function openOutside() {
+// ---- the window: the outside (outside.js), and on its hills a duel: yours against an idle bot drawn by lot,
+// or the duel two bots have at the window, to watch. Closing the view gives it up
+const outsideUI = outsideView($("#vOutside canvas"), { state: () => state, room, shown: () => viewKind === "outside", wears: (seed) => room.wears(seed) });
+function openOutside(key) {
+  if (viewKind === "outside") return;
+  const at = room.playing("window"), bot = (id) => { const x = byId(id) || {}; return { id, name: x.name || id, color: projectColor(x.unit || "") }; };
   openView("outside");
-  const draw = () => { if (viewKind !== "outside") return; drawOutside(octx, ocv.width, ocv.height, performance.now() / 1000); requestAnimationFrame(draw); };
-  draw();
-}
-const mixc = (a, b, k) => "#" + [1, 3, 5].map((i) => { const x = parseInt(a.slice(i, i + 2), 16), y = parseInt(b.slice(i, i + 2), 16); return Math.round(x + (y - x) * k).toString(16).padStart(2, "0"); }).join("");
-const SKY = [[0, "#0d1430"], [5, "#141d3f"], [6.5, "#d9775a"], [8, "#7fb2e0"], [17, "#7fb2e0"], [19, "#e07a4a"], [20.5, "#2a2550"], [22, "#0d1430"], [24, "#0d1430"]];
-function skyAt(h) { for (let i = 1; i < SKY.length; i++) if (h <= SKY[i][0]) { const [h0, c0] = SKY[i - 1], [h1, c1] = SKY[i]; return mixc(c0, c1, (h - h0) / (h1 - h0)); } return SKY[0][1]; }
-const STARS = [...Array(40)].map((_, i) => [(i * 37) % 130, (i * 53) % 44, i % 3]);
-function drawOutside(c, W, H, t) {
-  const now = new Date(), h = now.getHours() + now.getMinutes() / 60, horizon = 52, sky = skyAt(h);
-  const dark = h < 6 || h > 20.5 ? 1 : h < 8 ? (8 - h) / 2 : h > 18.5 ? (h - 18.5) / 2 : 0;
-  const r = (x, y, w, hh, col) => { c.fillStyle = col; c.fillRect(x, y, w, hh); };
-  for (let b = 0; b < 4; b++) r(0, b * 13, W, 13, mixc(sky, "#ffffff", 0.05 * (3 - b) * (1 - dark) + 0.02 * b));   // the sky, lighter toward the horizon
-  if (dark > 0) for (const [x, y, k] of STARS) if (((Math.floor(t * 2) + k) % 5) || k === 0) r(x, y, 1, 1, dark > 0.5 ? "#f4f6fb" : "#8b93ad");
-  // the sun from 6:30 to 20:30, the moon the rest of the night, on an arc over the hills
-  const day = h >= 6.5 && h <= 20.5, p = day ? (h - 6.5) / 14 : ((h + 24 - 20.5) % 24) / 10;
-  const sx = Math.round(10 + p * 110), sy = Math.round(horizon - 4 - Math.sin(p * Math.PI) * 44);
-  if (day) { r(sx - 3, sy - 2, 7, 5, "#ffe27a"); r(sx - 2, sy - 3, 5, 7, "#ffe27a"); r(sx - 1, sy - 1, 3, 3, "#fff6c0"); }
-  else { r(sx - 3, sy - 2, 7, 5, "#e8e5ef"); r(sx - 2, sy - 3, 5, 7, "#e8e5ef"); r(sx, sy - 2, 4, 5, sky); }
-  // clouds, drifting
-  for (let i = 0; i < 3; i++) {
-    const cx = Math.round((i * 47 + t * (2 + i)) % (W + 30)) - 15, cy = 8 + i * 11, col = mixc("#f4f6fb", sky, 0.25 + dark * 0.6);
-    r(cx, cy + 2, 18, 3, col); r(cx + 3, cy, 8, 2, col); r(cx + 12, cy + 1, 4, 1, col);
+  let tas = "", yours = false;
+  if (at.length === 2) { const [a, b] = at.map(bot); tas = `${a.name} vs ${b.name}`; outsideUI.open(a, b, key); }
+  else {
+    const who = idleBots(), it = who.length ? who[Math.floor(Math.random() * who.length)] : null, you = (state && state.you) || {};
+    outsideUI.open({ id: "you", name: you.name || "you", seed: you.seed || you.name, color: "#d97757", human: true }, it, key);
+    if (it) { tas = "with " + it.name; yours = true; }
   }
-  // hills, a few pines, the meadow
-  const hill = mixc("#2b4a3a", "#101a22", dark), pine = mixc("#1d3a2a", "#0a1310", dark);
-  for (let x = 0; x < W; x++) r(x, horizon - Math.round(6 * Math.sin(x / 17) + 4 * Math.sin(x / 7 + 2)) - 2, 1, H, hill);
-  for (const [x, hh] of [[5, 11], [12, 8], [61, 9], [118, 12], [125, 8]]) for (let k = 0; k < hh; k++) r(x - Math.floor(k / 3), horizon + 6 - hh + k, 1 + 2 * Math.floor(k / 3), 1, pine);
-  r(0, horizon + 6, W, H - horizon - 6, mixc("#1f3a2c", "#0c1418", dark));
-  // the other machines (each a door in the room) as cottages along the hills, in their door's paint: their
-  // windows bright and smoke from the chimney while their bots work, one lamp on while they idle about,
-  // dark with none, boarded up while out of reach; the name underneath. Fireflies after dark
-  const others = ((state && state.machines) || []).filter((m) => m.id), span = (W - 16) / Math.max(1, others.length), base = horizon + 9;
-  const warm = "#ffd97a", glow = "rgba(255,217,122,0.35)";
-  others.forEach((m, i) => {
-    const p = room.paint(m.id), mine = state.bots.filter((b) => (b.m || "") === m.id);
-    const busy = mine.some((b) => b.busy || b.waiting), lamp = mine.length > 0, cx = Math.round(8 + span * (i + 0.5)), x = cx - 8;
-    const wall = mixc(p.top, "#0c1418", dark * 0.55), roof = mixc(p.d, "#0c1418", dark * 0.5), line = p.k;
-    r(x + 11, base - 17, 3, 6, line); r(x + 12, base - 17, 1, 5, roof);                                  // the chimney
-    for (let k = 0; k < 6; k++) r(x - 1 + k, base - 10 - k, 18 - 2 * k, 1, k === 5 ? line : roof);     // the roof
-    r(x - 1, base - 10, 18, 1, line);
-    r(x, base - 9, 16, 9, line); r(x + 1, base - 9, 14, 8, wall);                                     // the walls
-    r(x + 6, base - 6, 4, 6, line); r(x + 7, base - 5, 2, 5, mixc(p.d, "#000000", 0.3));              // the door
-    for (const [wx, on] of [[x + 2, busy || lamp], [x + 11, busy]]) {
-      if (on && dark > 0.3) r(wx - 1, base - 8, 4, 4, glow);
-      r(wx, base - 7, 2, 2, on ? warm : mixc("#26303c", "#0c1418", dark));
-    }
-    if (m.error) { r(x + 1, base - 7, 14, 1, "#6b4a2b"); r(x + 5, base - 4, 6, 1, "#6b4a2b"); }       // boarded up
-    if (busy && !m.error) for (let k = 0; k < 6; k++) {                                                 // smoke, rising and spreading
-      const ph = (t * 0.3 + k / 6) % 1, s = 2 + Math.round(ph * 3), sx = Math.round(x + 12 + ph * 5 + Math.sin(ph * 5 + k) * 1.5) - (s >> 1), sy = Math.round(base - 18 - ph * 18);
-      c.globalAlpha = 0.75 * (1 - ph); r(sx, sy, s, s - 1, mixc("#f1f3f7", "#8a93a3", dark)); c.globalAlpha = 1;
-    }
-    const name = m.name.slice(0, Math.max(1, Math.floor((span + 1) / 4))).toUpperCase(), tw = room.tinyW(name);
-    room.tiny(c, name, Math.round(cx - tw / 2), base + 2, mixc("#f4f6fb", "#8b93ad", dark * 0.5));
-  });
-  if (dark > 0.5) for (let k = 0; k < 6; k++) {
-    const fx = Math.round((k * 23 + Math.sin(t * 0.7 + k) * 6 + 7) % W), fy = Math.round(horizon + 4 + (k % 3) * 3 + Math.sin(t * 1.3 + k * 2) * 2);
-    if (Math.floor(t * 1.5 + k) % 3) r(fx, fy, 1, 1, "#e8f59a");
-  }
+  view.querySelector(".tas").textContent = tas;
+  $("#vOutside .hint").hidden = !yours;
+  room.draw();
 }
 // ---- the whiteboard, big: the same ink the bots draw on (room.js), four pixels an ink pixel; draw
 // on it with the pointer, in your colour

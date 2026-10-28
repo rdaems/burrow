@@ -208,6 +208,17 @@ function startRoom(cv, app) {
   // a figure's colour: a bot wears its project's, you wear yours
   const colorOf = (b) => b.staff ? b.color : b.human ? (b.color || YOU) : projectColor(b.unit);
   const seedOf = (b) => b.staff ? b.seed : b.human ? (b.seed || b.name) : b.id;
+  // what a person's portrait wears, for a small figure of them elsewhere (the gunner outside the window): the
+  // shoulders' colours as body() takes them, the skin, the hair (down the middle from the top)
+  function wears(seed) {
+    const f = face(seed, YOU, true), d = f.px;
+    if (!d) return null;
+    const at = (x, y) => { const i = (y * 20 + x) * 4; return d[i + 3] < 128 ? null : "#" + [d[i], d[i + 1], d[i + 2]].map((v) => v.toString(16).padStart(2, "0")).join(""); };
+    const shirt = at(6, 19) || YOU, skin = pixelAvatar.skin(seed);
+    let hair = null;
+    for (let y = 0; y < 12 && !hair; y++) { const c = at(10, y); if (c && c !== INK && c !== INK2 && c !== skin) hair = c; }
+    return { shirt, shade: (at(15, 19) !== shirt && at(15, 19)) || shade(shirt, 0.62), skin, hair };
+  }
 
   // halo for a highlighted bot (or chair, or screen): one dot around its outline (not its shadow)
   const halos = new Map();
@@ -524,6 +535,13 @@ function startRoom(cv, app) {
       if (f.id === pv && !(f.act.kind === "pong" && f.act.you) && !f.work) { end(f); f.act = { kind: "pong", side: 1, you: true, left: 1e9, there: false }; }
       if (f.act.kind === "pong" && !f.human && (f.act.you ? f.id !== pv : !!pv)) end(f);
     }
+    // the duel at the window (outside.js): the bot you play stands there with you; two you watch stay until you look away
+    const ow = app.outside(), wv = ow && !ow.watch && ow.id;
+    for (const f of folk.values()) {
+      if (f.id === wv && !(f.act.kind === "window" && f.act.you) && !f.work && !DOOMED.has(f.act.kind)) { end(f); f.act = { kind: "window", at: ow.at, side: 1, you: true, left: 1e9 }; }
+      if (f.act.kind === "window" && f.act.you && !f.human && f.id !== wv) end(f);
+      if (ow && ow.watch && ow.ids.includes(f.id) && f.act.kind === "window" && f.act.with) f.act.left = Math.max(f.act.left, 5);
+    }
     // messages under way: the beam reaches the other, who takes it in
     for (const bm of w.beams) { const was = bm.t; bm.t += dt; if (was < BEAM && bm.t >= BEAM) { const g = folk.get(bm.to); if (g) g.chat = Math.max(g.chat, 1); } }
     w.beams = w.beams.filter((bm) => bm.t < BEAM + 0.4 && folk.has(bm.from) && folk.has(bm.to));
@@ -564,7 +582,7 @@ function startRoom(cv, app) {
       if (r.back || !r.parts.length || performance.now() - r.t0 < 1500) continue;
       if ([...folk.values()].filter((g) => g.act.kind === "sweep" && g.act.at === id).length >= 2) continue;
       if (w.fear > 0.35 && Math.random() > 1.2 - w.fear) continue;     // afraid: they hesitate to come over
-      const crew = [...folk.values()].filter((g) => g.b && !g.b.human && !g.b.staff && !g.work && !g.held && !g.lying && !g.open && SWEEPERS.has(g.act.kind) && !(g.act.kind === "loiter" && g.act.panic))
+      const crew = [...folk.values()].filter((g) => g.b && !g.b.human && !g.b.staff && !g.work && !g.held && !g.lying && !g.open && SWEEPERS.has(g.act.kind) && !(g.act.kind === "loiter" && g.act.panic) && !(g.act.kind === "window" && (g.act.you || g.act.with)))
         .sort((a, b) => Math.hypot(a.x - r.x, a.y - r.y) - Math.hypot(b.x - r.x, b.y - r.y))[0];
       if (crew) { end(crew); crew.act = { kind: "sweep", at: id, wait: 0 }; }
     }
@@ -800,9 +818,10 @@ function startRoom(cv, app) {
     // you: with the bot whose session is open, at the table of the game you play; else about the
     // room like the others
     if (f.human && !sleepy && !fps) {
-      const o = app.open(), g = o && folk.get(o), game = app.chess(), pp = app.pong(), sh = app.shell(), a = f.act;
+      const o = app.open(), g = o && folk.get(o), game = app.chess(), pp = app.pong(), ow = app.outside(), sh = app.shell(), a = f.act;
       if (game) { if (!(a.kind === "chess" && a.you)) { end(f); f.act = { kind: "chess", side: game.white.id === "you" ? 0 : 1, you: true, left: 1e9, there: false }; } }
       else if (pp) { if (!(a.kind === "pong" && a.you)) { end(f); f.act = { kind: "pong", side: 0, you: true, left: 1e9, there: false }; } }
+      else if (ow && !ow.watch) { if (!(a.kind === "window" && a.you)) { end(f); f.act = { kind: "window", at: ow.at, side: 0, you: true, left: 1e9 }; } }
       else if (g) { if (!(a.kind === "with" && a.to === g.id) && !a.chosen) { end(f); f.act = { kind: "with", to: g.id }; } }      // (a seat you clicked yourself keeps you)
       else if (sh) { if (!(a.kind === "screen" && a.m === sh.m && a.dir === sh.dir) && !a.chosen) { end(f); f.act = { kind: "screen", m: sh.m, dir: sh.dir }; } }
       else if (a.kind === "with" || a.kind === "screen" || a.you) end(f);
@@ -1015,10 +1034,17 @@ function startRoom(cv, app) {
       }
       case "window": {
         const win = L.windows.find((p) => p.key === act.at) || L.windows[0];
-        if (!win) { f.act = rest(); break; }
-        if (walk(f, { x: Math.round((win.x0 + win.x1) / 2), y: WALL + 8, on: win.key }, v, dt)) {
-          f.arms = "down"; f.dir = Math.sin(w.T * 0.7 + f.z) > 0 ? 1 : -1;
-          if ((act.left -= dt) <= 0) f.act = rest();
+        if (!win || (act.with && !partner())) { f.act = rest(); break; }
+        const duel = act.you || act.with, mid = Math.round((win.x0 + win.x1) / 2);
+        act.there = walk(f, { x: duel ? mid + (act.side ? 10 : -10) : mid, y: WALL + 8, on: win.key }, v, dt);
+        if (act.there) {
+          // looking out; at a duel (outside.js) the two face each other, an arm out as each fires: yours, or the
+          // two you watch, as the duel goes; else a shot every few seconds, turn about
+          const ow = app.outside(), mine = ow && (act.you || (ow.watch && ow.ids.includes(f.id)));
+          const shot = mine ? performance.now() / 1000 - ow.fired[act.side] < 0.5 : !!act.with && (w.T + (act.side ? 3.5 : 0)) % 7 < 0.5;
+          f.dir = duel ? (act.side ? -1 : 1) : Math.sin(w.T * 0.7 + f.z) > 0 ? 1 : -1;
+          f.arms = shot ? "fwd1" : "down";
+          if ((act.left -= dt) <= 0) { const g = partner(); if (g) g.act = rest(); f.act = rest(); }
         }
         break;
       }
@@ -1238,7 +1264,11 @@ function startRoom(cv, app) {
     const spare = (kind, ps) => ps.filter((p) => !others.some((g) => g.act.kind === kind && g.act.at === p.key));
     const plants = spare("plant", L.plants), wins = spare("window", L.windows), chairs = spare("chair", L.chairs);
     if (r < 0.86 && plants.length) return { kind: "plant", at: any(plants).key, wait: 0 };
-    if (r < 0.91 && wins.length) return { kind: "window", at: any(wins).key, left: rnd(12, 25) };
+    if (r < 0.91 && wins.length) {             // a look outside, or with a mate a duel on the hills out there (outside.js)
+      const at = any(wins).key;
+      if (mate && !f.human && !mate.human && Math.random() < 0.5) { const left = rnd(40, 80); mate.carry = null; mate.act = { kind: "window", at, side: 1, left, with: f.id }; return { kind: "window", at, side: 0, left, with: mate.id }; }
+      return { kind: "window", at, left: rnd(12, 25) };
+    }
     if (r < 0.96 && chairs.length) return { kind: "chair", at: any(chairs).key, left: rnd(45, 90) };
     for (let k = 0; k < 8; k++) {             // somewhere free to stand about
       const x = rnd(L.floor.x0, L.floor.x1), y = rnd(L.floor.y0, L.floor.y1);
@@ -1479,7 +1509,7 @@ function startRoom(cv, app) {
     if (pending && pending.mid != null && (s.machines.some((m) => m.id === pending.mid) || performance.now() - pending.t > 10000)) pending = null;
     if (pending) drawKind(ctx, pending.kind, pending.at, w, T);
     for (const win of L.windows) {
-      const h = hot(win.x0, win.y0, win.x1, win.y1, { kind: "outside" });
+      const h = hot(win.x0, win.y0, win.x1, win.y1, { kind: "outside", key: win.key });
       onTheWall(win.key, [win.x0, win.y0, win.x1, win.y1], h, (c) => drawWindow(c, win));
       if (h) tip = { text: "outside", x: (win.x0 + win.x1) / 2, y: win.y1 + 10 };
     }
@@ -3126,7 +3156,7 @@ function startRoom(cv, app) {
       case "armchair": return { kind: "chair", at: p.key, left: long };
       case "neuralyzer": return f.b && !f.b.human && !f.b.staff ? { kind: "neuralyze", at: p.key, stage: 0, wait: 0 } : null;
       case "fire": return { kind: "warm", side: f.x > (lastL.fire.x0 + lastL.fire.x1) / 2 ? 1 : 0, left: long / 2 };   // its hands at the fire (it burns furniture, never a bot)
-      case "window": return { kind: "window", at: p.key, left: long / 3 };
+      case "window": if (f.human) { app.act({ kind: "outside", key: p.key }); return null; } return { kind: "window", at: p.key, left: long / 3 };
       case "coffee": return { kind: "coffee", stage: 0, wait: 0 };
       case "plant": return { kind: "plant", at: p.key, wait: 0 };
       case "printer": return { kind: "print", stage: 0, wait: 0 };
@@ -3324,7 +3354,7 @@ function startRoom(cv, app) {
   // the whiteboard's ink, for the view: the canvas itself, a line on it (in ink pixels), a wipe
   const board = { ink: () => ink(world()), line: (x0, y0, x1, y1, col) => inkLine(world(), x0, y0, x1, y1, col), wipe: () => wipe(world()), version: () => world().inkV || 0 };
   // the two at a game table right now (chess, pong), white or the left side first: the page lets you watch them
-  const playingAt = (kind) => [...world().folk.values()].filter((f) => f.act.kind === kind && f.act.there && f.act.with && !f.act.you).sort((a, b) => a.act.side - b.act.side).map((f) => f.id);
+  const playingAt = (kind) => [...world().folk.values()].filter((f) => f.act.kind === kind && f.act.there && f.act.with && !f.act.you && !f.human).sort((a, b) => a.act.side - b.act.side).map((f) => f.id);
   // for look.mjs: two bots sent to a game, a kickabout for some
   window.__room.game = (kind, a, b) => { const w = world(), fa = w.folk.get(a), fb = w.folk.get(b); if (!fa || !fb) return false; end(fa); end(fb); fa.act = { kind, side: 0, with: b, left: 90, there: false }; fb.act = { kind, side: 1, with: a, left: 90, there: false }; return true; };
   window.__room.football = (ids) => { const w = world(), team = ids.map((id) => w.folk.get(id)).filter(Boolean); return team.length >= 2 && !!football(w, lastL, team); };
@@ -3337,5 +3367,5 @@ function startRoom(cv, app) {
     const x = c.getContext("2d"); x.imageSmoothingEnabled = false; x.drawImage(im, 0, 0, c.width, c.height);
     return c.toDataURL();
   };
-  return { talk, typed, size, draw, figure, fresh: (id) => fresh.add(id), width, color: projectColor, icon, door: doorPicture, paints: () => ({ wood: WOOD.top, list: PAINT.map((p) => p.top) }), paintOf: paintIdx, paint: paintOf, tiny, tinyW, printer: printerPicture, carry: carryKind, place: placeKind, pend, condemn: (ids) => condemn(ids), playing: playingAt, names: NAMES, at, board, stats, hovered: () => hovered && { id: hovered.b.id, seat: !!hovered.seat } };
+  return { talk, typed, size, draw, figure, wears, fresh: (id) => fresh.add(id), width, color: projectColor, icon, door: doorPicture, paints: () => ({ wood: WOOD.top, list: PAINT.map((p) => p.top) }), paintOf: paintIdx, paint: paintOf, tiny, tinyW, printer: printerPicture, carry: carryKind, place: placeKind, pend, condemn: (ids) => condemn(ids), playing: playingAt, names: NAMES, at, board, stats, hovered: () => hovered && { id: hovered.b.id, seat: !!hovered.seat } };
 }

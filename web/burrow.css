@@ -115,8 +115,18 @@ button, input, select { font:inherit; color:inherit; }
 .vform.desk .sessions li { padding:3px 0; cursor:pointer; }
 .vform.desk .sessions li:hover b { text-decoration:underline; }
 .vform.desk .sessions small { color:var(--steel3); }
-/* the outside, four pixels a dot */
-.outside { display:block; width:520px; max-width:100%; aspect-ratio:130/70; border:2px solid var(--ink); image-rendering:pixelated; }
+/* the outside, four pixels a dot, a little wider than the other panels; the duel's keys under it */
+#view[data-kind="outside"] { width:min(688px, calc(100% - 48px)); }
+.outside { display:block; width:644px; max-width:100%; aspect-ratio:160/96; border:2px solid var(--ink); image-rendering:pixelated; }
+#vOutside .duel { display:grid; grid-template-columns:1fr auto 1fr; gap:12px; margin:0 0 8px; color:var(--steel3); white-space:nowrap; }
+#vOutside .duel .pl { overflow:hidden; text-overflow:ellipsis; min-width:0; }
+#vOutside .duel .r { text-align:right; }
+#vOutside .duel b { font-weight:normal; }
+#vOutside .duel b.on { color:var(--gold2); }
+#vOutside .duel i { font-style:normal; color:var(--white); margin:0 10px; }
+#vOutside .duel .sc { color:var(--white); }
+#vOutside .hint { margin:10px 0 0; color:var(--steel3); text-align:center; }
+#vOutside .hint code { color:var(--gold2); font:14px/1 var(--mono); -webkit-font-smoothing:auto; text-shadow:none; }
 .vform p { margin:0 0 10px; color:var(--white); }
 .vform b { color:var(--gold2); font-weight:normal; }
 .vform code, .settings code { color:var(--gold2); font:14px/1 var(--mono); -webkit-font-smoothing:auto; text-shadow:none; }   /* paths, flags, keys: the terminal's font, as the fields (the pixel font has no ~) */

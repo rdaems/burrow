@@ -25,8 +25,9 @@ can do here.
 **One room, all your machines.** Each machine is a door in the wall, each working directory a desk with its
 sessions seated at it.
 
-**It is an office.** Idle robots take breaks: coffee, chess, ping-pong, a nap on a mat, a meeting at the
-whiteboard. You furnish it, and keeping it tidy is yours: a full room is a full room.
+**It is an office.** Idle robots take breaks: coffee, chess, ping-pong, a duel on the hills outside the
+window, a nap on a mat, a meeting at the whiteboard. You furnish it, and keeping it tidy is yours: a full
+room is a full room.
 
 ## The room
 

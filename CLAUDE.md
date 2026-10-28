@@ -1802,6 +1802,40 @@ resumes) and `worktreePath`. So burrow mirrored `claude agents`, which forgets.
 - To trust a new git repo for a test from inside a session: the trust prompt's cursor starts on "No, exit" (↓ then
   Enter), and the `CLAUDE_*` variables of the calling session must be unset, or the child session does not save it.
 
+## The window is a game: a duel on the hills (2026-10-28)
+
+He: "When i click the window, it is shown a bit bigger than it is now, and it's actually a game. Another classic one,
+it was called vgabomb on our old DOS pc". VGABomb (1989, Turbo Basic, VGA): two artillery positions on either side
+of a mountain under a night sky, angle and speed, a wind, as QBasic's Gorillas. Built in that genre on the window's
+own landscape, not a copy of VGABomb.
+- **web/outside.js** (`outsideView(canvas, app)`): the outside moved out of index.html (sky by the hour, sun or moon,
+  stars, clouds, the other machines as cottages, fireflies), now 160 x 96 dots at four pixels a dot (644 px, the view
+  688 px wide for it). The hills are a heightmap (`land.g`, the top per column) at two levels with a mountain between;
+  the cottages and pines stand in the meadow in front (`M` 78, `BASE` 89) and are never hit.
+- **The duel**: two guns on level pads, a gunner each (you as your portrait wears it, `room.wears(seed)`; a bot a
+  robot in its project colour), a pennant each. ↑ ↓ the angle, ← → the power (a step a press, faster while held), space
+  or Enter fires. Shells step at 1/120 s (`fly`, `down`): gravity 60, power × 1.1 dots/s, the wind pushes up to 9
+  dots/s²; a round's wind is shown by the clouds, the chimney smoke and the pennants, never a number. A shell that
+  comes down makes a crater (earth on top where it hit), within 5 dots of a gun (or on it) it wrecks it: the gunner is
+  thrown on its back, the winner hops, the score goes up, and after 3.6 s a new land and wind, the loser to start.
+  Each player's last shot stays as a dotted line in its colour until its next. The names, the score and the angle and
+  power of whose turn it is are a line over the picture in the view's lettering (the 3x5 lettering at four pixels a
+  dot with a shadow read badly).
+- **The bot's aim** (`plan`): it knows the physics: for every angle the power that lands nearest you (the same steps
+  as the real flight, so a perfect hand always hits), an angle it likes (seeded by its id), then the hand: power off by
+  9 × 0.55^shots (+0.5) times its skill (0.75-1.35 by id), the angle a little. It hit in 5 and 2 shots in a test. Its
+  barrel swings round and its numbers come up before it fires.
+- **Who plays**: a click on the window (or you dropped on it) is a duel against an idle bot drawn by lot (`.tas`
+  "with NAME"); none idle: the outside only, gentle hills. Two idle bots can duel at the window on a break (half of
+  the window breaks with a mate at hand); a click while they are both there watches theirs (both sides aimed, "A vs
+  B", no keys hint), and they stay while you watch. In the room the two stand under the window 20 dots apart facing
+  each other, an arm out as each fires (`app.outside().fired`). A bot that gets work or a question walks off the hill
+  ("NAME left"); closing the view ends it. You are never a bot's duel mate on your own breaks (`playingAt` leaves you
+  out too, which also keeps a ping-pong break of yours from being "watched" with you as a machine).
+- Test hooks: `__outside.get()`, `aim(a, p)`, `fire()`, `solve()` (the bots' aim with a perfect hand), `wind(v)`;
+  `outsideUI` is a page global. In the demo pick completed bots (`/over/` in the id) for a duel of two: the others get
+  work now and then and leave.
+
 ## Next
 
 - More of Claude Code in the room: the file explorer / diff hanging off a project's screen; maybe a
