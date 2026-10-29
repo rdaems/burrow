@@ -55,3 +55,8 @@ pub fn dissolve(im: &pix::Image, d: f64) -> pix::Image {
     }
     out
 }
+
+/// a picture of a piece as it stands (2 dots of padding), for the fire
+pub fn snapshot_piece(_room: &crate::room::Room, _key: &str, _at: [i32; 2], _u: Option<i32>, r: crate::layout::Rect, _inp: &crate::io::Input) -> pix::Image {
+    pix::Image::new((r[2] - r[0] + 4).max(1) as u32, (r[3] - r[1] + 4).max(1) as u32)
+}

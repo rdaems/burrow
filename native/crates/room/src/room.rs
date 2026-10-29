@@ -87,6 +87,8 @@ pub struct Room {
     pub img: Image,
     /// the floor, drawn once for the room's size
     pub floor: Option<Image>,
+    /// the pointer's look over the room: default, pointer, grab, grabbing
+    pub cursor: &'static str,
 }
 
 impl Room {
@@ -118,6 +120,7 @@ impl Room {
             tick_dt: 0.0,
             img: Image::new(512, 800),
             floor: None,
+            cursor: "default",
         }
     }
 

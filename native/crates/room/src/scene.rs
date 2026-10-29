@@ -241,7 +241,16 @@ impl Room {
             out.hover = Some(id);
         }
         let on_hot = self.hots.iter().any(|h| self.over(h.r[0], h.r[1], h.r[2], h.r[3]));
-        out.cursor = if self.moving.is_some() || self.held.is_some() { "grabbing" } else if on_hot { "pointer" } else { "default" };
+        self.cursor = if self.moving.is_some() || self.held.is_some() {
+            "grabbing"
+        } else if on_hot {
+            "pointer"
+        } else if self.piece_at(self.pointer).is_some() {
+            "grab"
+        } else {
+            "default"
+        };
+        out.cursor = self.cursor;
         let _ = l;
     }
 

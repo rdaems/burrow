@@ -10,6 +10,7 @@ pub mod font;
 pub mod io;
 pub mod layout;
 pub mod paint;
+pub mod pointer;
 pub mod remains;
 pub mod room;
 pub mod scene;
