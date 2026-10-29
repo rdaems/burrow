@@ -83,3 +83,25 @@ fn lettering_is_pairs() {
         Some(im)
     });
 }
+
+#[test]
+fn layout_is_room_js_layout() {
+    // the web room's own layout of a demo state (tools/golden.mjs, case layout-demo): desks, seats, doors, pieces
+    use burrow_room::layout::{Keep, Size, layout};
+    let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(golden().join("layout-demo.json")).unwrap()).unwrap();
+    let s: burrow_room::model::State = serde_json::from_value(v["state"].clone()).unwrap();
+    let size = Size { w: v["W"].as_i64().unwrap() as i32, h: v["H"].as_i64().unwrap() as i32 };
+    let l = layout(&s, &s.desks, &size, &mut Keep::default(), None, &|_| false, 0.0);
+    for (d, want) in l.desks.iter().zip(v["desks"].as_array().unwrap()) {
+        assert_eq!(d.key, want["key"].as_str().unwrap());
+        assert_eq!(serde_json::json!(d.at), want["at"], "{}", d.key);
+        assert_eq!(d.w as i64, want["w"].as_i64().unwrap(), "{}", d.key);
+        assert_eq!(d.label, want["label"].as_str().unwrap());
+        let seats: Vec<serde_json::Value> = d.seats.iter().map(|(id, x, _)| serde_json::json!([id, x])).collect();
+        assert_eq!(serde_json::json!(seats), want["seats"], "{}", d.key);
+    }
+    let doors: Vec<serde_json::Value> = l.doors.iter().map(|d| serde_json::json!([d.key, d.x0, d.y0])).collect();
+    assert_eq!(serde_json::json!(doors), v["doors"]);
+    let pieces: Vec<serde_json::Value> = l.pieces.iter().map(|p| serde_json::json!([p.key, p.at, p.r])).collect();
+    assert_eq!(serde_json::json!(pieces), v["pieces"]);
+}

@@ -5,8 +5,10 @@
 pub mod avatar;
 pub mod figure;
 pub mod font;
+pub mod layout;
 pub mod sprites;
 #[rustfmt::skip]
 pub mod sprites_gen;
+pub mod world;
 
 pub use burrow_model as model;

@@ -4,7 +4,7 @@
 // so that its drawing functions are reachable as `window.__in`; each case is a JS expression giving a
 // data URL (or a canvas) and is saved as outdir/<name>.png. Math.random is seeded, so a case that rolls
 // dice rolls the same ones every time.
-//   cases.json: [{"name": "icon-plant", "js": "room.icon('plant', 1, 0)"}, …]
+//   cases.json: [{"name": "icon-plant", "js": "room.icon('plant', 1, 0)"}, …]; {"json": true, …} saves the text it gives as .json
 import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -61,6 +61,7 @@ for (const c of cases) {
   const js = `(async () => { const v = await (${c.js}); return v && v.toDataURL ? v.toDataURL() : v; })()`;
   const r = await send("Runtime.evaluate", { expression: js, returnByValue: true, awaitPromise: true });
   const v = r.result?.result?.value;
+  if (c.json && typeof v === "string") { writeFileSync(`${outdir}/${c.name}.json`, v); ok++; continue; }   // a case with json: true gives text
   if (typeof v !== "string" || !v.startsWith("data:image/png;base64,")) {
     console.error(c.name + ":", JSON.stringify(v ?? r.result?.exceptionDetails?.exception?.description).slice(0, 300));
     continue;
