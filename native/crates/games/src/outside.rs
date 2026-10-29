@@ -542,7 +542,7 @@ impl Outside {
     fn crater(&mut self, x: f64, y: f64, rad: f64) {
         let mut i = (x - rad).ceil();
         while i <= x + rad {
-            if i >= 0. && i < WF {
+            if (0. ..WF).contains(&i) {
                 let low = y + (rad * rad - (i - x).powi(2)).max(0.).sqrt();
                 let iu = i as usize;
                 if (self.land.g[iu] as f64) < low {
@@ -955,16 +955,16 @@ impl Outside {
         let mut tune = None;
         if d.tune > 0. {
             d.tune -= dt;
-            if d.tune <= 0. {
-                if let Some(won) = d.won {
-                    // the round's tune: yours won, or lost (a duel you watch: won)
-                    let mine = d.p.iter().find(|p| p.p.human).map(|p| p.side);
-                    tune = Some(if mine.is_none_or(|s| s == won) {
-                        "win"
-                    } else {
-                        "lose"
-                    });
-                }
+            if d.tune <= 0.
+                && let Some(won) = d.won
+            {
+                // the round's tune: yours won, or lost (a duel you watch: won)
+                let mine = d.p.iter().find(|p| p.p.human).map(|p| p.side);
+                tune = Some(if mine.is_none_or(|s| s == won) {
+                    "win"
+                } else {
+                    "lose"
+                });
             }
         }
         if let Some(name) = tune {
@@ -1121,18 +1121,20 @@ impl Outside {
         let Some(d) = self.duel.as_ref() else { return };
         let me = self.you();
         if k == Key::Fire {
-            if let Some(side) = me {
-                if !repeat && d.phase == Phase::Aim && d.turn == side {
-                    self.fire(side);
-                }
+            if let Some(side) = me
+                && !repeat
+                && d.phase == Phase::Aim
+                && d.turn == side
+            {
+                self.fire(side);
             }
             return;
         }
-        if let Some(side) = me {
-            if !self.held.iter().any(|(h, _)| *h == k) {
-                self.held.push((k, Held { t: self.t, owe: 0. }));
-                self.nudge(side, k, 1.);
-            }
+        if let Some(side) = me
+            && !self.held.iter().any(|(h, _)| *h == k)
+        {
+            self.held.push((k, Held { t: self.t, owe: 0. }));
+            self.nudge(side, k, 1.);
         }
     }
     pub fn key_up(&mut self, k: Key) {
@@ -1420,7 +1422,7 @@ impl Outside {
             } else {
                 0.
             };
-            if !(out && (bx < -6. || bx > WF + 6.)) {
+            if !out || (-6. ..=WF + 6.).contains(&bx) {
                 let y = match p.body {
                     Some(b) => b.y + 1.,
                     None => ground(land, bx),

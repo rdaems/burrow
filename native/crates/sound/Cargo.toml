@@ -6,3 +6,4 @@ license.workspace = true
 description = "the room's sounds, made as they play (a port of web/sound.js)"
 
 [dependencies]
+cpal = "0.18"

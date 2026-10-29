@@ -45,6 +45,7 @@ impl Rng {
         Rng(seed)
     }
     /// 0 <= r < 1
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> f64 {
         self.0 = self.0.wrapping_add(0x9e3779b97f4a7c15);
         let mut z = self.0;

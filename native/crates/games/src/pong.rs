@@ -227,10 +227,10 @@ impl Pong {
         if self.keys[1] && !self.watching {
             self.my_y += PAD * dt;
         }
-        if let (Some(o), Some(b)) = (self.auto, &self.ball) {
-            if b.heading() == SIDE {
-                self.my_y = b.y_at(b.contact(SIDE)) + o; // the test rig plays
-            }
+        if let (Some(o), Some(b)) = (self.auto, &self.ball)
+            && b.heading() == SIDE
+        {
+            self.my_y = b.y_at(b.contact(SIDE)) + o; // the test rig plays
         }
         self.my_y = clamp(self.my_y, HALF, FH - HALF);
         let t = self.t;
@@ -247,20 +247,20 @@ impl Pong {
                 self.serve(1 - SIDE, self.mach.y);
             }
         }
-        if let Some(b) = &self.ball {
-            if !self.judged {
-                let s = b.heading();
-                let tc = b.contact(s);
-                if t >= tc {
-                    let yb = b.y_at(tc);
-                    let pad = if s == SIDE { self.my_y } else { self.mach.y };
-                    if (yb - pad).abs() <= HALF + R {
-                        self.hit(s, yb, tc, pad);
-                    } else {
-                        self.judged = true;
-                        self.miss_at = self.t + 0.3;
-                        self.ball.as_mut().unwrap().missed = Some(s);
-                    }
+        if let Some(b) = &self.ball
+            && !self.judged
+        {
+            let s = b.heading();
+            let tc = b.contact(s);
+            if t >= tc {
+                let yb = b.y_at(tc);
+                let pad = if s == SIDE { self.my_y } else { self.mach.y };
+                if (yb - pad).abs() <= HALF + R {
+                    self.hit(s, yb, tc, pad);
+                } else {
+                    self.judged = true;
+                    self.miss_at = self.t + 0.3;
+                    self.ball.as_mut().unwrap().missed = Some(s);
                 }
             }
         }
@@ -273,14 +273,15 @@ impl Pong {
     /// the ball machine follows the ball, a little late and a little off
     fn machine(&mut self, dt: f64) {
         let mut target = FH / 2. + (self.my_y - FH / 2.) * 0.25;
-        if let Some(b) = &self.ball {
-            if b.vx > 0. && !self.judged {
-                if self.mach.ball != b.n {
-                    self.mach.ball = b.n;
-                    self.mach.err = (self.rng.next() - 0.5) * (14. + b.vx.hypot(b.vy) / 9.);
-                }
-                target = b.y_at(b.contact(1)) + self.mach.err;
+        if let Some(b) = &self.ball
+            && b.vx > 0.
+            && !self.judged
+        {
+            if self.mach.ball != b.n {
+                self.mach.ball = b.n;
+                self.mach.err = (self.rng.next() - 0.5) * (14. + b.vx.hypot(b.vy) / 9.);
             }
+            target = b.y_at(b.contact(1)) + self.mach.err;
         }
         self.mach.y = clamp(
             self.mach.y + clamp(target - self.mach.y, -115. * dt, 115. * dt),
@@ -292,14 +293,15 @@ impl Pong {
     fn machine0(&mut self, dt: f64) {
         let mut target = FH / 2. + (self.mach.y - FH / 2.) * 0.25;
         let m0 = self.mach0.as_mut().unwrap();
-        if let Some(b) = &self.ball {
-            if b.vx < 0. && !self.judged {
-                if m0.ball != b.n {
-                    m0.ball = b.n;
-                    m0.err = (self.rng.next() - 0.5) * (14. + b.vx.hypot(b.vy) / 9.);
-                }
-                target = b.y_at(b.contact(0)) + m0.err;
+        if let Some(b) = &self.ball
+            && b.vx < 0.
+            && !self.judged
+        {
+            if m0.ball != b.n {
+                m0.ball = b.n;
+                m0.err = (self.rng.next() - 0.5) * (14. + b.vx.hypot(b.vy) / 9.);
             }
+            target = b.y_at(b.contact(0)) + m0.err;
         }
         m0.y = clamp(
             m0.y + clamp(target - m0.y, -115. * dt, 115. * dt),
