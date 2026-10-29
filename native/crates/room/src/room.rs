@@ -392,6 +392,32 @@ impl Room {
     pub fn at(&self, id: &str) -> Option<(f64, f64)> {
         self.w.get(id).map(|f| (f.x, f.y))
     }
+    /// a piece carried in from the closet, the pointer at (x, y) in dots: its ghost where it would land, and that
+    /// place (none outside the room); no kind: the carrying is over. The room's pointer follows it (the closet
+    /// holds the pointer meanwhile)
+    pub fn carry_kind(&mut self, kind: Option<&str>, x: f64, y: f64) -> Option<[i32; 2]> {
+        let Some(kind) = kind else {
+            self.carrying = None;
+            return None;
+        };
+        let inside = x >= 0.0 && x < self.size.w as f64 && y >= 0.0 && y < self.size.h as f64;
+        self.pointer = inside.then_some((x, y));
+        let at = inside.then(|| self.size.clamp_at(kind, [layout::jround(x), layout::jround(y)], None));
+        self.carrying = Some((kind.to_string(), at));
+        at
+    }
+    /// put down where it was carried: its place
+    pub fn place_kind(&mut self, kind: &str, x: f64, y: f64) -> Option<[i32; 2]> {
+        let at = self.carry_kind(Some(kind), x, y);
+        self.carrying = None;
+        at
+    }
+    /// a door (or a reception) let go from the closet: it stands there while its panel is open, and until the
+    /// state brings the machine `mid`; none takes it back
+    pub fn pend(&mut self, at: Option<[i32; 2]>, mid: Option<String>, kind: &str, now: f64) {
+        self.pending = at.map(|at| (at, mid, kind.to_string(), now));
+    }
+
     /// is anything in the room being dragged or carried
     pub fn busy_hand(&self) -> bool {
         self.moving.is_some() || self.held.is_some() || self.w.s.dog_held
@@ -420,4 +446,27 @@ pub fn is_doomed(f: &Fig) -> bool {
 
 pub fn footprint(key: &str, at: [i32; 2], u: Option<i32>) -> layout::Rect {
     foot(key, at, u)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_piece_carried_in_from_the_closet() {
+        let mut r = Room::new(1, 0.0);
+        let at = r.carry_kind(Some("plant"), 60.4, 120.6);
+        assert_eq!(r.carrying, Some(("plant".to_string(), at)));
+        assert!(at.is_some(), "inside the room: where it lands");
+        assert_eq!(r.pointer, Some((60.4, 120.6)));
+        assert_eq!(r.carry_kind(Some("plant"), -5.0, 10.0), None, "outside the room: nowhere");
+        assert_eq!(r.carrying, Some(("plant".to_string(), None)));
+        let put = r.place_kind("window", 100.0, 200.0).unwrap();
+        assert_eq!(put[1], layout::wall_y("window"), "a wall piece hangs on the wall");
+        assert!(r.carrying.is_none());
+        r.pend(Some(put), None, "door", 5.0);
+        assert!(r.pending.is_some());
+        r.pend(None, None, "door", 6.0);
+        assert!(r.pending.is_none());
+    }
 }

@@ -44,9 +44,22 @@ pub mod col {
 
 pub const PIXEL: &str = "Pair Pixel";
 pub const MONO: &str = "JetBrainsMono NF";
+/// the notes' reading font: the system's
+pub const SANS: &str = ".SystemUIFont";
 
 fn c(v: u32) -> Color {
     Color::rgb(v)
+}
+
+/// `a` with `k` of `b` mixed in
+pub fn mix(a: u32, b: u32, k: f64) -> u32 {
+    let m = c(a).mix(c(b), k).0;
+    (m[0] as u32) << 16 | (m[1] as u32) << 8 | m[2] as u32
+}
+
+/// a pix colour as the page's u32
+pub fn hex(x: Color) -> u32 {
+    (x.0[0] as u32) << 16 | (x.0[1] as u32) << 8 | x.0[2] as u32
 }
 
 /// pixel.js's dithered fills: solid `c0` on top, Bayer-dithering into `c1` downwards from `from` percent, in three
@@ -145,6 +158,14 @@ impl Frame {
             clip: true,
             glow: None,
         }
+    }
+
+    /// no border, no corner cut: a fill (a picked row)
+    pub fn flat(mut self) -> Frame {
+        self.border = None;
+        self.rings.clear();
+        self.clip = false;
+        self
     }
 
     /// the frame drawn `w` x `h` CSS px
@@ -291,17 +312,204 @@ pub fn button_frame(look: Look) -> Frame {
     }
 }
 
-/// a steel button with a label in the pixel font; `small` for a band's ✕
+/// a steel button with a label in the pixel font; `small` for a band's ✕. Gold under the pointer, pressed in
+/// while held (both drawn beneath, shown by the button's group), gold and pressed in when `on`
 pub fn button(id: impl Into<ElementId>, label: impl Into<SharedString>, on: bool, small: bool) -> gpui::Stateful<Div> {
-    let label: SharedString = label.into();
+    button_with(id, pixel_text(label, col::INK, false), on, small)
+}
+
+/// a steel button round anything
+pub fn button_with(id: impl Into<ElementId>, inner: impl IntoElement, on: bool, small: bool) -> gpui::Stateful<Div> {
     let (py, px_) = if small { (1.0, 8.0) } else { (5.0, 12.0) };
+    let layer = |look: Look| div().absolute().size_full().child(frame_bg(button_frame(look)));
+    let mut b = div().id(id).group("btn").relative().flex_none().cursor_pointer();
+    if on {
+        b = b.child(layer(Look::On));
+    } else {
+        b = b
+            .child(layer(Look::Plain))
+            .child(layer(Look::Hover).invisible().group_hover("btn", |s| s.visible()))
+            .child(div().id("down").absolute().size_full().child(frame_bg(button_frame(Look::Pressed))).invisible().group_active("btn", |s| s.visible()));
+    }
+    // pressed in: the label a pixel down and right
+    b.child(div().id("label").relative().px(px(px_ + 2.)).py(px(py + 2.)).group_active("btn", |s| s.top(px(2.)).left(px(1.))).child(inner))
+}
+
+/// text in the pixel font that wraps, with the ink shadow (the shadow's copy wraps the same: it is as wide)
+pub fn pixel_para(s: impl Into<SharedString>, color: u32) -> Div {
+    let s: SharedString = s.into();
+    div()
+        .relative()
+        .font_family(PIXEL)
+        .text_size(px(16.))
+        .line_height(px(22.))
+        .child(div().absolute().left(px(2.)).top(px(2.)).w_full().text_color(rgb(col::INK)).child(s.clone()))
+        .child(div().relative().text_color(rgb(color)).child(s))
+}
+
+/// a run of prose: the pixel font, paths and keys in the terminal's (`Code`, gold: the pixel font has no ~), a
+/// name in gold (`Gold`)
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Run {
+    Plain,
+    Code,
+    Gold,
+}
+
+/// prose of runs, wrapping, with the ink shadow behind what is in the pixel font
+pub fn prose(parts: &[(&str, Run)], color: u32) -> Div {
+    let text: String = parts.iter().map(|(t, _)| *t).collect();
+    let runs = |shadow: bool| -> Vec<gpui::TextRun> {
+        parts
+            .iter()
+            .filter(|(t, _)| !t.is_empty())
+            .map(|(t, r)| {
+                let (family, c) = match r {
+                    Run::Plain => (PIXEL, color),
+                    Run::Code => (MONO, col::GOLD2),
+                    Run::Gold => (PIXEL, col::GOLD2),
+                };
+                let c = if shadow { if *r == Run::Code { 0 } else { col::INK } } else { c };
+                let hc: Hsla = if shadow && *r == Run::Code { gpui::transparent_black() } else { hsla(c) };
+                gpui::TextRun { len: t.len(), font: gpui::font(family), color: hc, background_color: None, underline: None, strikethrough: None }
+            })
+            .collect()
+    };
+    let t: SharedString = text.into();
+    div()
+        .relative()
+        .text_size(px(16.))
+        .line_height(px(22.))
+        .child(div().absolute().left(px(2.)).top(px(2.)).w_full().child(gpui::StyledText::new(t.clone()).with_runs(runs(true))))
+        .child(div().relative().child(gpui::StyledText::new(t).with_runs(runs(false))))
+}
+
+/// a list under a field (.suggest): steel, an ink line, the terminal's font; the row picked in gold
+pub fn steel_list(id: impl Into<ElementId>, attached: bool) -> gpui::Stateful<Div> {
+    div()
+        .id(id)
+        .relative()
+        .flex()
+        .flex_col()
+        .p(px(2.))
+        .pl(px(4.))
+        .bg(rgb(col::STEEL4))
+        .border_color(rgb(col::INK))
+        .border_l_2()
+        .border_r_2()
+        .border_b_2()
+        .when(!attached, |d| d.border_t_2())
+        .font_family(MONO)
+        .text_size(px(14.))
+        .line_height(px(20.))
+        .text_color(rgb(col::INK))
+        .overflow_y_scroll()
+}
+
+/// a row of that list: picked, faint (a recent folder), with a note on the right
+pub fn steel_row(id: impl Into<ElementId>, label: impl Into<SharedString>, picked: bool, faint: bool, note: Option<SharedString>) -> gpui::Stateful<Div> {
+    let label: SharedString = label.into();
     div()
         .id(id)
         .relative()
         .flex_none()
+        .flex()
         .cursor_pointer()
-        .child(frame_bg(button_frame(if on { Look::On } else { Look::Plain })))
-        .child(div().relative().px(px(px_ + 2.)).py(px(py + 2.)).child(pixel_text(label, col::INK, false)))
+        .when(picked, |d| d.child(frame_bg(Frame::button(Fill::Hot, col::GOLD2, col::GOLD2).flat())))
+        .when(!picked, |d| d.hover(|s| s.bg(rgb(col::STEEL3))))
+        .child(
+            div()
+                .relative()
+                .flex_1()
+                .min_w(px(0.))
+                .px(px(8.))
+                .py(px(3.))
+                .overflow_hidden()
+                .whitespace_nowrap()
+                .text_ellipsis()
+                .when(faint, |d| d.text_color(rgb(col::STEEL0)))
+                .child(label),
+        )
+        .when_some(note, |d, n| d.child(div().relative().pr(px(8.)).py(px(3.)).opacity(0.6).whitespace_nowrap().child(n)))
+}
+
+/// the switchboard's on/off slider: a sunken steel track, gold when on, a steel knob at its end
+pub fn slider(id: impl Into<ElementId>, on: bool) -> gpui::Stateful<Div> {
+    let track = if on { Frame { border: Some(col::INK), rings: vec![(0xbfaf7b, 0xf6c784)], fill: Fill::Gold, band: None, pad: 0, pad_fill: None, clip: false, glow: None } } else { Frame { border: Some(col::INK), rings: vec![(0x201f2f, col::STEEL0)], fill: Fill::Solid(col::STEEL0), band: None, pad: 0, pad_fill: None, clip: false, glow: None } };
+    let knob = Frame { border: Some(col::INK), rings: vec![(col::WHITE, col::STEEL1)], fill: Fill::Button, band: None, pad: 0, pad_fill: None, clip: false, glow: None };
+    div()
+        .id(id)
+        .relative()
+        .flex_none()
+        .w(px(46.))
+        .h(px(24.))
+        .cursor_pointer()
+        .child(frame_bg(track))
+        .child(div().absolute().top(px(2.)).left(px(if on { 24. } else { 2. })).w(px(20.)).h(px(20.)).child(frame_bg(knob)))
+}
+
+/// a bar a limit: steel in an ink ring, gold for what is used
+pub fn bar(used: f32) -> Div {
+    let used = used.clamp(0., 100.);
+    div()
+        .relative()
+        .h(px(14.))
+        .my(px(4.))
+        .child(frame_bg(Frame { border: Some(col::INK), rings: vec![(col::STEEL2, col::STEEL4)], fill: Fill::Solid(col::STEEL4), band: None, pad: 0, pad_fill: None, clip: false, glow: None }))
+        .child(
+            div()
+                .absolute()
+                .top(px(2.))
+                .bottom(px(2.))
+                .left(px(2.))
+                .w(gpui::relative(used / 100. * 0.99))
+                .child(frame_bg(Frame { border: None, rings: vec![(col::GOLD2, col::GOLD0)], fill: Fill::Hot, band: None, pad: 0, pad_fill: None, clip: false, glow: None })),
+        )
+}
+
+/// a paint to pick (the doors): its colour, a bevel, the one worn ringed in the pale gold
+pub fn swatch(id: impl Into<ElementId>, color: u32, on: bool) -> gpui::Stateful<Div> {
+    div()
+        .id(id)
+        .relative()
+        .flex_none()
+        .w(px(22.))
+        .h(px(22.))
+        .cursor_pointer()
+        .when(on, |d| d.child(div().absolute().top(px(-3.)).left(px(-3.)).w(px(28.)).h(px(28.)).border_2().border_color(rgb(col::PALE0))))
+        .child(frame_bg(Frame { border: Some(col::INK), rings: vec![(mix(color, col::WHITE, 0.35), mix(color, 0, 0.3))], fill: Fill::Solid(color), band: None, pad: 0, pad_fill: None, clip: false, glow: None }))
+}
+
+thread_local! {
+    static IMAGES: RefCell<HashMap<(String, u32), Arc<RenderImage>>> = RefCell::new(HashMap::new());
+}
+
+/// a picture kept by name: made once for each screen scale (`css` CSS pixels a pixel of it). For what does not
+/// change (furniture, faces, doors, chess pieces)
+pub fn pic(key: &str, css: u32, window: &Window, make: impl FnOnce() -> Image) -> (Arc<RenderImage>, f32, f32) {
+    let k = css * window.scale_factor().round().max(1.0) as u32;
+    let im = IMAGES.with(|c| c.borrow().get(&(key.to_string(), k)).cloned());
+    let im = im.unwrap_or_else(|| {
+        let p = picture(&make(), k);
+        IMAGES.with(|c| c.borrow_mut().insert((key.to_string(), k), p.clone()));
+        p
+    });
+    let sz = im.size(0);
+    let s = window.scale_factor().round().max(1.0);
+    (im.clone(), sz.width.0 as f32 / s, sz.height.0 as f32 / s)
+}
+
+/// a picture shown at its size (CSS px)
+pub fn image(im: Arc<RenderImage>, w: f32, h: f32) -> Div {
+    div().flex_none().w(px(w)).h(px(h)).child(
+        canvas(
+            |_, _, _| {},
+            move |b: Bounds<Pixels>, _, window: &mut Window, _: &mut App| {
+                let _ = window.paint_image(b, Corners::default(), im, 0, false);
+            },
+        )
+        .size_full(),
+    )
 }
 
 /// a hairline of `Hsla`
