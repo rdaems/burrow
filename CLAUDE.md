@@ -185,7 +185,7 @@ message is the log. When something goes, take it out here. Keep the file under a
   ping-pong = play or watch; coffee or cooler = the limits; clock = keep awake; switchboard (one lever) = settings
   (rc, yolo, hardcore: a slider and a name a line, a help box under them for the line under the pointer, empty
   once the pointer leaves the panel; hardcore stays vague); pair table = its
-  pair room; dog house = the dog; radio = sound; filing cabinet = the file trees; door = the doors' panel; project cabinet = a new desk; reception =
+  pair room; dog house = the dog; radio = sound; filing cabinet = FILES on the bands; door = the doors' panel; project cabinet = a new desk; reception =
   the office manager. Dropped on: the neuralyzer gives an idle bot `/clear`; the booth deletes.
 - Whoever is at a piece rides along when it is dragged: a spot at a piece carries its key (`on`), `ride()` moves
   them each frame. One rule for every piece: reuse it, don't add a fix per piece.
@@ -260,23 +260,22 @@ message is the log. When something goes, take it out here. Keep the file under a
   opens there. Tiles are 16-bit windows (ink ring, steel bevel, dithered band in the pixel font, the pastel gold
   when focused or hovered), 6 px gaps. Kinds: bot, shell, notes.
 - `.term` is `box-sizing: content-box` (the fit addon takes the parent's computed size).
-- **The file tree** beside a session's or a shell's terminal (`syncTree`, `makeTree`), while a filing cabinet (`files`
-  kind) stands in the room and is on (settings `files`; the cabinet is the switch, like the radio; its top drawer open
-  while on): rooted where it runs (the bot's `cwd`, the shell's folder), folders opened with a click, git's changes
-  coloured (gold changed, green new, a dot on a folder holding some), what changed in the last two minutes bold with a
-  dot. A file clicked opens in the editor; dragged onto a terminal it goes in as `@path` in a session (Claude Code reads
-  it with the message), its path in a shell (`pathFor`). `/api/tree` (`TREE`, python3 on the machine: the open folders
-  and `git status` in one round) every 15 s and when a bot's turn ends. Not in a tile under 480 px wide; while a file of
-  it is open the tree sits in that file's tile, on its left, and the terminal keeps its width.
-- **The editor** (`openFile`, kind `file`): a tile beside its terminal, one a terminal (another file takes its place
-  once this one is saved). CodeMirror 6 in `web/editor.js`, bundled by `web/editor/build.sh` (exact versions in its
-  package.json, licences in LICENSES.txt; the page only takes the parts, its setup is in index.html), loaded when the
-  first file opens. ⌘S saves through `/api/file` (`FILE`, python3 on the machine): only if the file has not changed
-  since it was read (mtime in ns), via a temporary file renamed over it, mode and symlinks kept. A markdown file opens
-  rendered (marked + DOMPurify: the page can open shells, nothing in a file may run; pictures through `/raw`, links to
-  other files open here), SOURCE / PREVIEW on the band. Every 4 s it looks at the file on disk: changed while nothing
-  is unsaved, it comes in; with unsaved edits a red badge and THEIRS / MINE. ✕ (or ⌘W, Esc, the floor) on unsaved
-  edits warns once. @ on the band puts it in its terminal. While it has the focus you stand at the desk's screen.
+- **Files** (`openFiles`, kind `file`): one tile beside a session's or a shell's terminal, the tree on its left and
+  the file picked on its right (he: "the sidebar with file explorer and editor are just one thing"; the tree in the
+  terminal's own tile was tried and dropped). FILES on the terminal's band opens it (again: focus, or close if focused),
+  while a filing cabinet (`files` kind) stands in the room and is on (settings `files`; the cabinet is the switch, like
+  the radio). One a terminal; a README at its top opens first. The tree (`makeTree`): rooted where the terminal runs (the
+  bot's `cwd`, the shell's folder), git's changes coloured (gold changed, green new, a dot on a folder holding some),
+  what changed in the last two minutes bold with a dot; `/api/tree` (`TREE`, python3 on the machine: the open folders and
+  `git status` in one round) every 15 s and when the bot's turn ends. A file dragged onto a terminal goes in as `@path`
+  (Claude Code reads it with the message), its path in a shell (`pathFor`); @ on the band does the same. The editor:
+  CodeMirror 6 in `web/editor.js`, bundled by `web/editor/build.sh` (versions in its package.json, licences in
+  LICENSES.txt; the page takes the parts, its setup is in index.html), loaded when the first file opens. ⌘S saves through
+  `/api/file` (`FILE`): only if the file has not changed since it was read (mtime in ns), through a temporary file renamed
+  over it, mode and symlinks kept. Markdown opens rendered (marked + DOMPurify: the page can open shells, nothing in a
+  file may run; pictures through `/raw`, links to other files open here), SOURCE / PREVIEW on the band. Every 4 s it
+  looks at the file: changed while nothing is unsaved, it comes in; with unsaved edits a red badge and THEIRS / MINE.
+  Closing on unsaved edits warns once. While it has the focus you stand at the desk's screen.
 - **The view** (`#view`): one 16-bit panel in the pane (pair's door.css: ink ring, bevels, the dithered fill, the
   pixel font, steel buttons), centred, as wide as its kind needs (640 px at most); opening it closes the tiles; the
   floor or Esc closes it. Every popup is one of its panels: keep them the same, simple, streamlined. Fields and

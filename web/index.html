@@ -241,7 +241,7 @@ es.addEventListener("state", (e) => {
   state = JSON.parse(e.data);
   if (first) { first = false; room.size(); }   // the room's width, as it was left
   for (const t of tiles.all()) showWho(t);
-  syncTrees();
+  syncFiles();
   for (const t of notesTiles()) renderNotes(t);
   if (viewKind === "chess") showChess();
   if (viewKind === "closet") fillCloset(true);   // only if its pictures were still loading, never mid-drag
@@ -824,12 +824,10 @@ function makeRoom(retain) {
 function closeTile(t, keepPlace) {         // keepPlace: another tile took its place in the tree already
   if (t.kind === "file" && t.dirty && !keepPlace && !(t.closing > performance.now())) { t.closing = performance.now() + 3000; t.say("unsaved: ✕ again drops it", true); return; }
   if (t.view) t.view.destroy();
-  const back = t.kind === "file" && t.src;   // (its tree goes back beside its terminal)
   if (t.ws) { const s = t.ws; t.ws = null; s.close(); }
   if (t.term) t.term.dispose();
   if (hoverTile === t) hoverTile = null;
   if (keepPlace) tiles.forget(t); else tiles.remove(t);
-  if (back && back.tree) { back.tree.cur = null; back.tree.render(); syncTree(back); }
   $("#pane").classList.toggle("empty", !tiles.all().length && !viewKind);
   room.draw();
 }
@@ -847,6 +845,7 @@ function showWho(t) {
   if (t.kind === "file") return showFile(t);
   if (t.kind === "notes") return t.name("notes", digest && digest.writing ? "writing…" : digest && !digest.on ? "switched off" : "");
   const m = machine(t.m), on = m ? "on " + m.name : "";
+  filesLink(t);
   if (t.kind === "shell") t.name(t.dir.replace(/\/+$/, "").split("/").pop() || t.dir, on);
   else if (managerOf(t.id)) { const M = managerOf(t.id); t.name(M.name, "office manager"); appLink(t, M.rc); }
   else { const b = byId(t.id); t.name(b ? b.name : t.id, on); appLink(t, b && b.rc); }
@@ -857,7 +856,7 @@ function showWho(t) {
 function appLink(t, rc) {
   let bt = t.bar.querySelector(".tapp");
   if (!rc) { if (bt) bt.remove(); return; }
-  if (!bt) { bt = document.createElement("button"); bt.className = "tapp"; bt.textContent = "APP"; bt.title = "the same session on your phone, or at claude.ai/code"; t.bar.appendChild(bt); }
+  if (!bt) { bt = document.createElement("button"); bt.className = "tapp"; bt.textContent = "APP"; bt.title = "the same session on your phone, or at claude.ai/code"; bandBox(t).appendChild(bt); }
   bt.onclick = (e) => { e.stopPropagation(); window.open("https://claude.ai/code/session_" + rc.replace(/^cse_/, ""), "_blank", "noopener"); };
 }
 // open a bot's session: in the focused tile's place (see makeRoom), or `at` a previewed spot when
@@ -932,8 +931,6 @@ function openTerminal(t, at) {
   $("#pane").classList.remove("empty");
   term.open(el);
   showWho(t);
-  syncTree(t);
-  new ResizeObserver(() => syncTree(t)).observe(t.body);   // (a narrow tile has no room for one)
   new ResizeObserver(() => { if (t.ws) fit.fit(); }).observe(el);
   requestAnimationFrame(() => { fit.fit(); connect(t, term); term.focus(); });
   return t;
@@ -1179,29 +1176,65 @@ function showChess() {
 // ping-pong's own ✕ hides its card: then the game is over here too
 new MutationObserver(() => { if ($("#pong").hidden && viewKind === "pong") closeView(); }).observe($("#pong"), { attributes: true, attributeFilter: ["hidden"] });
 
-// ---- the file tree beside a terminal, while a filing cabinet stands in the room and is on (a click on it switches
-// them): the root of what runs there (a session's working directory, a shell's folder), folders opened and closed with
-// a click, what git says changed in colour (gold changed, green new, a dot on a folder that holds changes), what changed
-// in the last two minutes lit: where the bot is at work. A click on a file puts it in the terminal: @path in a session
-// (Claude Code reads the file with the message), its path in a shell. Read again every 15 s, and when a bot's turn ends
+// ---- the files of a session or a shell: one tile, the tree on its left and the file you pick on its right. FILES on
+// the terminal's band opens it beside the terminal (again: back to it, or closed if it has the focus), while a filing
+// cabinet stands in the room and is on (a click on the cabinet switches FILES off and on). The tree is rooted where the
+// terminal runs (a session's working directory, a shell's folder): folders open and close with a click, what git says
+// changed in colour (gold changed, green new, a dot on a folder that holds changes), what changed in the last two
+// minutes bold with a dot: where the bot is at work. A file dragged from it onto a terminal goes in as @path (its path
+// in a shell). Read again every 15 s, and when the bot's turn ends. A README at its top opens first.
+//   The file: CodeMirror (editor.js, loaded the first time), in the terminal's font and colours; ⌘S saves. A markdown
+// file opens rendered (its pictures from the machine), SOURCE on the band to edit it. What a session changes on disk
+// comes in by itself while you have nothing unsaved; with unsaved edits the band says so, and THEIRS (load it) or MINE
+// (save over it) settles it. A save goes through only if the file has not changed since it was read (/api/file).
+// @ on the band puts it in its terminal. While the tile has the focus you stand at the desk's screen, typing when you type
 const treesOn = () => !!(state && state.settings && state.settings.files) && (state.furniture || []).some((k) => /^files\d*$/.test(k));
-function syncTrees() { for (const t of tiles.all()) syncTree(t); }
-function syncTree(t) {
-  if (!t.term || (t.kind !== "bot" && t.kind !== "shell")) return;
-  const b = t.kind === "bot" && byId(t.id), root = t.kind === "shell" ? t.dir : b && b.cwd;
-  const ed = fileTiles().find((x) => x.src === t), host = ed || t;   // a file of it open: the tree in that file's tile
-  const want = treesOn() && !!root && host.body.clientWidth >= (ed ? 420 : 480);
-  if (t.tree && (!want || t.tree.root !== root)) { t.tree.el.remove(); t.tree = null; }
-  if (want && !t.tree) { t.tree = makeTree(t, root); t.tree.load(); }
-  if (t.tree && t.tree.el.parentNode !== host.body) host.body.appendChild(t.tree.el);
-  for (const x of [t, ed]) if (x) x.body.classList.toggle("treed", !!t.tree && x === host);
-  if (b) { if (t.tree && t.busy && !b.busy) t.tree.load(); t.busy = b.busy; }   // its turn over: what it did
+const filesTiles = () => tiles.all().filter((t) => t.kind === "file");
+const filesOf = (src) => filesTiles().find((x) => x.src === src);
+const rootOf = (t) => { const b = t.kind === "bot" && byId(t.id); return ((t.kind === "shell" ? t.dir : b && b.cwd) || "").replace(/\/+$/, ""); };
+const isMd = (p) => /\.(md|markdown)$/i.test(p);
+function bandBox(t) {                        // the buttons on a band's right
+  let box = t.bar.querySelector(".tbtns");
+  if (!box) { box = document.createElement("span"); box.className = "tbtns"; t.bar.appendChild(box); }
+  return box;
+}
+function filesLink(t) {                      // FILES on a terminal's band
+  let bt = t.bar.querySelector(".tfiles");
+  if (!treesOn() || !rootOf(t)) { if (bt) bt.remove(); return; }
+  if (!bt) { bt = document.createElement("button"); bt.className = "tapp tfiles"; bt.textContent = "FILES"; bt.title = "its files, beside it"; bandBox(t).prepend(bt); }
+  bt.onclick = (e) => { e.stopPropagation(); openFiles(t, true); };
+}
+function syncFiles() {                       // each state: FILES on the bands; a bot's turn over, its files read again
+  for (const t of tiles.all()) {
+    if (t.kind === "bot" || t.kind === "shell") filesLink(t);
+    const b = t.kind === "file" && t.src && t.src.kind === "bot" && byId(t.src.id);
+    if (b) { if (t.busy && !b.busy) t.tree.load(); t.busy = b.busy; }
+  }
+}
+async function openFiles(src, toggle) {
+  closeView();
+  let t = filesOf(src);
+  if (t) { if (toggle && tiles.focused() === t) closeTile(t); else tiles.focus(t); return t; }
+  const root = rootOf(src);
+  if (!root) return null;
+  t = makeTile("file", "files:" + src.m + ":" + root);
+  Object.assign(t, { src, m: src.m, root, rel: null, path: null });
+  t.body.classList.add("file");
+  t.main = document.createElement("div"); t.main.className = "fmain"; t.body.appendChild(t.main);
+  t.say = (msg, warn) => { t.note = msg; t.warn = !!warn; showFile(t); };
+  t.tree = makeTree(t, root); t.body.appendChild(t.tree.el);
+  tiles.focus(src); tiles.add(t);            // beside its terminal
+  showFile(t);
+  await t.tree.load();
+  const readme = (t.tree.dirs.get("") || []).find(([n, d]) => !d && /^readme\.(md|markdown)$/i.test(n));
+  if (readme && !t.rel) openFile(t, readme[0]);
+  return t;
 }
 function makeTree(t, root) {
-  const el = document.createElement("div"), tr = { el, root, open: new Set([""]), dirs: new Map(), git: {}, now: 0 };
+  const el = document.createElement("div"), tr = { el, root, open: new Set([""]), dirs: new Map(), git: {}, now: 0, cur: null };
   el.className = "tree";
   tr.render = () => {
-    const changed = Object.keys(tr.git), name = root.replace(/\/+$/, "").split("/").pop() || root;
+    const changed = Object.keys(tr.git), name = root.split("/").pop() || root;
     const rows = [`<div class="root" title="${esc(root)}">${esc(name)}</div>`];
     const walk = (rel, d) => {
       const es = tr.dirs.get(rel);
@@ -1224,7 +1257,7 @@ function makeTree(t, root) {
     if (r.error) return note(r.error);
     for (const [d, es] of Object.entries(r.dirs || {})) { if (es) tr.dirs.set(d, es); else if (d) { tr.dirs.delete(d); tr.open.delete(d); } }
     tr.git = r.git || {}; tr.now = r.now || 0;
-    if (t.tree === tr) tr.render();
+    tr.render();
   };
   el.addEventListener("click", (e) => {
     const row = e.target.closest(".row[data-p]");
@@ -1233,10 +1266,10 @@ function makeTree(t, root) {
     if (row.dataset.d) { if (tr.open.has(p)) tr.open.delete(p); else { tr.open.add(p); if (!tr.dirs.has(p)) tr.load(p); } tr.render(); return; }
     openFile(t, p);
   });
-  el.addEventListener("dragstart", (e) => {   // onto a terminal: @path (drop, below)
+  el.addEventListener("dragstart", (e) => {   // onto a terminal: @path (the drop, below)
     const row = e.target.closest(".row[data-p]");
     if (!row || row.dataset.d) return;
-    const abs = root.replace(/\/+$/, "") + "/" + row.dataset.p;
+    const abs = root + "/" + row.dataset.p;
     e.dataTransfer.setData("text/x-burrow-file", JSON.stringify({ m: t.m, path: abs }));
     e.dataTransfer.setData("text/plain", abs);
     e.dataTransfer.effectAllowed = "copy";
@@ -1244,7 +1277,7 @@ function makeTree(t, root) {
   tr.render();
   return tr;
 }
-setInterval(() => { if (document.visibilityState === "visible") for (const t of tiles.all()) if (t.tree) t.tree.load(); }, 15000);
+setInterval(() => { if (document.visibilityState === "visible") for (const t of filesTiles()) t.tree.load(); }, 15000);
 
 // a file as it goes into a terminal: @path in a session (relative to where it runs when it is under it), which Claude
 // Code reads with the message; its path in a shell, quoted if it must be
@@ -1254,62 +1287,41 @@ function pathFor(t, abs) {
   return /\s/.test(rel) ? `@"${rel}" ` : `@${rel} `;
 }
 
-// ---- a file in a tile beside its terminal (a click in its tree): CodeMirror (editor.js, loaded the first time one
-// opens), in the terminal's font and colours; ⌘S saves. A markdown file opens rendered (its pictures from the machine),
-// SOURCE on the band to edit it. What a session changes on disk comes in by itself while you have nothing unsaved;
-// with unsaved edits the band says so, and THEIRS (load it) or MINE (save over it) settles it. A save goes through
-// only if the file has not changed since it was read (/api/file). One editor a terminal: another file takes its place,
-// once this one is saved. @ on the band puts it in its terminal. While it has the focus you stand at the desk's
-// screen, and you type when you type
 let editorLib = null;
 const loadEditor = () => editorLib || (editorLib = new Promise((ok, no) => {
   const sc = document.createElement("script");
   sc.src = "editor.js"; sc.onload = () => ok(window.Editor); sc.onerror = () => { editorLib = null; no(new Error("editor.js did not load")); };
   document.head.appendChild(sc);
 }));
-const fileTiles = () => tiles.all().filter((t) => t.kind === "file");
-const isMd = (p) => /\.(md|markdown)$/i.test(p);
-async function openFile(src, rel) {
-  closeView();
-  const root = src.tree.root.replace(/\/+$/, ""), path = root + "/" + rel;
-  let t = fileTiles().find((x) => x.src === src);
-  if (t && t.path === path) { tiles.focus(t); if (t.view) t.view.focus(); return t; }
-  if (t && t.dirty) { t.say("unsaved: ⌘S first", true); tiles.focus(t); return t; }
-  if (!t) {
-    t = makeTile("file", path); t.src = src;
-    t.body.classList.add("file");
-    t.main = document.createElement("div"); t.main.className = "fmain"; t.body.appendChild(t.main);
-    t.say = (msg, warn) => { t.note = msg; t.warn = !!warn; showFile(t); };
-    tiles.focus(src); tiles.add(t);          // beside its terminal
-    new ResizeObserver(() => syncTree(t.src)).observe(t.body);
-  }
+async function openFile(t, rel) {             // in a files' tile: the file you picked in its tree
+  const path = t.root + "/" + rel;
+  if (t.path === path) { if (t.view) t.view.focus(); return; }
+  if (t.dirty) { t.say("unsaved: ⌘S first", true); return; }
   if (t.view) { t.view.destroy(); t.view = null; }
-  Object.assign(t, { m: src.m, root, rel, path, dirty: false, mtime: null, md: isMd(rel), preview: isMd(rel), note: "", warn: false, theirs: null });
+  Object.assign(t, { rel, path, dirty: false, mtime: null, md: isMd(rel), preview: isMd(rel), note: "", warn: false, theirs: null, closing: 0 });
   t.main.innerHTML = '<div class="fnote">…</div>';
-  src.tree.cur = rel; src.tree.render(); syncTree(src);
+  t.tree.cur = rel; t.tree.render();
   showFile(t);
   await loadFile(t);
-  return t;
 }
 function showFile(t) {
   const m = machine(t.m);
-  t.name(t.rel.split("/").pop(), t.note || (t.dirty ? "unsaved" : m && m.id ? "on " + m.name : ""));
-  t.el.querySelector(".tname").title = t.path;
+  t.name(t.rel ? t.rel.split("/").pop() : t.root.split("/").pop() || t.root, t.note || (t.dirty ? "unsaved" : m && m.id ? "on " + m.name : ""));
+  t.el.querySelector(".tname").title = t.path || t.root;
   t.el.classList.toggle("dirty", !!t.dirty && !t.warn);
   t.el.classList.toggle("warn", !!t.warn);
   if (!t.btns) {
-    const box = document.createElement("span"); box.className = "tbtns"; t.bar.appendChild(box);
-    const btn = (label, title, fn) => { const b = document.createElement("button"); b.className = "tapp"; b.textContent = label; b.title = title; b.onclick = (e) => { e.stopPropagation(); fn(); }; box.appendChild(b); return b; };
+    const btn = (label, title, fn) => { const b = document.createElement("button"); b.className = "tapp"; b.textContent = label; b.title = title; b.onclick = (e) => { e.stopPropagation(); fn(); }; bandBox(t).appendChild(b); return b; };
     t.btns = {
       theirs: btn("THEIRS", "load the file as it is now (your edits go)", () => loadFile(t)),
       mine: btn("MINE", "save yours over it", () => saveFile(t, true)),
       md: btn("SOURCE", "its source, to edit / rendered", () => { t.preview = !t.preview; renderFile(t); showFile(t); }),
-      at: btn("@", "into its terminal (@path: Claude Code reads it with your message)", () => { if (t.src && t.src.term) { t.src.term.paste(pathFor(t.src, t.path)); tiles.focus(t.src); t.src.term.focus(); } }),
+      at: btn("@", "into its terminal (@path: Claude Code reads it with your message)", () => { if (t.src && t.src.term && t.path) { t.src.term.paste(pathFor(t.src, t.path)); tiles.focus(t.src); t.src.term.focus(); } }),
     };
   }
   t.btns.md.hidden = !t.md || !t.view; t.btns.md.textContent = t.preview ? "SOURCE" : "PREVIEW";
   t.btns.theirs.hidden = t.btns.mine.hidden = !t.theirs;
-  t.btns.at.hidden = !(t.src && t.src.term && tiles.all().includes(t.src));
+  t.btns.at.hidden = !(t.path && t.src && t.src.term && tiles.all().includes(t.src));
 }
 async function loadFile(t) {
   const path = t.path, [E, r] = await Promise.all([loadEditor().catch((e) => ({ err: e })), api("/api/file", { m: t.m, path })]);
@@ -1334,9 +1346,9 @@ function mountEditor(t, E, text) {
     e.preventDefault();
     const href = a.getAttribute("href");
     if (/^https?:\/\//i.test(href)) return void window.open(href, "_blank", "noopener");
-    if (href.startsWith("#") || /^[a-z]+:/i.test(href) || !t.src || !t.src.tree) return;
+    if (href.startsWith("#") || /^[a-z]+:/i.test(href)) return;
     const rel = resolveRel(t.rel, href.split("#")[0]);
-    if (rel !== null) openFile(t.src, rel);
+    if (rel !== null) openFile(t, rel);
   });
   t.view = new E.EditorView({
     parent: ed,
@@ -1386,11 +1398,11 @@ async function saveFile(t, force) {
   t.dirty = t.view.state.doc.toString() !== text;
   t.say("saved", false);
   setTimeout(() => { if (t.note === "saved") t.say("", false); }, 1500);
-  if (t.src && t.src.tree) t.src.tree.load();
+  t.tree.load();
 }
 // what changed on disk: taken in while you have nothing unsaved (where you were stays), else the band asks
 async function watchFile(t) {
-  if (!t.view || t.saving || t.theirs) return;
+  if (!t.view || !t.path || t.saving || t.theirs) return;
   const r = await api("/api/file", { m: t.m, path: t.path, op: "stat" });
   if (r.error || !t.view || t.saving) return;
   if (r.missing) { if (t.mtime !== "gone") { t.theirs = "gone"; t.say("deleted on disk", true); } return; }
@@ -1403,7 +1415,7 @@ async function watchFile(t) {
   renderFile(t); t.say("updated", false);
   setTimeout(() => { if (t.note === "updated") t.say("", false); }, 1500);
 }
-setInterval(() => { if (document.visibilityState === "visible") for (const t of fileTiles()) watchFile(t); }, 4000);
+setInterval(() => { if (document.visibilityState === "visible") for (const t of filesTiles()) watchFile(t); }, 4000);
 // the editor's look: the terminal's colours, the room's palette for what the code is
 const editorLook = (E) => E.EditorView.theme({
   "&": { height: "100%", color: "#e4e7f0", backgroundColor: "transparent", fontSize: "13px" },

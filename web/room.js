@@ -1747,13 +1747,13 @@ function startRoom(cv, app) {
       if (soundOn && !still) items.push([ra.y + 0.1, () => drawNotes(ctx, ra, T)]);
       if (h) tip = { text: soundOn ? "sound on" : "sound off", x: ra.x, y: ra.y - 22 };
     }
-    // the filing cabinet: the file tree beside each terminal, while one stands here and it is on; a click switches them
-    // (its top drawer stands open while they are on)
+    // the filing cabinet: FILES on the terminals' bands (their files' tile), while one stands here and it is on; a click
+    // switches them (its top drawer stands open while they are on)
     const filesOn = !!app.settings().files && L.cabinets.length > 0;
     for (const fc of L.cabinets) {
       const h = hot(...foot("files", [fc.x, fc.y]), { kind: "files" });
       piece(fc, "files", (c) => drawFiling(c, fc, filesOn));
-      if (h) tip = { text: filesOn ? "file trees on" : "file trees off", x: fc.x, y: fc.y - 27 };
+      if (h) tip = { text: filesOn ? "files on" : "files off", x: fc.x, y: fc.y - 27 };
     }
     for (const n of L.neuralyzers) {
       const fl = w.flash && performance.now() - w.flash.t0 < 400;
