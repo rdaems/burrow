@@ -2192,11 +2192,27 @@ TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=u
          ".png": "image/png", ".woff2": "font/woff2", ".svg": "image/svg+xml"}
 
 
+# Who may talk to this server: its own page (localhost or 127.0.0.1 at its port) and programs with no browser behind
+# them, which send no Origin (the office managers' curl). Without this any page open in a browser could open a
+# terminal here (a websocket is not held to the same-origin rule), a login shell on this or any machine, or post to
+# the API; and a name of the attacker's that resolves to 127.0.0.1 (DNS rebinding) is turned away by its Host
+HOSTS = {f"localhost:{PORT}", f"127.0.0.1:{PORT}"}
+
+
+def trusted(headers):
+    origin = headers.get("Origin")
+    return headers.get("Host", "") in HOSTS and (origin is None or (origin.startswith("http://") and origin[7:] in HOSTS))
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def log_message(self, *a):
         pass
+
+    def refuse(self):
+        self.close_connection = True
+        self.reply(403, {"error": "not from here"})
 
     def reply(self, code, body, ctype="application/json"):
         if not isinstance(body, bytes):
@@ -2209,6 +2225,8 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
+        if not trusted(self.headers):
+            return self.refuse()
         u = urlparse(self.path)
         q = {k: v[0] for k, v in parse_qs(u.query).items()}
         if u.path == "/events":
@@ -2273,6 +2291,8 @@ class Handler(BaseHTTPRequestHandler):
         self.close_connection = True
 
     def do_POST(self):
+        if not trusted(self.headers):
+            return self.refuse()
         u = urlparse(self.path)
         n = int(self.headers.get("Content-Length") or 0)
         if u.path == "/api/upload":

@@ -30,7 +30,9 @@ message is the log. When something goes, take it out here. Keep the file under a
 
 - `web/` is the app. `python3 web/server.py` (stdlib only: polls, ptys, a hand-written websocket, SSE) serves
   http://localhost:7777 from the main checkout; it reads the files per request, so a reload shows a change to the
-  page; a change to server.py needs a restart (his server runs detached, see memory).
+  page; a change to server.py needs a restart (his server runs detached, see memory). It answers only its own page
+  and programs that send no Origin (`trusted`: Host localhost or 127.0.0.1 at its port; a foreign Origin gets 403):
+  a websocket is not held to the same-origin rule, so any page in his browser could otherwise open a shell here.
   - `index.html` the page (tiles, terminals, the view's panels, the act handler), `room.js` the room (layout,
     think, draw, pointer), `tiles.js` the tiling, `sprites.js` letter-grid sprites, `paintings.js` the easel's
     paintings, `pixel.js` and the fonts pair's (avatars, dithers), `burrow.css`, `sound.js`, `outside.js` (the window), `fps.js` + `props3d.js` +
