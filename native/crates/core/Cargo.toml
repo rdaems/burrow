@@ -1,0 +1,11 @@
+[package]
+name = "burrow-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "burrow's backend: Claude Code's sessions on every machine, room.json, terminals, the notes (a port of web/server.py)"
+
+[dependencies]
+burrow-model = { path = "../model" }
+serde.workspace = true
+serde_json.workspace = true

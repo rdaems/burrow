@@ -557,6 +557,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "burrow-core"
+version = "0.2.0"
+dependencies = [
+ "burrow-model",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "burrow-fps"
+version = "0.2.0"
+dependencies = [
+ "pix",
+]
+
+[[package]]
+name = "burrow-games"
+version = "0.2.0"
+dependencies = [
+ "pix",
+]
+
+[[package]]
 name = "burrow-model"
 version = "0.2.0"
 dependencies = [
@@ -572,6 +595,10 @@ dependencies = [
  "serde",
  "serde_json",
 ]
+
+[[package]]
+name = "burrow-sound"
+version = "0.2.0"
 
 [[package]]
 name = "bytemuck"

@@ -1,0 +1,9 @@
+[package]
+name = "burrow-games"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "the window's outside and its artillery duel, ping-pong (ports of web/outside.js, web/pong.js)"
+
+[dependencies]
+pix = { path = "../pix" }
