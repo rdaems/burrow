@@ -156,6 +156,15 @@ impl Burrow {
                                     b.start_fps(&k, window, cx);
                                 }
                             }
+                            // a desk's panel, a pair table's (the first there is, if none is named)
+                            "desk" => {
+                                let u = if v.is_empty() { b.state.desks.first().map(|d| d.unit.clone()).unwrap_or_default() } else { v.to_string() };
+                                b.act(json!({"kind": "desk", "unit": u}), window, cx);
+                            }
+                            "pair" => {
+                                let k = if v.is_empty() { b.state.furniture.iter().find(|k| k.starts_with("pair")).cloned().unwrap_or_default() } else { v.to_string() };
+                                b.act(json!({"kind": "pairOpen", "key": k}), window, cx);
+                            }
                             "view" => {
                                 if let Some(kind) = ViewKind::parse(v) {
                                     b.open_view(kind, window, cx);

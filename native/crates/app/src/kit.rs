@@ -273,6 +273,8 @@ pub fn frame_bg(f: Frame) -> impl IntoElement {
         },
     )
     .absolute()
+    .top_0()
+    .left_0()
     .size_full()
 }
 
@@ -321,7 +323,7 @@ pub fn button(id: impl Into<ElementId>, label: impl Into<SharedString>, on: bool
 /// a steel button round anything
 pub fn button_with(id: impl Into<ElementId>, inner: impl IntoElement, on: bool, small: bool) -> gpui::Stateful<Div> {
     let (py, px_) = if small { (1.0, 8.0) } else { (5.0, 12.0) };
-    let layer = |look: Look| div().absolute().size_full().child(frame_bg(button_frame(look)));
+    let layer = |look: Look| div().absolute().inset_0().child(frame_bg(button_frame(look)));
     let mut b = div().id(id).group("btn").relative().flex_none().cursor_pointer();
     if on {
         b = b.child(layer(Look::On));
@@ -329,7 +331,7 @@ pub fn button_with(id: impl Into<ElementId>, inner: impl IntoElement, on: bool, 
         b = b
             .child(layer(Look::Plain))
             .child(layer(Look::Hover).invisible().group_hover("btn", |s| s.visible()))
-            .child(div().id("down").absolute().size_full().child(frame_bg(button_frame(Look::Pressed))).invisible().group_active("btn", |s| s.visible()));
+            .child(div().id("down").absolute().inset_0().child(frame_bg(button_frame(Look::Pressed))).invisible().group_active("btn", |s| s.visible()));
     }
     // pressed in: the label a pixel down and right
     b.child(div().id("label").relative().px(px(px_ + 2.)).py(px(py + 2.)).group_active("btn", |s| s.top(px(2.)).left(px(1.))).child(inner))

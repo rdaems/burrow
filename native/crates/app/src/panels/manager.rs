@@ -53,8 +53,8 @@ pub fn body(b: &mut Burrow, window: &mut Window, cx: &mut Context<Burrow>) -> An
                 .py(px(10.))
                 .when(st.here, |d| d.opacity(0.6))
                 .when(!st.here, |d| d.cursor_pointer().on_click(cx.listener(move |b, _, window, cx| hire(b, key.clone(), window, cx))))
-                .child(div().absolute().size_full().child(frame_bg(card(bg))))
-                .when(!st.here, |d| d.child(div().absolute().size_full().invisible().group_hover("card", |s| s.visible()).child(frame_bg(card(hot)))))
+                .child(div().absolute().inset_0().child(frame_bg(card(bg))))
+                .when(!st.here, |d| d.child(div().absolute().inset_0().invisible().group_hover("card", |s| s.visible()).child(frame_bg(card(hot)))))
                 .child(div().relative().flex_none().px(px(8.)).py(px(4.)).bg(rgb(mix(0xffffff, cv, 0.65))).border_2().border_color(rgb(col::INK)).child(kit::image(im, w, h)))
                 .child(who),
         );
