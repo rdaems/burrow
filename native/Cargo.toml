@@ -18,6 +18,11 @@ serde_json = "1"
 [profile.dev.package."*"]
 opt-level = 2            # GPUI and the rest fast even in a debug build
 
+[profile.dev.package.pix]
+opt-level = 2            # the pixels: a test renders whole rooms
+[profile.dev.package.burrow-room]
+opt-level = 2
+
 [profile.release]
 opt-level = 3
 lto = "thin"

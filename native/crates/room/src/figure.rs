@@ -101,7 +101,7 @@ pub fn body(seed: &str, color: Color, arms: Arms, legs: Legs, human: bool, femme
     let mut px: Vec<Option<Color>> = vec![None; (SW * SH) as usize];
     let mut line = vec![false; (SW * SH) as usize];
     let idx = |x: i32, y: i32| ((y + 1) * SW + x + 1) as usize;
-    let mut set = |px: &mut Vec<Option<Color>>, x: i32, y: i32, c: Color| {
+    let set = |px: &mut Vec<Option<Color>>, x: i32, y: i32, c: Color| {
         let i = (y + 1) * SW + x + 1;
         if i >= 0 && (i as usize) < px.len() {
             px[i as usize] = Some(c);

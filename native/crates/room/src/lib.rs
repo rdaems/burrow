@@ -3,12 +3,19 @@
 //! pointer and the keys.
 
 pub mod avatar;
+pub mod dog;
+pub mod dream;
 pub mod figure;
 pub mod font;
+pub mod io;
 pub mod layout;
+pub mod paint;
+pub mod remains;
+pub mod room;
 pub mod sprites;
 #[rustfmt::skip]
 pub mod sprites_gen;
+pub mod think;
 pub mod world;
 
 pub use burrow_model as model;

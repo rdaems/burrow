@@ -150,6 +150,8 @@ pub struct Fig {
     pub walking: bool,
     /// it came in through its door just now (seconds since)
     pub came: f64,
+    /// an office manager's session: busy, waiting, its process alive
+    pub staff_state: (bool, bool, bool),
 }
 
 impl Fig {
@@ -214,6 +216,12 @@ pub struct Part {
     pub flip: bool,
     pub charred: bool,
     pub bounced: i32,
+    /// a cog: the big one
+    pub big: bool,
+    /// put back together: where it flew in from
+    pub bx: f64,
+    pub by: f64,
+    pub bz: f64,
 }
 
 /// a drop of oil on the floor
@@ -221,7 +229,10 @@ pub struct Part {
 pub struct Drop {
     pub x: f64,
     pub y: f64,
-    pub r: f64,
+    /// its size, 1 or 2 dots
+    pub s: i32,
+    /// a highlight
+    pub hi: bool,
 }
 
 /// what is left of a shot bot: its pieces and the oil; a click puts it back together
@@ -243,6 +254,9 @@ pub struct Remains {
     pub seed: String,
     pub color: Option<pix::Color>,
     pub fade: f64,
+    /// the puddle's half width, and how many parts there were (it shrinks as they are mopped up)
+    pub puddle: f64,
+    pub total: usize,
 }
 
 /// a shot fired: its flash
@@ -273,24 +287,53 @@ pub struct Dream {
     pub f: f64,
 }
 
+/// what the dog is up to
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct DogAct {
+    pub kind: &'static str,
+    pub left: f64,
+    /// afraid: only its eyes in the dark door
+    pub hide: bool,
+    /// where it trots to (wander)
+    pub to: Option<Spot>,
+    /// whom it visits or barks at
+    pub who: Option<String>,
+    pub sniff: f64,
+    /// fetch: run, pick, back, wait
+    pub stage: &'static str,
+    pub wait: f64,
+    /// after a shake: home, or what comes next
+    pub next: Option<Box<DogAct>>,
+    pub yap: bool,
+    /// called out of its house: a few steps out first
+    pub out: bool,
+}
+
+impl DogAct {
+    pub fn new(kind: &'static str, left: f64) -> DogAct {
+        DogAct { kind, left, ..Default::default() }
+    }
+}
+
 /// the dog: where it is and what it is up to
 #[derive(Clone, Debug, Default)]
 pub struct Dog {
     pub x: f64,
     pub y: f64,
     pub dir: f64,
-    pub act: Act,
+    pub act: DogAct,
     pub pose: &'static str,
-    pub wag: f64,
+    pub wag: i32,
     pub step: f64,
+    pub z: f64,
     pub inside: bool,
+    pub asleep: bool,
     pub held: bool,
     pub leaving: bool,
-    pub house: Option<String>,
-    pub barked: HashSet<String>,
+    pub barking: bool,
+    /// hearts rising: x, y, when
     pub hearts: Vec<(f64, f64, f64)>,
-    pub sniff: f64,
-    pub bark: f64,
+    pub love_at: Option<f64>,
 }
 
 /// the stick you throw for the dog
@@ -300,8 +343,8 @@ pub struct Stick {
     pub y: f64,
     pub x0: f64,
     pub y0: f64,
-    pub tx: f64,
-    pub ty: f64,
+    pub x1: f64,
+    pub y1: f64,
     pub t: f64,
     pub h: f64,
     pub held: bool,
@@ -360,6 +403,13 @@ pub struct Shared {
     pub dog: Option<Dog>,
     pub stick: Option<Stick>,
     pub dog_held: bool,
+    /// a newcomer the dog goes and barks at
+    pub dog_news: Option<String>,
+    /// the bots you shot (the face in the first person grins)
+    pub kills: u32,
+    /// a door ajar: when someone last went through it, by machine
+    pub door_at: HashMap<String, f64>,
+    pub spark_on: bool,
 }
 
 pub struct World {

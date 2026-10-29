@@ -450,7 +450,7 @@ pub fn layout(s: &State, desks: &[Desk], size: &Size, keep: &mut Keep, moving: O
         }
     }
     // a free place, for a unit (with room to grow by a chair) or a piece without one
-    let mut free = |key: &str, uw: Option<i32>, taken: &mut Vec<Rect>| -> [i32; 2] {
+    let free = |key: &str, uw: Option<i32>, taken: &mut Vec<Rect>| -> [i32; 2] {
         let wide = uw.map(|w| w + SEAT);
         let mut cands = size.slots();
         for j in 0..40 {
