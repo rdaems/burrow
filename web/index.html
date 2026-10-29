@@ -890,7 +890,7 @@ function openTerminal(t, at) {
   // Option+drag selects in the terminal itself instead (Cmd+C then copies), as in VS Code's terminal
   term.loadAddon(new ClipboardAddon.ClipboardAddon(undefined, {
     readText: async () => "",
-    writeText: async (_, text) => { try { await navigator.clipboard.writeText(text); } catch {} },
+    writeText: async (_, text) => { try { if (window.ipc) window.ipc.postMessage("clip:" + text); else await navigator.clipboard.writeText(text); } catch {} },   // (burrow's window puts it there itself: a webview won't without a click)
   }));
   // what goes to the session; only what you type (or paste) is typing in the room: not the terminal's own
   // reports, which Claude Code asks for: focus in and out (a press in the room blurs the terminal), the mouse
@@ -902,6 +902,7 @@ function openTerminal(t, at) {
   // ⌘← ⌘→ ⌘⌫ as Ghostty sends them: Ctrl+A, Ctrl+E, Ctrl+U (the line's start, its end, delete to its start), which
   // Claude Code's prompt and the shells know (xterm.js sends nothing for ⌘ keys)
   term.attachCustomKeyEventHandler((e) => {
+    if (e.metaKey && e.key.toLowerCase() === "w") return false;   // ⌘W is the page's (it closes the tile), not the session's
     const cmd = e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && CMD_KEYS[e.key];
     if (cmd) { e.preventDefault(); if (e.type === "keydown") term.input(cmd); return false; }
     if (e.key !== "Enter" || !e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return true;
@@ -1186,6 +1187,8 @@ pane.addEventListener("drop", async (e) => {
   for (const file of e.dataTransfer.files) await hand(file, t);
 });
 addEventListener("keydown", (e) => {
+  // ⌘W closes the focused tile, or the view: in burrow's own window (a browser keeps ⌘W for its tab, it never comes here)
+  if (e.metaKey && !e.ctrlKey && !e.altKey && e.key.toLowerCase() === "w") { e.preventDefault(); if (viewKind) closeView(); else { const t = tiles.focused(); if (t) closeTile(t); } return; }
   if (e.key !== "Escape" || !(document.activeElement === document.body || view.contains(document.activeElement))) return;
   if (viewKind) closeView(); else { const t = tiles.focused(); if (t) closeTile(t); }
 });

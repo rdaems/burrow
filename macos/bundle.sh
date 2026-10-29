@@ -1,5 +1,7 @@
 #!/bin/sh
-# Build burrow.app: the release binary, an Info.plist, and an icon drawn from one of the room's robots.
+# Build burrow.app: the window around the room (src/main.rs), an Info.plist, an icon drawn from one of the room's
+# robots (macos/icon-dots.txt), and a copy of web/ for a Mac without this checkout (built here, the app serves this
+# checkout's web/ itself, so a change shows on a reload).
 #   macos/bundle.sh            -> target/release/burrow.app
 #   cp -R target/release/burrow.app /Applications/
 set -e
@@ -10,10 +12,10 @@ work=target/release/icon
 rm -rf "$app" "$work"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$work/burrow.iconset"
 cp target/release/burrow "$app/Contents/MacOS/burrow"
+rsync -a --exclude __pycache__ web/ "$app/Contents/Resources/web/"
 version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
 
-target/release/burrow --icon-dots > "$work/dots.txt"
-python3 -I - "$work/dots.txt" "$work/icon.png" <<'PY'
+python3 -I - macos/icon-dots.txt "$work/icon.png" <<'PY'
 # a dark rounded square with a rug and the robot on it, 1024 px, written as a PNG by hand
 import sys, zlib, struct
 dots = [l.split() for l in open(sys.argv[1]) if l.strip()]
@@ -64,6 +66,7 @@ cat > "$app/Contents/Info.plist" <<PLIST
   <key>CFBundleShortVersionString</key><string>$version</string>
   <key>LSMinimumSystemVersion</key><string>11.0</string>
   <key>NSHighResolutionCapable</key><true/>
+  <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
 </dict>
 </plist>
 PLIST

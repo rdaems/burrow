@@ -35,12 +35,16 @@ message is the log. When something goes, take it out here. Keep the file under a
   a websocket is not held to the same-origin rule, so any page in his browser could otherwise open a shell here.
   - `index.html` the page (tiles, terminals, the view's panels, the act handler), `room.js` the room (layout,
     think, draw, pointer), `tiles.js` the tiling, `sprites.js` letter-grid sprites, `paintings.js` the easel's
-    paintings, `pixel.js` and the fonts pair's (avatars, dithers), `burrow.css`, `sound.js`, `outside.js` (the window), `fps.js` + `props3d.js` +
-    `doom/` (the first person), `chessboard.js`/`chess.py`/`pong.js` (pair's games), `look.mjs` (tests).
+    paintings, `pixel.js` and the fonts pair's (avatars, dithers), `burrow.css`, `sound.js`, `outside.js` (the
+    window), `fps.js` + `props3d.js` + `doom/` (the first person), `chessboard.js`/`chess.py`/`pong.js` (pair's
+    games), `look.mjs` (tests).
   - xterm.js 5.5.0 and its addons (fit, clipboard, web-links) from jsdelivr.
-- `src/` is the first app, pure Rust (eframe/egui 0.37 + alacritty_terminal 0.26), frozen at Oct 21's features.
-  Keep it building (`cargo check`), don't port to it while the room changes daily; port, freeze or a webview is
-  his call. It still uses `rooms.json`. `.app`: `macos/bundle.sh`.
+- `src/main.rs`: burrow's window (wry 0.57, tao, muda; his choice over porting, the egui app is in git's history):
+  the system's webview on the same page, plus a dock icon, the keys a browser keeps (no menu takes ⌘W: the page
+  closes the focused tile), links in the browser, OSC 52 copies via IPC (`clip:`). No server on the port: it starts
+  one, detached, from `$SHELL -lc` (log `~/.cache/burrow/server.log`) in the checkout it was built in, `BURROW_WEB`,
+  or the bundle's copy; Restart Server in its menu. `macos/bundle.sh`: burrow.app. Test with `BURROW_PORT`,
+  `BURROW_SHOT=<png>`, `BURROW_TEST_JS` (a window opens for a few seconds).
 - burrow's own state, `~/.config/burrow/`: `room.json` (layout, furniture, desks kept, names, width, you,
   settings, paint, pair, managers, awake; `v` is its migration number, `furnish` in server.py, now 13),
   `digest.json` (the notes), `office/<name>/` (the office managers' sessions). Uploads in `~/.cache/burrow/drop`.
@@ -195,12 +199,11 @@ message is the log. When something goes, take it out here. Keep the file under a
 - The pair table is one pair room (`BURROW_PAIR`, default pair.daems.me): new or linked by your page or an invite; a
   bot dropped on it gets the room's bring link typed into its session; a click shows the chat, and while it is open
   you stand beside the table holding its telephone's handset to your ear, the cord coiled back to the base (`phone`
-  act and arms, `app.pair()`); it goes back on the cradle when the chat closes. A bot posting in a table's room beams
-  from its antenna to the telephone, one reading it (a `/messages`, or a wait that brings messages) gets a beam from
-  the telephone (`pairtalk`, `room.pairTalk`): pair's agents curl `<pair>/a/<token>/…`, so the transcript sweep that
-  finds messages between sessions finds these too (`PAIR_GREP`, `parse_pair`); the table is the one linked to the room
-  pair named in answer to the bot's join (its whole transcript searched once when that is older, `pair_table`). pair is behind
-  Cloudflare: send a User-Agent. pair names its agents itself (a `?name=` would need a change in pair).
+  act and arms, `app.pair()`); it goes back on the cradle when the chat closes. A bot posting in a table's room
+  beams to its telephone, one reading it gets a beam back (`pairtalk`): pair's agents curl `<pair>/a/<token>/…`,
+  found by the same transcript sweep as messages between sessions (`PAIR_GREP`); the table by the room pair named at
+  the bot's join. pair is behind Cloudflare: send a User-Agent. pair names its agents itself (a `?name=` would need
+  a change in pair).
 
 ## Removing a bot
 

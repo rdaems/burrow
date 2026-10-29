@@ -1,17 +1,17 @@
 [package]
 name = "burrow"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 license = "MIT"
 description = "Persistent Claude Code sessions on your machines, shown as bots in a room"
 repository = "https://github.com/rdaems/burrow"
 
+# A native window around the room (web/): the system's own webview, burrow's server started when none runs
 [dependencies]
-alacritty_terminal = "0.26.0"
-eframe = "0.37.0"
-egui = "0.37"
-serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.154"
+wry = "0.57"
+tao = "0.37"
+muda = "0.21"
+arboard = "3.7"
 
 [profile.release]
 opt-level = 3
