@@ -9,3 +9,6 @@ pub mod theme;
 
 pub use screen::{Link, Out, Screen};
 pub use theme::Theme;
+pub mod view;
+
+pub use view::{TermEvent, TermView, load_fonts};

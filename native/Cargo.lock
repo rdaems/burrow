@@ -634,6 +634,7 @@ name = "burrow-term"
 version = "0.2.0"
 dependencies = [
  "alacritty_terminal",
+ "futures",
  "gpui",
 ]
 

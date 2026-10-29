@@ -469,6 +469,13 @@ impl Screen {
         Some(((c.point.column.0, row as usize), c.shape, self.term.cursor_style().blinking))
     }
 
+    /// the cursor's cell, shown or not (where an input method composes)
+    pub fn cursor_cell(&self) -> Option<((usize, usize), CursorShape, bool)> {
+        let c = self.term.grid().cursor.point;
+        let row = c.line.0 + self.display_offset() as i32;
+        (row >= 0 && (row as usize) < self.rows()).then(|| ((c.column.0, row as usize), CursorShape::Block, false))
+    }
+
     /// a viewport cell
     pub fn cell(&self, col: usize, row: usize) -> &Cell {
         &self.term.grid()[Line(row as i32 - self.display_offset() as i32)][Column(col)]
