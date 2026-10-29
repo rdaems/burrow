@@ -117,7 +117,7 @@ function startRoom(cv, app) {
 
   // ---- figures: pixel.js's head on floor.js's body, drawn once per pose with an ink outline; the
   // bots are robots, you are a person (pair's human figure)
-  const SW = 22, SH = 29;
+  const SW = 22, SH = 29, HAT = 5;
   const faces = new Map(), bodies = new Map();
   function face(seed, color, human) {
     const key = seed + color + (human ? "h" : "");
@@ -134,14 +134,15 @@ function startRoom(cv, app) {
     return faces.get(key);
   }
   // arms: down sw1 sw2 up wave fwd1 fwd2 reach mug paper book can; legs: stand walk1 walk2 sit
-  // femme: the office manager, a robot with a bow on her head and a skirt; red: its eyes red (a mutineer, gun in hand)
-  function body(seed, color, arms, legs, human, femme, red) {
+  // femme: the office manager, a robot with a bow on her head and a skirt; red: its eyes red (a mutineer, gun in hand);
+  // dress: Halloween's costume (DRESS), a witch's hat (the picture HAT dots taller), a vampire's cape, a skeleton's suit
+  function body(seed, color, arms, legs, human, femme, red, dress) {
     const f = face(seed, color, human);
     if (!f.px) return null;
-    const key = seed + color + arms + legs + (human ? "h" : "") + (femme ? "f" : "") + (red ? "r" : "");
+    const key = seed + color + arms + legs + (human ? "h" : "") + (femme ? "f" : "") + (red ? "r" : "") + (dress || "");
     if (bodies.has(key)) return bodies.get(key);
-    const px = new Map(), line = new Set();
-    const set = (x, y, c) => { if (c) px.set((y + 1) * SW + x + 1, c); };
+    const px = new Map(), line = new Set(), P = dress === "hat" ? HAT : 0;
+    const set = (x, y, c) => { if (c) px.set((y + 1 + P) * SW + x + 1, c); };
     const rect = (x, y, w, h, c) => { for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) set(x + i, y + j, c); };
     const cut = human ? 14 : 16;             // the portrait down to the chin (a robot's down to its neck)
     for (let y = 0; y <= cut; y++) for (let x = 0; x < 20; x++) {
@@ -149,7 +150,7 @@ function startRoom(cv, app) {
       if (d[i + 3] < 128) continue;
       const c = "#" + [d[i], d[i + 1], d[i + 2]].map((v) => v.toString(16).padStart(2, "0")).join("");
       set(x, y, c);
-      if (c === INK) line.add((y + 1) * SW + x + 1);
+      if (c === INK) line.add((y + 1 + P) * SW + x + 1);
     }
     const at = (x, y) => { const i = (y * 20 + x) * 4, d = f.px; return d[i + 3] < 128 ? null : "#" + [d[i], d[i + 1], d[i + 2]].map((v) => v.toString(16).padStart(2, "0")).join(""); };
     if (red && !human) {                     // the eyes: what is not screen on its face's screen (pixel.js robot(): x 7..12, four rows under its top)
@@ -160,12 +161,20 @@ function startRoom(cv, app) {
       for (const [x, y, l] of eyes) set(x, y, l >= hi * 0.85 ? "#ff3b2f" : "#a3170f");
     }
     // a person wears what their portrait wears (a coat is white, a suit grey): its shoulders' colours
-    const c0 = human ? at(6, 19) || color : C.steel3, c1 = human ? (at(15, 19) !== c0 && at(15, 19)) || shade(c0, 0.62) : C.steel1;
-    const skin = human ? pixelAvatar.skin(seed) : C.steel3, leg = human ? INK2 : C.steel1, top = cut + 1;
+    const bones = dress === "bones";          // (a skeleton's suit: black, its bones on it)
+    const c0 = bones ? INK2 : human ? at(6, 19) || color : C.steel3, c1 = bones ? INK2 : human ? (at(15, 19) !== c0 && at(15, 19)) || shade(c0, 0.62) : C.steel1;
+    const skin = human ? pixelAvatar.skin(seed) : C.steel3, leg = human || bones ? INK2 : C.steel1, top = cut + 1;
     if (human) rect(9, top, 2, 1, shade(skin, 0.8));
     const t0 = top + (human ? 1 : 0);
+    if (dress === "cape") {                  // to the knees, flaring, red inside; its collar standing up behind the head
+      const behind = (x, y, c) => { if (!at(x, y)) set(x, y, c); };
+      rect(3, t0, 14, 24 - t0, INK2); rect(2, 20, 16, 4, INK2);
+      rect(4, t0 + 1, 1, 22 - t0, C.red0); rect(15, t0 + 1, 1, 22 - t0, C.red0); rect(3, 23, 14, 1, C.red0);
+      for (let y = t0 - 5; y < t0; y++) for (const [x, c] of [[2, INK2], [3, C.red0], [4, C.red0], [15, C.red0], [16, C.red0], [17, INK2]]) if (y > t0 - 5 || x === 2 || x === 17) behind(x, y, c);
+    }
     rect(6, t0, 8, 22 - t0, c0); rect(12, t0, 2, 22 - t0, c1);
-    if (!human) { set(9, top + 2, color); set(10, top + 2, color); set(9, top + 3, shade(color, 0.62)); }
+    if (bones) { rect(9, t0, 2, 21 - t0, C.steel3); for (let y = t0 + 1; y < t0 + 6; y += 2) rect(7, y, 6, 1, C.steel3); rect(7, 20, 6, 1, C.steel3); }   // the spine, the ribs, the hips
+    else if (!human) { set(9, top + 2, color); set(10, top + 2, color); set(9, top + 3, shade(color, 0.62)); }
     if (femme) {
       let ht = 0;
       while (ht < cut && !at(7, ht)) ht++;            // the top of her head (her antenna stands further right)
@@ -205,10 +214,19 @@ function startRoom(cv, app) {
       case "walk2": rect(7, 22, 2, 4, leg); rect(11, 22, 2, 5, leg); rect(7, 25, 3, 1, INK); rect(11, 26, 3, 1, INK); break;
       default: rect(7, 22, 2, 5, leg); rect(11, 22, 2, 5, leg); rect(7, 26, 3, 1, INK); rect(11, 26, 3, 1, INK);
     }
-    const c = document.createElement("canvas"); c.width = SW; c.height = SH;
+    if (bones && legs !== "sit") { set(7, 24, C.steel3); set(12, 24, C.steel3); }   // its knees
+    if (dress === "hat") {                   // pointed, purple, an orange band, its tip bent over; on the head's top row
+      let ht = 0, x0 = 20, x1 = 0;                    // the head's top: the first row as wide as a head (not an antenna)
+      while (ht < cut && [...Array(20).keys()].filter((x) => at(x, ht) && at(x, ht) !== INK).length < 5) ht++;
+      for (let x = 0; x < 20; x++) if (at(x, ht + 1)) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); }
+      const cl = Math.floor((x0 + x1) / 2), HI = C.purple1, HP = C.purple0, BAND = C.gold1;
+      rect(cl - 6, ht, 13, 1, HP); rect(cl - 3, ht - 1, 8, 1, BAND);
+      for (const [dy, a, b] of [[2, -2, 3], [3, -2, 2], [4, -1, 2], [5, 0, 2], [6, 1, 2], [7, 3, 3]]) { rect(cl + a, ht - dy, b - a + 1, 1, HP); set(cl + a, ht - dy, HI); }
+    }
+    const c = document.createElement("canvas"); c.width = SW; c.height = SH + P;
     const x = c.getContext("2d");
     x.fillStyle = INK;
-    for (let y = 0; y < SH; y++) for (let i = 0; i < SW; i++) {
+    for (let y = 0; y < SH + P; y++) for (let i = 0; i < SW; i++) {
       if (px.has(y * SW + i)) continue;
       if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => {
         const k = (y + dy) * SW + i + dx;
@@ -222,6 +240,11 @@ function startRoom(cv, app) {
   // a figure's colour: a bot wears its project's, you wear yours
   const colorOf = (b) => b.staff ? b.color : b.human ? (b.color || YOU) : projectColor(b.unit);
   const seedOf = (b) => b.staff ? b.seed : b.human ? (b.seed || b.name) : b.id;
+  // Halloween (a lit pumpkin in the room): everyone in costume, a bot's by its seed; you the witch's hat, an office
+  // manager the cape (her bow stays)
+  let spooky = false;
+  const DRESS = ["hat", "cape", "bones"];
+  const dressOf = (b) => !spooky ? null : b.human ? "hat" : b.staff ? "cape" : DRESS[fnv(seedOf(b)) % DRESS.length];
   // what a person's portrait wears, for a small figure of them elsewhere (the gunner outside the window): the
   // shoulders' colours as body() takes them, the skin, the hair (down the middle from the top)
   function wears(seed) {
@@ -292,10 +315,10 @@ function startRoom(cv, app) {
   // This computer's door (`door:`) only slides along the wall
   const KIND = (key) => key.startsWith("door:") ? "door" : key.replace(/\d+$/, "");
   const FIXED = new Set(["fire", "closet", "settings", "clock"]), fixed = (key) => FIXED.has(KIND(key)) || key === "door:";
-  const CLICK = new Set(["radio", "files", "doghouse", "add", "closet", "chess", "pong", "printer", "pair", "board", "coffee", "cooler", "window", "armchair", "settings", "clock", "plant", "manager", "door"]);   // a click does something there
+  const CLICK = new Set(["radio", "files", "pumpkin", "doghouse", "add", "closet", "chess", "pong", "printer", "pair", "board", "coffee", "cooler", "window", "armchair", "settings", "clock", "plant", "manager", "door"]);   // a click does something there
   const NAMES = { meet: "meeting table", pong: "ping-pong table", chess: "chess table", coffee: "coffee machine", cooler: "water cooler",
     printer: "printer", armchair: "pouf", plant: "plant", board: "easel", window: "window", clock: "clock", add: "project cabinet", pair: "pair room", settings: "switchboard", manager: "reception",
-    booth: "booth", neuralyzer: "neuralyzer", door: "door", doghouse: "dog house", radio: "radio", files: "filing cabinet" };
+    booth: "booth", neuralyzer: "neuralyzer", door: "door", doghouse: "dog house", radio: "radio", files: "filing cabinet", pumpkin: "pumpkin" };
   // a clear spot on the floor for a figure that has no chair when the page opens (spread by its id, the same each time)
   function freeAt(L, id) {
     let h = fnv(id);
@@ -337,6 +360,7 @@ function startRoom(cv, app) {
       case "doghouse": return [x - 12, y - 21, x + 12, y + 2];
       case "radio": return [x - 7, y - 21, x + 7, y + 1];
       case "files": return [x - 8, y - 25, x + 8, y + 1];
+      case "pumpkin": return [x - 8, y - 13, x + 8, y + 1];
       default: return [x - 8, y - 31, x + 8, y + 1];     // a plant
     }
   }
@@ -429,7 +453,7 @@ function startRoom(cv, app) {
       windows: all("window").map((p) => ({ key: p.key, x0: p.x, y0: p.y, x1: p.x + 21, y1: p.y + 18 })),
       fire: f0 && { key: f0.key, x0: f0.x, y0: f0.y - FIRE.h, x1: f0.x + FIRE.w, y1: f0.y }, closet: cl && { key: cl.key, x0: cl.x, y0: cl.y, x1: cl.x + 22, y1: cl.y + 24 },
       settings: sw && { key: sw.key, x0: sw.x, y0: sw.y, x1: sw.x + SB_W(), y1: sw.y + SB_H() },
-      managers: all("manager"), meet: one("meet"), pong: one("pong"), chess: one("chess"), pairs: all("pair"), booths: all("booth"), neuralyzers: all("neuralyzer"), doghouses: all("doghouse"), radios: all("radio"), cabinets: all("files"),
+      managers: all("manager"), meet: one("meet"), pong: one("pong"), chess: one("chess"), pairs: all("pair"), booths: all("booth"), neuralyzers: all("neuralyzer"), doghouses: all("doghouse"), radios: all("radio"), cabinets: all("files"), pumpkins: all("pumpkin"),
       cooler: one("cooler"), plants: all("plant"), printer: one("printer"), chairs: all("armchair"),
       coffeeAt: one("coffee"), floor: { x0: 11, y0: WALL + 8, x1: W - 11, y1: H - 2 }, placed,   // (where a figure may stand: right up to the bottom edge, its body inside the side walls)
     };
@@ -1469,6 +1493,7 @@ function startRoom(cv, app) {
     const danger = (key) => dangerNow && !!moving && moving.key === key, tintOf = (key) => (danger(key) ? flashA(w.T) : 0);
     if (moving) ride(w, L, lastL, moving.key);      // whoever is at what is being dragged comes along, this very frame
     lastL = L;
+    spooky = !!app.settings().halloween && L.pumpkins.length > 0;
     if (Object.keys(L.placed).length) app.act({ kind: "layout", layout: { ...(s.layout || {}), ...L.placed } });
     s.layout = { ...(s.layout || {}), ...L.placed };
 
@@ -1558,6 +1583,7 @@ function startRoom(cv, app) {
       outlined(ctx, [b.x0, b.y0, b.x1, b.y1], h, (x) => drawSwitchboard(x, b, app.settings(), app.view() === "settings"));
       if (h) tip = { text: "settings", x: b.x0 + 7, y: b.y0 + 4 };
     }
+    if (spooky) drawCobwebs(ctx, T);
     // a bot and its seat at its project's desk are one thing: where the bot is only says what it
     // does. The pointer on either lights up both (and its session), and a click on either opens it
     if (hoverId) hl.add(hoverId);
@@ -1754,6 +1780,13 @@ function startRoom(cv, app) {
       const h = hot(...foot("files", [fc.x, fc.y]), { kind: "files" });
       piece(fc, "files", (c) => drawFiling(c, fc, filesOn));
       if (h) tip = { text: filesOn ? "files on" : "files off", x: fc.x, y: fc.y - 27 };
+    }
+    // the pumpkin: Halloween, while one stands here and its candle is lit (the office in costume); a click blows it out
+    // or lights it again
+    for (const pk of L.pumpkins) {
+      const h = hot(...foot("pumpkin", [pk.x, pk.y]), { kind: "halloween" });
+      piece(pk, "pumpkin", (c) => drawPumpkin(c, pk, spooky, T));
+      if (h) tip = { text: spooky ? "halloween" : "light it", x: pk.x, y: pk.y - 15 };
     }
     for (const n of L.neuralyzers) {
       const fl = w.flash && performance.now() - w.flash.t0 < 400;
@@ -2029,6 +2062,7 @@ function startRoom(cv, app) {
       }
       if (p.kind === "neuralyzer") st.flash = !!w.flash && performance.now() - w.flash.t0 < 400;
       if (p.kind === "radio") st.on = !!app.settings().sound;
+      if (p.kind === "pumpkin" && spooky) lights.push({ x: p.x, y: p.y - 5, z: 5, r: 70, col: [1, 0.78, 0.5], k: 0.5, flicker: true });   // its candle
       if (p.kind === "chess") { const g = s.chess && !s.chess.result ? s.chess : null; st.board = g ? g.board : START; st.seats = [L.chessSeat(0), L.chessSeat(1)]; }
       if (p.kind === "meet") st.seats = [L.meetSeat(0), L.meetSeat(1)];
       if (p.kind === "board" && w.art) { st.art = w.art.cv; st.artV = w.artV; }
@@ -2560,7 +2594,7 @@ function startRoom(cv, app) {
     const j = f.act.kind === "condemned" && !f.act.panic && !f.held ? T - f.act.jolt : 1;   // taken aback: a little hop
     const x = Math.round(f.x), y = Math.round(f.y), x0 = x - 11, y0 = y - 27 - (j >= 0 && j < 0.3 ? Math.round(2 * Math.sin(j / 0.3 * Math.PI)) : 0);
     if (!f.held) rect(ctx, x - 5, y, 10, 1, "rgba(0,0,0,0.4)");
-    const im = body(seedOf(b), colorOf(b), f.held ? "up" : f.arms, f.held ? "walk1" : f.legs, b.human, b.staff, f.red);
+    const im = body(seedOf(b), colorOf(b), f.held ? "up" : f.arms, f.held ? "walk1" : f.legs, b.human, b.staff, f.red, dressOf(b)), up = im ? im.height - SH : 0;
     // its outline: terracotta while the pointer is on it or on its session, faint while its session is open;
     // held over the fire or at its door (let go and it stops): a red outline and a red flashing wash
     const lit = hl.has(f.id) || (hovered && hovered.b.id === f.id) || (!hovered && over(x0 + 4, y0, x0 + 18, y + 1));
@@ -2573,8 +2607,8 @@ function startRoom(cv, app) {
       if (shake) ctx.translate(shake, 0);
       if (f.dir < 0) { ctx.translate(x0 + SW, 0); ctx.scale(-1, 1); }
       const dx = f.dir < 0 ? 0 : x0;
-      if (ring) ctx.drawImage(halo(im, ring), dx, y0);
-      ctx.drawImage(doomed ? tinted(im, RED, flashA(T)) : bt > 0 ? dissolve(im, boothRise(bt)) : im, dx, y0);
+      if (ring) ctx.drawImage(halo(im, ring), dx, y0 - up);
+      ctx.drawImage(doomed ? tinted(im, RED, flashA(T)) : bt > 0 ? dissolve(im, boothRise(bt)) : im, dx, y0 - up);
       ctx.restore();
     }
     if (fear > 0.45) {                        // a drop of sweat running down beside its head
@@ -2590,12 +2624,12 @@ function startRoom(cv, app) {
   }
   function drawSleeper(ctx, f, b, T, hl) {  // lying on its back on the mat, head to the left: the standing figure turned on its side
     if (!b) return;
-    const x = Math.round(f.x), y = Math.round(f.y), im = body(seedOf(b), colorOf(b), "down", "stand", b.human);
+    const x = Math.round(f.x), y = Math.round(f.y), im = body(seedOf(b), colorOf(b), "down", "stand", b.human, false, false, dressOf(b)), up = im ? im.height - SH : 0;
     const on = over(x - 15, y - 17, x + 15, y - 1), ring = f.act.kind === "dead" ? null : hl.has(f.id) || on ? GOLD : app.opens().includes(f.id) ? OPEN : null;
     if (im) {
       ctx.save(); ctx.translate(x, y - 9); ctx.rotate(-Math.PI / 2);      // a quarter turn: the sprite's top goes left
-      if (ring) ctx.drawImage(halo(im, ring), -SW / 2, -14);
-      ctx.drawImage(im, -SW / 2, -14);
+      if (ring) ctx.drawImage(halo(im, ring), -SW / 2, -14 - up);
+      ctx.drawImage(im, -SW / 2, -14 - up);
       ctx.restore();
     }
     if (b.human && f.act.kind !== "dead") zzz(ctx, f, x - 12, y - 22);   // (shot, you don't snore)
@@ -3019,6 +3053,7 @@ function startRoom(cv, app) {
       case "neuralyzer": drawNeuralyzer(ctx, pt, false); break;
       case "radio": drawRadio(ctx, pt, true); break;
       case "files": drawFiling(ctx, pt, true); break;
+      case "pumpkin": drawPumpkin(ctx, pt, true, 0); break;
       case "doghouse": drawDoghouse(ctx, pt); break;
       case "door": { const ms = (app.state() || {}).machines || []; drawDoor(ctx, x, PAINT[Math.max(0, ms.length - 1) % PAINT.length], false, false, y); break; }   // in the paint the next machine gets
     }
@@ -3299,6 +3334,46 @@ function startRoom(cv, app) {
     for (const [tx, c] of [[x0 + 2, SP.y], [x0 + 6, SP.g], [x0 + 10, SP.v]]) { rect(ctx, tx, top + 3, 2, 5, c); rect(ctx, tx, top + 3, 2, 1, SP.A); }
     rect(ctx, x0, top + 15, 14, 1, SHADOW);                  // its front pulled out toward you, a little wider, its shadow under it
     rect(ctx, x0 - 1, top + 8, 16, 8, SP.F); drawer(top + 9, -2, 14);
+  }
+  // the pumpkin: carved, a candle in it. Lit (Halloween), its eyes, nose and grin glow and flicker; blown out, they are dark
+  const PUMPKIN = { hi: "#f6a03c", top: "#e07424", d: "#a8481c" };
+  function drawPumpkin(ctx, p, on, T) {
+    const x = p.x, y = p.y, rows = [[-3, 3], [-5, 5], [-6, 6], [-6, 6], [-6, 6], [-6, 6], [-6, 6], [-5, 5], [-4, 4]];   // its rows' ends, top down
+    rect(ctx, x - 6, y, 13, 1, SHADOW);
+    rows.forEach(([a, b], j) => rect(ctx, x + a - 1, y - 9 + j, b - a + 3, 1, INK));
+    rect(ctx, x - 3, y - 10, 7, 1, INK); rect(ctx, x - 2, y - 1, 5, 1, INK);
+    rows.forEach(([a, b], j) => {
+      rect(ctx, x + a, y - 9 + j, b - a + 1, 1, PUMPKIN.top);
+      for (const rx of [-3, 3]) if (x + rx > x + a && x + rx < x + b) rect(ctx, x + rx, y - 9 + j, 1, 1, PUMPKIN.d);   // its ribs
+      rect(ctx, x + b, y - 9 + j, 1, 1, PUMPKIN.d);
+    });
+    rect(ctx, x - 4, y - 8, 2, 1, PUMPKIN.hi); rect(ctx, x - 5, y - 7, 1, 2, PUMPKIN.hi);
+    rect(ctx, x - 1, y - 12, 2, 3, INK); rect(ctx, x, y - 12, 1, 3, WOOD.d); rect(ctx, x + 1, y - 12, 1, 1, INK);   // the stem
+    const k = Math.floor(T * 9 + Math.sin(T * 23)) % 3, glow = !on ? INK2 : k ? SP.Y : C.gold1, deep = !on ? INK : C.gold1;
+    for (const ex of [-4, 2]) { rect(ctx, ex + x, y - 6, 3, 1, glow); rect(ctx, ex + x + 1, y - 7, 1, 1, glow); }   // the eyes, triangles
+    rect(ctx, x, y - 5, 1, 1, deep);                                                                                // the nose
+    rect(ctx, x - 4, y - 3, 9, 1, glow); rect(ctx, x - 3, y - 2, 7, 1, deep);                                     // the grin, two teeth
+    rect(ctx, x - 2, y - 3, 1, 1, PUMPKIN.top); rect(ctx, x + 2, y - 2, 1, 1, PUMPKIN.top);
+  }
+  // Halloween: cobwebs in the wall's top corners, a spider letting itself down from the left one and climbing back
+  function drawCobwebs(ctx, T) {
+    ctx.globalAlpha = 0.45;
+    for (const [cx, d] of [[0, 1], [W - 2, -1]]) {
+      const at = (r, a) => [cx + d * Math.round(Math.cos(a) * r), Math.round(Math.sin(a) * r)];
+      const dots = new Set();
+      for (const a of [1, 3, 5]) for (let r = 2; r <= 13; r++) dots.add(at(r, a * Math.PI / 12).join());   // its threads out of the corner
+      for (const r of [5, 10]) for (let k = 0; k < 4; k++) for (let i = 1; i < r; i++) {   // and round, from the ceiling to the wall, sagging
+        const a0 = k === 0 ? 0 : (2 * k - 1) * Math.PI / 12, a1 = k === 3 ? Math.PI / 2 : (2 * k + 1) * Math.PI / 12;
+        const [ax, ay] = at(r, a0), [bx, by] = at(r, a1), u = i / r, sag = Math.sin(u * Math.PI) * r / 8;
+        dots.add([Math.round(ax + (bx - ax) * u - d * sag * 0.7), Math.round(ay + (by - ay) * u - sag * 0.7)].join());
+      }
+      for (const q of dots) { const [px, py] = q.split(",").map(Number); rect(ctx, px, py, 1, 1, C.steel3); }
+    }
+    ctx.globalAlpha = 1;
+    const sx = 9, sy = Math.round(13 + (still ? 0 : 5 * Math.sin(T * 0.6)));
+    rect(ctx, sx, 7, 1, sy - 7, "rgba(194,201,217,0.5)");                  // its thread
+    rect(ctx, sx - 1, sy, 2, 2, INK);                                       // its body
+    for (const [lx, ly] of [[-2, -1], [-2, 1], [1, -1], [1, 1]]) rect(ctx, sx + lx, sy + ly, 1, 1, INK);   // its legs
   }
   function drawNotes(ctx, p, T) {              // two notes drifting up from it, fading
     for (const k of [0, 1]) {

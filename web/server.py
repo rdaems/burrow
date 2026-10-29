@@ -447,6 +447,7 @@ OPTIONS = {
     "hardcore": False,  # the booth is a gun closet: she clears them out with a shotgun, and a click on it gives you a crosshair
     "sound": True,  # the room makes its sounds while a radio stands in it (no switch on the switchboard: the radio is the switch)
     "files": True,  # a file tree beside each terminal while a filing cabinet stands in the room (the cabinet is the switch)
+    "halloween": True,  # the office in costume while a lit pumpkin stands in it (the pumpkin is the switch)
 }
 # (no switch for clearing out sessions: you ask an office manager, and she removes them through /api/office)
 
@@ -469,7 +470,7 @@ def doom_wad():
         pass
     return os.path.join(HERE, "doom", "freedoom.wad")
 KINDS = {"meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "add", "pair", "manager",
-         "booth", "neuralyzer", "doghouse", "radio", "files"}
+         "booth", "neuralyzer", "doghouse", "radio", "files", "pumpkin"}
 
 
 # The office manager: whoever sits at the reception booth (the `manager` piece; one at a time). Her style is
@@ -2501,6 +2502,8 @@ class Handler(BaseHTTPRequestHandler):
                         hub.room.setdefault("settings", {})["sound"] = True
                     if kind == "files":                  # a filing cabinet put down: the file trees are on
                         hub.room.setdefault("settings", {})["files"] = True
+                    if kind == "pumpkin":                # a pumpkin put down: it is lit
+                        hub.room.setdefault("settings", {})["halloween"] = True
                 elif b.get("remove"):
                     key = b["remove"]
                     if kind_of(key) in FIXED or key not in fs:

@@ -142,6 +142,10 @@ message is the log. When something goes, take it out here. Keep the file under a
 - Sound only while a radio stands in the room and is on, and only for real events (a hand going up, a beam, a door,
   the booth, a shot, the printer when clicked, a game you play or watch, the fire taking something): no ambient
   noise, no keys, no crackle. Synthesised in the browser; Doom's own in the first person.
+- Halloween while a pumpkin (`pumpkin` kind, from the closet) stands in the room and is lit (settings `halloween`; the
+  pumpkin is the switch, like the radio): everyone in costume (`dressOf`: a bot's by its seed, a witch's hat, a vampire's
+  cape or a skeleton's suit; you the hat, the office managers the cape; `body()`'s `dress`, the hat makes the picture
+  `HAT` dots taller), cobwebs in the wall's top corners with a spider going up and down. Not in the 3d models yet.
 
 ## Desks
 
@@ -185,7 +189,7 @@ message is the log. When something goes, take it out here. Keep the file under a
   ping-pong = play or watch; coffee or cooler = the limits; clock = keep awake; switchboard (one lever) = settings
   (rc, yolo, hardcore: a slider and a name a line, a help box under them for the line under the pointer, empty
   once the pointer leaves the panel; hardcore stays vague); pair table = its
-  pair room; dog house = the dog; radio = sound; filing cabinet = FILES on the bands; door = the doors' panel; project cabinet = a new desk; reception =
+  pair room; dog house = the dog; radio = sound; filing cabinet = FILES on the bands; pumpkin = Halloween; door = the doors' panel; project cabinet = a new desk; reception =
   the office manager. Dropped on: the neuralyzer gives an idle bot `/clear`; the booth deletes.
 - Whoever is at a piece rides along when it is dragged: a spot at a piece carries its key (`on`), `ride()` moves
   them each frame. One rule for every piece: reuse it, don't add a fix per piece.
