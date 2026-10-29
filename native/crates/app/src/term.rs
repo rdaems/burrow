@@ -154,6 +154,13 @@ impl TermTile {
         }
     }
 
+    /// keys typed into it as they are (no paste)
+    pub fn say(&self, b: &[u8]) {
+        if let Some(c) = &self._conn {
+            c.write(b);
+        }
+    }
+
     /// text handed to the program once it is up (a dropped file's path, a pair link): pasted as a terminal pastes
     /// (bracketed once the program turned that on; a session being restarted takes a few seconds: one at least,
     /// ten at most)

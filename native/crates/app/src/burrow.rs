@@ -539,14 +539,19 @@ impl Burrow {
             }
             "spawn" => {
                 let (m, dir) = (s("m"), s("dir"));
+                let (m2, dir2) = (m.clone(), dir.clone());
                 let task = cx.background_executor().spawn(async move { hub.spawn(&m, &dir, "").map(|id| (m, id)) });
-                cx.spawn_in(window, async move |this, cx| {
-                    if let Ok((m, id)) = task.await {
+                cx.spawn_in(window, async move |this, cx| match task.await {
+                    Ok((m, id)) => {
                         let _ = this.update_in(cx, |b, window, cx| {
                             b.room.fresh(&id); // just started: you both go to its desk
                             b.open_bot(&m, &id, shift, None, window, cx);
                         });
                     }
+                    Err(e) if not_trusted(&e) => {
+                        let _ = this.update_in(cx, |b, window, cx| b.trust_first(m2, dir2, shift, window, cx));
+                    }
+                    Err(e) => eprintln!("burrow: {e}"),
                 })
                 .detach();
             }
@@ -693,6 +698,56 @@ impl Burrow {
         self.tile.get_mut(&t).unwrap().body = Some(body);
         self.tiles.add(t);
         self.focus_tile(t, window, cx);
+    }
+
+    /// The + in a folder Claude Code there does not trust yet (`claude --bg` refuses until `claude` ran there once and
+    /// was told yes): your terminal at that desk opens with `claude` started in it, its trust prompt on the screen. The
+    /// bot is asked for again every three seconds (Claude Code decides what it trusts; five minutes at most); once it
+    /// starts, that `claude` is quit and the bot's session takes the terminal's place. Told no, or the terminal
+    /// closed: nothing starts
+    fn trust_first(&mut self, m: String, dir: String, shift: bool, window: &mut Window, cx: &mut Context<Self>) {
+        self.open_shell(&m, &dir, shift, window, cx);
+        let Some(t) = self.tile.iter().find(|(_, t)| matches!(&t.kind, TileKind::Shell { m: a, dir: d } if *a == m && *d == dir)).map(|(t, _)| *t) else {
+            return;
+        };
+        let say = move |b: &Burrow, keys: &[u8], cx: &mut Context<Self>| {
+            if let Some(body) = b.tile.get(&t).and_then(|x| x.body.clone()) {
+                body.read(cx).say(keys);
+            }
+        };
+        say(self, b"claude\r", cx);
+        let hub = self.hub.clone();
+        cx.spawn_in(window, async move |this, cx| {
+            for _ in 0..100 {
+                cx.background_executor().timer(Duration::from_secs(3)).await;
+                let Ok(open) = this.update(cx, |b, _| b.tile.contains_key(&t)) else { return };
+                if !open {
+                    return; // the terminal closed: nothing starts
+                }
+                let (h, m2, d2) = (hub.clone(), m.clone(), dir.clone());
+                let id = match cx.background_executor().spawn(async move { h.spawn(&m2, &d2, "") }).await {
+                    Ok(id) => id,
+                    Err(e) if not_trusted(&e) => continue,
+                    Err(e) => return eprintln!("burrow: {e}"),
+                };
+                for _ in 0..3 {
+                    // out of that claude (Ctrl+C twice is its way; once more for a line typed in it)
+                    let _ = this.update(cx, |b, cx| say(b, b"\x03", cx));
+                    cx.background_executor().timer(Duration::from_millis(300)).await;
+                }
+                let _ = this.update_in(cx, |b, window, cx| {
+                    b.room.fresh(&id);
+                    if b.tile.contains_key(&t) {
+                        b.tiles.focus(t); // in the terminal's place: it is the focused one it replaces
+                        b.open_bot(&m, &id, false, None, window, cx);
+                    } else {
+                        b.open_bot(&m, &id, shift, None, window, cx);
+                    }
+                });
+                return;
+            }
+        })
+        .detach();
     }
 
     fn open_notes(&mut self, retain: bool, window: &mut Window, cx: &mut Context<Self>) {
@@ -1316,3 +1371,8 @@ fn libc_time() -> i64 {
 
 #[allow(dead_code)]
 fn _unused(_: Side) {}
+
+/// what `claude --bg` says in a folder Claude Code does not trust yet ("Workspace not trusted")
+fn not_trusted(e: &str) -> bool {
+    e.to_lowercase().contains("not trusted")
+}
