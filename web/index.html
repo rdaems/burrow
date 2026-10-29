@@ -199,7 +199,28 @@ async function act(a) {
   else if (a.kind === "drop" && b) { const t = openBot(b.m, b.id, a.shift); for (const f of a.files) await hand(f, t); }
   else if (a.kind === "spawn") {
     const r = await api("/api/spawn", { m: a.m, dir: a.dir });
-    if (r.error) note(r.error); else { room.fresh(r.id); openBot(a.m, r.id, a.shift); }   // just started: you both go to its desk
+    if (r.error && /not trusted/i.test(r.error)) trustFirst(a);
+    else if (r.error) note(r.error); else { room.fresh(r.id); openBot(a.m, r.id, a.shift); }   // just started: you both go to its desk
+  }
+}
+// The + in a folder Claude Code there does not trust yet (`claude --bg` refuses until `claude` ran there once and was
+// told yes): your terminal at that desk opens with `claude` started in it, its trust prompt on the screen. The bot is
+// asked for again every three seconds (Claude Code decides what it trusts; five minutes at most); once it starts, that
+// `claude` is quit and the bot's session takes the terminal's place. Told no, or the terminal closed: nothing starts
+async function trustFirst(a) {
+  const t = openShell(a.m, a.dir, a.shift), say = (x) => { if (t.ws && t.ws.readyState === 1) t.ws.send(enc.encode(x)); else t.typed.push(x); };
+  say("claude\r");
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  for (let k = 0; k < 100; k++) {
+    await wait(3000);
+    if (!tiles.all().includes(t)) return;
+    const s = await api("/api/spawn", { m: a.m, dir: a.dir });
+    if (s.error && /not trusted/i.test(s.error)) continue;
+    if (s.error) return note(s.error);
+    for (let i = 0; i < 3; i++) { say("\x03"); await wait(300); }   // out of that claude (Ctrl+C twice is its way; once more for a line typed in it)
+    room.fresh(s.id);
+    if (tiles.all().includes(t)) { tiles.focus(t); openBot(a.m, s.id); } else openBot(a.m, s.id, a.shift);   // (in the terminal's place: it is the focused one it replaces)
+    return;
   }
 }
 function note(msg) {                       // trouble: the console's, never the room's

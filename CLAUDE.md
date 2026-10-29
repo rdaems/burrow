@@ -145,7 +145,9 @@ message is the log. When something goes, take it out here. Keep the file under a
 - A chair for every session, in arrival order (`seatRows`: who sits keeps the chair, a newcomer takes the far
   end). An empty desk is its cabinet and screen only; the first bot brings the desktop.
 - On the desk: the screen (a click: your shell there, one per screen, kept by the server with 200 kB of replay,
-  killed with the desk, not kept over a server restart; `exit` ends it), `+` beside it (a new bot), the name plate
+  killed with the desk, not kept over a server restart; `exit` ends it), `+` beside it (a new bot; in a folder Claude
+  Code there doesn't trust yet `claude --bg` refuses, so that terminal opens with `claude` in it, its trust prompt
+  showing, and the bot is asked for again every 3 s, taking the terminal's place once it starts: `trustFirst`), the name plate
   (8 letters, a given name 14; a click: the desk's panel, rename, its sessions, TERMINAL, KEEP).
 - The project cabinet adds a desk: a folder browser as VS Code's Open Folder (a path field over the folder list,
   where Claude Code ran lately first). No prose, no placeholder.
