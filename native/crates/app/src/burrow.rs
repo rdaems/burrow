@@ -279,7 +279,7 @@ impl Burrow {
             shell,
             shells,
             hl_shell,
-            still: false,
+            still: reduce_motion(),
             fps: false,
         }
     }
@@ -1092,6 +1092,24 @@ impl Render for Burrow {
                 )
             })
     }
+}
+
+/// macOS's Reduce Motion (the page's prefers-reduced-motion): asked at most once a second
+pub fn reduce_motion() -> bool {
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+    static AT: AtomicU64 = AtomicU64::new(0);
+    static ON: AtomicBool = AtomicBool::new(false);
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    if AT.swap(now, Ordering::Relaxed) != now {
+        let on: bool = unsafe {
+            use objc::{class, msg_send, sel, sel_impl};
+            let ws: *mut objc::runtime::Object = msg_send![class!(NSWorkspace), sharedWorkspace];
+            let v: objc::runtime::BOOL = msg_send![ws, accessibilityDisplayShouldReduceMotion];
+            v != objc::runtime::NO
+        };
+        ON.store(on, Ordering::Relaxed);
+    }
+    ON.load(Ordering::Relaxed)
 }
 
 /// this computer's clock: hours and minutes, local time
