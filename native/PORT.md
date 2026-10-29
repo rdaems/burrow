@@ -18,5 +18,5 @@ One line per web module; status: todo, wip, done (tested), n/a.
 | pong.js                      | crates/games/pong                    | done   |
 | chessboard.js                | crates/app (chess view)              | todo   |
 | sound.js                     | crates/sound                         | done   |
-| fps.js, props3d.js, doom/    | crates/fps                           | todo   |
+| fps.js, props3d.js, doom/    | crates/fps                           | done   |
 | look.mjs (tests)             | cargo test, PNG snapshots            | todo   |

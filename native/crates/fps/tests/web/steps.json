@@ -1,0 +1,43 @@
+[
+ {
+  "cdp": "Emulation.setEmulatedMedia",
+  "params": {
+   "features": [
+    {
+     "name": "prefers-reduced-motion",
+     "value": "reduce"
+    }
+   ]
+  }
+ },
+ {
+  "wait": 2500
+ },
+ {
+  "js": "(() => { const fl = document.createElement('canvas'); fl.width = 512; fl.height = 360; fl.v = 1; const wl = document.createElement('canvas'); wl.width = 4; wl.height = 4; wl.v = 1; const sc = { v: 1, W: 256, H: 180, WALL: 26, floor: fl, wall: wl, items: [], wkey: '', boxes: [], things: [], solid: [], lights: [] }; window.__stub = startFps({ scene: () => sc, start: () => ({ x: 128, y: 150, a: -Math.PI / 2 }), move() {}, shoot: () => false, unshoot() {}, alarm() {}, armed: () => true, use: () => null, label: () => null, status: () => ({ kills: 0 }), face: () => null, tiny: () => {}, tinyW: (s) => s.length * 4 - 1, snapshot: () => null }, () => {}); return 'started'; })()"
+ },
+ {
+  "wait": 7000
+ },
+ {
+  "js": "__fps && __fps.ready()"
+ },
+ {
+  "js": "(() => { for (const x of __fps.lvl().map.sectors) x.light = x.light0; return 'lights reset'; })()"
+ },
+ {
+  "js": "(() => { const L = __fps.lvl(), st = L.start, p = L.player; window.__cam = { x: st.x, y: st.y, z: L.sectorAt(st.x, st.y).floor + 41, a: st.angle * Math.PI / 180 }; return JSON.stringify(window.__cam) + ' t=' + L.time; })()"
+ },
+ {
+  "js": "'LEVEL ' + __fps.snap(__cam.x, __cam.y, __cam.z, __cam.a).toDataURL()"
+ },
+ {
+  "js": "'LEVEL2 ' + __fps.snap(__cam.x + 300, __cam.y + 120, __cam.z, __cam.a + 2.2).toDataURL()"
+ },
+ {
+  "wait": 300
+ },
+ {
+  "js": "'OFFICE ' + document.querySelector('#fps canvas').toDataURL()"
+ }
+]
