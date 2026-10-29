@@ -181,7 +181,9 @@ message is the log. When something goes, take it out here. Keep the file under a
   them each frame. One rule for every piece: reuse it, don't add a fix per piece.
 - The easel (kind `board`, the whiteboard it replaced) holds the robots' painting: famous paintings with every
   person in them a robot (`paintings.js`: Mona Lisa, The Starry Night, The Scream, Girl with a Pearl Earring, The
-  Great Wave, American Gothic; public domain), dots in layers in a painter's order. It grows only while a robot
+  Great Wave, American Gothic; public domain), dots in layers in a painter's order. Every person (or animal) in one
+  has the room's robot head (`head()`: a steel box, a dark screen with glowing eyes, ear bolts, an antenna) and steel
+  hands and neck; an oval face in metal read as a human (he: "I don't see robots"). It grows only while a robot
   paints at it (`paint`, an idle break now and then, 8%, palette and brush, 30 dots a second); done, it hangs ten
   minutes, then the next painter starts another. The room shows it at a third of its size; a click shows it framed
   with who painted it. Nothing of yours goes on it.

@@ -40,8 +40,50 @@ window.Paintings = (() => {
     return { put, area, oval, poly, line, dots: () => [...px.values()] };
   }
 
-  // ---- Mona Lisa, after Leonardo: a robot of golden metal in a dark dress, hands folded, the smile, the veil; the
-  // hazy land behind, its road winding on the left, a lake and a bridge on the right
+  // a robot's head as the room draws its robots (pixel.js robot()): a steel box lit along its top and left edge, shaded
+  // right and below, its corners cut; across it the dark screen with the eyes glowing in it; a bolt each side where ears
+  // would be; the antenna with its light. Whoever is in a painting has one. o: eye, dim (the eyes' colours), mouth
+  // ("grille", "smile", "o", "lips"), turn (-1..1: three quarters, the screen slid that way), top (the screen's first
+  // row, from the head's), ant (the antenna's height), light (its colour), glasses, noEars
+  const STEEL = { hi: "#f4f6fb", lit: "#c2c9d9", mid: "#8b93ad", dark: "#5d6280", deep: "#3b3a55", scr: "#1a2448" };
+  function head(E, x0, y0, w, h, L, o = {}) {
+    const eye = o.eye || "#7fdcb0", dim = o.dim || "#2fa087", turn = o.turn || 0, x1 = x0 + w - 1, y1 = y0 + h - 1;
+    E.area(x0, y0, x1 + 1, y1 + 1, L, (x, y) => {
+      if ((x === x0 || x === x1) && (y === y0 || y === y1)) return null;
+      if (y === y0 || x === x0) return STEEL.hi;
+      if (y === y1 || x === x1) return STEEL.dark;
+      return (x - x0) / w > 0.74 + turn * 0.12 ? STEEL.mid : STEEL.lit;
+    });
+    const m = o.glasses ? 1 : Math.max(1, Math.round(w * 0.14)), sy0 = y0 + (o.top ?? Math.max(2, Math.round(h * 0.22))), sh = Math.max(3, Math.round(h * 0.42));
+    const sx0 = x0 + 1 + m + Math.round(Math.min(0, turn) * m), sx1 = x1 - 1 - m + Math.round(Math.max(0, turn) * m);
+    E.area(sx0, sy0, sx1 + 1, sy0 + sh, L + 1, (x, y) => (y === sy0 ? STEEL.deep : STEEL.scr));
+    const ey = sy0 + Math.floor(sh / 2) - (sh > 4 ? 1 : 0), span = sx1 - sx0, inset = Math.max(1, Math.round(span * 0.22));
+    const two = w > 11 && !o.glasses && span - 2 * inset >= 5;             // eyes two dots wide when they still stand apart
+    const eyes = o.glasses ? [sx0 + 1, sx1 - 1] : [sx0 + inset, sx1 - inset - (two ? 1 : 0)];
+    for (const x of eyes) {
+      if (o.glasses) {                       // round glasses: a ring of light round each eye, a bridge between
+        for (const [i, j] of [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]]) E.put(x + i, ey + j, dim, L + 1);
+        E.put(x, ey, eye, L + 1);
+        continue;
+      }
+      for (let i = 0; i < (two ? 2 : 1); i++) { E.put(x + i, ey, eye, L + 1); if (sh > 3) E.put(x + i, ey + 1, dim, L + 1); }
+    }
+    if (o.glasses) E.line(eyes[0] + 2, ey, eyes[1] - 2, ey, L + 1, STEEL.mid);
+    const cx = Math.round((sx0 + sx1) / 2);
+    if (o.mouth === "smile") { for (let x = cx - 2; x <= cx + 2; x++) E.put(x, sy0 + sh - 1 - (Math.abs(x - cx) === 2 ? 1 : 0), dim, L + 1); }   // a slight smile, lit
+    if (o.mouth === "grille") for (let x = x0 + 3; x <= x1 - 3; x++) E.put(x, y1 - 2, x % 2 ? STEEL.dark : STEEL.deep, L + 1);
+    if (o.mouth === "lips") for (let x = cx - 1; x <= cx + 1; x++) E.put(x, sy0 + sh + 1, x === cx ? "#e86048" : "#b0503a", L + 1);
+    if (o.mouth === "o") E.oval(cx, Math.min(y1 - 2, sy0 + sh + 2), 1.4, 2.2, L + 1, (x, y, d) => (d > 0.7 ? STEEL.deep : "#0e1226"));   // wide open
+    if (!o.noEars) { const ym = Math.round((sy0 + sy0 + sh) / 2); E.put(x0 - 1, ym, STEEL.dark, L); E.put(x1 + 1, ym, STEEL.dark, L); E.put(x0 - 1, ym + 1, STEEL.deep, L); E.put(x1 + 1, ym + 1, STEEL.deep, L); }
+    if (o.ant) {
+      const ax = x0 + Math.floor(w / 2);
+      E.line(ax, y0 - 1, ax, y0 - o.ant, L, STEEL.mid);
+      E.put(ax, y0 - o.ant - 1, o.light || eye, L + 1);
+    }
+  }
+
+  // ---- Mona Lisa, after Leonardo: a robot in a dark dress, hands folded, the smile lit on its screen, the veil over
+  // its head; the hazy land behind, its road winding on the left, a lake and a bridge on the right
   function monaLisa() {
     const E = canvas(48, 60);
     E.area(0, 0, 48, 26, 0, (x, y) => ramp(["#8e9c6c", "#a9b27e", "#c6c48e", "#d9d09a"], y / 24, x, y));
@@ -58,24 +100,16 @@ window.Paintings = (() => {
     E.area(14, 20, 35, 38, 2, (x, y) => ((x * 3 + y) % 7 === 0 ? "#3a2a1a" : "#22180f"));   // the hair behind the neck
     E.poly([[14, 18], [19, 22], [19, 38], [13, 38]], 2, (x, y) => ((x + y * 2) % 5 === 0 ? "#3a2a1a" : "#22180f"));
     E.poly([[34, 18], [29, 22], [29, 38], [35, 38]], 2, (x, y) => ((x + y * 2) % 5 === 0 ? "#3a2a1a" : "#22180f"));
-    // the head, the neck, the chest in the neckline: golden metal lit from the left
-    const gold = (x0, span) => (x, y) => ramp(["#e2c48a", "#cfae70", "#b38f55", "#8a6a3c"], (x - x0) / span + (y - 11) / 50, x, y);
-    E.oval(24, 19, 6.3, 8.2, 3, gold(17.5, 13));
-    E.area(21, 27, 28, 35, 3, gold(20, 9));
-    E.oval(24, 34, 8, 4.5, 3, (x, y, d) => (y < 34 ? null : d > 0.86 ? "#6a5228" : gold(16, 16)(x, y)));
+    // the neck in rings, the chest plate in the neckline, the head: a robot's, the smile lit, the antenna through the veil
+    E.area(21, 26, 28, 36, 3, (x, y) => (x === 21 ? STEEL.hi : x === 27 ? STEEL.dark : (y - 26) % 3 === 2 ? STEEL.mid : STEEL.lit));
+    E.oval(24, 35, 8, 4, 3, (x, y, d) => (y < 35 ? null : d > 0.85 ? STEEL.dark : x < 21 ? STEEL.hi : STEEL.lit));
+    head(E, 18, 11, 13, 16, 3, { eye: "#f3c94a", dim: "#a8802a", mouth: "smile", turn: 0.25, ant: 5 });
     // the sleeves, the hands folded, the right over the left
     E.poly([[8, 54], [11, 49], [19, 52], [19, 56], [10, 58]], 3, (x, y) => ((x + y) % 5 === 0 ? "#7a6030" : "#5a4622"));
     E.poly([[40, 54], [37, 48], [29, 51], [28, 55], [38, 58]], 3, (x, y) => ((x - y) % 5 === 0 ? "#7a6030" : "#5a4622"));
-    E.oval(20.5, 54.5, 3, 1.8, 4, gold(17.5, 7));
-    E.oval(26, 53.2, 3.6, 2, 4, gold(22, 8));
-    for (const x of [24, 26, 28]) E.put(x, 54, "#8a6a3c", 4);
-    // a seam round the brow, the eyes, the smile, a bolt each side, the antenna through the veil
-    E.line(19, 14, 29, 14, 4, "#a8854a");
-    for (const ex of [21, 26]) { E.put(ex, 18, "#2a1d12", 4); E.put(ex + 1, 18, "#2a1d12", 4); E.put(ex, 19, "#a8854a", 4); E.put(ex + 1, 19, "#a8854a", 4); }
-    E.put(24, 20, "#b38f55", 4); E.put(24, 21, "#a07c46", 4);
-    for (const [x, y] of [[21, 23], [22, 24], [23, 24], [24, 24], [25, 24], [26, 23]]) E.put(x, y, "#6e4c2a", 4);
-    E.put(18, 21, "#8a6a3c", 4); E.put(30, 21, "#7a5c32", 4);
-    E.line(24, 10, 24, 5, 4, "#7a5a32"); E.oval(24, 4, 1.1, 1.1, 4, "#e2c48a");
+    E.oval(20.5, 54.5, 3, 1.8, 4, (x, y, d) => (d > 0.8 ? STEEL.dark : x < 20 ? STEEL.hi : STEEL.lit));   // the hands, steel
+    E.oval(26, 53.2, 3.6, 2, 4, (x, y, d) => (d > 0.8 ? STEEL.dark : STEEL.lit));
+    for (const x of [24, 26, 28]) E.put(x, 54, STEEL.dark, 4);
     return E.dots();
   }
 
@@ -135,39 +169,31 @@ window.Paintings = (() => {
     E.area(0, 28, 48, 60, 2, (x, y) => (y < rail(x) + 2 ? null : (Math.floor(y - x * 0.33) % 3 === 0 ? "#7a4a2e" : y > 54 ? "#8a5634" : "#9a6440")));
     E.line(0, 29, 48, 45, 2, "#5e3424", 2);
     for (let x = 2; x < 48; x += 7) E.line(x, rail(x), x, rail(x) + 3, 2, "#5e3424");
-    for (const fx of [3, 7]) ["k.", "kk", "kk", "k."].forEach((row, j) => [...row].forEach((ch, i) => ch === "k" && E.put(fx + i, 24 + (fx > 4 ? 1 : 0) + j, "#2a2430", 3)));   // two far along the bridge
-    // the one who screams: the dark body, the pale head, its clamps to its head
+    for (const fx of [3, 7]) ["y.", "hs", "kk", "kk", "k."].forEach((row, j) => [...row].forEach((ch, i) => E.put(fx + i, 23 + (fx > 4 ? 1 : 0) + j, { y: "#f3d54a", h: STEEL.lit, s: STEEL.scr, k: "#2a2430" }[ch], 3)));   // two far along the bridge
+    // the one who screams: the dark body, a long robot's head, the eyes wide, the mouth open; its clamps to its head
     E.poly([[13, 60], [16, 52], [19, 46], [21, 42], [28, 42], [30, 46], [33, 52], [37, 60]], 3, (x, y) => (Math.sin(x * 0.7 + y * 0.35) > 0.55 ? "#3e3a56" : "#2c2a3e"));
-    E.line(19, 38, 21, 44, 3, "#2c2a3e", 2); E.line(30, 38, 28, 44, 3, "#2c2a3e", 2);
-    E.oval(24.5, 35, 5, 7, 4, (x, y) => ramp(["#e4dab0", "#cfc292", "#a89a6c"], (x - 19.5) / 10, x, y));
-    E.area(18, 31, 20, 39, 4, (x, y) => (x === 19 ? "#6a7084" : "#9aa2b4")); E.area(29, 31, 31, 39, 4, (x, y) => (x === 29 ? "#6a7084" : "#9aa2b4"));
-    E.oval(22.4, 33.5, 0.9, 1.4, 5, "#2a2018"); E.oval(26.6, 33.5, 0.9, 1.4, 5, "#2a2018");
-    E.oval(24.5, 39, 1.2, 1.9, 5, "#2a1a14");
-    E.put(21, 37, "#8a7c58", 5); E.put(28, 37, "#8a7c58", 5);
-    E.line(24.5, 28, 24.5, 25, 5, "#6a7084"); E.put(24.5, 24, "#e8402a", 5);
+    E.line(19, 38, 21, 44, 3, "#2c2a3e", 2); E.line(31, 38, 28, 44, 3, "#2c2a3e", 2);
+    head(E, 20, 28, 10, 14, 4, { eye: "#fff6c8", dim: "#e8c040", mouth: "o", ant: 3, light: "#e8402a", noEars: true, top: 2 });
+    E.area(18, 31, 20, 39, 6, (x) => (x === 18 ? STEEL.dark : STEEL.mid)); E.area(30, 31, 32, 39, 6, (x) => (x === 31 ? STEEL.dark : STEEL.mid));
     return E.dots();
   }
 
-  // ---- Girl with a Pearl Earring, after Vermeer: a robot of smooth light metal turning to look at you, the blue
-  // and yellow turban (its antenna through it), the pearl from the bolt where an ear would be, the white collar
+  // ---- Girl with a Pearl Earring, after Vermeer: a robot turning to look at you over its shoulder, its eyes on its
+  // screen, a red light for the parted lips, the blue and yellow turban (its antenna through it), the pearl from the
+  // bolt where an ear would be, the white collar
   function pearl() {
     const E = canvas(48, 60);
     E.area(0, 0, 48, 60, 0, (x, y) => (hash(x >> 1, y >> 1, 8) < 0.2 ? "#1c1914" : "#12100c"));
     E.poly([[2, 60], [6, 50], [14, 44], [30, 45], [38, 52], [42, 60]], 1, (x, y) => ramp(["#a8884a", "#8a6e3a", "#6a5428", "#4a3a1c"], (x - 2) / 40 + (y - 44) / 60, x, y));
-    E.poly([[21, 36], [31, 36], [31, 45], [22, 45]], 2, (x, y) => ramp(["#d8cdb8", "#a89c86", "#6e665a"], (x - 21) / 10, x, y));
+    E.poly([[21, 36], [31, 36], [31, 45], [22, 45]], 2, (x, y) => ((y - 36) % 3 === 2 ? STEEL.dark : ramp([STEEL.lit, STEEL.mid, STEEL.dark], (x - 21) / 10, x, y)));   // the neck, in rings
     E.poly([[12, 46], [19, 43], [32, 44], [34, 46], [26, 48], [16, 49]], 2, (x, y) => ramp(["#f2ede2", "#d8d0c0", "#a8a090"], (x - 12) / 22, x, y));
-    E.oval(27, 27, 9, 10.5, 3, (x, y) => ramp(["#efe6d4", "#ddd2bc", "#bdb19a", "#8c826e", "#5a5348"], (x - 18) / 19 + (y - 17) / 70, x, y));
+    head(E, 19, 18, 17, 19, 3, { eye: "#bfe3ff", dim: "#4a76b8", mouth: "lips", turn: -0.35, top: 6, noEars: true });
     E.poly([[19, 14], [27, 11], [24, 19], [18, 35], [12, 35], [14, 22]], 4, (x, y) => ramp(["#f2d27a", "#d8b04a", "#b08a30", "#7a5e20"], (x - 12) / 16 + (hash(x, y >> 2, 9) - 0.5) * 0.15, x, y));
     E.oval(25, 17, 9.5, 6.5, 4, (x, y) => (y > 21 + (x - 25) * 0.25 ? null : ramp(["#5a86cc", "#3d6ab0", "#2a4f8f", "#1c3666"], (x - 16) / 19 + (Math.sin(x * 0.9 + y * 0.6) > 0.7 ? -0.2 : 0), x, y)));
-    // the eyes (the gaze), the nose's shadow, the lips parted, the bolt and its pearl, the antenna
-    E.oval(24, 27, 1.7, 1.7, 5, "#2a2420"); E.put(23, 26, "#f4f4f0", 5);
-    E.oval(31, 27, 1.2, 1.5, 5, "#2a2420"); E.put(30, 26, "#e4e0d8", 5);
-    E.line(28, 28, 28, 31, 5, "#a89c86"); E.put(28, 32, "#7c7262", 5);
-    for (const x of [27, 28, 29]) E.put(x, 34, "#b0503a", 5);
-    E.put(28, 35, "#5a2a20", 5);
-    E.oval(19.5, 30.5, 1.1, 1.1, 5, "#6a6458"); E.put(19.5, 32, "#8a8478", 5);
+    // the bolt and its pearl, the antenna through the turban
+    E.oval(19.5, 30.5, 1.1, 1.1, 5, STEEL.dark); E.put(19.5, 32, STEEL.mid, 5);
     E.oval(19.5, 34.3, 1.5, 2, 6, (x, y) => (y < 34 && x < 20 ? "#f8f8f4" : y > 35 ? "#7a7a86" : "#c8c8d0"));
-    E.line(26, 11, 25, 6, 6, "#8c826e"); E.oval(25, 5, 1.1, 1.1, 6, "#efe6d4");
+    E.line(26, 11, 25, 6, 6, STEEL.mid); E.oval(25, 5, 1.1, 1.1, 6, "#bfe3ff");
     return E.dots();
   }
 
@@ -208,7 +234,10 @@ window.Paintings = (() => {
     // the boats, robots rowing in them
     const boat = (x0, y0, x1, y1) => {
       E.line(x0, y0 + 1, x1, y1 + 1, 5, "#9a8a6a"); E.line(x0, y0, x1, y1, 5, "#e2d4b0");
-      for (let k = 2; k < Math.abs(x1 - x0) - 1; k += 3) { const x = x0 + k, y = Math.round(y0 + ((y1 - y0) * k) / (x1 - x0)); E.put(x, y - 1, "#8a94a8", 5); E.put(x + 1, y - 1, "#5d6280", 5); E.put(x, y - 2, "#5d6280", 5); }
+      for (let k = 2; k < Math.abs(x1 - x0) - 1; k += 3) {
+        const x = x0 + k, y = Math.round(y0 + ((y1 - y0) * k) / (x1 - x0));
+        E.put(x, y - 1, "#7fdcb0", 5); E.put(x + 1, y - 1, STEEL.scr, 5); E.put(x, y - 2, STEEL.lit, 5); E.put(x + 1, y - 2, STEEL.mid, 5); E.put(x, y - 3, "#f3d54a", 5);
+      }
     };
     boat(15, 41, 34, 36); boat(46, 45, 62, 43);
     return E.dots();
@@ -233,21 +262,16 @@ window.Paintings = (() => {
     E.area(12, 32, 17, 37, 4, steel(11, 7));
     E.oval(14.5, 37, 6, 2.2, 4, (x, y) => (y < 36 ? null : "#ece6da"));
     E.oval(14.5, 39.2, 1.3, 1.3, 5, (x, y, d) => (d < 0.5 ? "#8a5a3a" : "#c8a070"));
-    E.oval(14.5, 27, 5, 6, 5, steel(9.5, 10));
-    E.put(15, 26, "#2a2a30", 6); E.put(18, 26, "#2a2a30", 6); E.line(13, 30, 16, 30, 6, "#5a5e6a");
-    E.line(14.5, 21, 14.5, 17, 6, "#747c8a");
-    for (const [x, y] of [[12, 15], [13, 16], [12, 17], [16, 16], [17, 15], [17, 17]]) E.put(x, y, "#d6457a", 6);
-    E.put(14.5, 16, "#a03060", 6);
+    head(E, 10, 21, 10, 12, 5, { eye: "#7fdcb0", mouth: "grille", turn: 0.4, ant: 4 });
+    for (const [x, y] of [[13, 15], [14, 16], [13, 17], [16, 16], [17, 15], [17, 17]]) E.put(x, y, "#d6457a", 7);   // her bow, on the antenna
+    E.put(15, 16, "#a03060", 7);
     // him: the black jacket, the striped shirt, the overalls, the long head, round glasses, the pitchfork in his hand
     E.poly([[20, 60], [22, 40], [27, 34], [40, 34], [45, 40], [48, 60]], 4, (x, y) => (x < 26 || x > 41 ? "#2e2e3a" : "#1c1c24"));
     E.poly([[30, 34], [37.5, 34], [34, 45]], 4, (x, y) => (y % 2 ? "#e8e4dc" : "#c8c4bc"));
     E.poly([[29, 43], [38.5, 43], [39.5, 60], [28, 60]], 4, (x, y) => ((x * 3 + y) % 8 === 0 ? "#6a7a9a" : "#4a5a7a"));
     E.line(30, 36, 30, 43, 4, "#4a5a7a"); E.line(37.5, 36, 37.5, 43, 4, "#4a5a7a");
     E.area(32, 29, 36, 34, 4, steel(31, 6));
-    E.oval(34, 21.5, 5, 8, 5, steel(29, 10));
-    for (const gx of [32, 36]) E.oval(gx, 21, 1.7, 1.7, 6, (x, y, d) => (d > 0.55 ? "#2a2a30" : null));
-    E.put(34, 21, "#2a2a30", 6); E.line(31.5, 27, 36.5, 27, 6, "#5a5e6a");
-    E.line(34, 13.5, 34, 10, 6, "#747c8a"); E.oval(34, 9.5, 1, 1, 6, "#bcc4d0");
+    head(E, 29, 13, 11, 17, 5, { eye: "#7fdcb0", mouth: "grille", glasses: true, ant: 3 });
     E.line(27.5, 36, 27.5, 60, 7, "#8a6a4a");
     for (const tx of [24.5, 27.5, 30.5]) E.line(tx, 30, tx, 36, 7, "#9aa2a8");
     E.line(24.5, 36, 30.5, 36, 7, "#9aa2a8");
