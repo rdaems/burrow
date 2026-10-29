@@ -1,0 +1,9 @@
+[package]
+name = "pix"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "burrow's pixel drawing: an RGBA buffer and the part of the browser's 2D canvas the web room used"
+
+[dependencies]
+png = "0.18"

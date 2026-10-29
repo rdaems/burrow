@@ -1,0 +1,10 @@
+[package]
+name = "burrow-model"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "burrow's state as the room sees it: the JSON the web server pushed as its `state` event"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
