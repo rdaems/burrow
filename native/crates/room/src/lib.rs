@@ -4,6 +4,7 @@
 
 pub mod avatar;
 pub mod dog;
+pub mod draw;
 pub mod dream;
 pub mod figure;
 pub mod font;
