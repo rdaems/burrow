@@ -59,7 +59,6 @@ pub struct Act {
     pub water: bool,
     pub t: f64,
     pub free: bool,
-    pub drawing: bool,
     pub done: f64,
     pub wave: f64,
     pub team: Vec<String>,
@@ -282,15 +281,17 @@ pub struct Burning {
     pub t0: f64,
 }
 
-/// the whiteboard's dream: the scene, the order its pixels come in, how far
-#[derive(Clone, Debug, Default)]
-pub struct Dream {
-    pub scene: usize,
-    pub order: Vec<(i32, i32, pix::Color)>,
+/// the painting on the easel: which, the order its dots go on in, how far, when it was done, who has painted at it,
+/// the canvas
+#[derive(Clone, Debug)]
+pub struct Art {
+    pub i: usize,
+    pub order: Vec<crate::paintings::Dot>,
     pub n: usize,
     pub done: Option<f64>,
-    pub mine: HashMap<usize, pix::Color>,
+    pub by: Vec<String>,
     pub f: f64,
+    pub img: Image,
 }
 
 /// what the dog is up to
@@ -404,10 +405,10 @@ pub struct Shared {
     pub plies: Option<usize>,
     pub chess_at: f64,
     pub chess_asked: f64,
-    pub dream: Option<Dream>,
-    /// the whiteboard's ink, 130 x 55 (five pixels a board dot)
-    pub ink: Option<Image>,
-    pub ink_v: u64,
+    pub art: Option<Art>,
+    /// a number that changes as the painting is painted; the painting small, as the easel shows it (art_small)
+    pub art_v: u64,
+    pub art_small: Option<Vec<(i32, i32, pix::Color)>>,
     pub dog: Option<Dog>,
     pub stick: Option<Stick>,
     pub dog_held: bool,

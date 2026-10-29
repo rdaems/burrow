@@ -120,7 +120,7 @@ pub fn foot(key: &str, at: [i32; 2], u: Option<i32>) -> Rect {
         "cooler" => [x - 5, y - 26, x + 5, y + 1],
         "printer" => [x - 7, y - 15, x + 7, y + 1],
         "armchair" => [x - 8, y - 14, x + 8, y + 1],
-        "board" => [x - 16, y - 26, x + 16, y + 1],
+        "board" => [x - 12, y - 34, x + 12, y + 1], // the easel
         "window" => [x, y, x + 21, y + 18],
         "clock" => [x, y, x + 17, y + 17],
         "fire" => [x, y - FIRE_H, x + FIRE_W, y + 1],
@@ -321,7 +321,7 @@ impl Size {
             "armchair" => [w - 32, fy],
             "plant0" => [w - 8, fy],
             "plant1" => [w - 12, 64],
-            "board" => [w / 2 + 46, WALL + 34],
+            "board" => [w / 2 + 46, WALL + 42],
             "window" => [w - 40, 4],
             "clock" => [w - 15, 5],
             "fire" => [w - 92, fy],

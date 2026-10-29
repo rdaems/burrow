@@ -1,4 +1,4 @@
-//! The furniture on the floor: the whiteboard, the pair table, the project cabinet, the reception, the
+//! The furniture on the floor: the easel, the pair table, the project cabinet, the reception, the
 //! rug, a nap's mat, the booth and the gun closet, the radio, the neuralyzer, the meeting table, the
 //! chess table, the stools, the coffee corner, the cooler, the printer, the pouf, the plants, the
 //! ping-pong table, the dog house.
@@ -9,94 +9,53 @@ use crate::font::{tiny, tiny_w};
 use pix::css;
 use std::sync::OnceLock;
 
-// ---- the whiteboard on wheels, on the floor: its face 30 x 15, two posts, a base on four wheels. What is
-// drawn on it is ink at five pixels a board dot (130 x 55): the host of a meeting draws boxes, lines and
-// dots in its colour, you draw on it big in the view. A board dot is inked when any of its pixels is
-// (the colour of the first)
+// ---- the easel: two legs splayed in front and one behind, a ledge with a few spots of paint, the canvas on it
+// (upright or across, as the painting is) clamped at the top; on it the painting at a third of its size (`small`:
+// art::art_small), or the bare primer
 
-/// where the ink goes on the board's face, in board dots
-pub struct InkArea {
-    pub x: i32,
-    pub y: i32,
-    pub w: i32,
-    pub h: i32,
-}
-pub const INK_AREA: InkArea = InkArea { x: 2, y: 2, w: 26, h: 11 };
-/// pixels of ink a board dot
-pub const INKS: i32 = 5;
-
-/// a line of ink (Bresenham), `width` pixels square a step
-#[allow(clippy::too_many_arguments)]
-pub fn ink_line(ink: &mut Image, x0: i32, y0: i32, x1: i32, y1: i32, col: Color, width: i32) {
-    let mut c = ink.ctx();
-    let (dx, dy) = ((x1 - x0).abs(), -(y1 - y0).abs());
-    let (sx, sy) = (if x0 < x1 { 1 } else { -1 }, if y0 < y1 { 1 } else { -1 });
-    let (mut e, mut x, mut y) = (dx + dy, x0, y0);
-    loop {
-        rect(&mut c, x, y, width, width, col);
-        if x == x1 && y == y1 {
-            break;
+/// the easel standing at x, y (the bottom middle); `i`: which painting is on it (its size), `small` its dots
+pub fn draw_easel(ctx: &mut Ctx, x: i32, y: i32, art: Option<(usize, &[(i32, i32, Color)])>) {
+    let p = &crate::paintings::list()[art.map_or(0, |a| a.0)];
+    let (cw, ch) = (p.w / 3, p.h / 3);
+    let cx0 = x - (cw as f64 / 2.0).floor() as i32;
+    let cy1 = y - 11;
+    let cy0 = cy1 - ch;
+    let leg = |ctx: &mut Ctx, x0: i32, y0: i32, x1: i32, y1: i32, col: Color| {
+        let n = ((x1 - x0) as f64).hypot((y1 - y0) as f64).ceil() as i32;
+        for k in 0..=n {
+            let (fx, fy) = if n == 0 { (x0 as f64, y0 as f64) } else { (x0 as f64 + ((x1 - x0) * k) as f64 / n as f64, y0 as f64 + ((y1 - y0) * k) as f64 / n as f64) };
+            rect(ctx, js_round(fx), js_round(fy), 1, 1, col);
         }
-        let e2 = 2 * e;
-        if e2 >= dy {
-            e += dy;
-            x += sx;
-        }
-        if e2 <= dx {
-            e += dx;
-            y += sy;
-        }
+    };
+    rect(ctx, x - 10, y + 1, 21, 1, SHADOW);
+    leg(ctx, x, cy1, x + 1, y, WOOD.k); // the back leg, the mast
+    leg(ctx, x - 1, cy0 - 3, x - 1, cy1, WOOD.k);
+    leg(ctx, x, cy0 - 3, x, cy1, WOOD.d);
+    for s in [-1, 1] {
+        let o = if s < 0 { 1 } else { -1 };
+        leg(ctx, x + s * 4, cy1 + 1, x + s * 9, y, WOOD.k);
+        leg(ctx, x + s * 4 + o, cy1 + 1, x + s * 9 + o, y, WOOD.top);
     }
-}
-
-/// the board's dots from the ink (keep them until the ink changes): a dot's middle pixel, else its first inked one
-pub fn board_cells(ink: &Image) -> Vec<(i32, i32, Color)> {
-    let mut out = Vec::new();
-    let solid = |p: [u8; 4]| (p[3] > 128).then_some(Color::rgb(((p[0] as u32) << 16) | ((p[1] as u32) << 8) | p[2] as u32));
-    for j in 0..INK_AREA.h {
-        for i in 0..INK_AREA.w {
-            let mut col = solid(ink.get(i * INKS + 2, j * INKS + 2));
-            'dot: for y in j * INKS..(j + 1) * INKS {
-                for x in i * INKS..(i + 1) * INKS {
-                    if col.is_some() {
-                        break 'dot;
-                    }
-                    col = solid(ink.get(x, y));
-                }
-            }
-            if let Some(c) = col {
-                out.push((i, j, c));
+    rect(ctx, x - 6, y - 6, 13, 1, WOOD.k); // the crossbar
+    rect(ctx, cx0 - 1, cy0 - 1, cw + 2, ch + 2, Color::rgb(0x3f3740)); // the canvas, its edge
+    match art {
+        Some((_, small)) => {
+            for &(i, j, col) in small {
+                rect(ctx, cx0 + i, cy0 + j, 1, 1, col);
             }
         }
+        None => rect(ctx, cx0, cy0, cw, ch, crate::paintings::PRIMER),
     }
-    out
+    rect(ctx, x - 2, cy0 - 3, 5, 2, WOOD.k); // the clamp
+    rect(ctx, x - 1, cy0 - 3, 3, 1, WOOD.top);
+    rect(ctx, cx0 - 3, cy1 + 1, cw + 6, 2, WOOD.k); // the ledge
+    rect(ctx, cx0 - 2, cy1 + 1, cw + 4, 1, WOOD.top);
+    rect(ctx, cx0, cy1 + 1, 1, 1, C::RED1);
+    rect(ctx, cx0 + 2, cy1 + 1, 1, 1, C::BLUE2);
+    rect(ctx, cx0 + cw - 2, cy1 + 1, 1, 1, C::GOLD2);
 }
 
-/// the whiteboard standing at x, y (the bottom middle), with what is drawn on it
-pub fn draw_board(ctx: &mut Ctx, x: i32, y: i32, cells: &[(i32, i32, Color)]) {
-    let (fx, fy) = (x - 15, y - 26);
-    rect(ctx, fx, fy, 30, 15, SP::F);
-    rect(ctx, fx + 1, fy + 1, 28, 13, Color::rgb(0xefebe8));
-    rect(ctx, fx + 1, fy + 14, 28, 1, SP::E); // the tray
-    rect(ctx, fx + 3, fy + 13, 3, 1, SP::r); // markers
-    rect(ctx, fx + 7, fy + 13, 3, 1, SP::v);
-    for px in [fx + 3, fx + 26] {
-        rect(ctx, px, fy + 15, 1, 8, SP::F);
-        rect(ctx, px + 1, fy + 15, 1, 8, SP::E);
-    }
-    rect(ctx, fx + 1, fy + 23, 28, 2, SP::F);
-    rect(ctx, fx + 2, fy + 23, 26, 1, SP::E);
-    for px in [fx, fx + 5, fx + 24, fx + 29] {
-        rect(ctx, px, fy + 25, 1, 2, SP::F);
-    }
-    rect(ctx, fx + 1, fy + 27, 28, 1, SHADOW);
-    let (ix, iy) = (fx + INK_AREA.x, fy + INK_AREA.y);
-    for &(i, j, col) in cells {
-        rect(ctx, ix + i, iy + j, 1, 1, col);
-    }
-}
-
-/// a pair room: a small round table with a speakerphone on it, its light on while a room is linked,
+/// a pair room: a small round table with a telephone on it, its light on while a room is linked,
 /// blinking while a bot is held over it (it would join the chat)
 /// hand: where you hold its handset while its room is open, and the side you stand (the cradle empty, the cord
 /// coiling from the base to your hand)

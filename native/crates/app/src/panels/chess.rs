@@ -274,7 +274,7 @@ pub fn body(b: &mut Burrow, window: &mut Window, cx: &mut Context<Burrow>) -> An
         }
         grid = grid.child(line);
     }
-    // the side: who moves, a promotion, what went wrong, the moves, your buttons
+    // the side: who moves, a promotion, what went wrong, your buttons (no list of the moves)
     let mut side = div().flex().flex_col().flex_1().min_w(px(200.)).child(div().mb(px(8.)).text_color(rgb(if turn { col::GOLD2 } else { col::TEXT })).when(turn, |d| d.font_weight(kit::bold())).child(status(v.as_ref(), me)));
     if let Some(ft) = ui.promo.clone() {
         let mut pr = div().flex().items_center().gap(px(6.)).mb(px(8.)).text_color(rgb(col::DIM)).child("promote to");
@@ -292,13 +292,6 @@ pub fn body(b: &mut Burrow, window: &mut Window, cx: &mut Context<Burrow>) -> An
     }
     if !ui.err.is_empty() {
         side = side.child(div().mb(px(8.)).text_color(rgb(col::TISSUE2)).child(ui.err.clone()));
-    }
-    if let Some(v) = v.as_ref().filter(|v| !v.sans.is_empty()) {
-        let mut moves = div().id("moves").flex().flex_col().flex_wrap().max_h(px(190.)).overflow_y_scroll().mb(px(10.)).px(px(8.)).py(px(6.)).bg(rgb(col::CODE)).border_1().border_color(rgb(col::LINE)).rounded(px(6.)).text_size(px(13.));
-        for (i, pair) in v.sans.chunks(2).enumerate() {
-            moves = moves.child(div().flex().gap(px(4.)).child(div().w(px(32.)).text_color(rgb(col::FAINT)).child(format!("{}.", i + 1))).child(format!("{} {}", pair[0], pair.get(1).cloned().unwrap_or_default())));
-        }
-        side = side.child(moves);
     }
     if let Some(v) = v.as_ref().filter(|v| v.result.is_none() && you_play(v)) {
         let _ = v;
@@ -322,8 +315,7 @@ pub fn body(b: &mut Burrow, window: &mut Window, cx: &mut Context<Burrow>) -> An
                 .pl(px(2.))
                 .pr(px(8.))
                 .py(px(2.))
-                .border_1()
-                .rounded(px(6.))
+                .border_2()
                 .border_color(if on { rgb(c) } else { gpui::transparent_black().into() })
                 .children(face(b, &p.id, 28., window))
                 .child(div().font_weight(kit::bold()).text_color(rgb(c)).child(p.name.clone()))
@@ -350,8 +342,7 @@ pub fn body(b: &mut Burrow, window: &mut Window, cx: &mut Context<Burrow>) -> An
                     .pl(px(3.))
                     .pr(px(8.))
                     .py(px(3.))
-                    .border_1()
-                    .rounded(px(6.))
+                    .border_2()
                     .border_color(rgb(col::LINE))
                     .hover(|s| s.border_color(rgb(c)))
                     .cursor_pointer()

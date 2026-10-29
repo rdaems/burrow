@@ -386,8 +386,8 @@ pub fn think(w: &mut World, bots: &[Bot], l: &Layout, dt: f64, t: &mut Tick) {
         }
     }
     kickabout(w, dt, t);
-    let first = t.rand();
-    crate::dream::dream_step(w, dt, first);
+    let (r0, r1, r2) = (t.rand(), t.rand(), t.rand());
+    crate::art::art_step(w, dt, r0, r1, r2);
     // an idle bot's place: at the end of its project's desk, by the empty chair, one per project (the first idle
     // one); the others are off on a break
     let mut homes: Vec<(String, Spot)> = Vec::new();
@@ -1035,10 +1035,32 @@ pub fn think_one(w: &mut World, i: usize, l: &Layout, _now: f64, dt: f64, home: 
                 f.act = rest(rnd_rest);
                 return;
             };
-            if walk(f, &Spot::on((b.x - 16 - 6) as f64, (b.y + 1) as f64, &b.key), v, dt) {
+            if walk(f, &Spot::on((b.x - 12 - 6) as f64, (b.y + 1) as f64, &b.key), v, dt) {
                 f.dir = 1.0;
-                f.arms = if (wt * 2.0).floor() as i64 % 3 != 0 { "reach" } else { "down" };
-                f.act.drawing = true; // drawing the dream on (dreamStep)
+                f.arms = if (wt * 2.0).floor() as i64 % 3 != 0 { "reach" } else { "down" }; // showing the painting round
+            }
+        }
+        "paint" => {
+            // at the easel, a palette in one hand, the brush going in the other (art_step paints)
+            let wanted = crate::art::art_wanted(w);
+            let f = &mut w.folk[i];
+            let Some(b) = l.board.clone() else {
+                f.act = rest(rnd_rest);
+                return;
+            };
+            f.act.there = walk(f, &Spot::on((b.x - 17) as f64, (b.y + 1) as f64, &b.key), v, dt);
+            if f.act.there {
+                f.dir = 1.0;
+                f.arms = if (wt * 2.5 + f.z).floor() as i64 % 2 != 0 { "paint1" } else { "paint2" };
+                let mut left = f.act.left.unwrap_or(0.0);
+                if !wanted {
+                    left = left.min(3.0); // finished not long ago: a last look, then off
+                }
+                left -= dt;
+                f.act.left = Some(left);
+                if left <= 0.0 {
+                    f.act = rest(rnd_rest);
+                }
             }
         }
         "meeting" => {
@@ -1593,16 +1615,15 @@ pub fn pick_break(w: &mut World, i: usize, l: &Layout, t: &mut Tick) -> Act {
         wa.act.left = Some(left);
         return Act { kind: "chess", side: 1 - wa.act.side, with: Some(wa.id.clone()), left: Some(left), ..Default::default() };
     }
+    if l.board.is_some() && !taken(w, "paint") && crate::art::art_wanted(w) && t.rand() < 0.08 {
+        let left = t.rnd(40.0, 75.0);
+        return Act { kind: "paint", left: Some(left), ..Default::default() }; // now and then, to the easel
+    }
     if l.meet.is_some() && l.board.is_some() && mates.len() >= 2 && w.s.meeting.is_none() && w.s.t - w.s.last_meeting > 180.0 && r < 0.08 {
         let left = t.rnd(45.0, 75.0);
         w.s.meeting = Some(Meeting { host: fid.clone(), left });
         w.s.last_meeting = w.s.t;
         w.s.meetings += 1;
-        if let Some(d) = &w.s.dream
-            && d.done.is_some_and(|done| w.s.t - done > 240.0)
-        {
-            crate::dream::next_dream(w); // a dream done a while: wiped, the host starts the next
-        }
         for (k, &j) in mates.iter().take(4).enumerate() {
             w.folk[j].carry = None;
             w.folk[j].act = Act { kind: "meeting", seat: k, ..Default::default() };

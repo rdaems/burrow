@@ -155,9 +155,9 @@ pub struct Piece {
     /// the chess board as it stands (64 letters), the seats at chess and the meeting table
     pub board: String,
     pub seats: Vec<(f64, f64)>,
-    /// the whiteboard's dream (130 x 55), its version
-    pub ink: Option<Tex>,
-    pub ink_v: u64,
+    /// the painting on the easel (its canvas, a dot a texel), its version
+    pub art: Option<Tex>,
+    pub art_v: u64,
     pub variant: u32,
     /// the pair table linked to a room
     pub linked: bool,
@@ -1116,36 +1116,36 @@ impl Props {
                 out.solid.push([x - 16.0, y - 18.0, x + 16.0, y - 5.0]);
             }
             "board" => {
-                // the whiteboard on wheels: two posts, the board with the dream on it
-                for px in [x - 15.0, x + 14.0] {
-                    b!(px, y - 3.5, px + 1.0, y - 2.0, 0.0, 28.0, steel);
+                // the easel: legs splayed in steps, one behind, a ledge, the painting on it (a third of its dots a dot)
+                let (pw, ph) = p.art.as_ref().map_or((16.0, 20.0), |a| (a.img.w as f64 / 3.0, a.img.h as f64 / 3.0));
+                for s in [-1.0, 1.0] {
+                    for k in 0..4 {
+                        let (lx, k) = (x + s * (8.5 - k as f64 * 1.2), k as f64);
+                        b!(lx - 0.5, y - 1.2, lx + 0.5, y - 0.2, k * 2.75, (k + 1.0) * 2.75, wood);
+                    }
                 }
-                b!(x - 15.0, y - 4.0, x + 15.0, y - 2.0, 1.0, 2.0, dark_steel);
-                for px in [x - 15.0, x - 10.0, x + 9.0, x + 14.0] {
-                    b!(px, y - 4.5, px + 1.2, y - 1.5, 0.0, 1.0, black);
-                }
-                if let Some(ink) = &p.ink {
+                b!(x - 0.5, y - 6.0, x + 0.5, y - 5.0, 0.0, 11.0, wood_d);
+                b!(x - 0.5, y - 4.0, x + 0.5, y - 3.0, 11.0, 14.0 + ph, wood_d); // the mast, behind the canvas
+                b!(x - pw / 2.0 - 2.0, y - 3.5, x + pw / 2.0 + 2.0, y - 0.8, 10.0, 11.0, wood_hi);
+                if let Some(art) = &p.art {
                     let c = match &self.board {
-                        Some((v, t)) if *v == p.ink_v => t.clone(),
+                        Some((v, t)) if *v == p.art_v => t.clone(),
                         _ => {
-                            let mut c = Image::new(150, 75);
+                            let mut c = Image::new(art.img.w + 2, art.img.h + 2);
                             {
                                 let mut g = c.ctx();
-                                g.fill_rect(0.0, 0.0, 150.0, 75.0, pix::css("#3f3740"));
-                                g.fill_rect(8.0, 8.0, 134.0, 59.0, pix::css("#efebe8"));
-                                g.draw_image(&ink.img, 10.0, 10.0);
-                                g.fill_rect(8.0, 67.0, 134.0, 5.0, pix::css("#595e60"));
-                                g.fill_rect(20.0, 67.0, 12.0, 3.0, pix::css("#eb4c3f"));
-                                g.fill_rect(36.0, 67.0, 12.0, 3.0, pix::css("#4a76b8"));
+                                g.fill_rect(0.0, 0.0, art.img.w as f64 + 2.0, art.img.h as f64 + 2.0, pix::css("#3f3740"));
+                                g.draw_image(&art.img, 1.0, 1.0);
                             }
                             let t = Tex::new(c);
-                            self.board = Some((p.ink_v, t.clone()));
+                            self.board = Some((p.art_v, t.clone()));
                             t
                         }
                     };
-                    b!(x - 15.0, y - 2.8, x + 15.0, y - 2.0, 13.0, 28.0, Mat::Plain("#d8d4cf", 0.03), Over { front: Some(Face::whole(c)), ..Default::default() });
+                    b!(x - pw / 2.0, y - 2.6, x + pw / 2.0, y - 2.0, 11.0, 11.0 + ph, Mat::Plain("#e8e2d4", 0.03), Over { front: Some(Face::whole(c)), ..Default::default() });
                 }
-                out.solid.push([x - 15.0, y - 4.5, x + 15.0, y - 1.5]);
+                b!(x - 1.5, y - 3.6, x + 1.5, y - 1.8, 11.0 + ph, 12.5 + ph, wood_d); // the clamp over its top edge
+                out.solid.push([x - 9.0, y - 6.0, x + 9.0, y]);
             }
             "armchair" => {
                 // under whoever sits on it (at y - 4), as high as a seated robot's thighs (its shins hang over the

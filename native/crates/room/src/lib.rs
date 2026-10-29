@@ -8,12 +8,13 @@
 pub mod avatar;
 pub mod dog;
 pub mod draw;
-pub mod dream;
+pub mod art;
 pub mod figure;
 pub mod font;
 pub mod io;
 pub mod layout;
 pub mod paint;
+pub mod paintings;
 pub mod pointer;
 pub mod remains;
 pub mod room;

@@ -1,7 +1,7 @@
 //! The office in the first person (room.js's `scene3`): what is in the room right now, for the gun closet's view
 //! (burrow-fps) to make its 3d things of: the floor and what lies on it (an overlay, two texels a dot), what hangs on
 //! the wall, every desk and piece of furniture with what it shows (the coffee left, a screen at work, the game on the
-//! chess board, the dream on the whiteboard), the lights (the fire, a booth in use), and everyone in the pose the room
+//! chess board, the painting on the easel), the lights (the fire, a booth in use), and everyone in the pose the room
 //! gives them.
 
 use crate::draw as D;
@@ -217,9 +217,10 @@ impl Room {
                 }
                 "meet" => p.seats = [0, 1].iter().filter_map(|&i| l.meet_seat(i)).map(|(s, _)| (s.x, s.y)).collect(),
                 "board" => {
-                    let ink = crate::dream::ink(&mut self.w).clone();
-                    p.ink = Some(Tex::new(ink));
-                    p.ink_v = self.w.s.ink_v;
+                    if let Some(a) = &self.w.s.art {
+                        p.art = Some(Tex::new(a.img.clone()));
+                        p.art_v = self.w.s.art_v;
+                    }
                 }
                 "plant" => p.variant = key.trim_start_matches(|c: char| !c.is_ascii_digit()).parse::<u32>().unwrap_or(0) % 2,
                 "pair" => p.linked = st.pair.contains_key(key),

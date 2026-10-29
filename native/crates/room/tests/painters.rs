@@ -4,7 +4,7 @@
 
 use burrow_room::draw::*;
 use burrow_room::figure::{self, Arms, Legs};
-use pix::{Color, Ctx, Image, css};
+use pix::{Ctx, Image, css};
 use std::path::PathBuf;
 
 fn golden() -> PathBuf {
@@ -446,17 +446,19 @@ fn the_floor_is_room_js() {
     });
     check("paint-mat", exact, |_| Some(on(36, 20, PLANK, |c| draw_mat(c, 18, 18))));
     check("paint-doghouse", exact, |_| Some(on(28, 26, PLANK, |c| draw_doghouse(c, 14, 23))));
-    check("paint-board-ink", exact, |_| {
-        let mut ink = Image::new(130, 55);
-        {
-            let mut k = ink.ctx();
-            k.rect(0, 0, 130, 3, css("#2b2433"));
-            k.rect(10, 10, 4, 30, css("#2b2433"));
-            k.rect(60, 20, 12, 12, css("#e8505b"));
-            k.rect(101, 41, 1, 1, css("#4a76b8"));
-        }
-        let cells = board_cells(&ink);
-        Some(on(34, 30, PLANK, |c| draw_board(c, 17, 28, &cells)))
+    check("paint-easel-", exact, |name| {
+        let n = name.strip_prefix("paint-easel-")?;
+        let mut w = burrow_room::world::World::new();
+        let i = if n == "none" {
+            None
+        } else {
+            let (i, k) = n.split_once('-')?;
+            let i: usize = i.parse().ok()?;
+            burrow_room::art::new_art(&mut w, i, k.parse().ok()?);
+            Some(i)
+        };
+        let small = burrow_room::art::art_small(&mut w).to_vec();
+        Some(on(40, 48, PLANK, |c| draw_easel(c, 20, 45, i.map(|i| (i, &small[..])))))
     });
 }
 
@@ -519,15 +521,18 @@ fn figures_and_effects_are_room_js() {
 }
 
 #[test]
-fn dreams_are_room_js_dreamscene() {
-    check("paint-dream-", exact, |name| {
-        let (i, n) = name.strip_prefix("paint-dream-")?.split_once('-')?;
-        let o = dream_scene(i.parse().ok()?);
+fn paintings_are_paintings_js() {
+    use burrow_room::paintings::{PRIMER, list, order};
+    check("paint-art-", exact, |name| {
+        let (i, n) = name.strip_prefix("paint-art-")?.split_once('-')?;
+        let p = list().get(i.parse::<usize>().ok()?)?;
+        let o = order(p.make());
         let n = n.parse().unwrap_or(o.len()).min(o.len());
-        Some(on(65, 27, "#efebe8", |c| {
-            for p in &o[..n] {
-                c.rect(p.x, p.y, 1, 1, dream_pal(p.c).unwrap_or(Color::NONE));
-            }
-        }))
+        let mut im = Image::filled(p.w as u32, p.h as u32, PRIMER);
+        let mut c = im.ctx();
+        for d in &o[..n] {
+            c.rect(d.x, d.y, 1, 1, d.c);
+        }
+        Some(im)
     });
 }

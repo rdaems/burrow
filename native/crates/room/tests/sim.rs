@@ -207,3 +207,29 @@ fn a_bot_posting_in_a_pair_room_beams_to_its_table_and_reading_beams_back() {
     run(&mut room, &mut inp, 1.5);
     assert!(room.w.s.beams.is_empty(), "arrived");
 }
+
+#[test]
+fn the_painting_grows_only_while_a_robot_paints_at_the_easel() {
+    let mut s = demo();
+    if !s.furniture.iter().any(|k| k.starts_with("board")) {
+        s.furniture.push("board0".into());
+    }
+    let mut inp = Input { state: s, now: 0.0, hour: 14, ..Default::default() };
+    let mut room = Room::new(11, 0.0);
+    room.resize(&inp, 820.0);
+    let mut painted = 0;
+    let mut n = None;
+    for _ in 0..12 * 60 * 12 {
+        run(&mut room, &mut inp, 5.0 / 60.0);
+        let a = room.w.s.art.as_ref().expect("a painting on the easel from the start");
+        if let Some(n0) = n
+            && a.n > n0
+        {
+            painted += 1;
+            assert!(room.w.folk.iter().any(|f| f.act.kind == "paint" && f.act.there), "it grew with nobody painting");
+            assert!(!a.by.is_empty());
+        }
+        n = Some(a.n);
+    }
+    assert!(painted > 0, "nobody painted in twelve minutes");
+}

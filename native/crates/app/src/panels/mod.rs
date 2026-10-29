@@ -76,7 +76,7 @@ pub struct State {
     pub report: Option<report::Printing>,
     pub chess: chess::Ui,
     pub game: games::Pics,
-    pub board: board::Ink,
+    pub board: board::Painting,
     /// the pair room opened in the browser (its link)
     pub pair_opened: Option<String>,
     /// the duel at the window, or ping-pong, is yours to play (the keys' hint shows)
@@ -175,7 +175,6 @@ pub fn opened(b: &mut Burrow, kind: ViewKind, window: &mut Window, cx: &mut Cont
         ViewKind::Chess => chess::opened(b, window, cx),
         ViewKind::Pong => games::pong_opened(b, window, cx),
         ViewKind::Outside => games::outside_opened(b),
-        ViewKind::Board => b.views.p.board.last = None,
         _ => {}
     }
 }

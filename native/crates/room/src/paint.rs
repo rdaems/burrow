@@ -36,10 +36,6 @@ pub fn vis_top(kind: &str) -> i32 {
     top
 }
 
-/// the whiteboard dream's pixels, in the order they come in
-pub fn dream_scene(i: usize) -> Vec<(i32, i32, Color)> {
-    D::dream_scene(i).into_iter().filter_map(|d| D::dream_pal(d.c).map(|c| (d.x, d.y, c))).collect()
-}
 
 pub fn tinted(im: &Image, col: Color, a: f64) -> Image {
     D::tinted(im, col, a)

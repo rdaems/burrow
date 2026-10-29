@@ -64,7 +64,7 @@ impl ViewKind {
             ViewKind::Pong => "PING-PONG",
             ViewKind::Report => "REPORT",
             ViewKind::Pair => "PAIR ROOM",
-            ViewKind::Board => "WHITEBOARD",
+            ViewKind::Board => "PAINTING",
             ViewKind::Limits => "LIMITS",
             ViewKind::Outside => "OUTSIDE",
             ViewKind::Settings => "SETTINGS",

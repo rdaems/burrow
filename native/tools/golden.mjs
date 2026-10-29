@@ -30,12 +30,12 @@ const pending = new Map();
 const send = (method, params = {}) => new Promise((r) => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
 // room.js with its insides exposed: everything named in startRoom's scope that a test may want
 const EXPOSE = `window.__in = { body, face, wears, halo, put, slab, tiny, tinyW, floor, drawDesk, drawKind, drawFigure, drawSleeper,
-  drawChair, drawFire, drawCloset, drawBoard, drawPair, drawAdd, drawSwitchboard, drawReception, drawDoor, drawClock, drawWindow,
+  drawChair, drawFire, drawCloset, drawEasel, drawPair, drawAdd, drawSwitchboard, drawReception, drawDoor, drawClock, drawWindow,
   drawRug, drawMat, drawBooth, drawGunCloset, drawRadio, drawNeuralyzer, drawTable, drawChess, drawStool, drawCoffee, drawCooler,
   drawPrinter, drawArmchair, drawPlant, drawPong, drawDoghouse, dogPic, heart, drawGrave: typeof drawGrave === "undefined" ? null : drawGrave,
   projectColor, shade, mix, fnv, foot, layout, defaults, icon, doorPicture, printerPicture, PAINT, PROJECT, WOOD,
-  get W() { return W; }, get H() { return H; }, world, dreamScene, plate, outlined, tinted, dissolve, snapshot, pouf, zzz, screenAt,
-  app, drawPart, drawNotes, drawStick, ELL, boothRise, boothGlow, boothShut, flashA, START, DREAM_PAL, DREAM_W, DREAM_H, cells, INK_AREA, INKS, FIRE, GOLD, RED,
+  get W() { return W; }, get H() { return H; }, world, artSmall, newArt, paintArt, ART, ART_SPEED, ART_REST, plate, outlined, tinted, dissolve, snapshot, pouf, zzz, screenAt,
+  app, drawPart, drawNotes, drawStick, ELL, boothRise, boothGlow, boothShut, flashA, START, FIRE, GOLD, RED,
   get pointer() { return pointer; }, set pointer(p) { pointer = p; } };\n`;
 ws.onmessage = async (e) => {
   const m = JSON.parse(e.data);
@@ -44,7 +44,7 @@ ws.onmessage = async (e) => {
   if (m.method === "Fetch.requestPaused") {
     const r = m.params;
     const body = await (await fetch(r.request.url)).text();
-    const patched = body.replace("  return { talk, typed,", EXPOSE + "  return { talk, typed,");
+    const patched = body.replace("  return { talk, pairTalk, typed,", EXPOSE + "  return { talk, pairTalk, typed,");
     if (patched === body) console.error("room.js: could not expose its insides");
     send("Fetch.fulfillRequest", { requestId: r.requestId, responseCode: 200,
       responseHeaders: [{ name: "Content-Type", value: "text/javascript" }], body: Buffer.from(patched).toString("base64") });

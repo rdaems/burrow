@@ -24,7 +24,13 @@ fn on(b: &Burrow, key: &str) -> bool {
 }
 
 pub fn body(b: &mut Burrow, cx: &mut Context<Burrow>) -> AnyElement {
-    let mut d = div().flex().flex_col();
+    // the pointer gone from the panel: no line is explained (the box keeps its room)
+    let mut d = div().id("settings").flex().flex_col().on_hover(cx.listener(|b, h: &bool, _, cx| {
+        if !*h {
+            b.views.p.help = None;
+            cx.notify();
+        }
+    }));
     for (i, (key, name, _)) in OPTIONS.iter().enumerate() {
         let v = on(b, key);
         let cur = b.views.p.help == Some(i);

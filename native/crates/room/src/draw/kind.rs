@@ -40,7 +40,7 @@ pub fn draw_kind(ctx: &mut Ctx, kind: &str, x: i32, y: i32, t: f64, env: &KindEn
                 draw_stool(ctx, x + d, y);
             }
         }
-        "board" => draw_board(ctx, x, y, &[]),
+        "board" => draw_easel(ctx, x, y, None),
         "window" => draw_window(ctx, x, y, env.clock.h),
         "clock" => draw_clock(ctx, x, y, None, env.clock, false),
         "fire" => draw_fire(ctx, x, y - FIRE.h, t, false, -1., &[], FirePart::All),

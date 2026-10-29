@@ -10,8 +10,8 @@ use std::collections::HashMap;
 pub struct Stats<'a> {
     pub bots: &'a HashMap<String, Stat>,
     pub meetings: u32,
-    /// how much of the whiteboard is inked, 0..1
-    pub inked: f64,
+    /// the painting on the easel and how much of it is painted, 0..1
+    pub art: Option<(&'a str, f64)>,
     /// minutes since the room opened
     pub shift: f64,
 }
@@ -132,9 +132,15 @@ pub fn lines(state: &State, st: &Stats, at: When, px: &dyn Fn(&str) -> f32, wide
     l.push(if prints > 0 { format!("  printed: {} by the bots, plus this one", n(prints, "page")) } else { "  printed: this page only".into() });
     l.push(String::new());
     l.push(format!("GAMES  ping-pong {}, chess {}", sum("pong"), sum("chess")));
-    let present = top("present").map(|(id, _)| format!(", {} at the board", name(id))).unwrap_or_default();
-    let meetings = if st.meetings > 0 { format!("{} held{present}", st.meetings) } else { "none".into() };
-    l.push(format!("MEETINGS  {meetings}, board {}% inked", (st.inked * 100.).round()));
+    let present = top("present").map(|(id, _)| format!(", {} by the easel", name(id))).unwrap_or_default();
+    l.push(format!("MEETINGS  {}", if st.meetings > 0 { format!("{} held{present}", st.meetings) } else { "none".into() }));
+    l.push(format!(
+        "EASEL     {}",
+        match st.art {
+            Some((title, k)) => format!("{title}, {}", if k >= 1. { "done".to_string() } else { format!("{}% painted", (k * 100.).round()) }),
+            None => "bare".into(),
+        }
+    ));
     let beams = sum("sent");
     let talker = top("sent").map(|(id, _)| format!(", most by {}", name(id))).unwrap_or_default();
     l.push(format!("MESSAGES  {}", if beams > 0 { format!("{beams} beamed{talker}") } else { "none, everyone minds their desk".into() }));
@@ -209,7 +215,7 @@ mod tests {
         b.acts.insert("sleep", 1);
         b.asleep = 50.;
         stats.insert("b".to_string(), b);
-        let st = Stats { bots: &stats, meetings: 0, inked: 0.25, shift: 12. };
+        let st = Stats { bots: &stats, meetings: 0, art: Some(("The Scream", 0.25)), shift: 12. };
         let px = |s: &str| s.chars().count() as f32 * 8.;
         let l = lines(&state(), &st, (3, 7, 9, 5), &px, 800.);
         assert!(l[0].starts_with("BURROW OFFICE REPORT") && l[0].ends_with("03/07 09:05"), "{}", l[0]);
@@ -221,7 +227,8 @@ mod tests {
         assert!(l.contains(&"  coffee: 3 cups, the pot at 63%".to_string()));
         assert!(l.contains(&"  naps: 1, longest bo (50 s)".to_string()));
         assert!(l.contains(&"MESSAGES  3 beamed, most by ada".to_string()));
-        assert!(l.contains(&"MEETINGS  none, board 25% inked".to_string()));
+        assert!(l.contains(&"MEETINGS  none".to_string()));
+        assert!(l.contains(&"EASEL     The Scream, 25% painted".to_string()));
         assert!(l.contains(&"EMPLOYEE OF THE SHIFT  ada, 7 min at the keys".to_string()));
         assert!(l.contains(&"LIMITS  5h 63% left, week ? left".to_string()));
     }
@@ -229,7 +236,7 @@ mod tests {
     #[test]
     fn lines_are_cut_to_the_paper() {
         let stats = HashMap::new();
-        let st = Stats { bots: &stats, meetings: 0, inked: 0., shift: 0. };
+        let st = Stats { bots: &stats, meetings: 0, art: None, shift: 0. };
         let px = |s: &str| s.chars().count() as f32 * 10.;
         for line in lines(&state(), &st, (1, 1, 0, 0), &px, 240.) {
             assert!(px(&line) <= 240., "{line}");

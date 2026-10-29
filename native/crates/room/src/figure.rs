@@ -31,6 +31,8 @@ pub enum Arms {
     Fwd1,
     Fwd2,
     Reach,
+    Paint1,
+    Paint2,
     Phone,
     Mug,
     Gun,
@@ -61,6 +63,8 @@ impl Arms {
             "fwd2" => Arms::Fwd2,
             "reach" => Arms::Reach,
             "phone" => Arms::Phone,
+            "paint1" => Arms::Paint1,
+            "paint2" => Arms::Paint2,
             "mug" => Arms::Mug,
             "gun" => Arms::Gun,
             "paper" => Arms::Paper,
@@ -195,6 +199,26 @@ pub fn body(seed: &str, color: Color, arms: Arms, legs: Legs, human: bool, femme
             rect(&mut px, 14, 14, 2, 4, c1);
             rect(&mut px, 16, 13, 2, 2, c1);
             rect(&mut px, 18, 12, 2, 2, skin);
+        }
+        Arms::Paint1 | Arms::Paint2 => {
+            // a palette on the back hand, a brush in the front one, up at the canvas and down
+            let brush = Color::rgb(0x8a5a32);
+            rect(&mut px, 4, 17, 2, 3, c1);
+            rect(&mut px, 1, 19, 5, 3, Color::rgb(0xd8b07a));
+            rect(&mut px, 2, 20, 1, 1, c::RED1);
+            rect(&mut px, 3, 19, 1, 1, c::BLUE2);
+            rect(&mut px, 4, 21, 1, 1, c::GOLD2);
+            if arms == Arms::Paint1 {
+                rect(&mut px, 14, 14, 2, 4, c1);
+                rect(&mut px, 16, 13, 2, 2, c1);
+                rect(&mut px, 18, 12, 2, 2, skin);
+                rect(&mut px, 20, 11, 1, 1, brush);
+            } else {
+                rect(&mut px, 14, 16, 3, 2, c1);
+                rect(&mut px, 17, 16, 2, 2, skin);
+                rect(&mut px, 19, 15, 1, 1, brush);
+                rect(&mut px, 20, 14, 1, 1, c::RED1);
+            }
         }
         Arms::Phone => {
             // a handset held to the ear

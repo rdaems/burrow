@@ -5,7 +5,6 @@
 
 mod desk;
 mod dog;
-mod dream;
 mod effects;
 mod figures;
 mod fire;
@@ -15,7 +14,6 @@ mod wall;
 
 pub use desk::*;
 pub use dog::*;
-pub use dream::*;
 pub use effects::*;
 pub use figures::*;
 pub use fire::*;
@@ -221,7 +219,7 @@ pub fn foot(key: &str, x: f64, y: f64, unit_w: Option<f64>) -> [f64; 4] {
         "cooler" => [x - 5., y - 26., x + 5., y + 1.],
         "printer" => [x - 7., y - 15., x + 7., y + 1.],
         "armchair" => [x - 8., y - 14., x + 8., y + 1.],
-        "board" => [x - 16., y - 26., x + 16., y + 1.],
+        "board" => [x - 12., y - 34., x + 12., y + 1.], // the easel
         "window" => [x, y, x + 21., y + 18.],
         "clock" => [x, y, x + 17., y + 17.],
         "fire" => [x, y - FIRE.h as f64, x + FIRE.w as f64, y + 1.],
