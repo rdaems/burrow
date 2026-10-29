@@ -237,8 +237,9 @@ message is the log. When something goes, take it out here. Keep the file under a
 
 ## Games
 
-- Chess (pair's board without its list of moves, square corners; `chess.py`, the server plays two plies) against an idle bot drawn by lot; bots play each
-  other for real on their breaks; a click on their table watches. Ping-pong (`pong.js`, ↑ ↓ only, the pointer stays
+- Chess (pair's board without its list of moves, square corners; `chess.py`, the server plays two plies) against an
+  idle bot drawn by lot; bots play each other for real on their breaks; a click on their table watches. He wants it
+  kept simple: no animated or 3d pieces (a Battle Chess-like board was offered and declined, 2026-10-29). Ping-pong (`pong.js`, ↑ ↓ only, the pointer stays
   visible), the same. Football between idle bots.
 - The window: an artillery duel on the hills (`outside.js`, the genre of VGABomb and Gorillas, not a copy), you
   against an idle bot that knows the physics; two bots can duel and you watch.
