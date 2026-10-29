@@ -171,6 +171,11 @@ async function act(a) {
     Sound.play(on ? "tune" : "click", a.pan || 0, 1, true);
     const r = await api("/api/settings", { sound: on }); if (r.error) note(r.error);
   }
+  else if (a.kind === "files") {              // the filing cabinet: the file trees beside the terminals on or off
+    const on = !(state && state.settings && state.settings.files);
+    Sound.play(on ? "paper" : "click", 0, 1);
+    const r = await api("/api/settings", { files: on }); if (r.error) note(r.error);
+  }
   else if (a.kind === "limits") { openView("limits"); fillLimits(); }
   else if (a.kind === "settings") { openView("settings"); fillSettings(true); }
   else if (a.kind === "doors") { openView("doors"); fillDoors(); }
@@ -235,6 +240,7 @@ es.addEventListener("state", (e) => {
   state = JSON.parse(e.data);
   if (first) { first = false; room.size(); }   // the room's width, as it was left
   for (const t of tiles.all()) showWho(t);
+  syncTrees();
   for (const t of notesTiles()) renderNotes(t);
   if (viewKind === "chess") showChess();
   if (viewKind === "closet") fillCloset(true);   // only if its pictures were still loading, never mid-drag
@@ -502,7 +508,7 @@ function askYou() {
 
 // ---- the closet: the furniture there is, drawn as it stands in the room; drag a piece into the
 // room to put it there, as many as you like. The fireplace takes a piece back out (it burns)
-const CATALOGUE = ["plant", "armchair", "window", "board", "meet", "chess", "pong", "coffee", "cooler", "printer", "add", "pair", "manager", "booth", "neuralyzer", "doghouse", "radio", "door"];
+const CATALOGUE = ["plant", "armchair", "window", "board", "meet", "chess", "pong", "coffee", "cooler", "printer", "add", "pair", "manager", "booth", "neuralyzer", "doghouse", "radio", "files", "door"];
 // Built when it opens, and again on a state update only while its pictures were still loading: never while
 // something is being carried out of it. Rebuilding it on every update (each second or two in a room with
 // many bots) took the picture being held away mid-drag, and the piece never arrived
@@ -920,6 +926,8 @@ function openTerminal(t, at) {
   $("#pane").classList.remove("empty");
   term.open(el);
   showWho(t);
+  syncTree(t);
+  new ResizeObserver(() => syncTree(t)).observe(t.body);   // (a narrow tile has no room for one)
   new ResizeObserver(() => { if (t.ws) fit.fit(); }).observe(el);
   requestAnimationFrame(() => { fit.fit(); connect(t, term); term.focus(); });
   return t;
@@ -1164,6 +1172,63 @@ function showChess() {
 }
 // ping-pong's own ✕ hides its card: then the game is over here too
 new MutationObserver(() => { if ($("#pong").hidden && viewKind === "pong") closeView(); }).observe($("#pong"), { attributes: true, attributeFilter: ["hidden"] });
+
+// ---- the file tree beside a terminal, while a filing cabinet stands in the room and is on (a click on it switches
+// them): the root of what runs there (a session's working directory, a shell's folder), folders opened and closed with
+// a click, what git says changed in colour (gold changed, green new, a dot on a folder that holds changes), what changed
+// in the last two minutes lit: where the bot is at work. A click on a file puts it in the terminal: @path in a session
+// (Claude Code reads the file with the message), its path in a shell. Read again every 15 s, and when a bot's turn ends
+const treesOn = () => !!(state && state.settings && state.settings.files) && (state.furniture || []).some((k) => /^files\d*$/.test(k));
+function syncTrees() { for (const t of tiles.all()) syncTree(t); }
+function syncTree(t) {
+  if (!t.term || (t.kind !== "bot" && t.kind !== "shell")) return;
+  const b = t.kind === "bot" && byId(t.id), root = t.kind === "shell" ? t.dir : b && b.cwd;
+  const want = treesOn() && !!root && t.body.clientWidth >= 480;
+  if (t.tree && (!want || t.tree.root !== root)) { t.tree.el.remove(); t.tree = null; t.body.classList.remove("treed"); }
+  if (want && !t.tree) { t.tree = makeTree(t, root); t.body.appendChild(t.tree.el); t.body.classList.add("treed"); t.tree.load(); }
+  if (b) { if (t.tree && t.busy && !b.busy) t.tree.load(); t.busy = b.busy; }   // its turn over: what it did
+}
+function makeTree(t, root) {
+  const el = document.createElement("div"), tr = { el, root, open: new Set([""]), dirs: new Map(), git: {}, now: 0 };
+  el.className = "tree";
+  tr.render = () => {
+    const changed = Object.keys(tr.git), name = root.replace(/\/+$/, "").split("/").pop() || root;
+    const rows = [`<div class="root" title="${esc(root)}">${esc(name)}</div>`];
+    const walk = (rel, d) => {
+      const es = tr.dirs.get(rel);
+      if (!es) { rows.push(`<div class="row note" style="--d:${d}">…</div>`); return; }
+      for (const [n, dir, mt] of es) {
+        const p = rel ? rel + "/" + n : n, cls = ["row", dir ? "dir" : "file"];
+        if (n.startsWith(".")) cls.push("dot");
+        if (dir) { if (tr.open.has(p)) cls.push("open"); if (changed.some((c) => c.startsWith(p + "/"))) cls.push("has"); }
+        else { if (tr.git[p]) cls.push(tr.git[p]); if (tr.now - mt < 120) cls.push("fresh"); }
+        rows.push(`<div class="${cls.join(" ")}" data-p="${esc(p)}"${dir ? ' data-d="1"' : ""} style="--d:${d}" title="${esc(p)}">${esc(n)}</div>`);
+        if (dir && tr.open.has(p)) walk(p, d + 1);
+      }
+    };
+    walk("", 0);
+    const top = el.scrollTop; el.innerHTML = rows.join(""); el.scrollTop = top;
+  };
+  tr.load = async (only) => {               // the folders open (or one just opened), and git
+    const r = await api("/api/tree", { m: t.m, root, dirs: only ? [only] : [...tr.open] });
+    if (r.error) return note(r.error);
+    for (const [d, es] of Object.entries(r.dirs || {})) { if (es) tr.dirs.set(d, es); else if (d) { tr.dirs.delete(d); tr.open.delete(d); } }
+    tr.git = r.git || {}; tr.now = r.now || 0;
+    if (t.tree === tr) tr.render();
+  };
+  el.addEventListener("click", (e) => {
+    const row = e.target.closest(".row[data-p]");
+    if (!row) return;
+    const p = row.dataset.p;
+    if (row.dataset.d) { if (tr.open.has(p)) tr.open.delete(p); else { tr.open.add(p); if (!tr.dirs.has(p)) tr.load(p); } tr.render(); return; }
+    const abs = root.replace(/\/+$/, "") + "/" + p;
+    t.term.paste(t.kind === "bot" ? (/\s/.test(p) ? `@"${p}" ` : `@${p} `) : (/[\s'"\\$]/.test(abs) ? "'" + abs.replace(/'/g, "'\\''") + "'" : abs) + " ");
+    t.term.focus();
+  });
+  tr.render();
+  return tr;
+}
+setInterval(() => { if (document.visibilityState === "visible") for (const t of tiles.all()) if (t.tree) t.tree.load(); }, 15000);
 
 // drop a file on a session: its path gets pasted in, as a terminal does with a file dropped on it (copied over
 // first for a remote machine). A paste, not keys: Claude Code makes a pasted image's path an [Image #n], a

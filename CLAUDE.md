@@ -181,7 +181,7 @@ message is the log. When something goes, take it out here. Keep the file under a
   ping-pong = play or watch; coffee or cooler = the limits; clock = keep awake; switchboard (one lever) = settings
   (rc, yolo, hardcore: a slider and a name a line, a help box under them for the line under the pointer, empty
   once the pointer leaves the panel; hardcore stays vague); pair table = its
-  pair room; dog house = the dog; radio = sound; door = the doors' panel; project cabinet = a new desk; reception =
+  pair room; dog house = the dog; radio = sound; filing cabinet = the file trees; door = the doors' panel; project cabinet = a new desk; reception =
   the office manager. Dropped on: the neuralyzer gives an idle bot `/clear`; the booth deletes.
 - Whoever is at a piece rides along when it is dragged: a spot at a piece carries its key (`on`), `ride()` moves
   them each frame. One rule for every piece: reuse it, don't add a fix per piece.
@@ -256,6 +256,13 @@ message is the log. When something goes, take it out here. Keep the file under a
   opens there. Tiles are 16-bit windows (ink ring, steel bevel, dithered band in the pixel font, the pastel gold
   when focused or hovered), 6 px gaps. Kinds: bot, shell, notes.
 - `.term` is `box-sizing: content-box` (the fit addon takes the parent's computed size).
+- **The file tree** beside a session's or a shell's terminal (`syncTree`, `makeTree`), while a filing cabinet (`files`
+  kind) stands in the room and is on (settings `files`; the cabinet is the switch, like the radio; its top drawer open
+  while on): rooted where it runs (the bot's `cwd`, the shell's folder), folders opened with a click, git's changes
+  coloured (gold changed, green new, a dot on a folder holding some), what changed in the last two minutes bold with a
+  dot. A file clicked goes into the terminal: `@path` in a session, its path in a shell. `/api/tree` (`TREE`, python3
+  on the machine: the open folders and `git status` in one round) every 15 s and when a bot's turn ends. Not in a tile
+  under 480 px wide.
 - **The view** (`#view`): one 16-bit panel in the pane (pair's door.css: ink ring, bevels, the dithered fill, the
   pixel font, steel buttons), centred, as wide as its kind needs (640 px at most); opening it closes the tiles; the
   floor or Esc closes it. Every popup is one of its panels: keep them the same, simple, streamlined. Fields and

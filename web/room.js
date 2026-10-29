@@ -292,10 +292,10 @@ function startRoom(cv, app) {
   // This computer's door (`door:`) only slides along the wall
   const KIND = (key) => key.startsWith("door:") ? "door" : key.replace(/\d+$/, "");
   const FIXED = new Set(["fire", "closet", "settings", "clock"]), fixed = (key) => FIXED.has(KIND(key)) || key === "door:";
-  const CLICK = new Set(["radio", "doghouse", "add", "closet", "chess", "pong", "printer", "pair", "board", "coffee", "cooler", "window", "armchair", "settings", "clock", "plant", "manager", "door"]);   // a click does something there
+  const CLICK = new Set(["radio", "files", "doghouse", "add", "closet", "chess", "pong", "printer", "pair", "board", "coffee", "cooler", "window", "armchair", "settings", "clock", "plant", "manager", "door"]);   // a click does something there
   const NAMES = { meet: "meeting table", pong: "ping-pong table", chess: "chess table", coffee: "coffee machine", cooler: "water cooler",
     printer: "printer", armchair: "pouf", plant: "plant", board: "easel", window: "window", clock: "clock", add: "project cabinet", pair: "pair room", settings: "switchboard", manager: "reception",
-    booth: "booth", neuralyzer: "neuralyzer", door: "door", doghouse: "dog house", radio: "radio" };
+    booth: "booth", neuralyzer: "neuralyzer", door: "door", doghouse: "dog house", radio: "radio", files: "filing cabinet" };
   // a clear spot on the floor for a figure that has no chair when the page opens (spread by its id, the same each time)
   function freeAt(L, id) {
     let h = fnv(id);
@@ -336,6 +336,7 @@ function startRoom(cv, app) {
       case "neuralyzer": return [x - 7, y - 19, x + 7, y + 2];
       case "doghouse": return [x - 12, y - 21, x + 12, y + 2];
       case "radio": return [x - 7, y - 21, x + 7, y + 1];
+      case "files": return [x - 8, y - 25, x + 8, y + 1];
       default: return [x - 8, y - 31, x + 8, y + 1];     // a plant
     }
   }
@@ -428,7 +429,7 @@ function startRoom(cv, app) {
       windows: all("window").map((p) => ({ key: p.key, x0: p.x, y0: p.y, x1: p.x + 21, y1: p.y + 18 })),
       fire: f0 && { key: f0.key, x0: f0.x, y0: f0.y - FIRE.h, x1: f0.x + FIRE.w, y1: f0.y }, closet: cl && { key: cl.key, x0: cl.x, y0: cl.y, x1: cl.x + 22, y1: cl.y + 24 },
       settings: sw && { key: sw.key, x0: sw.x, y0: sw.y, x1: sw.x + SB_W(), y1: sw.y + SB_H() },
-      managers: all("manager"), meet: one("meet"), pong: one("pong"), chess: one("chess"), pairs: all("pair"), booths: all("booth"), neuralyzers: all("neuralyzer"), doghouses: all("doghouse"), radios: all("radio"),
+      managers: all("manager"), meet: one("meet"), pong: one("pong"), chess: one("chess"), pairs: all("pair"), booths: all("booth"), neuralyzers: all("neuralyzer"), doghouses: all("doghouse"), radios: all("radio"), cabinets: all("files"),
       cooler: one("cooler"), plants: all("plant"), printer: one("printer"), chairs: all("armchair"),
       coffeeAt: one("coffee"), floor: { x0: 11, y0: WALL + 8, x1: W - 11, y1: H - 2 }, placed,   // (where a figure may stand: right up to the bottom edge, its body inside the side walls)
     };
@@ -1746,6 +1747,14 @@ function startRoom(cv, app) {
       if (soundOn && !still) items.push([ra.y + 0.1, () => drawNotes(ctx, ra, T)]);
       if (h) tip = { text: soundOn ? "sound on" : "sound off", x: ra.x, y: ra.y - 22 };
     }
+    // the filing cabinet: the file tree beside each terminal, while one stands here and it is on; a click switches them
+    // (its top drawer stands open while they are on)
+    const filesOn = !!app.settings().files && L.cabinets.length > 0;
+    for (const fc of L.cabinets) {
+      const h = hot(...foot("files", [fc.x, fc.y]), { kind: "files" });
+      piece(fc, "files", (c) => drawFiling(c, fc, filesOn));
+      if (h) tip = { text: filesOn ? "file trees on" : "file trees off", x: fc.x, y: fc.y - 27 };
+    }
     for (const n of L.neuralyzers) {
       const fl = w.flash && performance.now() - w.flash.t0 < 400;
       piece(n, "neuralyzer", (c) => drawNeuralyzer(c, n, fl));
@@ -3009,6 +3018,7 @@ function startRoom(cv, app) {
       case "booth": drawBooth(ctx, pt, false, -1, -1); drawBooth(ctx, pt, true, -1, -1); break;
       case "neuralyzer": drawNeuralyzer(ctx, pt, false); break;
       case "radio": drawRadio(ctx, pt, true); break;
+      case "files": drawFiling(ctx, pt, true); break;
       case "doghouse": drawDoghouse(ctx, pt); break;
       case "door": { const ms = (app.state() || {}).machines || []; drawDoor(ctx, x, PAINT[Math.max(0, ms.length - 1) % PAINT.length], false, false, y); break; }   // in the paint the next machine gets
     }
@@ -3269,6 +3279,26 @@ function startRoom(cv, app) {
     for (let j = 0; j < 6; j++) for (let i = 0; i < 10; i++) rect(ctx, x - 5 + i, y - 13 + j, 1, 1, (i + j) % 2 ? "#d8c49a" : "#bfa97e");   // the speaker's cloth
     for (const sx of [x - 3, x, x + 3]) rect(ctx, sx, y - 13, 1, 6, WOOD.d);           // behind three slats
     for (const kx of [x - 5, x + 3]) { rect(ctx, kx, y - 7, 2, 2, SP.F); rect(ctx, kx, y - 7, 1, 1, SP.C); }   // the knobs
+  }
+  // the filing cabinet: steel, three drawers, a card and a handle on each; while the file trees are on, its top drawer
+  // is pulled out, coloured folders' tabs standing up in it
+  function drawFiling(ctx, p, on) {
+    const x0 = p.x - 7, top = p.y - 24;
+    rect(ctx, x0 - 1, p.y, 16, 1, SHADOW);
+    rect(ctx, x0, top, 14, 24, SP.F);
+    rect(ctx, x0 + 1, top + 1, 12, 22, SP.C); rect(ctx, x0 + 1, top + 1, 12, 1, SP.B); rect(ctx, x0 + 1, top + 1, 1, 22, SP.B); rect(ctx, x0 + 12, top + 2, 1, 21, SP.D);
+    const drawer = (dy, dx = 0, w = 10) => {
+      rect(ctx, x0 + 2 + dx, dy, w, 6, SP.B); rect(ctx, x0 + 2 + dx, dy, w, 1, SP.A); rect(ctx, x0 + 2 + dx, dy + 5, w, 1, SP.D);
+      const c = x0 + 2 + dx + Math.floor(w / 2);
+      rect(ctx, c - 2, dy + 1, 4, 2, "#f4ecd8"); rect(ctx, c - 1, dy + 2, 2, 1, SP.D);   // its card
+      rect(ctx, c - 2, dy + 4, 4, 1, SP.F);                                               // its handle
+    };
+    drawer(top + 9); drawer(top + 16);
+    if (!on) { drawer(top + 2); return; }
+    rect(ctx, x0 + 1, top + 1, 12, 8, SP.x);                 // the open drawer: dark inside, the folders standing in it
+    for (const [tx, c] of [[x0 + 2, SP.y], [x0 + 6, SP.g], [x0 + 10, SP.v]]) { rect(ctx, tx, top + 3, 2, 5, c); rect(ctx, tx, top + 3, 2, 1, SP.A); }
+    rect(ctx, x0, top + 15, 14, 1, SHADOW);                  // its front pulled out toward you, a little wider, its shadow under it
+    rect(ctx, x0 - 1, top + 8, 16, 8, SP.F); drawer(top + 9, -2, 14);
   }
   function drawNotes(ctx, p, T) {              // two notes drifting up from it, fading
     for (const k of [0, 1]) {

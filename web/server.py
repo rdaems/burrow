@@ -303,6 +303,48 @@ def argv(m, script, tty):
     return ["ssh"] + ssh_opts(m) + port + (["-t"] if tty else ["-o", "BatchMode=yes"]) + [ssh, script]
 
 
+# the file tree beside a terminal: under a session's root, the folders asked for (folders first, then files, by name;
+# 400 at most; .git and .DS_Store left out), each entry [name, folder?, changed (s)]; what git says changed there,
+# relative to the root ("M" changed, "A" new or untracked, "D" gone), if it is in a repo; and the machine's clock
+TREE = r"""
+import json, os, subprocess, sys, time
+root = os.path.abspath(os.path.expanduser(sys.argv[1])); dirs = {}
+for d in json.loads(sys.argv[2]):
+    p = os.path.normpath(os.path.join(root, d))
+    if p != root and not p.startswith(root + os.sep):
+        continue
+    try:
+        es = []
+        with os.scandir(p) as it:
+            for e in it:
+                if e.name in (".git", ".DS_Store"):
+                    continue
+                try:
+                    es.append([e.name, 1 if e.is_dir() else 0, int(e.stat(follow_symlinks=False).st_mtime)])
+                except OSError:
+                    es.append([e.name, 0, 0])
+        es.sort(key=lambda x: (-x[1], x[0].lower()))
+        dirs[d] = es[:400]
+    except OSError:
+        dirs[d] = None
+git = {}
+try:
+    g = lambda *a: subprocess.run(["git", "-C", root] + list(a), capture_output=True, text=True, timeout=5)
+    pre = g("rev-parse", "--show-prefix")
+    if pre.returncode == 0:
+        pre = pre.stdout.strip()
+        for line in g("status", "--porcelain=v1", "-uall", "--no-renames").stdout.splitlines():
+            code, path = line[:2], line[3:]
+            if path.startswith(chr(34)):
+                path = json.loads(path)
+            if path.startswith(pre):
+                git[path[len(pre):]] = "A" if "?" in code or "A" in code else "D" if "D" in code else "M"
+except Exception:
+    pass
+print(json.dumps({"dirs": dirs, "git": git, "now": int(time.time())}))
+"""
+
+
 def run(m, script, timeout=60):
     p = subprocess.run(argv(m, script, False), capture_output=True, text=True, timeout=timeout)
     if p.returncode == 0:
@@ -336,6 +378,7 @@ OPTIONS = {
     "yolo": False,  # a bot started here gets --dangerously-skip-permissions: it never asks, it just does
     "hardcore": False,  # the booth is a gun closet: she clears them out with a shotgun, and a click on it gives you a crosshair
     "sound": True,  # the room makes its sounds while a radio stands in it (no switch on the switchboard: the radio is the switch)
+    "files": True,  # a file tree beside each terminal while a filing cabinet stands in the room (the cabinet is the switch)
 }
 # (no switch for clearing out sessions: you ask an office manager, and she removes them through /api/office)
 
@@ -358,7 +401,7 @@ def doom_wad():
         pass
     return os.path.join(HERE, "doom", "freedoom.wad")
 KINDS = {"meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "add", "pair", "manager",
-         "booth", "neuralyzer", "doghouse", "radio"}
+         "booth", "neuralyzer", "doghouse", "radio", "files"}
 
 
 # The office manager: whoever sits at the reception booth (the `manager` piece; one at a time). Her style is
@@ -2380,6 +2423,8 @@ class Handler(BaseHTTPRequestHandler):
                     hub.room["layout"][key] = [int(b["at"][0]), int(b["at"][1])]
                     if kind == "radio":                  # a radio put down: the sound is on
                         hub.room.setdefault("settings", {})["sound"] = True
+                    if kind == "files":                  # a filing cabinet put down: the file trees are on
+                        hub.room.setdefault("settings", {})["files"] = True
                 elif b.get("remove"):
                     key = b["remove"]
                     if kind_of(key) in FIXED or key not in fs:
@@ -2504,6 +2549,15 @@ class Handler(BaseHTTPRequestHandler):
         m, poke = hub.machine(mid), hub.pokes.get(mid)
         if path == "/api/hosts":             # the hosts of ~/.ssh/config, for the new door's field
             return {"hosts": ssh_hosts()}
+        if path == "/api/tree":              # the file tree beside a terminal: folders under its root, and git's changes there
+            if m.get("ssh") == "@demo":
+                now = int(time.time())
+                fake = {"": [["src", 1, now - 900], ["docs", 1, now - 86400], ["README.md", 0, now - 40], ["package.json", 0, now - 7200]],
+                        "src": [["lib", 1, now - 3000], ["main.js", 0, now - 20], ["room.js", 0, now - 5000]], "src/lib": [["util.js", 0, now - 9000]],
+                        "docs": [["notes.md", 0, now - 86400]]}
+                return {"dirs": {d: fake.get(d) for d in b.get("dirs") or [""]}, "git": {"src/main.js": "M", "README.md": "A"}, "now": now}
+            out = run(m, "python3 -c " + sq(TREE) + " " + sq(b["root"]) + " " + sq(json.dumps(b.get("dirs") or [""])), timeout=20)
+            return json.loads(out)
         if path == "/api/complete":          # directories there that start with what was typed so far
             d = (b.get("dir") or "").strip() or "~/"
             if m.get("ssh") == "@demo":
