@@ -173,7 +173,7 @@ message is the log. When something goes, take it out here. Keep the file under a
 - Fixed (`FIXED` in room.js and server.py): the fire, the closet, the switchboard, the clock, this computer's door.
   Everything else burns in the fire (a desk with bots sends its bots to the booth).
 - What a click does: printer = a report on fanfold paper rising out of a wide printer in the pane, funny about the
-  room's statistics; pouf = you sit; plant = you water it; window = the duel; easel = the painting, big; chess and
+  room's statistics; pouf = you sit; plant = you water it; window = the duel; easel = the canvas, big; chess and
   ping-pong = play or watch; coffee or cooler = the limits; clock = keep awake; switchboard (one lever) = settings
   (rc, yolo, hardcore: a slider and a name a line, a help box under them for the line under the pointer, empty
   once the pointer leaves the panel; hardcore stays vague); pair table = its
@@ -187,8 +187,9 @@ message is the log. When something goes, take it out here. Keep the file under a
   has the room's robot head (`head()`: a steel box, a dark screen with glowing eyes, ear bolts, an antenna) and steel
   hands and neck; an oval face in metal read as a human (he: "I don't see robots"). It grows only while a robot
   paints at it (`paint`, an idle break now and then, 8%, palette and brush, 30 dots a second); done, it hangs ten
-  minutes, then the next painter starts another. The room shows it at a third of its size; a click shows it framed
-  with who painted it. Nothing of yours goes on it.
+  minutes, then the next painter starts another. The room shows it at a third of its size; a click shows it framed,
+  CANVAS in the band and under it only "By abc-abc, def-def and xyz-xyz.": its title is never said (not on hover,
+  not in the report). Nothing of yours goes on it.
 - The dog (a dachshund, `w.dog`, with the dog house): wanders, visits, follows you, chases the ball, sleeps at
   night (23–7); a click pets it, then a click throws a stick; it can be picked up.
 - The pair table is one pair room (`BURROW_PAIR`, default pair.daems.me): new or linked by your page or an invite; a

@@ -1396,7 +1396,7 @@ function startRoom(cv, app) {
     const p = ART.list[i], cv = document.createElement("canvas");
     cv.width = p.w; cv.height = p.h;
     const g = cv.getContext("2d"); g.fillStyle = ART.PRIMER; g.fillRect(0, 0, p.w, p.h);
-    w.art = { i, order: ART.order(p.make()), n: 0, done: null, by: new Set(), f: 0, cv };
+    w.art = { i, order: ART.order(p.make()), n: 0, done: null, by: new Map(), f: 0, cv };
     w.artV = (w.artV || 0) + 1; w.artSmall = null;
     paintArt(w, Math.floor(w.art.order.length * start));
   }
@@ -1415,7 +1415,7 @@ function startRoom(cv, app) {
     if (!painter || !artWanted(w)) return;
     if (w.art.done !== null) newArt(w, (w.art.i + 1 + Math.floor(Math.random() * (ART.list.length - 1))) % ART.list.length, 0);   // the next one, never the same
     const a = w.art;
-    a.by.add(painter.id);
+    a.by.set(painter.id, painter.b.name);         // its name kept: a painter may be gone before the canvas is
     if ((a.f += dt * ART_SPEED) >= 1) { const k = Math.floor(a.f); a.f -= k; paintArt(w, a.n + k); }
   }
 
@@ -1646,7 +1646,7 @@ function startRoom(cv, app) {
     if (L.board) {                           // the easel: a click shows the painting; the tip says which it is
       const b = L.board, h = hot(b.x - 11, b.y - 33, b.x + 11, b.y - 8, { kind: "board" });
       piece(b, "board", (c) => drawEasel(c, b, w.art));
-      if (h) tip = { text: w.art ? ART.list[w.art.i].title : "easel", x: b.x, y: b.y - 36 };
+      if (h) tip = { text: "easel", x: b.x, y: b.y - 36 };
     }
     if (L.fire) {
       // the fireplace: what is held over it (a desk, a piece of furniture, a bot) is about to burn:
@@ -3599,13 +3599,13 @@ function startRoom(cv, app) {
   requestAnimationFrame(frame);
   window.__room = { world, size: () => ({ W, H, K }), layout: () => lastL, hp: () => lastHp, fps: (key) => firstPerson(key),
     shoot: (id) => { const f = world().folk.get(id); if (f) shoot(f); }, unshoot, dogPic, dog: () => world().dog, stick: () => world().stick, art: (i, k) => { const w = world(); newArt(w, i, k); return w.art.order.length; }, fear: (v) => { if (v !== undefined) world().fear = v; return world().fear; } };   // for poking at it from the console
-  const stats = () => { const w = world(), a = w.art; return { since: w.born, bots: Object.fromEntries(w.stats), meetings: w.meetings, art: a && { title: ART.list[a.i].title, k: a.n / a.order.length } }; };
+  const stats = () => { const w = world(), a = w.art; return { since: w.born, bots: Object.fromEntries(w.stats), meetings: w.meetings, art: a && { k: a.n / a.order.length } }; };
   // at(id): where a figure stands, in CSS pixels of the page (for look.mjs, to drive the room from outside)
   const at = (id) => { const f = world().folk.get(id), b = cv.getBoundingClientRect(); return f ? [b.left + f.x * K, b.top + (f.y - 12) * K] : null; };
   // the painting, for the view: its canvas, a number that changes as it is painted, what it is and who painted it
   const board = {
     canvas: () => world().art && world().art.cv, version: () => world().artV || 0,
-    info: () => { const a = world().art; if (!a) return null; const p = ART.list[a.i]; return { title: p.title, after: p.after, w: p.w, h: p.h, by: [...a.by], done: a.done !== null }; },
+    info: () => { const a = world().art; if (!a) return null; const p = ART.list[a.i]; return { w: p.w, h: p.h, by: [...a.by.values()] }; },
   };
   // the two at a game table right now (chess, pong), white or the left side first: the page lets you watch them
   const playingAt = (kind) => [...world().folk.values()].filter((f) => f.act.kind === kind && f.act.there && f.act.with && !f.act.you && !f.human).sort((a, b) => a.act.side - b.act.side).map((f) => f.id);

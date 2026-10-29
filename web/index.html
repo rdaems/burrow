@@ -273,7 +273,7 @@ addEventListener("focus", focus); addEventListener("blur", focus); document.addE
 
 // ---- the view: one thing at a time on the right, in place of the tiles, framed like one
 const PANELS = { dir: "#vDir", machine: "#vMachine", you: "#vYou", closet: "#vCloset", chess: "#chess", pong: "#pong", report: "#vReport", pair: "#vPair", board: "#vBoard", limits: "#vLimits", outside: "#vOutside", settings: "#vSettings", clock: "#vClock", doors: "#vDoors", manager: "#vManager", desk: "#vDesk" };
-const TITLES = { dir: "NEW DESK", machine: "A MACHINE", you: "YOU", closet: "THE CLOSET", chess: "CHESS", pong: "PING-PONG", report: "REPORT", pair: "PAIR ROOM", board: "PAINTING", limits: "LIMITS", outside: "OUTSIDE", settings: "SETTINGS", clock: "CLOCK", doors: "DOORS", manager: "OFFICE MANAGER", desk: "DESK" };
+const TITLES = { dir: "NEW DESK", machine: "A MACHINE", you: "YOU", closet: "THE CLOSET", chess: "CHESS", pong: "PING-PONG", report: "REPORT", pair: "PAIR ROOM", board: "CANVAS", limits: "LIMITS", outside: "OUTSIDE", settings: "SETTINGS", clock: "CLOCK", doors: "DOORS", manager: "OFFICE MANAGER", desk: "DESK" };
 function openView(kind) {
   if (viewKind && viewKind !== kind) closeView(true);
   for (const t of tiles.all()) closeTile(t);
@@ -581,8 +581,8 @@ function openOutside(key) {
   $("#vOutside .hint").hidden = !yours;
   room.draw();
 }
-// ---- the easel, big: the painting the robots are painting (room.js, paintings.js) in a gilded frame, seven pixels a
-// dot; what it is after in the band, who has painted at it under it
+// ---- the easel, big: the canvas the robots are painting (room.js, paintings.js) in a gilded frame, seven pixels a
+// dot, and who has painted at it under it; never what it is after
 const bcv = $("#vBoard canvas"), bctx = bcv.getContext("2d");
 const and = (xs) => (xs.length < 2 ? xs.join("") : xs.slice(0, -1).join(", ") + " and " + xs.at(-1));
 function openBoard() {
@@ -596,9 +596,7 @@ function openBoard() {
       if (bcv.width !== info.w || bcv.height !== info.h) { bcv.width = info.w; bcv.height = info.h; }
       bcv.style.width = info.w * 7 + "px";
       bctx.drawImage(c, 0, 0);
-      view.querySelector(".tas").textContent = `${info.title}, after ${info.after}`;
-      const names = info.by.map((id) => (byId(id) || {}).name || id);
-      $("#vBoard .by").textContent = [names.length ? "painted by " + and(names) : "", info.done ? "" : "not finished yet"].filter(Boolean).join(", ");
+      $("#vBoard .by").textContent = info.by.length ? "By " + and(info.by) + "." : "";
     }
     requestAnimationFrame(show);
   };
@@ -724,7 +722,7 @@ function fillReport() {
   const pong = sum("pong"), chess = sum("chess"), beams = sum("sent"), talker = top("sent"), worker = top("busy"), present = top("present");
   L.push("", `GAMES  ping-pong ${pong}, chess ${chess}`);
   L.push(`MEETINGS  ${st.meetings ? `${st.meetings} held${present ? ", " + name(present.b.id) + " by the easel" : ""}` : "none"}`);
-  L.push(`EASEL     ${st.art ? `${st.art.title}, ${st.art.k >= 1 ? "done" : Math.round(st.art.k * 100) + "% painted"}` : "bare"}`);
+  L.push(`EASEL     ${st.art ? (st.art.k >= 1 ? "a canvas done" : Math.round(st.art.k * 100) + "% painted") : "bare"}`);
   L.push(`MESSAGES  ${beams ? `${beams} beamed${talker ? ", most by " + name(talker.b.id) : ""}` : "none, everyone minds their desk"}`);
   if (worker && worker.n > 30) L.push("", `EMPLOYEE OF THE SHIFT  ${name(worker.b.id)}, ${mins(worker.n)} at the keys`);
   L.push("", `LIMITS  5h ${left(u.session)} left, week ${left(u.week)} left`, "", "recycled pixels, keep away from the fire");
