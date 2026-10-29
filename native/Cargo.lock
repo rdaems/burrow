@@ -756,9 +756,13 @@ dependencies = [
  "burrow-model",
  "burrow-room",
  "burrow-sound",
+ "burrow-term",
+ "futures",
  "gpui",
  "image",
+ "objc",
  "pix",
+ "raw-window-handle",
  "serde",
  "serde_json",
 ]

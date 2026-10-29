@@ -113,6 +113,33 @@ impl Burrow {
             b.hub.focus(on);
         })
         .detach();
+        // BURROW_OPEN (debug, with BURROW_SHOT): what to open once the state is in: bot:<id>, shell:<dir>, view:<kind>,
+        // several split by commas
+        if let Ok(what) = std::env::var("BURROW_OPEN") {
+            cx.spawn_in(window, async move |this, cx| {
+                cx.background_executor().timer(Duration::from_millis(1500)).await;
+                let _ = this.update_in(cx, |b, window, cx| {
+                    for w in what.split(',') {
+                        let (k, v) = w.split_once(':').unwrap_or((w, ""));
+                        match k {
+                            "bot" => {
+                                let m = b.state.bots.iter().find(|x| x.id == v).map(|x| x.m.clone()).unwrap_or_default();
+                                b.open_bot(&m, v, true, None, window, cx);
+                            }
+                            "shell" => b.open_shell("", v, true, window, cx),
+                            "notes" => b.open_notes(true, window, cx),
+                            "view" => {
+                                if let Some(kind) = ViewKind::parse(v) {
+                                    b.open_view(kind, window, cx);
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                });
+            })
+            .detach();
+        }
         let now = Instant::now();
         Burrow {
             hub,
@@ -172,6 +199,11 @@ impl Burrow {
         }
         if news {
             self.on_state(window, cx);
+        }
+        // a terminal whose program ended (or whose session went to agent view) closes its tile
+        let done: Vec<u64> = self.tile.iter().filter_map(|(k, t)| t.body.as_ref().filter(|b| b.update(cx, |b, _| b.done())).map(|_| *k)).collect();
+        for t in done {
+            self.close_tile(t, window, cx);
         }
         self.tick_games(dt, cx);
         let ticked = self.room.advance(dt);
@@ -271,6 +303,9 @@ impl Burrow {
         let l = self.room.step(&self.inp, &mut out);
         self.room.draw(&self.inp, &mut out, &l);
         let k = self.scale.round().max(1.0) as u32;
+        if std::env::var_os("BURROW_DEBUG").is_some() {
+            eprintln!("redraw {}x{} k={k} bots={} folk={}", self.room.img.w, self.room.img.h, self.state.bots.len(), self.room.w.folk.len());
+        }
         let bytes = self.room.img.upscale_bgra(k, [0x0b, 0x08, 0x12, 255]);
         let (w, h) = (self.room.img.w * k, self.room.img.h * k);
         if let Some(buf) = image::RgbaImage::from_raw(w, h, bytes)
@@ -512,6 +547,15 @@ impl Burrow {
         }
         let t = self.new_tile(TileKind::Bot { m: m.to_string(), id: id.to_string() });
         let body = crate::term::TermTile::bot(self.hub.clone(), m, id, window, cx);
+        // what you type there: a bubble over your head in the room, the bot answers when you pause
+        let folk = self.as_folk(id);
+        cx.subscribe(&body, move |this, _, ev: &crate::term::TileEvent, _| {
+            let crate::term::TileEvent::Typed { enter } = ev;
+            let now = this.now_ms();
+            this.room.typed(now, Some(&folk), *enter);
+            this.dirty = true;
+        })
+        .detach();
         self.tile.get_mut(&t).unwrap().body = Some(body);
         match at {
             Some(at) => {
@@ -535,6 +579,13 @@ impl Burrow {
         self.make_room(retain, window, cx);
         let t = self.new_tile(TileKind::Shell { m: m.to_string(), dir: dir.to_string() });
         let body = crate::term::TermTile::shell(self.hub.clone(), m, dir, window, cx);
+        cx.subscribe(&body, move |this, _, ev: &crate::term::TileEvent, _| {
+            let crate::term::TileEvent::Typed { enter } = ev;
+            let now = this.now_ms();
+            this.room.typed(now, None, *enter);
+            this.dirty = true;
+        })
+        .detach();
         self.tile.get_mut(&t).unwrap().body = Some(body);
         self.tiles.add(t);
         self.focus_tile(t, window, cx);
@@ -805,7 +856,12 @@ impl Burrow {
                     move |b, _, _| bounds.set(Some(b)),
                     move |b, _, window, _| {
                         if let Some(pic) = pic {
-                            let _ = window.paint_image(b, Corners::default(), pic, 0, false);
+                            let r = window.paint_image(b, Corners::default(), pic, 0, false);
+                            if std::env::var_os("BURROW_DEBUG").is_some() {
+                                eprintln!("paint room {:?} -> {:?}", b.size, r.is_ok());
+                            }
+                        } else if std::env::var_os("BURROW_DEBUG").is_some() {
+                            eprintln!("paint room: no picture");
                         }
                     },
                 )

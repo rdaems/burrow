@@ -50,6 +50,10 @@ impl ViewKind {
             ViewKind::Pong => "pong",
         }
     }
+    pub fn parse(s: &str) -> Option<ViewKind> {
+        use ViewKind::*;
+        [Dir, Machine, You, Closet, Report, Limits, Settings, Doors, Desk, Manager, Clock, Outside, Board, Pair, Chess, Pong].into_iter().find(|k| k.name() == s)
+    }
     pub fn title(self) -> &'static str {
         match self {
             ViewKind::Dir => "NEW DESK",
