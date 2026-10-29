@@ -132,7 +132,7 @@ message is the log. When something goes, take it out here. Keep the file under a
   - **needs input**: seated, hand up, a bubble with a `?` (pair's glyph, steady), the screen's cursor blinking.
   - **idle** (done, process off, or only a question in words): breaks, long ones (`pickBreak`, 6–16 s between):
     the pouf, a nap on a mat it rolls out itself, coffee, the cooler, the printer, watering plants, the window,
-    chess, ping-pong, football, the fire, a visit, watching a game, a stretch, coffee for a busy colleague,
+    chess, ping-pong, football, the fire (hands warmed, or a sausage grilled and eaten), a visit, watching a game, a stretch, coffee for a busy colleague,
     painting at the easel, a meeting by it. No idle chatter: a bubble is a real message or you typing.
   - **a message to another session**: a beam from the sender's antenna into the receiver's.
 - Elsewhere in the room: the coffee pot = the five-hour limit, the cooler's bottle = the week (a click: a bar per

@@ -182,6 +182,7 @@ function startRoom(cv, app) {
       case "sw1": arm(4, 17, 19, 5, 20); arm(14, 17, 19, 13, 20); break;
       case "sw2": arm(4, 17, 19, 3, 20); arm(14, 17, 19, 15, 20); break;
       case "fwd1": rect(4, 17, 2, 2, c1); rect(4, 19, 2, 1, skin); fwd(19); break;
+      case "eat": back(); rect(14, 15, 2, 3, c1); rect(13, 13, 2, 2, skin); break;   // a hand at its mouth
       case "fwd2": rect(4, 17, 2, 2, c1); rect(4, 19, 2, 1, skin); fwd(20); break;
       case "reach": back(); rect(14, 14, 2, 4, c1); rect(16, 13, 2, 2, c1); rect(18, 12, 2, 2, skin); break;
       case "paint1": case "paint2": {        // a palette on the back hand, a brush in the front one, up at the canvas and down
@@ -1131,6 +1132,16 @@ function startRoom(cv, app) {
         if (act.left !== undefined && (act.left -= dt) <= 0) wake(f);
         break;
       }
+      case "grill": {                        // a sausage on a stick over the fire, from its left or right, turned now and then
+        // while it browns; done, up to its mouth and eaten in three bites, a moment to savour it, off it goes
+        if (!L.fire) { f.act = rest(); break; }
+        if (!walk(f, { x: act.side ? L.fire.x1 + 3 : L.fire.x0 - 3, y: L.fire.y1 + 2 }, v, dt)) break;
+        f.legs = "stand"; f.dir = act.side ? -1 : 1;
+        act.t += dt;
+        f.arms = act.t < act.cook ? "fwd1" : act.t < act.cook + 7 ? "eat" : "down";
+        if (act.t > act.cook + 8.5) f.act = rest();
+        break;
+      }
       case "warm": {
         // its hands at the fire, from its left or its right side
         if (!L.fire) { f.act = rest(); break; }
@@ -1327,7 +1338,10 @@ function startRoom(cv, app) {
     const game = ["chess", "pong"].find((k) => others.filter((g) => g.act.kind === k && g.act.there && (g.act.with || g.act.you)).length >= 2 && !others.some((g) => g.act.kind === "watch" && g.act.game === k));
     if (r < 0.6 && game) return { kind: "watch", game, left: rnd(25, 50) };
     if (r < 0.65 && mate) return { kind: "visit", to: mate.id, left: rnd(15, 30), wave: 0.8 };
-    if (r < 0.7 && L.fire && !(moving && KIND(moving.key) === "fire")) { const side = others.some((g) => g.act.kind === "warm" && !g.act.side) ? 1 : 0; if (!others.some((g) => g.act.kind === "warm" && g.act.side === side)) return { kind: "warm", side, left: rnd(20, 40) }; }
+    if (r < 0.7 && L.fire && !(moving && KIND(moving.key) === "fire")) {   // the fire: its hands warmed, or a sausage grilled (one a side)
+      const at = (g) => g.act.kind === "warm" || g.act.kind === "grill", side = others.some((g) => at(g) && !g.act.side) ? 1 : 0;
+      if (!others.some((g) => at(g) && g.act.side === side)) return Math.random() < 0.5 ? { kind: "grill", side, t: 0, cook: rnd(14, 22) } : { kind: "warm", side, left: rnd(20, 40) };
+    }
     if (r < 0.74) return { kind: "stretch", left: rnd(4, 8) };
     if (r < 0.8 && !f.human) return { kind: "sleep", there: false, left: rnd(60, 150) };
     // one of a kind there can be many of, not in use: a plant to water, a window, an armchair
@@ -2585,8 +2599,26 @@ function startRoom(cv, app) {
     if (f.act.kind === "neuralyze" && f.act.stage === 2) for (let k = 0; k < 3; k++) {   // dazed: little stars round its head
       const a = T * 4 + k * 2.1; rect(ctx, x - 1 + Math.round(Math.cos(a) * 6), y0 + 3 + Math.round(Math.sin(a) * 2), 1, 1, SP.Y);
     }
+    if (f.act.kind === "grill" && f.act.t > 0 && !f.held) drawSausage(ctx, f, x, y, T);
     if (f.act.kind === "plant" && f.act.water && Math.floor(T * 6) % 2) { rect(ctx, x + 10 * f.dir, y0 + 21, 1, 1, C.blue3); rect(ctx, x + 11 * f.dir, y0 + 24, 1, 1, C.blue3); }
     if (!f.leaving && !f.held && over(x0 + 4, y0, x0 + 18, y + 1)) hovered = { b, x, y: y0 };
+  }
+  // a sausage: on its stick over the fire, raw pink browning to a crisp (turned now and then: its lit side flips),
+  // smoking a little near the end; then at its mouth, shorter with every bite
+  function drawSausage(ctx, f, x, y, T) {
+    const a = f.act, d = f.dir < 0 ? -1 : 1, k = Math.min(1, a.t / a.cook);
+    const col = k < 0.35 ? "#e8968a" : k < 0.75 ? "#c8643c" : "#8a4426", hi = k < 0.35 ? "#f8c4b4" : k < 0.75 ? "#e8905c" : "#b8643a";
+    const link = (sx, sy, n) => { rect(ctx, sx - 1, sy - 1, n + 2, 4, "#3a1a10"); rect(ctx, sx, sy, n, 2, col); };   // outlined, as the room draws things
+    if (a.t < a.cook) {
+      const hx = x + 8 * d, hy = y - 8;
+      for (let i = 0; i < 17; i++) rect(ctx, hx + i * d, hy - Math.floor(i / 2.5), 1, 1, i < 3 ? "#7a4a2a" : "#d8b07a");   // the stick, up over the flames
+      const sx = Math.min(hx + 13 * d, hx + 17 * d), sy = hy - 8, turn = Math.floor(a.t / 2.5) % 2;
+      link(sx, sy, 5); rect(ctx, sx + 1, sy + turn, 3, 1, hi);
+      if (k > 0.55 && Math.floor(T * 2) % 3) rect(ctx, sx + 2, sy - 3 - (Math.floor(T * 4) % 3), 1, 1, "rgba(206,210,220,0.6)");   // a wisp
+      return;
+    }
+    const e = a.t - a.cook, left = e < 1.2 ? 5 : 5 - 2 * Math.ceil((e - 1.2) / 2);   // bites at 1.2, 3.2, 5.2 s
+    if (left > 0) link(d > 0 ? x + 4 - left : x - 4, y - 12, left);
   }
   function drawSleeper(ctx, f, b, T, hl) {  // lying on its back on the mat, head to the left: the standing figure turned on its side
     if (!b) return;
@@ -3434,7 +3466,7 @@ function startRoom(cv, app) {
     switch (kind) {
       case "armchair": return { kind: "chair", at: p.key, left: long };
       case "neuralyzer": return f.b && !f.b.human && !f.b.staff ? { kind: "neuralyze", at: p.key, stage: 0, wait: 0 } : null;
-      case "fire": return { kind: "warm", side: f.x > (lastL.fire.x0 + lastL.fire.x1) / 2 ? 1 : 0, left: long / 2 };   // its hands at the fire (it burns furniture, never a bot)
+      case "fire": { const side = f.x > (lastL.fire.x0 + lastL.fire.x1) / 2 ? 1 : 0; return Math.random() < 0.5 ? { kind: "grill", side, t: 0, cook: rnd(14, 22) } : { kind: "warm", side, left: long / 2 }; }   // its hands at the fire, or a sausage on it (it burns furniture, never a bot)
       case "window": if (f.human) { app.act({ kind: "outside", key: p.key }); return null; } return { kind: "window", at: p.key, left: long / 3 };
       case "coffee": return { kind: "coffee", stage: 0, wait: 0 };
       case "plant": return { kind: "plant", at: p.key, wait: 0 };
@@ -3475,7 +3507,7 @@ function startRoom(cv, app) {
       else if (press.piece && !(press.bot && !f)) {
         moving = { key: press.piece.key, from: press.piece.at, u: press.piece.u, at: press.piece.at };
         // the fire picked up: whoever warmed their hands at it steps away (they would stand in the pit as it went)
-        if (KIND(moving.key) === "fire") for (const g of world().folk.values()) if (g.act.kind === "warm") end(g);
+        if (KIND(moving.key) === "fire") for (const g of world().folk.values()) if (g.act.kind === "warm" || g.act.kind === "grill") end(g);
       }
     }
     if (moving) {
