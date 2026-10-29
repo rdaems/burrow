@@ -212,9 +212,15 @@ struct MBox {
     metal: bool,
     glow: bool,
     round: f64,
-    paint: Option<Box<dyn Fn(f64, f64) -> Px>>,
+    paint: Front,
 }
 
+/// a painter for a box's front (u across it as you see it, v down)
+type Front = Option<Box<dyn Fn(f64, f64) -> Px>>;
+/// adds a robot's box: f0, f1, r0, r1, z0, z1, its colour, flat, glow, round, its front's painter
+type Push<'a> = dyn FnMut(f64, f64, f64, f64, f64, f64, Rgb, bool, bool, f64, Front) + 'a;
+/// adds a dog's box: f0, f1, r0, r1, z0, z1, its colour, its front's painter
+type DogPush<'a> = dyn FnMut(f64, f64, f64, f64, f64, f64, Rgb, Front) + 'a;
 const ROBOT: (f64, f64, f64) = (4.0, 9.0, 27.0); // S, R, Z
 const DOG: (f64, f64, f64) = (4.0, 13.0, 14.0);
 const WOODP_HI: &str = "#cfa86d";
@@ -388,7 +394,7 @@ impl Props {
         let th = k as f64 * PI / 4.0;
         let (cf, cr, sf, sr) = (th.cos(), th.sin(), th.sin(), -th.cos());
         let (w, h) = ((2.0 * rr * s).ceil() as i32, (zz * s).ceil() as i32);
-        let mut zb = vec![-1e9f64; (w * h) as usize];
+        let mut zb = vec![-1e9f32; (w * h) as usize]; // (a Float32Array in props3d.js)
         let mut im = Image::new(w as u32, h as u32);
         let (lf, lr) = (0.82 * cf - 0.57 * sf, 0.82 * cr - 0.57 * sr); // the light: from the front, a little from your left
         for b in boxes {
@@ -428,7 +434,7 @@ impl Props {
                     let dep = pf * cf + pr * cr;
                     for y in y0..y1 {
                         let i = (y * w + x) as usize;
-                        if dep <= zb[i] {
+                        if dep <= zb[i] as f64 {
                             continue;
                         }
                         let v = ((y as f64 + 0.5 - y0 as f64) / if y1 == y0 { 1.0 } else { (y1 - y0) as f64 }).min(0.999);
@@ -461,7 +467,7 @@ impl Props {
                         if !glow {
                             k2 *= grit(x, y, 11, 0.55) * if b.metal { 1.12 - 0.32 * v + if v > 0.12 && v < 0.2 { 0.14 } else { 0.0 } } else { 1.0 };
                         }
-                        zb[i] = dep;
+                        zb[i] = dep as f32;
                         im.px[i] = [u8c((rgb[0] * k2).min(255.0)), u8c((rgb[1] * k2).min(255.0)), u8c((rgb[2] * k2).min(255.0)), if glow { GLOW } else { 255 }];
                     }
                 }
@@ -594,7 +600,7 @@ impl Props {
                 |i, j| {
                     let (fi, fj) = (i as f64, j as f64);
                     let u = (fi + 0.5 - w / 2.0) / (w / 2.0 - 2.0);
-                    if fj >= 4.0 * TS && fj < 6.0 * TS && u.abs() <= 1.0 {
+                    if (4.0 * TS..6.0 * TS).contains(&fj) && u.abs() <= 1.0 {
                         return c3(mul(wd, if fj < 4.5 * TS { 1.15 } else { 0.95 } - u.abs() * 0.2)); // the top's edge
                     }
                     if fj >= 6.0 * TS && (fi - w / 2.0).abs() < 1.2 * TS {
@@ -603,7 +609,7 @@ impl Props {
                     if fj >= h - 1.5 * TS && (fi - w / 2.0).abs() < 6.0 * TS {
                         return c3(mul(wd, 0.6)); // its foot
                     }
-                    if fj >= 1.6 * TS && fj < 4.0 * TS && (fi - w / 2.0).abs() < 3.0 * TS {
+                    if (1.6 * TS..4.0 * TS).contains(&fj) && (fi - w / 2.0).abs() < 3.0 * TS {
                         // the speakerphone
                         return if fj < 2.2 * TS && (fi - w / 2.0).abs() < TS {
                             if linked { g3([130.0, 255.0, 160.0]) } else { c3([70.0, 80.0, 74.0]) }
@@ -1040,12 +1046,11 @@ impl Props {
                             let f = 7 - (by / cell).floor() as i32;
                             let pc = board.get((r * 8 + f) as usize).copied();
                             let (cx, cy) = (bx % cell - cell / 2.0, by % cell - cell / 2.0);
-                            if let Some(pc) = pc {
-                                if pc != '.' && cx * cx + cy * cy < (cell * 0.38).powi(2) {
+                            if let Some(pc) = pc
+                                && pc != '.' && cx * cx + cy * cy < (cell * 0.38).powi(2) {
                                     let wht = pc.is_uppercase() || !pc.is_alphabetic();
                                     return c3(mul(if wht { [240.0, 236.0, 226.0] } else { [40.0, 34.0, 44.0] }, if cx + cy < -1.0 { 1.25 } else { 1.0 }));
                                 }
-                            }
                             c3(if (r + f) % 2 != 0 { [232.0, 210.0, 160.0] } else { [168.0, 120.0, 76.0] })
                         },
                         1.0,
@@ -1322,11 +1327,10 @@ impl Props {
     /// the far wall's picture, w dots wide, wh high; kept while `key` (room.js `wkey`) stays the same
     pub fn wall(&mut self, w: f64, wh: f64, band: f64, items: &[WallItem], key: &str) -> Tex {
         let k = format!("{w}|{key}");
-        if let Some((wk, t)) = &self.wall {
-            if *wk == k {
+        if let Some((wk, t)) = &self.wall
+            && *wk == k {
                 return t.clone();
             }
-        }
         let c = self.wall_base(w, wh);
         let z_of = |yb: f64| (band - yb) * (wh / band);
         let c = self.over(c, |r| {
@@ -1481,7 +1485,7 @@ fn robot_boxes(sp: &Robot) -> Vec<MBox> {
     // its casing a cool steel, darker than the room's steel3 (lit warm, that went the colour of skin)
     let (s1, s2, s3, s4, dark, screen, ink2) = (hex("#3f4660"), hex("#6c7590"), hex("#8f9ab2"), hex("#c3cbdb"), hex("#2a2d3d"), hex(c::BLUE0), hex(c::INK2));
     let mut b: Vec<MBox> = Vec::new();
-    let mut bx = |f0: f64, f1: f64, r0: f64, r1: f64, z0: f64, z1: f64, c: Rgb, flat: bool, glow: bool, round: f64, paint: Option<Box<dyn Fn(f64, f64) -> Px>>| {
+    let mut bx = |f0: f64, f1: f64, r0: f64, r1: f64, z0: f64, z1: f64, c: Rgb, flat: bool, glow: bool, round: f64, paint: Front| {
         b.push(MBox { f0, f1, r0, r1, z0, z1, col: c, metal: !flat && c != col, glow, round, paint })
     };
     macro_rules! bx {
@@ -1566,7 +1570,7 @@ fn robot_boxes(sp: &Robot) -> Vec<MBox> {
     for r in [-5.6, 5.0] {
         bx!(-1.6, -0.2, r, r + 0.6, 16.4, 18.2, s2); // its ears, small bolts toward the back
     }
-    let tip = |b: &mut dyn FnMut(f64, f64, f64, f64, f64, f64, Rgb, bool, bool, f64, Option<Box<dyn Fn(f64, f64) -> Px>>), f0: f64, r0: f64, z0: f64, w: f64| b(f0, f0 + w, r0, r0 + w, z0, z0 + w, light, false, true, 0.0, None);
+    let tip = |b: &mut Push, f0: f64, r0: f64, z0: f64, w: f64| b(f0, f0 + w, r0, r0 + w, z0, z0 + w, light, false, true, 0.0, None);
     match p.ant {
         "one" => {
             bx!(-0.35, 0.35, -0.35, 0.35, top, top + 2.2, s2);
@@ -1590,21 +1594,21 @@ fn robot_boxes(sp: &Robot) -> Vec<MBox> {
     }
     // the arms, by the pose; what is held
     let r0 = |side: f64| if side < 0.0 { -5.6 } else { 3.6 };
-    let arm = |bx: &mut dyn FnMut(f64, f64, f64, f64, f64, f64, Rgb, bool, bool, f64, Option<Box<dyn Fn(f64, f64) -> Px>>), side: f64, f0: f64, f1: f64, z0: f64, z1: f64| bx(f0, f1, r0(side), r0(side) + 2.0, z0, z1, s2, false, false, 0.0, None);
-    let hand = |bx: &mut dyn FnMut(f64, f64, f64, f64, f64, f64, Rgb, bool, bool, f64, Option<Box<dyn Fn(f64, f64) -> Px>>), side: f64, f: f64, z: f64| bx(f - 0.9, f + 0.9, r0(side), r0(side) + 2.0, z, z + 1.2, s1, false, false, 0.0, None);
+    let arm = |bx: &mut Push, side: f64, f0: f64, f1: f64, z0: f64, z1: f64| bx(f0, f1, r0(side), r0(side) + 2.0, z0, z1, s2, false, false, 0.0, None);
+    let hand = |bx: &mut Push, side: f64, f: f64, z: f64| bx(f - 0.9, f + 0.9, r0(side), r0(side) + 2.0, z, z + 1.2, s1, false, false, 0.0, None);
     let a = sp.arms.as_str();
     {
-        let bx: &mut dyn FnMut(f64, f64, f64, f64, f64, f64, Rgb, bool, bool, f64, Option<Box<dyn Fn(f64, f64) -> Px>>) = &mut bx;
-        let down = |bx: &mut dyn FnMut(f64, f64, f64, f64, f64, f64, Rgb, bool, bool, f64, Option<Box<dyn Fn(f64, f64) -> Px>>), side: f64, df: f64| {
+        let bx: &mut Push = &mut bx;
+        let down = |bx: &mut Push, side: f64, df: f64| {
             arm(bx, side, -1.0 + df, 1.0 + df, 6.4, 12.0);
             hand(bx, side, df, 5.4);
         };
-        let fwd = |bx: &mut dyn FnMut(f64, f64, f64, f64, f64, f64, Rgb, bool, bool, f64, Option<Box<dyn Fn(f64, f64) -> Px>>), side: f64, z: f64| {
+        let fwd = |bx: &mut Push, side: f64, z: f64| {
             bx(-1.0, 1.0, r0(side), r0(side) + 2.0, z + 1.0, 12.0, s2, false, false, 0.0, None);
             bx(0.8, 5.4, if side < 0.0 { -5.6 } else { 3.6 }, if side < 0.0 { -3.6 } else { 5.6 }, z, z + 1.8, s2, false, false, 0.0, None);
             hand(bx, side, 6.0, z + 0.3);
         };
-        let pl = |bx: &mut dyn FnMut(f64, f64, f64, f64, f64, f64, Rgb, bool, bool, f64, Option<Box<dyn Fn(f64, f64) -> Px>>), f0: f64, f1: f64, r0: f64, r1: f64, z0: f64, z1: f64, c: Rgb| bx(f0, f1, r0, r1, z0, z1, c, false, false, 0.0, None);
+        let pl = |bx: &mut Push, f0: f64, f1: f64, r0: f64, r1: f64, z0: f64, z1: f64, c: Rgb| bx(f0, f1, r0, r1, z0, z1, c, false, false, 0.0, None);
         match a {
             "up" => {
                 for s in [-1.0, 1.0] {
@@ -1659,10 +1663,10 @@ fn robot_boxes(sp: &Robot) -> Vec<MBox> {
 fn dog_boxes(pose: &str, wag: bool) -> Vec<MBox> {
     let (b, d, w, n) = (hex("#c27a3e"), hex("#7a4424"), hex("#efd8b4"), hex("#1a1626"));
     let mut out: Vec<MBox> = Vec::new();
-    let mut bx = |f0: f64, f1: f64, r0: f64, r1: f64, z0: f64, z1: f64, c: Rgb, paint: Option<Box<dyn Fn(f64, f64) -> Px>>| {
+    let mut bx = |f0: f64, f1: f64, r0: f64, r1: f64, z0: f64, z1: f64, c: Rgb, paint: Front| {
         out.push(MBox { f0, f1, r0, r1, z0, z1, col: c, metal: false, glow: false, round: 0.0, paint })
     };
-    let head_at = |bx: &mut dyn FnMut(f64, f64, f64, f64, f64, f64, Rgb, Option<Box<dyn Fn(f64, f64) -> Px>>), f: f64, z: f64| {
+    let head_at = |bx: &mut DogPush, f: f64, z: f64| {
         bx(f, f + 4.0, -2.0, 2.0, z, z + 4.2, b, Some(Box::new(move |u, v| c3(if v > 0.3 && v < 0.5 && ((u - 0.25).abs() < 0.08 || (u - 0.75).abs() < 0.08) { n } else { b }))));
         bx(f + 4.0, f + 6.2, -1.2, 1.2, z + 0.6, z + 2.6, w, None);
         bx(f + 6.2, f + 6.9, -0.6, 0.6, z + 1.6, z + 2.6, n, None);
@@ -1676,7 +1680,7 @@ fn dog_boxes(pose: &str, wag: bool) -> Vec<MBox> {
         _ => 0.0,
     };
     let wag = if wag { 0.8 } else { -0.8 };
-    let bx: &mut dyn FnMut(f64, f64, f64, f64, f64, f64, Rgb, Option<Box<dyn Fn(f64, f64) -> Px>>) = &mut bx;
+    let bx: &mut DogPush = &mut bx;
     match pose {
         "lie" => {
             bx(-6.0, 6.0, -2.2, 2.2, 0.4, 4.0, b, None);

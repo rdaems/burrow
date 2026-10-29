@@ -94,7 +94,7 @@ fn i32at(d: &[u8], o: usize) -> i32 {
 
 impl Wad {
     pub fn open(data: Vec<u8>) -> Result<Wad, String> {
-        if data.len() < 12 || !(data[1..4] == *b"WAD") {
+        if data.len() < 12 || (data[1..4] != *b"WAD") {
             return Err("not a WAD".into());
         }
         let n = i32at(&data, 4).max(0) as usize;

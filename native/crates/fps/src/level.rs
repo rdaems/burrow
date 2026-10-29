@@ -12,6 +12,7 @@
 //!   teeth), feel pain and die on Doom's frames; items are picked up as you walk over them (health, armor, ammo, keys,
 //!   a backpack); barrels explode;
 //! - the shotgun: seven pellets in a spread, five to fifteen each, puffs on the walls, blood on what is hit.
+//!
 //! What it leaves out: the other weapons (their ammo is counted), vertical aim (autoaim, as Doom's), saving.
 //!
 //! `portal` (set by fps.rs): the mysterious door out to burrow's office, in a wall of the map. While it is open you
@@ -1164,14 +1165,13 @@ impl Level {
         let player = o.who == Who::Player;
         // through the open door: under its lintel, between its jambs; the lines on the office's side are not there
         let mut thru = false;
-        if let Some(p) = &self.portal {
-            if p.open > 0.0 && (if player { !self.away } else { o.missile && self.away }) {
+        if let Some(p) = &self.portal
+            && p.open > 0.0 && (if player { !self.away } else { o.missile && self.away }) {
                 let b = self.beyond(x, y);
                 let k = r * (p.nx.abs() + p.ny.abs());
                 let fits = self.along(x, y).abs() + r <= p.w / 2.0 && if o.missile { o.z >= p.floor && o.z + 8.0 <= p.floor + p.open } else { p.open >= o.h };
                 thru = fits && b < k && b > -(k + 16.0);
             }
-        }
         let mut sec = self.sector_at(x, y);
         if thru && self.beyond(x, y) < 0.0 {
             sec = self.portal.as_ref().unwrap().sector;
@@ -1237,11 +1237,10 @@ impl Level {
         // solid things: as tall as anything (vanilla Doom's)
         let blocker = self.mobjs.iter().find(|t| Who::Mobj(t.id) != o.who && t.solid && Some(t.id) != o.owner && (t.x - x).abs() < t.r + r && (t.y - y).abs() < t.r + r).map(|t| t.id);
         if let Some(t) = blocker {
-            if let (true, Who::Mobj(id)) = (o.missile, o.who) {
-                if let Some(i) = self.find(id) {
+            if let (true, Who::Mobj(id)) = (o.missile, o.who)
+                && let Some(i) = self.find(id) {
                     self.mobjs[i].hit = Some(Who::Mobj(t));
                 }
-            }
             return None;
         }
         let p = &self.player;
@@ -1249,11 +1248,10 @@ impl Level {
             return None;
         }
         if o.missile && self.hits_player(o.z, o.r, x, y) {
-            if let Who::Mobj(id) = o.who {
-                if let Some(i) = self.find(id) {
+            if let Who::Mobj(id) = o.who
+                && let Some(i) = self.find(id) {
                     self.mobjs[i].hit = Some(Who::Player);
                 }
-            }
             return None;
         }
         Some(At { floor, ceil, sector: sec })
@@ -1374,9 +1372,9 @@ impl Level {
         let (dx, dy) = (ang.cos(), ang.sin());
         let (x2, y2) = (x + dx * dist, y + dy * dist);
         let mut thru = false;
-        if office {
-            if let Some(p) = &self.portal {
-                if p.open > 0.0 {
+        if office
+            && let Some(p) = &self.portal
+                && p.open > 0.0 {
                     let (b0, b1) = (self.beyond(x, y), self.beyond(x2, y2));
                     if (b0 > 0.0) != (b1 > 0.0) {
                         let tc = b0 / (b0 - b1) * dist;
@@ -1384,8 +1382,6 @@ impl Level {
                         thru = self.along(x + dx * tc, y + dy * tc).abs() < p.w / 2.0 && z > p.floor && z < p.floor + p.open;
                     }
                 }
-            }
-        }
         let (mut best, mut line) = (dist, None);
         for li in self.lines_near(x.min(x2), y.min(y2), x.max(x2), y.max(y2)) {
             if thru && self.office_side(li) {
@@ -1441,17 +1437,15 @@ impl Level {
         if def.how != how {
             return false;
         }
-        if let (Some(k), Who::Player) = (def.key, by) {
-            if !self.player.keys[k as usize] {
+        if let (Some(k), Who::Player) = (def.key, by)
+            && !self.player.keys[k as usize] {
                 self.snd_who(Some("DSOOF"), by); // a locked door
                 return false;
             }
-        }
-        if let Who::Mobj(id) = by {
-            if self.find(id).is_some_and(|i| self.mobjs[i].d.mon) && !def.monster {
+        if let Who::Mobj(id) = by
+            && self.find(id).is_some_and(|i| self.mobjs[i].d.mon) && !def.monster {
                 return false;
             }
-        }
         let mut did = false;
         let tag = self.map.lines[li].tag;
         match def.does {
@@ -1508,13 +1502,12 @@ impl Level {
     fn door(&mut self, s: usize, kind: DoorMode, fast: bool) -> bool {
         if let Some(m) = self.movers[s] {
             // a door going down: back up (DR doors used again)
-            if let Mover::Door { dir: -1, top, speed, wait, mode } = m {
-                if kind == DoorMode::Raise {
+            if let Mover::Door { dir: -1, top, speed, wait, mode } = m
+                && kind == DoorMode::Raise {
                     self.movers[s] = Some(Mover::Door { dir: 1, top, speed, wait, mode });
                     self.snd_sector(if speed > 2.0 { "DSBDOPN" } else { "DSDOROPN" }, s);
                     return true;
                 }
-            }
             return false;
         }
         let ns = self.neighbours(s);
@@ -1963,12 +1956,11 @@ impl Level {
                     took = true;
                 }
             }
-            if let Some(k) = d.key {
-                if !p.keys[k as usize] {
+            if let Some(k) = d.key
+                && !p.keys[k as usize] {
                     p.keys[k as usize] = true;
                     took = true;
                 }
-            }
             if took {
                 self.mobjs[i].gone = true;
                 p.bonuscount = (p.bonuscount + 6).min(40);
@@ -2499,12 +2491,11 @@ impl Level {
         let (x, y) = (o.x, o.y);
         let b0 = self.beyond(x, y);
         if !self.try_move(Who::Mobj(id), x + mx, y + my) {
-            if let Some(h) = self.mobjs[i].hit {
-                if h != Who::Mobj(owner) {
+            if let Some(h) = self.mobjs[i].hit
+                && h != Who::Mobj(owner) {
                     let d = ((self.rng.rnd() % 8) + 1) * dmg;
                     self.damage(h, d, Some(Who::Mobj(owner)));
                 }
-            }
             if let Some(i) = self.find(id) {
                 self.mobjs[i].missile.as_mut().unwrap().dying = 1;
             }
@@ -2547,13 +2538,11 @@ impl Level {
         };
         let fl = self.map.sectors[s0].floor;
         let tr = self.trace(st.x, st.y, a, 1024.0, &|_| fl + 40.0, false);
-        if let Some(li) = tr.line {
-            if l2side(&self.map.lines[li], st.x, st.y) == 0 {
-                if let Some(f) = fits(li, tr.x, tr.y) {
+        if let Some(li) = tr.line
+            && l2side(&self.map.lines[li], st.x, st.y) == 0
+                && let Some(f) = fits(li, tr.x, tr.y) {
                     return Some(f);
                 }
-            }
-        }
         let (mut best, mut bl) = (None, 0.0);
         for &li in &self.map.sectors[s0].lines {
             let l = &self.map.lines[li];
@@ -2561,12 +2550,11 @@ impl Level {
                 continue;
             }
             let len = l.dx.hypot(l.dy);
-            if len > bl {
-                if let Some(f) = fits(li, (l.v1.x + l.v2.x) / 2.0, (l.v1.y + l.v2.y) / 2.0) {
+            if len > bl
+                && let Some(f) = fits(li, (l.v1.x + l.v2.x) / 2.0, (l.v1.y + l.v2.y) / 2.0) {
                     best = Some(f);
                     bl = len;
                 }
-            }
         }
         best
     }

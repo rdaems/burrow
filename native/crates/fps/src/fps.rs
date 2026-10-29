@@ -405,7 +405,7 @@ impl View {
             ceil_clip: vec![0; SW as usize],
             floor_clip: vec![0; SW as usize],
             solid: vec![0; SW as usize],
-            kx: (0..SW).map(|x| (x as f64 + 0.5 - CX) / PROJ).collect(),
+            kx: (0..SW).map(|x| ((x as f64 + 0.5 - CX) / PROJ) as f32 as f64).collect(), // (a Float32Array in fps.js)
             w_top: vec![0; SW as usize],
             w_bot: vec![0; SW as usize],
             w_z: vec![0.0; SW as usize],
@@ -559,11 +559,10 @@ impl View {
     fn far_wall(&mut self, r: &Ctx3) -> Arc<Pic> {
         let sc = r.sc;
         let key = format!("{}|{}", sc.wkey, sc.w);
-        if let Some((k, t)) = &self.far {
-            if *k == key {
+        if let Some((k, t)) = &self.far
+            && *k == key {
                 return t.clone();
             }
-        }
         let wad = r.wad;
         let (w, h) = (jround(sc.w * U) as i32, jround(CEIL) as i32);
         let base = wad.texture("STARTAN2").or_else(|| wad.texture("STARTAN3"));
@@ -628,11 +627,10 @@ impl View {
     }
     fn overlay(&mut self, r: &Ctx3) -> Arc<Ovl> {
         let c = &r.sc.floor;
-        if let Some((id, o)) = &self.ovl {
-            if *id == c.id {
+        if let Some((id, o)) = &self.ovl
+            && *id == c.id {
                 return o.clone();
             }
-        }
         let (w, h) = (c.img.w as i32, c.img.h as i32);
         let n = (w * h) as usize;
         let mut o = Ovl { w, h, px: vec![0; n], m: vec![0; n] };
@@ -833,8 +831,8 @@ impl View {
             }
         }
         // through the open door: the level, as it is from here
-        if win.is_none() && has_p && r.door_open > 0.0 {
-            if let Some(w2) = self.win_of() {
+        if win.is_none() && has_p && r.door_open > 0.0
+            && let Some(w2) = self.win_of() {
                 let (lx, ly) = r.o2l(px, py);
                 self.win_z(&w2, None);
                 let floor = r.p().unwrap().floor;
@@ -842,7 +840,6 @@ impl View {
                 let wz = self.w_z.clone();
                 self.win_z(&w2, Some(&wz));
             }
-        }
         self.aim_through = win.is_none() && (self.w_top[CXI as usize] as i32) < CYI && CYI < self.w_bot[CXI as usize] as i32;
         // the blocks (desks and what stands as one): the face a ray meets first, and their tops seen from above
         for b in &sc.boxes {
@@ -1182,8 +1179,8 @@ impl View {
             }
         }
         // through the open door: the office, as it is from here
-        if win.is_none() && r.p().is_some() && r.door_open > 0.0 {
-            if let Some(w2) = self.win_of() {
+        if win.is_none() && r.p().is_some() && r.door_open > 0.0
+            && let Some(w2) = self.win_of() {
                 let (ox, oy) = r.l2o(v.x, v.y);
                 self.win_z(&w2, None);
                 let fl = r.p().unwrap().floor;
@@ -1191,7 +1188,6 @@ impl View {
                 let wz = self.w_z.clone();
                 self.win_z(&w2, Some(&wz));
             }
-        }
         // masked middle textures (grates, bars), then the sprites, far to near
         let cmap = &r.wad.cmap[..];
         for mk in &masked {
@@ -1433,11 +1429,10 @@ impl LvlPass<'_, '_> {
         let line = &m.lines[sg0.line];
         let closed = bs.is_none_or(|bs| bs.ceil <= fs.floor || bs.floor >= fs.ceil);
         let is_door = self.win.is_none() && self.r.p().is_some_and(|p| p.lines.contains(&sg0.line));
-        if let Some(bs) = bs {
-            if !is_door && !closed && bs.ceil == fs.ceil && bs.floor == fs.floor && bs.ftex == fs.ftex && bs.ctex == fs.ctex && bs.light == fs.light && sd.mid == "-" {
+        if let Some(bs) = bs
+            && !is_door && !closed && bs.ceil == fs.ceil && bs.floor == fs.floor && bs.ftex == fs.ftex && bs.ctex == fs.ctex && bs.light == fs.light && sd.mid == "-" {
                 return; // nothing to draw: a line within one floor
             }
-        }
         let (ex, ey) = (v2.x - v1.x, v2.y - v1.y);
         let len = ex.hypot(ey);
         let (wx0, wy0) = (v1.x - self.cam.x, v1.y - self.cam.y);
@@ -1490,17 +1485,16 @@ impl LvlPass<'_, '_> {
                 self.plane(x, (bot + 1).max(cc + 1), fc - 1, fsi, true);
             }
             if closed {
-                if mid_t.is_some() {
-                    let rt = if flags & 16 != 0 { fs_floor + mid_t.as_ref().unwrap().h as f64 } else { fs_ceil };
+                if let Some(mt) = &mid_t {
+                    let rt = if flags & 16 != 0 { fs_floor + mt.h as f64 } else { fs_ceil };
                     self.wall_run(x, top, bot, &mid_t, u, rt, yo, z, base);
                 } else if bs.is_some() {
                     // two-sided but shut (a closed door, a lift up): its upper and lower textures fill it (R_StoreWallRange)
-                    if bs_ceil < fs_ceil && !both_sky {
-                        if let Some(ut) = &up_t {
+                    if bs_ceil < fs_ceil && !both_sky
+                        && let Some(ut) = &up_t {
                             let rt = if flags & 8 != 0 { fs_ceil } else { bs_ceil + ut.h as f64 };
                             self.wall_run(x, top, bot.min((CY - (bs_ceil - vz) * sc2 - 0.5).floor() as i32), &up_t, u, rt, yo, z, base);
                         }
-                    }
                     if bs_floor > fs_floor && lo_t.is_some() {
                         let rt = if flags & 16 != 0 { fs_ceil } else { bs_floor };
                         self.wall_run(x, top.max((CY - (bs_floor - vz) * sc2 - 0.5).ceil() as i32), bot, &lo_t, u, rt, yo, z, base);
@@ -1955,14 +1949,14 @@ impl Fps {
         let (x0, y0) = (x - p.lo * k, y - p.to * k);
         for j in 0..p.h * k {
             let yy = y0 + j;
-            if yy < 0 || yy >= SH {
+            if !(0..SH).contains(&yy) {
                 continue;
             }
             let row = (j / k) * p.w;
             for i in 0..p.w * k {
                 let xx = x0 + i;
                 let q = (row + i / k) as usize;
-                if xx < 0 || xx >= SW || p.op[q] == 0 {
+                if !(0..SW).contains(&xx) || p.op[q] == 0 {
                     continue;
                 }
                 self.view.fb[(yy * SW + xx) as usize] = trans.map_or(p.px[q], |t| t[p.px[q] as usize]);
@@ -2513,11 +2507,10 @@ impl Fps {
         self.flash = -1;
         self.view.extralight = 0;
         self.me = Me { x: self.door_x(), y: h - 40.0, a: -PI / 2.0, ..Default::default() };
-        if !self.still {
-            if let Some(b) = before {
+        if !self.still
+            && let Some(b) = before {
                 self.melt = Some(Melt::start(b, &mut self.rng, self.now));
             }
-        }
     }
     fn respawn(&mut self) {
         self.back_home(false)
@@ -2547,11 +2540,10 @@ impl Fps {
             return;
         }
         self.left = true;
-        if !self.still {
-            if let Some(s) = self.shot() {
+        if !self.still
+            && let Some(s) = self.shot() {
                 self.leave_melt = Some(Melt::start(s, &mut self.rng, self.now));
             }
-        }
         self.events.push(Event::Leave);
     }
 
@@ -2640,11 +2632,10 @@ impl Fps {
         out.px.fill([0, 0, 0, 255]);
         self.letterbox(out);
         let now = self.now;
-        if let Some(m) = &mut self.melt {
-            if !m.draw(out, now) {
+        if let Some(m) = &mut self.melt
+            && !m.draw(out, now) {
                 self.melt = None;
             }
-        }
     }
     fn help(&mut self) {
         let c = self.wad.nearest(190, 190, 200);
@@ -2730,14 +2721,14 @@ impl Fps {
             let y0 = jround((wsy - q.to as f64 - 16.0) * S as f64) as i32;
             for j in 0..q.h * S {
                 let y = y0 + j;
-                if y < 0 || y >= VH {
+                if !(0..VH).contains(&y) {
                     continue;
                 }
                 let row = (j / S) * q.w;
                 for i in 0..q.w * S {
                     let x = x0 + i;
                     let k = (row + i / S) as usize;
-                    if x < 0 || x >= SW || q.op[k] == 0 {
+                    if !(0..SW).contains(&x) || q.op[k] == 0 {
                         continue;
                     }
                     let c = trans.map_or(q.px[k], |t| t[q.px[k] as usize]);
@@ -2911,4 +2902,55 @@ impl Fps {
 
 fn u8c(v: f64) -> u8 {
     if v.is_nan() { 0 } else { v.clamp(0.0, 255.0).round_ties_even() as u8 }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn projection() {
+        // 90 degrees across 640 pixels: straight ahead the middle, 45 degrees each side the edges
+        assert_eq!(to_x(0.0), 320);
+        assert_eq!(to_x(PI / 4.0), 0);
+        assert_eq!(to_x(2.0 * PI - PI / 4.0), 640);
+        // a span wholly in view, one cut at the left edge, one behind
+        assert_eq!(clip_angles(0.2, 2.0 * PI - 0.2), Some((to_x(0.2), to_x(2.0 * PI - 0.2))));
+        assert_eq!(clip_angles(1.2, 2.0 * PI - 0.2), Some((0, to_x(2.0 * PI - 0.2))));
+        assert_eq!(clip_angles(PI - 0.1, PI + 0.1), None);
+        assert!((norm(-0.5) - (2.0 * PI - 0.5)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn light_bands() {
+        // full light up close: the brightest map; far off, darker; no light: the darkest
+        assert_eq!(wall_level(15, 1.0), 0);
+        assert_eq!(wall_level(15, 2560.0), 0);
+        assert_eq!(wall_level(10, 100.0), 8);
+        assert_eq!(wall_level(0, 10000.0), 31);
+        assert_eq!(plane_level(12, 16.0), 0);
+        assert_eq!(plane_level(12, 1000.0), 11);
+        assert!(plane_level(8, 4000.0) > plane_level(8, 100.0));
+    }
+
+    #[test]
+    fn the_door_joins_office_and_level() {
+        let w = Wad::open_bytes(crate::wad::freedoom()).unwrap();
+        let f = Fps::new(w, None, Arc::new(Scene::empty(256.0, 180.0, 26.0)), Start { x: 128.0, y: 150.0, a: 0.0 }, Options::default()).unwrap();
+        let r = f.ctx3();
+        assert!(r.p().is_some(), "E1M1 has a place for the door");
+        for (x, y) in [(100.0, 300.0), (173.25, 405.0), (400.0, 120.0)] {
+            let (lx, ly) = r.o2l(x, y);
+            let (ox, oy) = r.l2o(lx, ly);
+            assert!((ox - x).abs() < 1e-9 && (oy - y).abs() < 1e-9);
+        }
+        for a in [0.0, 1.0, -2.5, 3.0] {
+            let b = r.a2o(r.a2l(a));
+            assert!((a - b).sin().abs() < 1e-9 && (a - b).cos() > 0.0);
+        }
+        // the door's middle in the office is the portal's middle in the level
+        let (lx, ly) = r.o2l(r.door_x(), r.units().1);
+        let p = r.p().unwrap();
+        assert!((lx - p.cx).abs() < 1e-9 && (ly - p.cy).abs() < 1e-9);
+    }
 }

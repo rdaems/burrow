@@ -1,4 +1,4 @@
-use burrow_fps::{Level, Wad, wad};
+use burrow_fps::{Level, Wad, level, wad};
 
 #[test]
 fn directory() {
@@ -34,4 +34,30 @@ fn e1m1() {
     assert_eq!(lv.start.ty, 1);
     let spot = lv.door_spot(64.0, 72.0).expect("a place for the door");
     assert!((spot.nx.hypot(spot.ny) - 1.0).abs() < 1e-9);
+}
+
+#[test]
+fn walking_and_shooting_in_e1m1() {
+    let w = Wad::open_bytes(wad::freedoom()).unwrap();
+    let mut lv = Level::new(&w, "E1M1", 5).unwrap();
+    let (x0, y0) = (lv.player.x, lv.player.y);
+    let a = lv.player.angle;
+    let walk = level::Cmd { forward: 1.0, ..Default::default() };
+    for _ in 0..20 {
+        lv.tic(&walk);
+    }
+    let (dx, dy) = (lv.player.x - x0, lv.player.y - y0);
+    // forward, at Doom's speed: thrust 25/32 a tic, friction 0.90625 (at most 7.5 units a tic)
+    assert!(dx * a.cos() + dy * a.sin() > 60.0, "{dx} {dy}");
+    assert!((dx * a.sin() - dy * a.cos()).abs() < 1.0);
+    assert!(dx.hypot(dy) < 20.0 * 7.6);
+    let shells = lv.player.ammo[1];
+    assert!(lv.fire());
+    assert_eq!(lv.player.ammo[1], shells - 1);
+    // the time goes on, nothing breaks, what was killed stays dead
+    for _ in 0..350 {
+        lv.tic(&level::Cmd::default());
+    }
+    assert_eq!(lv.time, 370);
+    assert!(lv.mobjs.iter().all(|o| o.alive || o.state == Some(level::St::Die) || o.missile.is_some() || !o.d.mon));
 }
