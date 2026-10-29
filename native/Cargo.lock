@@ -561,8 +561,11 @@ name = "burrow-core"
 version = "0.2.0"
 dependencies = [
  "burrow-model",
+ "libc",
+ "regex",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]
