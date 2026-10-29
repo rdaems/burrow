@@ -168,6 +168,19 @@ impl TermView {
         }));
     }
 
+    /// the same from a std channel (a thread hands the bytes over; it ends when the sender goes)
+    pub fn feed_from_std(&mut self, rx: std::sync::mpsc::Receiver<Vec<u8>>, cx: &mut Context<Self>) {
+        let (tx, frx) = futures::channel::mpsc::unbounded();
+        std::thread::spawn(move || {
+            while let Ok(b) = rx.recv() {
+                if tx.unbounded_send(b).is_err() {
+                    break;
+                }
+            }
+        });
+        self.feed_from(frx, cx);
+    }
+
     pub fn set_theme(&mut self, theme: Theme, cx: &mut Context<Self>) {
         if self.screen.theme != theme {
             self.screen.theme = theme;
