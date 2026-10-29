@@ -1,7 +1,9 @@
 //! burrow, native: the room on the left (the web room's pixel art, drawn by burrow-room into a buffer and
 //! painted here), the pane on the right (tiles of terminals, or a panel). GPUI draws it on the GPU.
 
+mod kit;
 mod roomview;
+mod tiles;
 
 use gpui::{App, AppContext, Application, Bounds, TitlebarOptions, WindowBackgroundAppearance, WindowBounds, WindowOptions, point, px, size};
 use std::borrow::Cow;
