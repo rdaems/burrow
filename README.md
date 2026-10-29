@@ -28,8 +28,8 @@ can do here.
 sessions seated at it.
 
 **It is an office.** Idle robots take breaks: coffee, chess, ping-pong, a duel on the hills outside the
-window, a nap on a mat, a meeting at the whiteboard. You furnish it, and keeping it tidy is yours: a full
-room is a full room.
+window, a nap on a mat, painting at the easel. You furnish it, and keeping it tidy is yours: a full room
+is a full room.
 
 ## The room
 
@@ -44,7 +44,7 @@ a desk's screen for a shell of your own there. Drop a file on a robot or a termi
 
 Everything else is furniture, out of the closet: a booth that deletes a session (click it within five seconds
 to take it back), a fire that burns the furniture you drag into it, a neuralyzer for `/clear`, a printer for the
-office report, a switchboard for the settings, a radio for the sound, a whiteboard the robots dream on, a table for a
+office report, a switchboard for the settings, a radio for the sound, an easel the robots paint masterpieces on (with robots in them), a table for a
 [pair](https://github.com/rdaems/pair-prompting) room, a dog, and much more. Switch on hardcore and the
 booth is a gun closet, the office a first-person shooter in a small Doom engine, and in there a mysterious door
 leads to Doom's first level ([Freedoom](https://freedoom.github.io)'s; put id's `DOOM1.WAD`, the free

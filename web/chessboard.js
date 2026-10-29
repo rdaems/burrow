@@ -1,4 +1,4 @@
-// The chess table in the page: the board, the moves, and who to sit down with. The
+// The chess table in the page: the board and who to sit down with (burrow: no list of the moves). The
 // rules live on the server (chess.py): the board only offers the moves it was sent.
 //
 // chessPanel(el, { post(body), people(), me(), face(p) }) returns { update(view), turn() };
@@ -96,11 +96,6 @@ function chessPanel(el, room) {
     h += `</div><div class="ch-side"><p class="ch-status${turn() ? " mine" : ""}">${esc(status())}</p>`;
     if (promo) h += `<div class="ch-promo">promote to ${"qrbn".split("").map((k) => `<button class="btn" data-promo="${k}"><img alt="${k}" src="${chessSprite(view.white.id === me ? k.toUpperCase() : k)}"></button>`).join("")}</div>`;
     if (err) h += `<p class="err">${esc(err)}</p>`;
-    if (view && view.sans.length) {
-      h += `<ol class="ch-moves">`;
-      for (let i = 0; i < view.sans.length; i += 2) h += `<li><span>${i / 2 + 1}.</span> ${esc(view.sans[i])} ${esc(view.sans[i + 1] || "")}</li>`;
-      h += `</ol>`;
-    }
     if (mine()) {
       const offered = view.draw && view.draw !== me;
       h += `<div class="ch-acts"><button class="btn" data-act="draw">${offered ? "accept draw" : "offer draw"}</button><button class="btn" data-act="resign">resign</button></div>`;
@@ -115,8 +110,6 @@ function chessPanel(el, room) {
           : `<span class="none">nobody else is here yet</span>`) + `</div>`;
     }
     el.innerHTML = h;
-    const list = el.querySelector(".ch-moves");
-    if (list) list.scrollTop = list.scrollHeight;
   }
   async function send(body) {
     err = "";

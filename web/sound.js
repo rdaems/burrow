@@ -120,6 +120,7 @@ window.Sound = (() => {
     } },
     thud: { vol: 0.16, make: (d, t) => { tone(d, t, { f: 120, f2: 52, dur: 0.12, vol: 1 }); hiss(d, t, { dur: 0.07, type: "lowpass", f: 600, vol: 0.6 }); } },
     win: { vol: 0.13, make: (d, t) => { [523, 659, 784, 1047].forEach((f, i) => tone(d, t + i * 0.11, { f, dur: i === 3 ? 0.45 : 0.14, type: "square", vol: 0.35 })); return 0.9; } },
+    died: { vol: 0.2, make: (d, t) => { tone(d, t, { f: 196, f2: 49, dur: 1.6, type: "triangle", vol: 0.9 }); tone(d, t + 0.05, { f: 98, f2: 30, dur: 1.8, vol: 0.6 }); hiss(d, t, { dur: 0.7, type: "lowpass", f: 500, f2: 120, vol: 0.4 }); return 1.9; } },   // you, shot: down and out
     lose: { vol: 0.12, make: (d, t) => { [392, 349, 262].forEach((f, i) => tone(d, t + i * 0.22, { f, f2: i === 2 ? 200 : undefined, dur: i === 2 ? 0.6 : 0.2, type: "triangle", vol: 0.8 })); return 1.1; } },
   };
   function play(name, pan = 0, vol = 1, force, opt) {

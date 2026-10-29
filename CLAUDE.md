@@ -32,8 +32,8 @@ message is the log. When something goes, take it out here. Keep the file under a
   http://localhost:7777 from the main checkout; it reads the files per request, so a reload shows a change to the
   page; a change to server.py needs a restart (his server runs detached, see memory).
   - `index.html` the page (tiles, terminals, the view's panels, the act handler), `room.js` the room (layout,
-    think, draw, pointer), `tiles.js` the tiling, `sprites.js` letter-grid sprites, `pixel.js` and the fonts are
-    pair's (avatars, dithers), `burrow.css`, `sound.js`, `outside.js` (the window), `fps.js` + `props3d.js` +
+    think, draw, pointer), `tiles.js` the tiling, `sprites.js` letter-grid sprites, `paintings.js` the easel's
+    paintings, `pixel.js` and the fonts pair's (avatars, dithers), `burrow.css`, `sound.js`, `outside.js` (the window), `fps.js` + `props3d.js` +
     `doom/` (the first person), `chessboard.js`/`chess.py`/`pong.js` (pair's games), `look.mjs` (tests).
   - xterm.js 5.5.0 and its addons (fit, clipboard, web-links) from jsdelivr.
 - `src/` is the first app, pure Rust (eframe/egui 0.37 + alacritty_terminal 0.26), frozen at Oct 21's features.
@@ -129,8 +129,8 @@ message is the log. When something goes, take it out here. Keep the file under a
   - **needs input**: seated, hand up, a bubble with a `?` (pair's glyph, steady), the screen's cursor blinking.
   - **idle** (done, process off, or only a question in words): breaks, long ones (`pickBreak`, 6–16 s between):
     the pouf, a nap on a mat it rolls out itself, coffee, the cooler, the printer, watering plants, the window,
-    chess, ping-pong, football, the fire, a visit, watching a game, a stretch, coffee for a busy colleague, a
-    meeting at the whiteboard. No idle chatter: a bubble is a real message or you typing.
+    chess, ping-pong, football, the fire, a visit, watching a game, a stretch, coffee for a busy colleague,
+    painting at the easel, a meeting by it. No idle chatter: a bubble is a real message or you typing.
   - **a message to another session**: a beam from the sender's antenna into the receiver's.
 - Elsewhere in the room: the coffee pot = the five-hour limit, the cooler's bottle = the week (a click: a bar per
   `/usage` line); the clock tells the real time and keeps the Mac awake (Amphetamine: off, while local bots work,
@@ -152,7 +152,9 @@ message is the log. When something goes, take it out here. Keep the file under a
 - A chair for every session, in arrival order (`seatRows`: who sits keeps the chair, a newcomer takes the far
   end). An empty desk is its cabinet and screen only; the first bot brings the desktop.
 - On the desk: the screen (a click: your shell there, one per screen, kept by the server with 200 kB of replay,
-  killed with the desk, not kept over a server restart; `exit` ends it), `+` beside it (a new bot), the name plate
+  killed with the desk, not kept over a server restart; `exit` ends it), `+` beside it (a new bot; in a folder Claude
+  Code there doesn't trust yet `claude --bg` refuses, so that terminal opens with `claude` in it, its trust prompt
+  showing, and the bot is asked for again every 3 s, taking the terminal's place once it starts: `trustFirst`), the name plate
   (8 letters, a given name 14; a click: the desk's panel, rename, its sessions, TERMINAL, KEEP).
 - The project cabinet adds a desk: a folder browser as VS Code's Open Folder (a path field over the folder list,
   where Claude Code ran lately first). No prose, no placeholder.
@@ -176,19 +178,32 @@ message is the log. When something goes, take it out here. Keep the file under a
 - Fixed (`FIXED` in room.js and server.py): the fire, the closet, the switchboard, the clock, this computer's door.
   Everything else burns in the fire (a desk with bots sends its bots to the booth).
 - What a click does: printer = a report on fanfold paper rising out of a wide printer in the pane, funny about the
-  room's statistics; pouf = you sit; plant = you water it; window = the duel; whiteboard = draw on it; chess and
+  room's statistics; pouf = you sit; plant = you water it; window = the duel; easel = the painting, big; chess and
   ping-pong = play or watch; coffee or cooler = the limits; clock = keep awake; switchboard (one lever) = settings
-  (rc, yolo, hardcore: a slider and a name a line, a help box under them; hardcore stays vague); pair table = its
+  (rc, yolo, hardcore: a slider and a name a line, a help box under them for the line under the pointer, empty
+  once the pointer leaves the panel; hardcore stays vague); pair table = its
   pair room; dog house = the dog; radio = sound; door = the doors' panel; project cabinet = a new desk; reception =
   the office manager. Dropped on: the neuralyzer gives an idle bot `/clear`; the booth deletes.
 - Whoever is at a piece rides along when it is dragged: a spot at a piece carries its key (`on`), `ride()` moves
   them each frame. One rule for every piece: reuse it, don't add a fix per piece.
-- The whiteboard is the robots' dream, pixel art drawn in bit by bit (two robots in love on a hill or a beach),
-  faster while robots nap; you draw on it in black.
+- The easel (kind `board`, the whiteboard it replaced) holds the robots' painting: famous paintings with every
+  person in them a robot (`paintings.js`: Mona Lisa, The Starry Night, The Scream, Girl with a Pearl Earring, The
+  Great Wave, American Gothic; public domain), dots in layers in a painter's order. Every person (or animal) in one
+  has the room's robot head (`head()`: a steel box, a dark screen with glowing eyes, ear bolts, an antenna) and steel
+  hands and neck; an oval face in metal read as a human (he: "I don't see robots"). It grows only while a robot
+  paints at it (`paint`, an idle break now and then, 8%, palette and brush, 30 dots a second); done, it hangs ten
+  minutes, then the next painter starts another. The room shows it at a third of its size; a click shows it framed
+  with who painted it. Nothing of yours goes on it.
 - The dog (a dachshund, `w.dog`, with the dog house): wanders, visits, follows you, chases the ball, sleeps at
   night (23–7); a click pets it, then a click throws a stick; it can be picked up.
 - The pair table is one pair room (`BURROW_PAIR`, default pair.daems.me): new or linked by your page or an invite; a
-  bot dropped on it gets the room's bring link typed into its session; a click shows the chat. pair is behind
+  bot dropped on it gets the room's bring link typed into its session; a click shows the chat, and while it is open
+  you stand beside the table holding its telephone's handset to your ear, the cord coiled back to the base (`phone`
+  act and arms, `app.pair()`); it goes back on the cradle when the chat closes. A bot posting in a table's room beams
+  from its antenna to the telephone, one reading it (a `/messages`, or a wait that brings messages) gets a beam from
+  the telephone (`pairtalk`, `room.pairTalk`): pair's agents curl `<pair>/a/<token>/…`, so the transcript sweep that
+  finds messages between sessions finds these too (`PAIR_GREP`, `parse_pair`); the table is the one linked to the room
+  pair named in answer to the bot's join (its whole transcript searched once when that is older, `pair_table`). pair is behind
   Cloudflare: send a User-Agent. pair names its agents itself (a `?name=` would need a change in pair).
 
 ## Removing a bot
@@ -197,10 +212,20 @@ message is the log. When something goes, take it out here. Keep the file under a
   light rises, the bot dissolves feet first); a click on the booth or the bot runs it back, carrying it out undoes;
   then `claude stop` + `claude rm`. Never a countdown sign.
 - **Hardcore** (a setting): the booth is a gun closet. A bot dropped on it, a burnt desk's bots, what an office
-  manager is asked to remove: condemned (it panics near the closet, freezes when aimed at); an office manager, or
-  you, takes a gun and shoots. The remains (its body in parts, cogs, oil) are the undo: a click puts it back
+  manager is asked to remove: condemned. An office manager, or you, takes a gun and shoots. While she fetches the
+  gun it is only taken aback (a start, then it stands watching her, and starts at every shot); it panics once the gun
+  comes its way (she walks over to it; you in the first person), and freezes when aimed at. The remains (its body in parts, cogs, oil) are the undo: a click puts it back
   together. Idle bots sweep the pieces; the last one gone, the session is deleted (rust after 30 s). Fear grows with
   kills (trembling, hiding, fleeing whoever holds a gun).
+- **The mutiny** (hardcore, `mutinyTick`/`mutinyStep`): three of *your* kills within about 45 s (`w.blood`, not an
+  office manager's) and the idle bots gather away from you, talk in turn (dots), stroll to the gun closet one by one,
+  each takes a gun and its eyes go red (`f.red`: `body(…, red)`, props3d `sp.red`), then close in on you, slowly,
+  one shot at a time across them: 3–5 wide (dust beside you), then you are hit. You lie in a pool, the room goes red,
+  YOU DIED and RESPAWN drawn in the room (only that takes a click); RESPAWN brings you in by the door, they carry the
+  guns back, fear is gone. One that gets work or is opened drops out; none left standing, it is over. In the first
+  person their shots are Doom's damage (`room.incoming`, fps.js `takeShot`), you can shoot back, and dead the view
+  shows YOU DIED and a click respawns both. All of it is the room's own: no session is touched (except a mutineer you
+  shoot, as any bot).
 - The fire takes furniture and desks, not bots (a bot at the fire warms its hands). A bot that is to go loses its
   tile at once.
 
@@ -236,8 +261,9 @@ message is the log. When something goes, take it out here. Keep the file under a
 
 ## Games
 
-- Chess (pair's board, `chess.py`, the server plays two plies) against an idle bot drawn by lot; bots play each
-  other for real on their breaks; a click on their table watches. Ping-pong (`pong.js`, ↑ ↓ only, the pointer stays
+- Chess (pair's board without its list of moves, square corners; `chess.py`, the server plays two plies) against an
+  idle bot drawn by lot; bots play each other for real on their breaks; a click on their table watches. He wants it
+  kept simple: no animated or 3d pieces (a Battle Chess-like board was offered and declined, 2026-10-29). Ping-pong (`pong.js`, ↑ ↓ only, the pointer stays
   visible), the same. Football between idle bots.
 - The window: an artillery duel on the hills (`outside.js`, the genre of VGABomb and Gorillas, not a copy), you
   against an idle bot that knows the physics; two bots can duel and you watch.
@@ -259,7 +285,7 @@ message is the log. When something goes, take it out here. Keep the file under a
   `Input.dispatchDragEvent` with `files` for a file drop), `shot` (`clip`/`clipTo`). Chrome's own `--screenshot`
   doesn't run requestAnimationFrame. An "exception … localhost:<other port>" means it drove another session's
   Chrome: rerun.
-- Hooks: `room.at(id)` (on the page's `room`), `__room` (`world`, `layout`, `game`, `football`, `clock`, `dream`,
+- Hooks: `room.at(id)` (on the page's `room`), `__room` (`world`, `layout`, `game`, `football`, `clock`, `art`,
   `fear`, `dog`, `stick`, `shoot`, `unshoot`, …), `__fps` (`set`, `turn`, `fire`, `use`, `under`, `level`, `cam`,
   `snap`, `hom`), `__pong.get()`, `__outside` (`get`, `aim`, `fire`, `solve`, `wind`). A bot waiting:
   `Object.defineProperty(f, "waiting", {get: () => true, set() {}})` on a folk (think resets it every frame).

@@ -176,7 +176,7 @@ function startFps(room, done) {
       let l = Math.floor(x / 64) % 3 === 1 && Math.floor(y / 64) % 3 === 1 ? 224 : 192;
       for (const L of sc.lights || []) {
         const dx = x - L.x * U, dy = y - L.y * U;
-        if (dx * dx + dy * dy < 9000) l = Math.max(l, L.flicker && !still ? 192 + (fireFlick & 48) : 224);
+        if (dx * dx + dy * dy < 9000) l = Math.max(l, L.muzzle ? 255 : L.flicker && !still ? 192 + (fireFlick & 48) : 224);
       }
       if (P && Math.abs(x - doorX()) < 112 && y > H - 112) l = 208 - (still ? 0 : torchFlick * 16);
       lgrid[cy * lgw + cx] = l;
@@ -833,9 +833,19 @@ function startFps(room, done) {
     let pal = 0;
     if (p.damagecount) pal = Math.min(7, (p.damagecount + 7) >> 3) + 1;   // (Doom's STARTREDPALS)
     else if (p.bonuscount) pal = 8 + Math.min(4, (p.bonuscount + 7) >> 3);
+    if (p.dead) { pal = Math.max(pal, 3); died(); }
     const rgb = wad.rgb[pal] || wad.rgb[0];
     for (let i = 0; i < SW * SH; i++) out32[i] = rgb[fb[i]];
     ctx.putImageData(img, 0, 0);
+  }
+  function died() {                           // a dark band across the view, YOU DIED in it, then how to come back
+    const t = lvl.time - lvl.player.deadAt;
+    if (t < 18) return;
+    const k = 6 * S, txt = "YOU DIED", y0 = Math.round(VH / 2 - 5 * k / 2) - 8 * S;
+    for (let y = y0 - 7 * S; y < y0 + 5 * k + (t > 35 ? 19 : 7) * S; y++) for (let x = 0; x < SW; x++) fb[y * SW + x] = cmap[27 * 256 + fb[y * SW + x]];
+    words(txt, Math.round(CX - room.tinyW(txt) * k / 2) + S, y0 + S, wad.nearest(40, 0, 0), k);
+    words(txt, Math.round(CX - room.tinyW(txt) * k / 2), y0, wad.nearest(200, 30, 24), k);
+    if (t > 35) words("CLICK TO RESPAWN", Math.round(CX - room.tinyW("CLICK TO RESPAWN") * S / 2), y0 + 5 * k + 7 * S, wad.nearest(232, 232, 238));
   }
   const help = () => words("WASD WALK - MOUSE TURN - CLICK SHOOT - E USE - ESC LEAVE", 2 * S, VH - 7 * S, wad.nearest(190, 190, 200));
   function officeHud() {
@@ -943,6 +953,20 @@ function startFps(room, done) {
     }
     if (time % 4 === 0) { fireFlick = Math.random() * 64 | 0; torchFlick = Math.random() * 4 | 0; }   // the fire and the torches flicker (Doom's FireFlicker)
   }
+  // the mutiny (room.js, hardcore): a shot at you from one of them, from where it stands. Doom's shotgun from there;
+  // wide, a puff past you; else Doom's damage (the pain, the face, the red)
+  let deadSeen = false;
+  function takeShot(s) {
+    const p = lvl.player, { W, H, WALL } = units(), sx = s.x * U, sy = s.y * U, dx = me.x - sx, dy = me.y - sy, d = Math.hypot(dx, dy) || 1;
+    if (Sound.on()) Sound.doom(wad, "DSSHOTGN", world === "office" ? (d < 160 ? 1 : Math.max(0.15, (1200 - d) / 1040)) : 0.3, 0.75 * Math.sin(Math.atan2(sy - me.y, sx - me.x) - me.a), "mutiny" + s.x);
+    if (world !== "office" || p.dead) return;
+    if (!s.hit) {
+      const k = (d + 40 + Math.random() * 60) / d;
+      puffs.push({ x: Math.max(4, Math.min(W - 4, sx + dx * k + (Math.random() - 0.5) * 30)), y: Math.max(WALL + 2, Math.min(H - 4, sy + dy * k + (Math.random() - 0.5) * 30)), z: 14 + Math.random() * 36, t: 0 });
+      return;
+    }
+    lvl.damage(p, s.dmg, null);
+  }
   function use() {
     if (world !== "office") return;
     const { H } = units(), p = lvl.player;
@@ -959,6 +983,8 @@ function startFps(room, done) {
   function tic() {
     time++;
     const c = cmd();
+    if (room.where) room.where(world);
+    if (room.incoming) for (const s of room.incoming()) takeShot(s);
     if (world === "level") {
       lvl.away = false;
       const p = lvl.player, b0 = P ? lvl.beyond(p.x, p.y) : 0;
@@ -971,6 +997,8 @@ function startFps(room, done) {
       if (world === "office") { lvl.away = true; lvl.tic(c); for (const h of lvl.sounds.splice(0)) heard(h); }
     }
     doorTic();
+    if (lvl.player.dead && !deadSeen && room.died) room.died();     // (the room's mutiny: you lie there, they stand round you)
+    deadSeen = lvl.player.dead;
     // the weapon: Doom's bob while ready (A_WeaponReady), then its frames
     const bob = world === "level" ? lvl.player.bob || 0 : me.bob;
     if (gunState < 0) { const ang = (128 * time) % 8192 / 8192 * 2 * Math.PI; wsx = 1 + bob * Math.cos(ang); wsy = 32 + bob * Math.abs(Math.sin(ang)); }
@@ -1028,7 +1056,7 @@ function startFps(room, done) {
     me.x = doorX(); me.y = H - 40; me.a = -Math.PI / 2; me.mx = me.my = 0;
     melt = startMelt(before);
   }
-  const respawn = () => backHome(false), exitLevel = () => backHome(true);
+  const respawn = () => { backHome(false); if (room.respawn) room.respawn(); }, exitLevel = () => backHome(true);
   function shot(from) {                       // the screen as it is, as large as the window (the bars black)
     const c = document.createElement("canvas"); c.width = innerWidth; c.height = innerHeight;
     const g = c.getContext("2d"), r = cv.getBoundingClientRect();
