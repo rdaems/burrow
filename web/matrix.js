@@ -147,8 +147,15 @@ function rain(cells, drops, R, dt, src) {
   for (const col of cells) for (const cell of col) { if (cell.a) { cell.a *= k; if (cell.a < 0.015) { cell.a = 0; cell.c = ""; } } cell.h *= kh; }
 }
 
-let last = performance.now();
+let last = performance.now(), lastDraw = 0;
+// thirty frames a second at most; one that throws costs that frame, not the rain
 function frame(now) {
+  requestAnimationFrame(frame);
+  if (now - lastDraw < 32) return;
+  lastDraw = now;
+  try { draw(now); } catch (err) { console.error(err); }
+}
+function draw(now) {
   const dt = Math.min(0.1, (now - last) / 1000) * (still ? 0.25 : 1);
   last = now;
   const W = box.clientWidth, H = box.clientHeight;
@@ -182,7 +189,6 @@ function frame(now) {
     nameDown(l, st, hov === l);
   }
   for (let i = streaks.length - 1; i >= 0; i--) if (!streak(streaks[i], now)) streaks.splice(i, 1);
-  requestAnimationFrame(frame);
 }
 // a column's glyphs: green, the head of a drop white, a lane that needs you pulsing towards white
 function paint(cx, col, white, need, upto = rows) {

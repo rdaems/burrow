@@ -36,7 +36,7 @@ button:hover, button:focus-visible { color: var(--bg); background: var(--g); bor
 #info .k { color: var(--g3); }
 #info p { margin: 6px 0 0; color: var(--g2); }
 
-#out { position: absolute; left: 0; bottom: 0; z-index: 2; max-width: min(960px, 100%); padding: 6px 14px; pointer-events: none;
+#out { position: absolute; left: 0; bottom: 24px; z-index: 2; max-width: min(960px, 100%); padding: 6px 14px; pointer-events: none;
   white-space: pre-wrap; word-break: break-word; text-shadow: 0 0 6px rgba(0, 255, 65, 0.4); background: rgba(0, 4, 1, 0.94);
   border: 1px solid var(--g4); border-bottom: 0; border-left: 0; }
 #out:empty { display: none; }
