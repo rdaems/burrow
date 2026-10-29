@@ -94,6 +94,11 @@ pub struct Paint {
     pub k: Color,
     pub plate: Color,
 }
+impl Default for Paint {
+    fn default() -> Paint {
+        WOOD
+    }
+}
 pub const WOOD: Paint = Paint { hi: SP::h, top: SP::w, d: SP::d, k: SP::k, plate: Color::rgb(0x2e1f28) };
 const fn paint(hi: u32, top: u32, d: u32, k: u32, plate: u32) -> Paint {
     Paint { hi: Color::rgb(hi), top: Color::rgb(top), d: Color::rgb(d), k: Color::rgb(k), plate: Color::rgb(plate) }

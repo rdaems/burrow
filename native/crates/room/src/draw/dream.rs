@@ -36,7 +36,20 @@ pub fn dream_pal(ch: char) -> Option<Color> {
 fn is_line(c: char) -> bool {
     matches!(c, 'k' | 'G' | 'o' | 'N' | 't' | 'q')
 }
-const BOT: [&str; 12] = ["....k....", "....k....", "..kkkkk..", ".kSSSSSk.", ".kSkSkSk.", ".kpSSSpk.", "..kkkkk..", ".kCCCCCk.", "kCCCCCCCk", ".kCCCCCk.", "..kk.kk..", ".k.....k."];
+const BOT: [&str; 12] = [
+    "....k....",
+    "....k....",
+    "..kkkkk..",
+    ".kSSSSSk.",
+    ".kSkSkSk.",
+    ".kpSSSpk.",
+    "..kkkkk..",
+    ".kCCCCCk.",
+    "kCCCCCCCk",
+    ".kCCCCCk.",
+    "..kk.kk..",
+    ".k.....k.",
+];
 const BOW: [&str; 2] = ["..qq.qq..", "...qkq..."]; // hers: a bow on her antenna
 const HEART: [&str; 6] = [".kk.kk.", "krrkrrk", "krrrrrk", ".krrrk.", "..krk..", "...k..."];
 const SMALL: [&str; 3] = ["p.p", "ppp", ".p."];

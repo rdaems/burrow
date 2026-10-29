@@ -20,11 +20,35 @@ pub fn dog_color(ch: char) -> Option<Color> {
 /// its poses, facing right; its tail is put on by the wag
 pub fn dog_rows(pose: &str) -> &'static [&'static str] {
     match pose {
-        "walk1" => &["...........bbb..", "..........bbbebb", "..........dbbbbn", "..........rbb...", "..bbbbbbbbbbb...", "..bbbbbbbbbbw...", "...bb......bb..."],
-        "walk2" => &["...........bbb..", "..........bbbebb", "..........dbbbbn", "..........rbb...", "..bbbbbbbbbbb...", "..bbbbbbbbbbw...", "..b.b.....b.b..."],
+        "walk1" => &[
+            "...........bbb..",
+            "..........bbbebb",
+            "..........dbbbbn",
+            "..........rbb...",
+            "..bbbbbbbbbbb...",
+            "..bbbbbbbbbbw...",
+            "...bb......bb...",
+        ],
+        "walk2" => &[
+            "...........bbb..",
+            "..........bbbebb",
+            "..........dbbbbn",
+            "..........rbb...",
+            "..bbbbbbbbbbb...",
+            "..bbbbbbbbbbw...",
+            "..b.b.....b.b...",
+        ],
         "sit" => &[".......bbb..", "......bbbebb", "......dbbbbn", "......rbb...", "...bbbbbb...", "..bbbbbbw...", "..bb..bb...."],
         "lie" => &["...........bbb..", "..........bbbdbb", ".bbbbbbbbbdbbbbn", ".bbbbbbbbbbbbw.."],
-        _ => &["...........bbb..", "..........bbbebb", "..........dbbbbn", "..........rbb...", "..bbbbbbbbbbb...", "..bbbbbbbbbbw...", "..bb......bb...."],
+        _ => &[
+            "...........bbb..",
+            "..........bbbebb",
+            "..........dbbbbn",
+            "..........rbb...",
+            "..bbbbbbbbbbb...",
+            "..bbbbbbbbbbw...",
+            "..bb......bb....",
+        ],
     }
 }
 /// where its tail is, still and wagging
@@ -65,7 +89,9 @@ pub fn dog_pic(pose: &str, wag: bool) -> Rc<Image> {
     let mut im = Image::new(w as u32, h as u32);
     for j in 0..h {
         for i in 0..w {
-            let near = [(1, 0), (-1, 0), (0, 1), (0, -1)].iter().any(|&(dx, dy)| i + dx >= 0 && i + dx < w && px.contains_key(&((j + dy) * w + i + dx)));
+            let near = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+                .iter()
+                .any(|&(dx, dy)| i + dx >= 0 && i + dx < w && px.contains_key(&((j + dy) * w + i + dx)));
             if !px.contains_key(&(j * w + i)) && near {
                 im.set(i, j, INK.0);
             }

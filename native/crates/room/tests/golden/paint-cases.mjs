@@ -185,6 +185,9 @@ for (const i of [0, 1]) for (const n of [300, 1000, -1]) add(`dream-${i}-${n < 0
   for (const p of o.slice(0, ${n < 0 ? "o.length" : n})) { x.fillStyle = I.DREAM_PAL[p.c]; x.fillRect(p.x, p.y, 1, 1); }
   return c;`);
 
+// the floor and the wall, the room's size as the demo has it
+add("floor", `return I.floor();`);
+
 // pictures for the page
 add("printer-pic", `return I.printerPicture(100, 4).src;`);
 for (const i of [-1, 2]) add(`door-pic-${i}`, `return I.doorPicture(${i}, 3);`);

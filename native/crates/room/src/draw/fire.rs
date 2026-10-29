@@ -42,7 +42,13 @@ pub fn draw_fire(ctx: &mut Ctx, x0: i32, y0: i32, t: f64, feeding: bool, burst: 
     let r = |ctx: &mut Ctx, y: i32, x: i32, w: i32, c: Color| rect(ctx, cx + x, y0 + y, w, 1, c);
     let (st_k, st_m, st_hi, st_d) = (Color::rgb(0x4d4a4f), Color::rgb(0x8d8a86), Color::rgb(0xaaa59e), Color::rgb(0x6e6b6a)); // the stones
     let k = (t * 6.).floor() as i32 % 3;
-    let big = if feeding { xx(4) } else if !burning.is_empty() { xx(3) } else { 0 };
+    let big = if feeding {
+        xx(4)
+    } else if !burning.is_empty() {
+        xx(3)
+    } else {
+        0
+    };
     if part != FirePart::Flames {
         // the ring of stones at the bottom, lit along its far side, in shade on the near one
         let rows = xx(12);
@@ -62,7 +68,22 @@ pub fn draw_fire(ctx: &mut Ctx, x0: i32, y0: i32, t: f64, feeding: bool, burst: 
                 r(ctx, ty + j, -hw + 1, hw * 2 - 2, c);
             }
         }
-        for (x, y) in [(-12, 20), (-6, 17), (2, 17), (9, 18), (12, 22), (-10, 25), (-1, 26), (6, 26), (11, 25), (-13, 23), (-3, 17), (14, 20), (3, 27), (-8, 27)] {
+        for (x, y) in [
+            (-12, 20),
+            (-6, 17),
+            (2, 17),
+            (9, 18),
+            (12, 22),
+            (-10, 25),
+            (-1, 26),
+            (6, 26),
+            (11, 25),
+            (-13, 23),
+            (-3, 17),
+            (14, 20),
+            (3, 27),
+            (-8, 27),
+        ] {
             r(ctx, xx(y), xx(x), 1, st_k);
         }
         for (j, hw) in ell(xx(12), xx(4), xx(8)).into_iter().enumerate() {
@@ -110,9 +131,8 @@ pub fn draw_fire(ctx: &mut Ctx, x0: i32, y0: i32, t: f64, feeding: bool, burst: 
     // red, gold in them, yellow at the heart
     let (base, hw, hmax) = (xx(22), xx(7), xx(18));
     let flame = |ctx: &mut Ctx, x: i32, h: i32, c: Color| rect(ctx, cx + x, y0 + base - h, 1, h, c);
-    let fl: Vec<(i32, i32)> = (-hw..=hw)
-        .map(|x| (x, js_round(xx(15) as f64 - xx(13) as f64 * x.abs() as f64 / hw as f64) + (k + x.abs()) % 3))
-        .collect();
+    let fl: Vec<(i32, i32)> =
+        (-hw..=hw).map(|x| (x, js_round(xx(15) as f64 - xx(13) as f64 * x.abs() as f64 / hw as f64) + (k + x.abs()) % 3)).collect();
     for &(x, h) in &fl {
         flame(ctx, x, hmax.min(h + big), C::RED1);
     }
@@ -127,6 +147,8 @@ pub fn draw_fire(ctx: &mut Ctx, x0: i32, y0: i32, t: f64, feeding: bool, burst: 
     if burst >= 0. {
         // sparks, out and up, dying out
         for i in 0..14 {
+            #[allow(clippy::approx_constant)]
+            // room.js's own number, not TAU: the sparks fall where they did
             let a = (i as f64 * 2.399) % 6.283;
             let sp = 0.5 + ((i * 7919) % 100) as f64 / 200.;
             let tt = burst * sp * 1.6;
@@ -135,7 +157,19 @@ pub fn draw_fire(ctx: &mut Ctx, x0: i32, y0: i32, t: f64, feeding: bool, burst: 
             }
             let sx = js_round(a.sin() * xx(16) as f64 * tt);
             let sy = js_round(xx(22) as f64 - xx(8) as f64 * a.cos() * tt - xx(26) as f64 * tt);
-            r(ctx, sy, sx, 1, if tt < 0.5 { C::GOLD2 } else if tt < 0.8 { C::GOLD1 } else { C::RED1 });
+            r(
+                ctx,
+                sy,
+                sx,
+                1,
+                if tt < 0.5 {
+                    C::GOLD2
+                } else if tt < 0.8 {
+                    C::GOLD1
+                } else {
+                    C::RED1
+                },
+            );
         }
     }
 }

@@ -31,11 +31,8 @@ fn check(prefix: &str, allow: impl Fn(&str) -> usize, draw: impl Fn(&str) -> Opt
     let out = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/golden-out");
     let mut bad = Vec::new();
     let mut n = 0;
-    let mut names: Vec<_> = std::fs::read_dir(golden())
-        .unwrap()
-        .map(|e| e.unwrap().path())
-        .filter(|p| p.extension().is_some_and(|x| x == "png"))
-        .collect();
+    let mut names: Vec<_> =
+        std::fs::read_dir(golden()).unwrap().map(|e| e.unwrap().path()).filter(|p| p.extension().is_some_and(|x| x == "png")).collect();
     names.sort();
     for p in names {
         let name = p.file_stem().unwrap().to_string_lossy().to_string();
@@ -54,7 +51,14 @@ fn check(prefix: &str, allow: impl Fn(&str) -> usize, draw: impl Fn(&str) -> Opt
         if d > allow(&name) {
             std::fs::create_dir_all(&out).unwrap();
             got.save_png(out.join(format!("{name}.png"))).unwrap();
-            bad.push(format!("{name}: {} pixels ({}x{} vs {}x{})", if d == usize::MAX { -1 } else { d as i64 }, got.w, got.h, want.w, want.h));
+            bad.push(format!(
+                "{name}: {} pixels ({}x{} vs {}x{})",
+                if d == usize::MAX { -1 } else { d as i64 },
+                got.w,
+                got.h,
+                want.w,
+                want.h
+            ));
         }
     }
     assert!(n > 0, "no references for {prefix}");
@@ -216,7 +220,13 @@ fn desk_case(sp: Spec, t: f64, lit: bool, hl: &[&str], pointer: Option<&str>, sh
         color: project_color(sp.dir),
         paint: WOOD,
         seats: xs.clone(),
-        mugs: sp.seats.iter().zip(&xs).filter(|(s, _)| s.mug).map(|(s, &x)| (x, project_color(if s.unit.is_empty() { "u1" } else { s.unit }))).collect(),
+        mugs: sp
+            .seats
+            .iter()
+            .zip(&xs)
+            .filter(|(s, _)| s.mug)
+            .map(|(s, &x)| (x, project_color(if s.unit.is_empty() { "u1" } else { s.unit })))
+            .collect(),
         screen: screen(""),
         trees,
         on_plate: inside(hots.plate),
@@ -335,6 +345,10 @@ fn the_wall_is_room_js() {
         };
         Some(on(20, 24, WALLC, |c| draw_door(c, 2, &p, ajar, boarded, 2)))
     });
+    check("paint-floor", exact, |name| {
+        let want = Image::from_png(&std::fs::read(golden().join(format!("{name}.png"))).ok()?).ok()?;
+        Some(floor(want.w as i32, want.h as i32))
+    });
     check("paint-closet-", exact, |name| Some(on(26, 28, WALLC, |c| draw_closet(c, 2, 2, name.ends_with('1')))));
     check("paint-switch-", exact, |name| Some(on(14, 20, WALLC, |c| draw_switchboard(c, 2, 3, name.ends_with('1')))));
 }
@@ -349,7 +363,9 @@ fn the_floor_is_room_js() {
             _ => draw_coffee(c, 3, 24, false, 0., used(n)),
         }))
     });
-    check("paint-cooler-", exact, |name| Some(on(14, 30, PLANK, |c| draw_cooler(c, 7, 28, used(name.strip_prefix("paint-cooler-").unwrap())))));
+    check("paint-cooler-", exact, |name| {
+        Some(on(14, 30, PLANK, |c| draw_cooler(c, 7, 28, used(name.strip_prefix("paint-cooler-").unwrap()))))
+    });
     check("paint-printer-", exact, |name| {
         let n = name.strip_prefix("paint-printer-")?;
         if n == "pic" {
@@ -481,8 +497,12 @@ fn figures_and_effects_are_room_js() {
     check("paint-dissolve-", exact, |name| Some(dissolve(&bot(), name.strip_prefix("paint-dissolve-")?.parse().ok()?)));
     check("paint-outlined-", exact, |name| {
         Some(match name.strip_prefix("paint-outlined-")? {
-            "plant" => on(24, 40, PLANK, |c| outlined(c, foot("plant", 12., 34., None), true, GOLD, 0., |o| draw_plant(o, 12, 34, 0, None))),
-            "booth" => on(26, 44, PLANK, |c| outlined(c, foot("booth", 13., 38., None), true, RED, 0.5, |o| draw_booth(o, 13, 38, false, -1., -1., false, 0., false))),
+            "plant" => {
+                on(24, 40, PLANK, |c| outlined(c, foot("plant", 12., 34., None), true, GOLD, 0., |o| draw_plant(o, 12, 34, 0, None)))
+            }
+            "booth" => on(26, 44, PLANK, |c| {
+                outlined(c, foot("booth", 13., 38., None), true, RED, 0.5, |o| draw_booth(o, 13, 38, false, -1., -1., false, 0., false))
+            }),
             "off" => on(24, 40, PLANK, |c| outlined(c, foot("plant", 12., 34., None), false, GOLD, 0., |o| draw_plant(o, 12, 34, 1, None))),
             _ => return None,
         })

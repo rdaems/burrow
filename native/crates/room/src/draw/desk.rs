@@ -41,7 +41,7 @@ pub struct Desk<'a> {
     pub paint: Paint,
     /// each chair's x, in the bots' order
     pub seats: Vec<i32>,
-    /// a coffee a colleague brought, by the keyboard of the seat at x, in the bringer's colour
+    /// a coffee a colleague brought, by the keyboard of the seat at x, in the sitter's colour (room.js's colorOf)
     pub mugs: Vec<(i32, Color)>,
     pub screen: Screen,
     pub trees: Vec<Tree<'a>>,
@@ -52,12 +52,6 @@ pub struct Desk<'a> {
     /// the screen lit (drawDesk's `lit`), or its shell's tile under the pointer (`hsAt(d.dir)`)
     pub lit: bool,
     pub shell_lit: bool,
-}
-
-impl Default for Paint {
-    fn default() -> Paint {
-        WOOD
-    }
 }
 
 /// a JS string's length (in UTF-16 units): what seeds a screen's rows
@@ -86,10 +80,12 @@ pub fn desk_hots(x0: i32, y: i32, cab: i32, trees: usize) -> DeskHots {
         plate: [x0 + 2, y - 10, x0 + cab - 2, y - 2],
         screen: [sx, sy, sx + 22, sy + 18],
         plus: [px - 3, sy - 3, px + 8, sy + 8],
-        laptops: (0..trees as i32).map(|k| {
-            let (px, py) = (sx + 23 + k * LAP, y - 22);
-            [px, py, px + 12, py + 11]
-        }).collect(),
+        laptops: (0..trees as i32)
+            .map(|k| {
+                let (px, py) = (sx + 23 + k * LAP, y - 22);
+                [px, py, px + 12, py + 11]
+            })
+            .collect(),
     }
 }
 
@@ -205,7 +201,9 @@ pub fn draw_desk(ctx: &mut Ctx, d: &Desk, t: f64) {
 
 /// an office chair at a project's desk, its sitter facing the screen; none where no bot is yet
 pub fn draw_chair(ctx: &mut Ctx, x: i32, y: i32, lit: bool) {
-    let Some(im) = sprites::get("chair") else { return };
+    let Some(im) = sprites::get("chair") else {
+        return;
+    };
     if lit {
         put(ctx, &halo(&im, GOLD), x - 4, y - 16, false);
     }

@@ -168,7 +168,14 @@ pub fn draw_clock(ctx: &mut Ctx, x0: i32, y0: i32, a: Option<&Awake>, time: Cloc
     for k in 0..12 {
         // the hours
         let ang = k as f64 / 12. * 2. * PI;
-        rect(ctx, js_round(cx as f64 + ang.sin() * 5.6), js_round(cy as f64 - ang.cos() * 5.6), 1, 1, if k % 3 != 0 { SP::C } else { SP::E });
+        rect(
+            ctx,
+            js_round(cx as f64 + ang.sin() * 5.6),
+            js_round(cy as f64 - ang.cos() * 5.6),
+            1,
+            1,
+            if k % 3 != 0 { SP::C } else { SP::E },
+        );
     }
     let hand = |ctx: &mut Ctx, ang: f64, len: f64, col: Color| {
         // a line from the middle, half a dot a step
@@ -210,4 +217,30 @@ pub fn draw_window(ctx: &mut Ctx, x0: i32, y0: i32, hour: u32) {
         rect(ctx, px + 2, gy + 2, 1, 1, glint);
         rect(ctx, px + 1, gy + 3, 1, 1, glint);
     }
+}
+
+/// the floor and the wall behind everything, `w` x `h` dots: Pixel Agents' planks in rows, their seams
+/// staggered, the navy wall, its baseboard, a soft shadow along its foot
+pub fn floor(w: i32, h: i32) -> Image {
+    let mut im = Image::new(w as u32, h as u32);
+    {
+        let ctx = &mut im.ctx();
+        rect(ctx, 0, WALL, w, h - WALL, PLANK);
+        let (mut y, mut row) = (WALL + 3, 0);
+        while y < h {
+            rect(ctx, 0, y, w, 1, SEAM);
+            let mut x = -((fnv(&format!("r{row}")) % 48) as i32);
+            while x < w {
+                rect(ctx, x, y + 1, 1, 3, SEAM);
+                x += 40 + (fnv(&format!("{row}:{x}")) % 4) as i32 * 8;
+            }
+            y += 4;
+            row += 1;
+        }
+        rect(ctx, 0, 0, w, WALL, WALLC);
+        rect(ctx, 0, WALL - 2, w, 2, BASEBOARD);
+        rect(ctx, 0, WALL, w, 1, pix::css("rgba(0,0,0,0.3)"));
+        rect(ctx, 0, WALL + 1, w, 1, pix::css("rgba(0,0,0,0.12)"));
+    }
+    im
 }

@@ -470,12 +470,20 @@ pub fn draw_chess(ctx: &mut Ctx, x: i32, y: i32, board: Option<&str>) {
     for f in (0..8).rev() {
         for r in 0..8 {
             // the pieces stand up from their squares, back to front
-            let Some(&p) = b.get((r * 8 + f) as usize) else { continue };
+            let Some(&p) = b.get((r * 8 + f) as usize) else {
+                continue;
+            };
             if p == b'.' {
                 continue;
             }
             let white = p.is_ascii_uppercase();
-            let tall = if b"KQkq".contains(&p) { 3 } else if b"Pp".contains(&p) { 1 } else { 2 };
+            let tall = if b"KQkq".contains(&p) {
+                3
+            } else if b"Pp".contains(&p) {
+                1
+            } else {
+                2
+            };
             let px = x0 + 2 + r * 2 + if white { 0 } else { 1 };
             let py = y0 + 9 - f;
             rect(ctx, px, py - tall + 1, 1, tall, if white { SP::A } else { SP::x });
@@ -534,7 +542,8 @@ pub fn draw_printer(ctx: &mut Ctx, x: i32, y: i32, wait: Option<f64>) {
 // the pouf (the kind is still "armchair"): a square green cushion seen from above at a slant, as the furniture
 // is, so it is the same from each of its four sides; its corners rounded, its top lit along the front edge, a
 // button in the middle, on two little splayed wooden feet. Pixel Agents' armchair, its seat without the back
-const POUF: &[(char, u32)] = &[('k', 0x173115), ('h', 0x8cbf8c), ('t', 0x6fa374), ('s', 0x487841), ('d', 0x355f31), ('w', 0x885c47), ('x', 0x532e3d)];
+const POUF: &[(char, u32)] =
+    &[('k', 0x173115), ('h', 0x8cbf8c), ('t', 0x6fa374), ('s', 0x487841), ('d', 0x355f31), ('w', 0x885c47), ('x', 0x532e3d)];
 const POUF_ROWS: [&str; 14] = [
     "..kkkkkkkkkkkk..",
     ".kttttttttttttk.",
@@ -572,7 +581,9 @@ pub fn draw_armchair(ctx: &mut Ctx, x: i32, y: i32) {
 
 /// Pixel Agents' plants (`i` 0 or 1: which); stirred (`stir_ms`: how long since the pointer came), the leaves sway twice
 pub fn draw_plant(ctx: &mut Ctx, x: i32, y: i32, i: u32, stir_ms: Option<f64>) {
-    let Some(im) = sprites::get(if i != 0 { "PLANT_2" } else { "PLANT" }) else { return };
+    let Some(im) = sprites::get(if i != 0 { "PLANT_2" } else { "PLANT" }) else {
+        return;
+    };
     let k = stir_ms.map(|ms| (ms / 125.).floor() as i64).unwrap_or(4);
     if k >= 4 {
         put(ctx, &im, x - 8, y - 30, false);
@@ -598,7 +609,10 @@ pub fn draw_pong(ctx: &mut Ctx, gx: i32, gy: i32, ball: Option<PongBall>) {
         let a = if from { 1. } else { -1. };
         let x = gx as f64 + a * 18. * (1. - 2. * t);
         let k = if t < 0.5 { t * 2. } else { (t - 0.5) * 2. };
-        let y = gy as f64 - 12. - js_round((k * std::f64::consts::PI).sin() * if t < 0.5 { 6. } else { 8. }) as f64 - 6. * (1. - (t * 4.).min(1.));
+        let y = gy as f64
+            - 12.
+            - js_round((k * std::f64::consts::PI).sin() * if t < 0.5 { 6. } else { 8. }) as f64
+            - 6. * (1. - (t * 4.).min(1.));
         let (rx, ry) = (js_round(x), js_round(y));
         rect(ctx, rx - 1, ry - 1, 3, 3, INK);
         rect(ctx, rx, ry, 1, 1, C::WHITE);
