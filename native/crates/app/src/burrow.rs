@@ -160,9 +160,42 @@ impl Burrow {
         if let Ok(clicks) = std::env::var("BURROW_CLICKS") {
             cx.spawn_in(window, async move |this, cx| {
                 cx.background_executor().timer(Duration::from_millis(2000)).await;
+                let pt = |s: &str| s.split_once(',').and_then(|(x, y)| Some((x.trim().parse::<f64>().ok()?, y.trim().parse::<f64>().ok()?)));
                 for c in clicks.split(';') {
-                    let Some((x, y)) = c.split_once(',').and_then(|(x, y)| Some((x.trim().parse::<f64>().ok()?, y.trim().parse::<f64>().ok()?))) else { continue };
-                    let _ = this.update_in(cx, |b, window, cx| b.click_room(x, y, window, cx));
+                    if let Some((a, z)) = c.split_once('>') {
+                        // a drag: pressed at a, moved there in steps, let go at z (held at z: "x,y>x,y!")
+                        let hold = z.ends_with('!');
+                        let (Some(a), Some(z)) = (pt(a), pt(z.trim_end_matches('!'))) else { continue };
+                        let _ = this.update_in(cx, |b, window, cx| {
+                            let mut out = Output::default();
+                            b.room.pointer_move(a.0, a.1, (0.0, 0.0), &mut out);
+                            b.redraw(window, cx);
+                            b.room.pointer_down(a.0, a.1, false);
+                            b.drag = Some(Drag::Room);
+                        });
+                        for k in 1..=10 {
+                            let (x, y) = (a.0 + (z.0 - a.0) * k as f64 / 10.0, a.1 + (z.1 - a.1) * k as f64 / 10.0);
+                            let _ = this.update_in(cx, |b, window, cx| {
+                                let mut out = Output::default();
+                                b.room.pointer_move(x, y, (0.0, 0.0), &mut out);
+                                b.after(out, window, cx);
+                                b.dirty = true;
+                            });
+                            cx.background_executor().timer(Duration::from_millis(60)).await;
+                        }
+                        if !hold {
+                            let _ = this.update_in(cx, |b, window, cx| {
+                                let mut out = Output::default();
+                                let inp = b.input();
+                                b.room.pointer_up(&inp, &mut out, (0.0, 0.0));
+                                b.drag = None;
+                                b.after(out, window, cx);
+                                b.dirty = true;
+                            });
+                        }
+                    } else if let Some((x, y)) = pt(c) {
+                        let _ = this.update_in(cx, |b, window, cx| b.click_room(x, y, window, cx));
+                    }
                     cx.background_executor().timer(Duration::from_millis(700)).await;
                 }
             })
