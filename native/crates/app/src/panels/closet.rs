@@ -64,14 +64,15 @@ pub fn body(b: &mut Burrow, window: &mut Window, cx: &mut Context<Burrow>) -> An
                 )
                 .child(kit::image(im, w, hh))
                 .child(
+                    // its name, with the panel's ink shadow; gold under the pointer
                     div()
+                        .relative()
                         .font_family(kit::PIXEL)
                         .text_size(px(16.))
                         .line_height(px(22.))
                         .whitespace_nowrap()
-                        .text_color(rgb(col::STEEL3))
-                        .group_hover("item", |s| s.text_color(rgb(col::GOLD2)))
-                        .child(burrow_room::layout::name_of(kind).to_string()),
+                        .child(div().absolute().left(px(2.)).top(px(2.)).text_color(rgb(col::INK)).child(burrow_room::layout::name_of(kind).to_string()))
+                        .child(div().relative().text_color(rgb(col::STEEL3)).group_hover("item", |s| s.text_color(rgb(col::GOLD2))).child(burrow_room::layout::name_of(kind).to_string())),
                 ),
         );
     }
