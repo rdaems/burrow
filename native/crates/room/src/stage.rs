@@ -290,7 +290,7 @@ impl Room {
             let tree_lit: Vec<bool> = trees.iter().map(|(tr, _, mine)| hs.as_ref().is_some_and(|h| h.m == d.d.m && h.dir == *tr) || mine.iter().any(|id| hl.contains(id))).collect();
             let r = rf(foot(&d.key, d.at, Some(d.w)));
             let (dg, tn) = (danger(&d.key), tint_of(&d.key));
-            let screen_lit = d.seats.iter().any(|(id, _, _)| hl.contains(id)) && false;
+            let screen_lit = false; // (room.js draws a desk with its `lit` left out)
             let paint = move |c: &mut Ctx| {
                 let td: Vec<D::Tree> = trees.iter().enumerate().map(|(k, (tr, on, _))| D::Tree { dir: tr.as_str(), screen: tree_screens[k], on: *on, lit: tree_lit[k] }).collect();
                 let desk = D::Desk {
