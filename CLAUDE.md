@@ -264,9 +264,19 @@ message is the log. When something goes, take it out here. Keep the file under a
   kind) stands in the room and is on (settings `files`; the cabinet is the switch, like the radio; its top drawer open
   while on): rooted where it runs (the bot's `cwd`, the shell's folder), folders opened with a click, git's changes
   coloured (gold changed, green new, a dot on a folder holding some), what changed in the last two minutes bold with a
-  dot. A file clicked goes into the terminal: `@path` in a session, its path in a shell. `/api/tree` (`TREE`, python3
-  on the machine: the open folders and `git status` in one round) every 15 s and when a bot's turn ends. Not in a tile
-  under 480 px wide.
+  dot. A file clicked opens in the editor; dragged onto a terminal it goes in as `@path` in a session (Claude Code reads
+  it with the message), its path in a shell (`pathFor`). `/api/tree` (`TREE`, python3 on the machine: the open folders
+  and `git status` in one round) every 15 s and when a bot's turn ends. Not in a tile under 480 px wide; while a file of
+  it is open the tree sits in that file's tile, on its left, and the terminal keeps its width.
+- **The editor** (`openFile`, kind `file`): a tile beside its terminal, one a terminal (another file takes its place
+  once this one is saved). CodeMirror 6 in `web/editor.js`, bundled by `web/editor/build.sh` (exact versions in its
+  package.json, licences in LICENSES.txt; the page only takes the parts, its setup is in index.html), loaded when the
+  first file opens. ⌘S saves through `/api/file` (`FILE`, python3 on the machine): only if the file has not changed
+  since it was read (mtime in ns), via a temporary file renamed over it, mode and symlinks kept. A markdown file opens
+  rendered (marked + DOMPurify: the page can open shells, nothing in a file may run; pictures through `/raw`, links to
+  other files open here), SOURCE / PREVIEW on the band. Every 4 s it looks at the file on disk: changed while nothing
+  is unsaved, it comes in; with unsaved edits a red badge and THEIRS / MINE. ✕ (or ⌘W, Esc, the floor) on unsaved
+  edits warns once. @ on the band puts it in its terminal. While it has the focus you stand at the desk's screen.
 - **The view** (`#view`): one 16-bit panel in the pane (pair's door.css: ink ring, bevels, the dithered fill, the
   pixel font, steel buttons), centred, as wide as its kind needs (640 px at most); opening it closes the tiles; the
   floor or Esc closes it. Every popup is one of its panels: keep them the same, simple, streamlined. Fields and

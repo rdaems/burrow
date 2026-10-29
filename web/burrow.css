@@ -83,6 +83,32 @@ button, input, select { font:inherit; color:inherit; }
 .tree .note { color:var(--steel1); cursor:default; }
 .tree::-webkit-scrollbar { width:8px; }
 .tree::-webkit-scrollbar-thumb { background:var(--ink2); }
+/* a file's tile: CodeMirror in the terminal's font and colours, or a markdown file rendered; its band says what is unsaved */
+.tbody.file { flex-direction:row; }
+.fmain { position:relative; flex:1; min-width:0; }
+.tbody.file .tree { order:-1; border-left:none; border-right:2px solid var(--ink2); }
+.tree .row.cur { background:var(--line); color:var(--steel4); }
+.fedit, .fview { position:absolute; inset:0; overflow:auto; }
+.fedit[hidden], .fview[hidden] { display:none; }
+.fedit .cm-editor { height:100%; }
+.fedit .cm-editor.cm-focused { outline:none; }
+.fnote { padding:18px 20px; color:var(--steel2); font:13px/1.5 "Burrow Mono", "JetBrains Mono", Menlo, monospace; }
+.fview { padding:20px 28px 48px; font:15px/1.6 -apple-system, system-ui, sans-serif; color:#dfe2ec; }
+.fview h1, .fview h2, .fview h3, .fview h4 { color:var(--steel4); line-height:1.25; margin:1.2em 0 .5em; }
+.fview h1 { font-size:1.7em; } .fview h2 { font-size:1.35em; border-bottom:1px solid var(--line); padding-bottom:.2em; } .fview h3 { font-size:1.12em; }
+.fview a { color:var(--pale0); }
+.fview code { font:13px "Burrow Mono", "JetBrains Mono", Menlo, monospace; background:var(--code); padding:1px 5px; border-radius:4px; }
+.fview pre { background:var(--code); padding:12px 14px; border-radius:6px; overflow:auto; }
+.fview pre code { padding:0; background:none; }
+.fview blockquote { margin:1em 0; padding:0 1em; border-left:3px solid var(--line); color:var(--steel2); }
+.fview img { max-width:100%; }
+.fview table { border-collapse:collapse; } .fview th, .fview td { border:1px solid var(--line); padding:4px 10px; }
+.fview hr { border:none; border-top:1px solid var(--line); }
+.tbar .tbtns { margin-left:auto; display:flex; gap:6px; }
+.tbar .tbtns .tapp { margin-left:0; }
+.tbar .tbtns [hidden] { display:none; }
+.tile.dirty .tas::before { content:"● "; }
+.tile.warn .tas { background:#eb4c3f; color:#fff; text-shadow:none; padding:0 6px; border-radius:3px; flex:none; }
 .term .xterm-viewport { background:transparent !important; }
 .term .xterm-viewport::-webkit-scrollbar { width:8px; }
 .term .xterm-viewport::-webkit-scrollbar-thumb { background:var(--ink2); }

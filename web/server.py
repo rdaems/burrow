@@ -345,8 +345,76 @@ print(json.dumps({"dirs": dirs, "git": git, "now": int(time.time())}))
 """
 
 
-def run(m, script, timeout=60):
-    p = subprocess.run(argv(m, script, False), capture_output=True, text=True, timeout=timeout)
+# a file there, for the editor beside a terminal (python3 on the machine): read (its text; or too big, binary, missing),
+# stat, or write (what comes on stdin; only if it has not changed since it was read, its mtime in ns as a string, unless
+# forced; through a temporary file renamed over it, so a session never reads half a file; its mode kept, a symlink
+# followed). It answers its mtime and size after
+FILE = r"""
+import json, os, sys, tempfile
+a = json.loads(sys.argv[1]); p = os.path.realpath(os.path.expanduser(a["path"]))
+def st():
+    try:
+        s = os.stat(p)
+        return {"mtime": str(s.st_mtime_ns), "size": s.st_size}
+    except FileNotFoundError:
+        return {"missing": True}
+out = st()
+if a["op"] == "read" and not out.get("missing"):
+    if out["size"] > 2000000:
+        out["big"] = True
+    else:
+        data = open(p, "rb").read()
+        try:
+            if b"\0" in data[:8192]:
+                raise ValueError
+            out["text"] = data.decode("utf-8")
+        except ValueError:
+            out["binary"] = True
+elif a["op"] == "write":
+    if not a.get("force") and out.get("mtime") != a.get("mtime"):
+        out["conflict"] = True
+    else:
+        data = sys.stdin.buffer.read()
+        mode = None if out.get("missing") else os.stat(p).st_mode & 0o7777
+        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(p), prefix=".burrow-")
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        os.chmod(tmp, mode if mode is not None else 0o644)
+        os.replace(tmp, p)
+        out = st()
+print(json.dumps(out))
+"""
+
+
+# a picture there, as base64 (8 MB at most), for /raw
+IMAGES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp", ".svg": "image/svg+xml"}
+RAW = r"""
+import base64, os, sys
+p = os.path.realpath(os.path.expanduser(sys.argv[1]))
+sys.exit(1) if os.path.getsize(p) > 8000000 else sys.stdout.write(base64.b64encode(open(p, "rb").read()).decode())
+"""
+
+
+# the demo's files: made up by name, kept in memory, as /api/file answers for a real one
+DEMO_FILES = {}
+
+
+def demo_file(path, op, b):
+    name = path.rsplit("/", 1)[-1]
+    f = DEMO_FILES.setdefault(path, {"text": {"README.md": "# kite\n\nA made-up project in **burrow**'s demo.\n\n- the room\n- the robots\n\n```js\nconst kite = fly();\n```\n",
+                                              "main.js": "// main.js\nexport function fly() {\n  return \"up\";\n}\n"}.get(name, ""), "mtime": "1"})
+    if op == "write":
+        if not b.get("force") and b.get("mtime") != f["mtime"]:
+            return {"conflict": True, "mtime": f["mtime"], "size": len(f["text"])}
+        f.update(text=b.get("text", ""), mtime=str(time.time_ns()))
+    out = {"mtime": f["mtime"], "size": len(f["text"])}
+    if op == "read":
+        out["text"] = f["text"]
+    return out
+
+
+def run(m, script, timeout=60, input=None):
+    p = subprocess.run(argv(m, script, False), capture_output=True, text=True, timeout=timeout, input=input)
     if p.returncode == 0:
         return p.stdout
     raise RuntimeError((p.stderr.strip() or p.stdout.strip() or f"exit {p.returncode}"))
@@ -2278,6 +2346,14 @@ class Handler(BaseHTTPRequestHandler):
             return self.term(q, u.path == "/shell")
         if u.path == "/api/office":          # the office as the office manager sees it (curl from her session)
             return self.reply(200, hub.office())
+        if u.path == "/raw":                 # a picture on a session's machine, for a markdown file shown rendered (pictures only)
+            try:
+                kind, m = IMAGES[os.path.splitext(q.get("path", ""))[1].lower()], hub.machine(q.get("m"))
+                if m.get("ssh") == "@demo":
+                    raise LookupError
+                return self.reply(200, base64.b64decode(run(m, "python3 -c " + sq(RAW) + " " + sq(q["path"]), timeout=30)), kind)
+            except Exception:
+                return self.reply(404, b"not here", "text/plain")
         if u.path == "/doom.wad":            # the gun closet's Doom data: id's own WAD if you put one here, else Freedoom's (doom/)
             return self.reply(200, open(doom_wad(), "rb").read(), "application/octet-stream")
         name = "index.html" if u.path == "/" else u.path.lstrip("/")
@@ -2549,6 +2625,12 @@ class Handler(BaseHTTPRequestHandler):
         m, poke = hub.machine(mid), hub.pokes.get(mid)
         if path == "/api/hosts":             # the hosts of ~/.ssh/config, for the new door's field
             return {"hosts": ssh_hosts()}
+        if path == "/api/file":              # a file there, for the editor beside a terminal: read it, look at it, or write it
+            op = b.get("op") or "read"
+            if m.get("ssh") == "@demo":
+                return demo_file(b["path"], op, b)
+            arg = {"op": op, "path": b["path"], "mtime": b.get("mtime"), "force": bool(b.get("force"))}
+            return json.loads(run(m, "python3 -c " + sq(FILE) + " " + sq(json.dumps(arg)), timeout=20, input=b.get("text", "") if op == "write" else None))
         if path == "/api/tree":              # the file tree beside a terminal: folders under its root, and git's changes there
             if m.get("ssh") == "@demo":
                 now = int(time.time())
