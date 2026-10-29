@@ -12,7 +12,7 @@ One line per web module; status: todo, wip, done (tested), n/a.
 | tiles.js                     | crates/app (tiles)                   | done   |
 | index.html (page, panels)    | crates/app                           | todo   |
 | burrow.css                   | crates/app (theme)                   | todo   |
-| xterm.js terminals           | crates/app (alacritty_terminal)      | todo   |
+| xterm.js terminals           | crates/term                          | done   |
 | server.py + chess.py         | crates/core                          | done   |
 | outside.js                   | crates/games/outside                 | done   |
 | pong.js                      | crates/games/pong                    | done   |
