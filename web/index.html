@@ -176,6 +176,11 @@ async function act(a) {
     Sound.play(on ? "paper" : "click", 0, 1);
     const r = await api("/api/settings", { files: on }); if (r.error) note(r.error);
   }
+  else if (a.kind === "halloween") {          // the pumpkin: its candle lit (the office in costume) or blown out
+    const on = !(state && state.settings && state.settings.halloween);
+    Sound.play("click", 0, 1);
+    const r = await api("/api/settings", { halloween: on }); if (r.error) note(r.error);
+  }
   else if (a.kind === "limits") { openView("limits"); fillLimits(); }
   else if (a.kind === "settings") { openView("settings"); fillSettings(true); }
   else if (a.kind === "doors") { openView("doors"); fillDoors(); }
@@ -511,7 +516,7 @@ function askYou() {
 
 // ---- the closet: the furniture there is, drawn as it stands in the room; drag a piece into the
 // room to put it there, as many as you like. The fireplace takes a piece back out (it burns)
-const CATALOGUE = ["desk", "plant", "armchair", "window", "board", "meet", "chess", "pong", "coffee", "cooler", "printer", "pair", "manager", "booth", "neuralyzer", "doghouse", "radio", "files", "door"];
+const CATALOGUE = ["desk", "plant", "armchair", "window", "board", "meet", "chess", "pong", "coffee", "cooler", "printer", "pair", "manager", "booth", "neuralyzer", "doghouse", "radio", "files", "pumpkin", "door"];
 // Built when it opens, and again on a state update only while its pictures were still loading: never while
 // something is being carried out of it. Rebuilding it on every update (each second or two in a room with
 // many bots) took the picture being held away mid-drag, and the piece never arrived

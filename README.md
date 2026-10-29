@@ -44,7 +44,7 @@ a desk's screen for a shell of your own there. Drop a file on a robot or a termi
 
 Everything else is furniture, out of the closet: a booth that deletes a session (click it within five seconds
 to take it back), a fire that burns the furniture you drag into it, a neuralyzer for `/clear`, a printer for the
-office report, a switchboard for the settings, a radio for the sound, an easel the robots paint masterpieces on (with robots in them), a table for a
+office report, a switchboard for the settings, a radio for the sound, a pumpkin for Halloween (the office in costume), an easel the robots paint masterpieces on (with robots in them), a table for a
 [pair](https://github.com/rdaems/pair-prompting) room, a dog, and much more. Switch on hardcore and the
 booth is a gun closet, the office a first-person shooter in a small Doom engine, and in there a mysterious door
 leads to Doom's first level ([Freedoom](https://freedoom.github.io)'s; put id's `DOOM1.WAD`, the free
