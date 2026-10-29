@@ -294,7 +294,7 @@ function startRoom(cv, app) {
   const FIXED = new Set(["fire", "closet", "settings", "clock"]), fixed = (key) => FIXED.has(KIND(key)) || key === "door:";
   const CLICK = new Set(["radio", "doghouse", "add", "closet", "chess", "pong", "printer", "pair", "board", "coffee", "cooler", "window", "armchair", "settings", "clock", "plant", "manager", "door"]);   // a click does something there
   const NAMES = { meet: "meeting table", pong: "ping-pong table", chess: "chess table", coffee: "coffee machine", cooler: "water cooler",
-    printer: "printer", armchair: "pouf", plant: "plant", board: "whiteboard", window: "window", clock: "clock", add: "project cabinet", pair: "pair room", settings: "switchboard", manager: "reception",
+    printer: "printer", armchair: "pouf", plant: "plant", board: "easel", window: "window", clock: "clock", add: "project cabinet", pair: "pair room", settings: "switchboard", manager: "reception",
     booth: "booth", neuralyzer: "neuralyzer", door: "door", doghouse: "dog house", radio: "radio" };
   // a clear spot on the floor for a figure that has no chair when the page opens (spread by its id, the same each time)
   function freeAt(L, id) {
