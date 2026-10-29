@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>burrow // operator</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-clipboard@0.1.0/lib/addon-clipboard.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/lib/addon-web-links.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css">
+<link rel="stylesheet" href="/matrix.css">
+</head>
+<body>
+<!-- burrow's other face: the sessions as the operator sees them, a column of falling code each (matrix.js) -->
+<header id="top"><span class="brand">BURROW <i>//</i> OPERATOR</span><span id="counts"></span><span id="limits"></span><span id="clock"></span></header>
+<main id="main">
+  <div id="rainbox"><canvas id="rain"></canvas><div id="labels"></div><div id="info" hidden></div><div id="out"></div></div>
+  <section id="jack" hidden>
+    <div class="jbar"><span id="jname"></span><span id="jsub"></span><span class="sp"></span><button id="japp" type="button" hidden>APP</button><button id="jexit" type="button" title="out of this session: it goes on running">EXIT</button></div>
+    <div id="jterm"></div>
+  </section>
+</main>
+<footer id="op"><label for="cmd" id="ps">operator@burrow:~$</label><input id="cmd" spellcheck="false" autocomplete="off" autocapitalize="off"><span id="hint"></span></footer>
+<script src="/matrix.js"></script>
+</body>
+</html>

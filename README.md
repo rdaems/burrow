@@ -50,6 +50,11 @@ booth is a gun closet, the office a first-person shooter in a small Doom engine,
 leads to Doom's first level ([Freedoom](https://freedoom.github.io)'s; put id's `DOOM1.WAD`, the free
 shareware, or your `DOOM.WAD` in `~/.config/burrow/` for the real one).
 
+The same burrow has another face at http://localhost:7777/matrix: no room, every session a lane of falling
+code made of what it is saying and doing, frozen and white when it needs you; click a lane to jack in to its
+terminal, or type at the operator's line (`help`, `ls`, `jack <agent>`, `load <project>`, `tell <agent> …`,
+`rabbit` for the next one that needs you).
+
 An **office manager** sits at a reception. Pick one when you put it down:
 
 - **Susan** is a Claude Code session that knows the office: ask her anything, she does it in the room.

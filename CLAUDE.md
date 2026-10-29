@@ -40,6 +40,12 @@ message is the log. When something goes, take it out here. Keep the file under a
     paintings, `pixel.js` and the fonts pair's (avatars, dithers), `burrow.css`, `sound.js`, `outside.js` (the
     window), `fps.js` + `props3d.js` + `doom/` (the first person), `chessboard.js`/`chess.py`/`pong.js` (pair's
     games), `look.mjs` (tests).
+  - `matrix.html` + `matrix.js` + `matrix.css`: the same burrow as the operator sees it, at `/matrix` (no 16 bit):
+    a session a lane of falling code made of what it said and did (`/api/stream`: one command a machine for the
+    sessions whose record changed, 256 kB of each transcript, condensed; a machine asked at most every ten
+    seconds), fast = working, a frozen white page = needs you, a drip = idle; a click on a lane jacks into its
+    terminal (the room's terminal to the letter); the operator's line under it (help, ls, jack, load, tell
+    = `/api/tell`, reset, stop, delete, shell, rabbit, limits, nodes, room).
   - xterm.js 5.5.0 and its addons (fit, clipboard, web-links) from jsdelivr.
 - `src/main.rs`: burrow's window (wry 0.57, tao, muda; his choice over porting, the egui app is in git's history):
   the system's webview on the same page, no title bar to be seen (transparent, in the page's night, no title; like
