@@ -3,6 +3,7 @@
 //! pointer and the keys.
 
 pub mod avatar;
+pub mod draw;
 pub mod figure;
 pub mod font;
 pub mod sprites;

@@ -34,7 +34,9 @@ const EXPOSE = `window.__in = { body, face, wears, halo, put, slab, tiny, tinyW,
   drawRug, drawMat, drawBooth, drawGunCloset, drawRadio, drawNeuralyzer, drawTable, drawChess, drawStool, drawCoffee, drawCooler,
   drawPrinter, drawArmchair, drawPlant, drawPong, drawDoghouse, dogPic, heart, drawGrave: typeof drawGrave === "undefined" ? null : drawGrave,
   projectColor, shade, mix, fnv, foot, layout, defaults, icon, doorPicture, printerPicture, PAINT, PROJECT, WOOD,
-  get W() { return W; }, get H() { return H; }, world, dreamScene, plate, outlined, tinted, dissolve, snapshot, pouf, zzz, screenAt };\n`;
+  get W() { return W; }, get H() { return H; }, world, dreamScene, plate, outlined, tinted, dissolve, snapshot, pouf, zzz, screenAt,
+  app, drawPart, drawNotes, drawStick, ELL, boothRise, boothGlow, boothShut, flashA, START, DREAM_PAL, DREAM_W, DREAM_H, cells, INK_AREA, INKS, FIRE, GOLD, RED,
+  get pointer() { return pointer; }, set pointer(p) { pointer = p; } };\n`;
 ws.onmessage = async (e) => {
   const m = JSON.parse(e.data);
   if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); }
