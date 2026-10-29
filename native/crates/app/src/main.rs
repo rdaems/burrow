@@ -2,6 +2,7 @@
 //! painted here), the pane on the right (tiles of terminals, or a panel). GPUI draws it on the GPU.
 
 mod burrow;
+mod fpsview;
 mod icon;
 mod kit;
 mod notes;

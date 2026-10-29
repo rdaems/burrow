@@ -205,6 +205,13 @@ pub fn picture(im: &Image, scale: u32) -> Arc<RenderImage> {
     Arc::new(RenderImage::new(vec![image::Frame::new(buf)]))
 }
 
+/// an opaque picture (the room, Doom): no alpha to premultiply
+pub fn picture_opaque(im: &Image, scale: u32) -> Arc<RenderImage> {
+    let bgra = im.upscale_bgra(scale, [0, 0, 0, 255]);
+    let buf = image::RgbaImage::from_raw(im.w * scale, im.h * scale, bgra).expect("a picture");
+    Arc::new(RenderImage::new(vec![image::Frame::new(buf)]))
+}
+
 /// GPUI wants premultiplied BGRA
 fn premultiplied_bgra(im: &Image, k: u32) -> Vec<u8> {
     let (w, h) = (im.w * k, im.h * k);

@@ -107,3 +107,32 @@ fn the_room_draws() {
     assert!(room.img.px.iter().all(|p| p[3] == 255), "the room is opaque");
     room.img.save_png(concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/room-demo.png")).unwrap();
 }
+
+#[test]
+fn the_room_in_the_first_person() {
+    // the demo room as the gun closet's view sees it: a scene with every desk and piece, everyone in it, and a frame
+    // drawn from it (target/room-fps.png)
+    use burrow_fps::{Fps, Options, Start, Wad};
+    let mut s = demo();
+    s.furniture.push("booth0".into());
+    let mut inp = Input { state: s.clone(), now: 0.0, hour: 14, ..Default::default() };
+    let mut room = Room::new(13, 0.0);
+    room.resize(&inp, 820.0);
+    run(&mut room, &mut inp, 20.0);
+    let scene = room.scene3(&inp).expect("a scene");
+    assert!(scene.boxes.len() > 20, "{} boxes", scene.boxes.len());
+    assert!(scene.things.iter().filter(|t| t.bot.is_some()).count() >= s.bots.len() / 2);
+    assert!(!scene.items.is_empty());
+    let wad = Wad::open_bytes(burrow_fps::wad::freedoom()).unwrap();
+    let door = Wad::open_bytes(burrow_fps::wad::door_wad()).ok();
+    let start = Start { x: 128.0, y: 300.0, a: -std::f64::consts::FRAC_PI_2 };
+    let mut fps = Fps::new(wad, door, scene, start, Options { seed: 1, ..Default::default() }).unwrap();
+    for _ in 0..10 {
+        fps.tick(1000.0 / 35.0);
+    }
+    let mut img = pix::Image::new(640, 400);
+    fps.draw(&mut img);
+    let distinct: std::collections::HashSet<[u8; 4]> = img.px.iter().copied().collect();
+    assert!(distinct.len() > 30, "a frame with something in it ({} colours)", distinct.len());
+    img.save_png(concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/room-fps.png")).unwrap();
+}

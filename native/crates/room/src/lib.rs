@@ -15,6 +15,7 @@ pub mod pointer;
 pub mod remains;
 pub mod room;
 pub mod scene;
+pub mod scene3;
 pub mod sprites;
 pub mod stage;
 #[rustfmt::skip]

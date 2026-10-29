@@ -752,6 +752,7 @@ name = "burrow-app"
 version = "0.2.0"
 dependencies = [
  "burrow-core",
+ "burrow-fps",
  "burrow-games",
  "burrow-model",
  "burrow-room",
@@ -806,6 +807,7 @@ dependencies = [
 name = "burrow-room"
 version = "0.2.0"
 dependencies = [
+ "burrow-fps",
  "burrow-model",
  "pix",
  "serde",

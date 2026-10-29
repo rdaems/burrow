@@ -81,6 +81,11 @@ pub struct Burrow {
     pub sound: burrow_sound::Sound,
     pub outside: burrow_games::outside::Outside,
     pub pong: burrow_games::pong::Pong,
+    /// the gun closet's first person, and its melt after
+    pub fps: Option<crate::fpsview::FpsRun>,
+    pub leaving: Option<crate::fpsview::Leaving>,
+    /// pictures to drop from the GPU at the next paint
+    pub stale_pictures: Vec<Arc<RenderImage>>,
 }
 
 impl Burrow {
@@ -107,8 +112,11 @@ impl Burrow {
         })
         .detach();
         // the window's focus: away a minute, you nap (and the polls slow down)
-        cx.observe_window_activation(window, |b, window, _| {
+        cx.observe_window_activation(window, |b, window, cx| {
             let on = window.is_window_active();
+            if !on && b.fps.is_some() {
+                b.stop_fps(cx); // the pointer let go: out of the first person, as when the browser's lock was lost
+            }
             b.blur_at = if on { None } else { b.blur_at.or(Some(Instant::now())) };
             b.hub.focus(on);
         })
@@ -128,6 +136,14 @@ impl Burrow {
                             }
                             "shell" => b.open_shell("", v, true, window, cx),
                             "notes" => b.open_notes(true, window, cx),
+                            "fps" => {
+                                // the demo in hardcore, at the gun closet
+                                b.hub.settings(&[("hardcore", true)]);
+                                b.state.settings.hardcore = true;
+                                if let Some(k) = b.room.last.as_ref().and_then(|l| l.booths.first()).map(|p| p.key.clone()) {
+                                    b.start_fps(&k, window, cx);
+                                }
+                            }
                             "view" => {
                                 if let Some(kind) = ViewKind::parse(v) {
                                     b.open_view(kind, window, cx);
@@ -182,6 +198,9 @@ impl Burrow {
             sound: burrow_sound::Sound::new(),
             outside: burrow_games::outside::Outside::new(seed),
             pong: burrow_games::pong::Pong::new(seed ^ 0x9e37),
+            fps: None,
+            leaving: None,
+            stale_pictures: Vec::new(),
         }
     }
 
@@ -222,6 +241,12 @@ impl Burrow {
         if ticked || self.dirty || news {
             self.redraw(window, cx);
             cx.notify();
+        }
+        if self.fps.is_some() {
+            self.fps_frame(dt, ticked, window, cx);
+        } else if self.leaving.is_some() {
+            let now = self.now_ms();
+            self.leaving_frame(now, window, cx);
         }
     }
 
@@ -292,7 +317,7 @@ impl Burrow {
             shells,
             hl_shell,
             still: reduce_motion(),
-            fps: false,
+            fps: self.fps.is_some(),
         }
     }
 
@@ -329,7 +354,7 @@ impl Burrow {
     }
 
     /// what the room asked for: actions, sounds, the tile under a carried bot
-    fn after(&mut self, out: Output, window: &mut Window, cx: &mut Context<Self>) {
+    pub fn after(&mut self, mut out: Output, window: &mut Window, cx: &mut Context<Self>) {
         self.sound.set(out.sound_on);
         for s in &out.sounds {
             self.sound.play(s.name, s.pan, s.vol, false, None);
@@ -341,6 +366,9 @@ impl Burrow {
         if let Some(hs) = out.hover_shell {
             self.lit_shell = hs;
             cx.notify();
+        }
+        if let Some(key) = out.first_person.take() {
+            self.start_fps(&key, window, cx);
         }
         for a in out.acts {
             self.act(a, window, cx);
@@ -1069,7 +1097,7 @@ impl Render for Burrow {
         if (w0, h0) != (self.room.size.w, self.room.size.h) {
             self.dirty = true;
         }
-        for old in self.stale.drain(..) {
+        for old in self.stale.drain(..).chain(self.stale_pictures.drain(..)) {
             let _ = window.drop_image(old);
         }
         let room = self.room_element(cx);
@@ -1093,7 +1121,30 @@ impl Render for Burrow {
                 ),
             )
             .child(pane)
-            .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| views::key(this, e, window, cx)))
+            .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| {
+                if !this.fps_key(e) {
+                    views::key(this, e, window, cx)
+                }
+            }))
+            .on_key_up(cx.listener(|this, e: &gpui::KeyUpEvent, _, _| {
+                this.fps_key_up(e);
+            }))
+            .on_modifiers_changed(cx.listener(|this, e: &gpui::ModifiersChangedEvent, _, _| this.fps_modifiers(e)))
+            .when_some(self.fps.as_ref().and_then(|r| r.picture.clone()).or(self.leaving.as_ref().and_then(|l| l.picture.clone())), |d, pic| {
+                // the first person over everything (or its melt over the room, on the way out)
+                let black = self.fps.is_some();
+                d.child(
+                    div()
+                        .id("fps")
+                        .absolute()
+                        .inset_0()
+                        .when(black, |d| d.bg(rgb(0x000000)))
+                        .child(canvas(|_, _, _| {}, move |b, _, window, _| {
+                            let _ = window.paint_image(b, Corners::default(), pic, 0, false);
+                        }).size_full())
+                        .when(black, |d| d.on_mouse_down(MouseButton::Left, cx.listener(|this, _, _, _| this.fps_click()))),
+                )
+            })
             // while something is dragged, the pointer is followed over the whole window
             .when(dragging, |d| {
                 let (a, b) = (this.clone(), this.clone());
