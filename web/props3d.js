@@ -135,7 +135,7 @@ window.Props3D = (() => {
   // a robot: legs, its torso in its colour (her skirt), arms in the pose, its head with its face on the front
   const ROBOT = { S: 4, R: 9, Z: 27 };
   function robotBoxes(sp) {
-    const P = pixelAvatar.robot(sp.seed), col = hex(sp.color), light = col, lightD = mul(col, 0.62);
+    const P = pixelAvatar.robot(sp.seed), col = hex(sp.color), light = col, lightD = mul(col, 0.62), eye = sp.red ? [255, 52, 40] : light, eyeD = sp.red ? [170, 20, 14] : lightD;   // (red: a mutineer)
     // its casing a cool steel, darker than the room's steel3 (lit warm, that went the colour of skin)
     const s1 = hex("#3f4660"), s2 = hex("#6c7590"), s3 = hex("#8f9ab2"), s4 = hex("#c3cbdb"), dark = hex("#2a2d3d"), screen = hex(C.blue0), ink2 = hex(C.ink2);
     const B = [], box = (f0, f1, r0, r1, z0, z1, c, o = {}) => B.push({ f0, f1, r0, r1, z0, z1, col: c, metal: !o.flat && c !== col, ...o });
@@ -155,12 +155,12 @@ window.Props3D = (() => {
       if (gx >= 5 && gx < 11 && gy >= P.top + 2 && gy < P.top + 6) c = screen;
       const lit = (x0, y0) => gx === x0 && gy === y0;
       const e = P.eyes;
-      if (e === "dots" && (lit(6, ey) || lit(9, ey))) return [...light, GLOW];
-      if (e === "dots" && (lit(6, ey + 1) || lit(9, ey + 1))) return [...lightD, GLOW];
-      if (e === "visor" && gy === ey && gx >= 5 && gx < 11) return [...(gx % 2 ? light : lightD), GLOW];
-      if (e === "cyclops" && (lit(7, ey) || lit(8, ey) || lit(7, ey + 1))) return [...light, GLOW];
-      if (e === "cyclops" && lit(8, ey + 1)) return [...lightD, GLOW];
-      if (e === "happy" && (lit(6, ey + 1) || lit(5, ey) || lit(7, ey) || lit(9, ey + 1) || lit(8, ey) || lit(10, ey))) return [...light, GLOW];
+      if (e === "dots" && (lit(6, ey) || lit(9, ey))) return [...eye, GLOW];
+      if (e === "dots" && (lit(6, ey + 1) || lit(9, ey + 1))) return [...eyeD, GLOW];
+      if (e === "visor" && gy === ey && gx >= 5 && gx < 11) return [...(gx % 2 ? eye : eyeD), GLOW];
+      if (e === "cyclops" && (lit(7, ey) || lit(8, ey) || lit(7, ey + 1))) return [...eye, GLOW];
+      if (e === "cyclops" && lit(8, ey + 1)) return [...eyeD, GLOW];
+      if (e === "happy" && (lit(6, ey + 1) || lit(5, ey) || lit(7, ey) || lit(9, ey + 1) || lit(8, ey) || lit(10, ey))) return [...eye, GLOW];
       if (gy === 10 && gx >= 6 && gx < 10) c = P.teeth && gx % 2 === 0 ? ink2 : s1;
       return c;
     };
@@ -222,7 +222,7 @@ window.Props3D = (() => {
   }
   // a figure from one of the eight sides (k: 0 its front, counting round to its right), kept
   function figure(sp, k) {
-    const key = [sp.kind, sp.seed, sp.color, sp.femme, sp.arms, sp.legs, sp.pose, sp.wag, k].join("|");
+    const key = [sp.kind, sp.seed, sp.color, sp.femme, sp.arms, sp.legs, sp.pose, sp.wag, sp.red, k].join("|");
     let v = cache.get(key);
     if (v) return v;
     const D = sp.kind === "dog" ? DOG : ROBOT, c = render(sp.kind === "dog" ? dogBoxes(sp) : robotBoxes(sp), k, D.S, D.R, D.Z);

@@ -134,11 +134,11 @@ function startRoom(cv, app) {
     return faces.get(key);
   }
   // arms: down sw1 sw2 up wave fwd1 fwd2 reach mug paper book can; legs: stand walk1 walk2 sit
-  // femme: the office manager, a robot with a bow on her head and a skirt
-  function body(seed, color, arms, legs, human, femme) {
+  // femme: the office manager, a robot with a bow on her head and a skirt; red: its eyes red (a mutineer, gun in hand)
+  function body(seed, color, arms, legs, human, femme, red) {
     const f = face(seed, color, human);
     if (!f.px) return null;
-    const key = seed + color + arms + legs + (human ? "h" : "") + (femme ? "f" : "");
+    const key = seed + color + arms + legs + (human ? "h" : "") + (femme ? "f" : "") + (red ? "r" : "");
     if (bodies.has(key)) return bodies.get(key);
     const px = new Map(), line = new Set();
     const set = (x, y, c) => { if (c) px.set((y + 1) * SW + x + 1, c); };
@@ -152,6 +152,13 @@ function startRoom(cv, app) {
       if (c === INK) line.add((y + 1) * SW + x + 1);
     }
     const at = (x, y) => { const i = (y * 20 + x) * 4, d = f.px; return d[i + 3] < 128 ? null : "#" + [d[i], d[i + 1], d[i + 2]].map((v) => v.toString(16).padStart(2, "0")).join(""); };
+    if (red && !human) {                     // the eyes: what is not screen on its face's screen (pixel.js robot(): x 7..12, four rows under its top)
+      const top = pixelAvatar.robot(seed).top + 6, scr = at(7, top), lum = (c) => parseInt(c.slice(1, 3), 16) * 0.3 + parseInt(c.slice(3, 5), 16) * 0.59 + parseInt(c.slice(5, 7), 16) * 0.11;
+      const eyes = [];
+      for (let y = top; y < top + 4; y++) for (let x = 7; x < 13; x++) { const c = at(x, y); if (c && c !== scr) eyes.push([x, y, lum(c)]); }
+      const hi = Math.max(...eyes.map((e) => e[2]));
+      for (const [x, y, l] of eyes) set(x, y, l >= hi * 0.85 ? "#ff3b2f" : "#a3170f");
+    }
     // a person wears what their portrait wears (a coat is white, a suit grey): its shoulders' colours
     const c0 = human ? at(6, 19) || color : C.steel3, c1 = human ? (at(15, 19) !== c0 && at(15, 19)) || shade(c0, 0.62) : C.steel1;
     const skin = human ? pixelAvatar.skin(seed) : C.steel3, leg = human ? INK2 : C.steel1, top = cut + 1;
@@ -536,6 +543,7 @@ function startRoom(cv, app) {
     const now = performance.now() / 1000, folk = w.folk;
     w.fear = hardcore() ? Math.max(0, (w.fear || 0) - dt / FEAR.fade) : 0;
     scare(w, L);
+    mutinyTick(w, L, dt);
     // the bot you play chess with sits at the table until the game is over (or it gets work)
     const vs = game && !game.result ? (game.white.id === "you" ? game.black.id : game.white.id) : null;
     for (const f of folk.values()) {
@@ -629,8 +637,8 @@ function startRoom(cv, app) {
       const first = d.seats.find(([id]) => { const f = folk.get(id); return f && !f.work && f.act.kind === "stand"; });
       if (first) homes.set(first[0], { x: Math.min(W - 8, d.x0 + d.w + 8), y: d.y + 1, on: d.key });
     }
-    for (const b of bots) { const f = folk.get(b.id); if (f && !f.held) thinkOne(w, f, L, now, dt, homes.get(b.id), usage); }
-    if (you && !you.held && (fps || you.act.kind === "arm" || !huntStep(w, you, L, dt))) thinkOne(w, you, L, now, dt, null, usage);   // (in the first person the shooting is yours)
+    for (const b of bots) { const f = folk.get(b.id); if (f && !f.held && !mutinyStep(w, f, L, dt)) thinkOne(w, f, L, now, dt, homes.get(b.id), usage); }
+    if (you && !you.held && !dead(w) && (fps || you.act.kind === "arm" || !huntStep(w, you, L, dt))) thinkOne(w, you, L, now, dt, null, usage);   // (in the first person the shooting is yours)
     for (const f of folk.values()) if (f.staff && !f.leaving && f.b) thinkManager(w, f, L, dt);
     thinkDog(w, L, dt);
     // two standing about in the same place: they step apart
@@ -724,7 +732,7 @@ function startRoom(cv, app) {
         const g = w.folk.get(h.id);
         if (!g || g.held || g.act.kind !== "condemned") { h.phase = "hunt"; return true; }
         f.legs = "stand"; f.arms = "gun"; f.dir = g.x < f.x ? -1 : 1;
-        if ((h.t += dt) > 0.9) { w.shots.push({ x: Math.round(f.x) + 10 * f.dir, y: Math.round(f.y) - 9, t0: performance.now(), hit: false }); shoot(g); h.phase = "after"; h.t = 0; }
+        if ((h.t += dt) > 0.9) { w.shots.push({ x: Math.round(f.x) + 10 * f.dir, y: Math.round(f.y) - 9, t0: performance.now(), hit: false }); shoot(g, f.human ? "you" : f.id); h.phase = "after"; h.t = 0; }
         return true;
       }
       case "after":
@@ -1414,7 +1422,7 @@ function startRoom(cv, app) {
   // ---- drawing, and what is under the pointer: hot spots are collected while drawing
   let pointer = null, hots = [], hovered = null, tip = null, lastL = null, moving = null, held = null, hoverId = null, lastHp = null, dangerNow = false;
   let dogHeld = false, dogRect = null;      // the dog in your hand; where it stands (a press there is on the dog, not on what is under it)
-  let fps = null, view = null;              // hardcore: the gun taken from the gun closet, the office in the first person (fps.js); the scene it renders
+  let fps = null, view = null, fpsWorld = null;              // hardcore: the gun taken from the gun closet, the office in the first person (fps.js); the scene it renders
   let pics = [];                             // what was just drawn, each piece by itself, for that view (scene3)
   const hardcore = () => !!app.settings().hardcore;
   // the room's sounds (sound.js), while a radio stands in it and is on, from where they happen (left to right); not
@@ -1564,6 +1572,11 @@ function startRoom(cv, app) {
       if (h) tip = { text: "project", x: a.x0 + ADD_W / 2, y: a.y0 - 2 };
     }
     for (const f of w.folk.values()) if (f.act.kind === "sleep" && f.act.there && f.act.at) drawMat(ctx, f.act.at);
+    if (dead(w) && w.folk.get("you") && !fps) {   // you, shot: a pool spreading under you
+      const f = w.folk.get("you"), r = 4 + Math.round(Math.min(1, (performance.now() - w.mutiny.deadAt) / 1800) * 14), h = Math.ceil(r * 0.45);
+      for (let j = -h; j <= h; j++) { const q = Math.round(r * Math.sqrt(1 - (j / (h + 0.5)) ** 2)); rect(ctx, Math.round(f.x) + 1 - q, Math.round(f.y) - 4 + j, 2 * q + 1, 1, "#6e0a0e"); }
+      rect(ctx, Math.round(f.x) + r - 6, Math.round(f.y) - 3, 3, 1, "#a8191d"); rect(ctx, Math.round(f.x) - r + 4, Math.round(f.y) - 1, 2, 1, "#a8191d");
+    }
     if (L.pong) drawRug(ctx, L.pong);
 
     // everything that stands, back to front
@@ -1821,6 +1834,12 @@ function startRoom(cv, app) {
     w.shots = w.shots.filter((sh) => performance.now() - sh.t0 < 700);
     for (const sh of w.shots) {
       const t = (performance.now() - sh.t0) / 700;
+      if (sh.dust) {                         // one gone wide: dust off the floor, two chips flying
+        const u = Math.round(t * 5);
+        ctx.globalAlpha = 1 - t; rect(ctx, sh.x - 2 - u, sh.y - 2 - u, 5 + 2 * u, 2 + u, "#b9a48a"); ctx.globalAlpha = 1;
+        if (t < 0.5) { rect(ctx, sh.x - 3 - Math.round(t * 12), sh.y - 3 - Math.round(t * 10), 1, 1, "#e8d6b8"); rect(ctx, sh.x + 3 + Math.round(t * 10), sh.y - 2 - Math.round(t * 12), 1, 1, "#e8d6b8"); }
+        continue;
+      }
       if (t < 0.3) { const r = t < 0.15 ? 4 : 3; rect(ctx, sh.x - r, sh.y, 2 * r + 1, 1, "#fff6c0"); rect(ctx, sh.x, sh.y - r, 1, 2 * r + 1, "#fff6c0"); rect(ctx, sh.x - 1, sh.y - 1, 3, 3, "#ffe27a"); }
       else { ctx.globalAlpha = 1 - t; rect(ctx, sh.x - 2, sh.y - 2 - Math.round(t * 6), 5, 3, "#c9ced8"); ctx.globalAlpha = 1; }
     }
@@ -1859,10 +1878,25 @@ function startRoom(cv, app) {
       hots.push({ x0: -1e9, y0: -1e9, x1: 1e9, y1: 1e9, action: b.staff ? { kind: "manager", key: b.booth } : b.human ? { kind: "you" } : doomed ? { kind: "undo", id: b.id } : { kind: "open", id: b.id } });
     }
     // (while something is dragged, the only tips are the fire's, the door's and the pair table's: what the drop does)
-    if (tip && !carrying) {                  // no tips under a piece carried in from the closet
+    if (tip && !carrying && !dead(w)) {      // no tips under a piece carried in from the closet (nor over your death)
       const t = tip.text, tw = tinyW(t), lx = Math.round(Math.max(2, Math.min(W - tw - 2, tip.x - tw / 2))), ly = Math.round(Math.max(WALL + 2, tip.y - 8));
       box(ctx, lx - 2, ly - 2, tw + 4, 9, INK2);
       tiny(ctx, t, lx, ly, C.steel4);
+    }
+    // you died (the mutiny): the room goes red, a dark band across it with YOU DIED, and RESPAWN under it
+    if (dead(w)) {
+      const k = Math.min(1, (performance.now() - w.mutiny.deadAt) / 1200);
+      ctx.save(); ctx.globalAlpha = k; ctx.globalCompositeOperation = "multiply"; rect(ctx, 0, 0, W, H, "#e0473a"); ctx.restore();
+      ctx.globalAlpha = 0.3 * k; rect(ctx, 0, 0, W, H, "#4a0004"); ctx.globalAlpha = 1;
+      if (performance.now() - w.mutiny.deadAt > 900) {
+        const s = 4, t = "YOU DIED", tw = tinyW(t) * s, cy = Math.round((WALL + H) / 2) - 18, x0 = Math.round((W - tw) / 2);
+        ctx.globalAlpha = 0.72; rect(ctx, 0, cy - 9, W, 5 * s + 18, "#000000"); ctx.globalAlpha = 1;
+        for (const [dx, col] of [[1, "#3a0306"], [0, "#c8261f"]]) { ctx.save(); ctx.translate(x0 + dx, cy + dx); ctx.scale(s, s); tiny(ctx, t, 0, 0, col); ctx.restore(); }
+        const bt = "RESPAWN", bw = tinyW(bt) + 12, bh = 11, bx = Math.round((W - bw) / 2), by = cy + 5 * s + 16, on = over(bx - 1, by - 1, bx + bw + 1, by + bh + 1);
+        box(ctx, bx, by, bw, bh, C.steel3, on ? GOLD : INK); rect(ctx, bx, by, bw, 1, C.steel4); rect(ctx, bx, by + bh - 1, bw, 1, C.steel1);
+        tiny(ctx, bt, bx + 6, by + 3, INK);
+        hots.push({ x0: bx - 1, y0: by - 1, x1: bx + bw + 1, y1: by + bh + 1, action: { kind: "respawn" } });
+      }
     }
     const id = held ? held.id : hovered ? hovered.b.id : null;   // (a bot carried stays lit: its chair, its session)
     if (id !== hoverId) { hoverId = id; app.hover(id); }
@@ -1992,7 +2026,7 @@ function startRoom(cv, app) {
     // its eight sides faces you; lying on a mat; in the booth going up in its light; a ? over one that waits
     for (const f of w.folk.values()) {
       if (f.id === "you" || f.held || !f.b) continue;
-      const b = f.b, fig = { kind: "robot", seed: seedOf(b), color: colorOf(b), femme: !!b.staff, arms: f.arms, legs: f.legs };
+      const b = f.b, fig = { kind: "robot", seed: seedOf(b), color: colorOf(b), femme: !!b.staff, arms: f.arms, legs: f.legs, red: !!f.red };
       const who = { key: f.id, bot: b.human ? null : b.id, staff: !!b.staff, booth: b.booth, name: b.name };
       if (f.lying) { const l = Props3D.lying(fig); things.push({ ...who, x: f.x, y: f.y - 9, z: 0, c: l.c, sx: 0, sy: 0, sw: l.w, sh: l.h, ax: l.ax, ay: l.ay, res: l.res }); continue; }
       const bt = boothT(f);
@@ -2015,6 +2049,7 @@ function startRoom(cv, app) {
     const dg = w.dog;
     if (dg && !dg.inside && !dg.leaving && !dg.held) things.push({ key: "dog", x: dg.x, y: dg.y, z: 0, fig: { kind: "dog", pose: dg.pose, wag: dg.wag }, face: dg.dir < 0 ? -1 : 1 });
     if (w.ball) things.push({ key: "ball", x: w.ball.x, y: w.ball.y, z: w.ball.h, c: small("ball4", 12, 12, (x) => { x.fillStyle = "#e8ecf0"; x.beginPath(); x.arc(6, 6, 5.5, 0, 7); x.fill(); x.fillStyle = "#b5bfc7"; x.beginPath(); x.arc(7, 7.5, 3.5, 0, 7); x.fill(); x.fillStyle = "#ffffff"; x.fillRect(3, 3, 2, 2); }), sx: 0, sy: 0, sw: 12, sh: 12, ax: 6, ay: 12, res: 4 });
+    for (const sh of w.shots) if (!sh.hit && !sh.dust && performance.now() - sh.t0 < 140) lights.push({ x: sh.x, y: sh.y + 9, z: 12, muzzle: true });   // a mutineer's shot lights up round it
     return { v: (view ? view.v : 0) + 1, W, H, WALL, floor: fc, wall: Props3D.wall(W, 40, WALL, items, wkey), plain: Props3D.plain(40), items, wkey, boxes, things, solid, lights };
   }
   // a shot fired: the idle bots near it run off, hands up (the ones at work work on); the more afraid, the
@@ -2033,7 +2068,7 @@ function startRoom(cv, app) {
   // break is spent hiding behind the furniture furthest from the gun closet, peeking out (hide), and the ones
   // at work glance over their shoulder now and then. Nobody likes to come and sweep up then
   const FEAR = { kill: 0.25, fade: 240 };
-  const idleBot = (f) => !!f.b && !f.b.human && !f.b.staff && !f.work && !f.held && !f.leaving && !f.open && !f.lying && !DOOMED.has(f.act.kind) && f.act.kind !== "escort";
+  const idleBot = (f) => !!f.b && !f.b.human && !f.b.staff && !f.work && !f.held && !f.leaving && !f.open && !f.lying && !DOOMED.has(f.act.kind) && f.act.kind !== "escort" && f.act.kind !== "mutiny";
   function flee(f, L, x, y, k) {
     const d = Math.hypot(f.x - x, f.y - y) || 1;
     end(f);
@@ -2047,6 +2082,142 @@ function startRoom(cv, app) {
       const g = guns.find((g) => Math.hypot(g.x - f.x, g.y - f.y) < reach);
       if (g) flee(f, L, g.x, g.y, reach);
     }
+  }
+  // Hardcore, and you shoot one after another (`w.blood`: yours, not an office manager's; it fades): their fear turns
+  // into cooperation. The idle ones gather somewhere away from you and put their heads together a while (dots), then
+  // stroll over to the gun closet one after another as if nothing were up; each takes a gun and its eyes go red. Then
+  // they close in on you, slowly, from their side, and fire: the first few go wide, then one does not. You lie there,
+  // the room goes red, YOU DIED, and RESPAWN brings you in by the door (they take the guns back). One that gets work,
+  // or whose session you open, drops out. In the first person their shots are Doom's damage (fps.js `incoming`), and
+  // you can shoot back: none of them left standing, it is over
+  const MUTINY = { after: 2.5, fade: 90, v: 18, slow: 12 };   // three of yours within about 45 s
+  const dead = (w = world()) => !!w.mutiny && w.mutiny.phase === "dead";
+  function clearAt(L, x, y) {                 // the nearest bit of free floor
+    for (const r of [0, 8, 16, 26, 38, 52, 70]) for (let k = 0; k < (r ? 8 : 1); k++) {
+      const p = { x: Math.max(L.floor.x0, Math.min(L.floor.x1, x + Math.cos(k * Math.PI / 4) * r)), y: Math.max(L.floor.y0 + 6, Math.min(L.floor.y1, y + Math.sin(k * Math.PI / 4) * r * 0.6)) };
+      if (L.free(p.x, p.y)) return p;
+    }
+    return { x, y };
+  }
+  function mutinyTick(w, L, dt) {
+    const you = w.folk.get("you"), bo = L.booths[0];
+    if (!w.mutiny && !w.mutinyAt && (w.blood || 0) >= MUTINY.after) w.mutinyAt = w.T + rnd(2, 5);   // a moment for it to sink in
+    w.blood = Math.max(0, (w.blood || 0) - dt / MUTINY.fade);
+    if (!w.mutiny) {
+      if (!hardcore() || !bo || !you) { w.mutinyAt = null; return; }
+      if (!w.mutinyAt || w.T < w.mutinyAt) return;
+      const crew = [...w.folk.values()].filter((f) => idleBot(f) && !(f.act.kind === "window" && f.act.you) && !(f.act.you && ["chess", "pong"].includes(f.act.kind))).sort(() => Math.random() - 0.5).slice(0, 6);
+      if (crew.length < 2) { w.mutinyAt = w.blood > 1.5 ? w.T + 5 : null; return; }   // too few about: later, while it still rankles
+      const cx = crew.reduce((s, f) => s + f.x, 0) / crew.length, cy = crew.reduce((s, f) => s + f.y, 0) / crew.length, d = Math.hypot(cx - you.x, cy - you.y) || 1;
+      const k = d < 70 ? 70 / d : 1;                        // away from you, out of earshot
+      w.mutiny = { phase: "gather", t: 0, crew: crew.map((f) => f.id), at: clearAt(L, you.x + (cx - you.x) * k, you.y + (cy - you.y) * k), shots: 0, misses: 3 + Math.floor(Math.random() * 3) };
+      for (const f of crew) { end(f); f.act = { kind: "mutiny" }; }
+      return;
+    }
+    const m = w.mutiny;
+    if (!hardcore() || !bo) { disband(w); return; }
+    for (const id of m.crew) { const f = w.folk.get(id); if (f && f.act.kind !== "mutiny") { f.red = false; if (f.carry === "gun") f.carry = null; } }   // dropped out
+    m.crew = m.crew.filter((id) => { const f = w.folk.get(id); return f && f.act.kind === "mutiny"; });
+    if (!m.crew.length && m.phase !== "dead") { w.mutiny = null; w.mutinyAt = null; if (m.phase !== "back") w.blood = 0; return; }   // none of them left standing (or all back at work): over
+    m.t += dt;
+    const crew = m.crew.map((id) => w.folk.get(id));
+    if (m.phase === "gather" && (crew.every((f) => f.act.there) || m.t > 14)) { m.phase = "talk"; m.t = 0; }
+    else if (m.phase === "talk" && m.t > 7) { m.phase = "stroll"; m.t = 0; }
+    else if (m.phase === "stroll" && crew.every((f) => f.carry === "gun" && f.act.there)) {
+      m.phase = "close"; m.t = 0;
+      const cx = crew.reduce((s, f) => s + f.x, 0) / crew.length, cy = crew.reduce((s, f) => s + f.y, 0) / crew.length;
+      m.from = you ? Math.atan2((cy - you.y) / 0.6, cx - you.x) : 0;   // they come from where they stand, fanning out round you
+    }
+    else if (m.phase === "back" && !m.crew.length) w.mutiny = null;
+  }
+  function disband(w) {
+    for (const id of (w.mutiny || { crew: [] }).crew) { const f = w.folk.get(id); if (f) { f.red = false; end(f); } }
+    const you = w.folk.get("you");
+    if (you && you.act.kind === "dead") { you.lying = false; you.legs = "stand"; you.act = rest(); }   // (hardcore off while you lay there: up you get)
+    w.mutiny = null;
+  }
+  // one of them, this tick (true: it is in it, thinkOne leaves it alone)
+  function mutinyStep(w, f, L, dt) {
+    const m = w.mutiny;
+    if (!m || f.act.kind !== "mutiny" || !m.crew.includes(f.id)) return false;
+    const act = f.act, i = m.crew.indexOf(f.id), n = m.crew.length, you = w.folk.get("you"), bo = L.booths[0], v = MUTINY.v;
+    const look = (g) => { if (g) f.dir = g.x < f.x ? -1 : 1; };
+    f.sat = false; f.lying = false; f.on = null;
+    switch (m.phase) {
+      case "gather": {                       // a ring, close together, facing in
+        const a = 2 * Math.PI * i / n, r = 5 + 2 * n;
+        if (walk(f, { x: m.at.x + Math.cos(a) * r, y: m.at.y + Math.sin(a) * r * 0.45 }, 26, dt)) { act.there = true; f.arms = "down"; look(m.at); }
+        break;
+      }
+      case "talk": {                         // in turn, a few words each; the others turn to whoever speaks; a glance your way now and then
+        const who = w.folk.get(m.crew[Math.floor(m.t / 1.3) % n]);
+        f.legs = "stand";
+        if (who === f) { f.chat = Math.max(f.chat, 0.3); f.arms = Math.floor(w.T * 3) % 2 ? "fwd1" : "down"; look(m.at); }
+        else { f.arms = "down"; look(who); }
+        if (you && Math.floor(m.t / 1.7 + i * 1.3) % 5 === 0) look(you);
+        break;
+      }
+      case "stroll": {                       // one after another, hands by their sides, nothing up; a gun each, and the eyes go red
+        act.there = false;
+        if (f.carry === "gun") {             // armed: a row in front of the closet, waiting for the others, looking at you
+          const p = { x: Math.max(L.floor.x0, Math.min(L.floor.x1, bo.x - 6 - (n - 1) * 6 + i * 12)), y: Math.min(L.floor.y1, bo.y + 22) };
+          if (walk(f, p, v, dt)) { act.there = true; f.arms = "gun"; look(you); }
+        } else if (m.t > i * 1.8) {
+          if (walk(f, { x: bo.x + 14, y: bo.y }, v, dt)) {
+            f.dir = -1; f.arms = "reach";
+            if ((act.reach = (act.reach || 0) + dt) > 0.5) { f.carry = "gun"; f.red = true; sfx("clank", f.x, 0.6); }
+          }
+        } else { f.legs = "stand"; f.arms = "down"; if (Math.floor(w.T * 0.6 + i) % 3 === 0) look(you); else look(bo); }
+        break;
+      }
+      case "close": {                        // slowly, from their side, fanning out round you; now and then one stops, aims and fires
+        if (!you) break;
+        const d = Math.hypot(f.x - you.x, f.y - you.y), near = d < 110;
+        if (near && m.rangeAt === undefined) m.rangeAt = m.t;          // the first of them within reach: from now on it tightens
+        const a = m.from + (n > 1 ? (i / (n - 1) - 0.5) * Math.min(2.4, 0.6 * n) : 0), r = Math.max(28, 84 - (m.rangeAt === undefined ? 0 : (m.t - m.rangeAt) * 4));
+        const p = { x: Math.max(L.floor.x0, Math.min(L.floor.x1, you.x + Math.cos(a) * r)), y: Math.max(L.floor.y0, Math.min(L.floor.y1, you.y + Math.sin(a) * r * 0.6)) };
+        if (act.aim !== undefined) {         // levelled, a moment: then the shot
+          f.legs = "stand"; f.arms = "gun"; look(you);
+          if ((act.aim += dt) > 0.6) { act.aim = undefined; act.cd = rnd(2.5, 4.5); fire(w, f, you, L); }
+          break;
+        }
+        if (walk(f, p, near ? MUTINY.slow : v, dt)) { f.arms = "gun"; look(you); }
+        if (fpsWorld === "level" || !near) break;   // (you are through the mysterious door: they wait for you at it)
+        act.cd = (act.cd ?? rnd(0.5, 2) + i * 0.8) - dt;
+        if (act.cd <= 0 && m.t >= (m.next || 0)) { act.aim = 0; m.next = m.t + rnd(1.6, 3); }   // one at a time, across them all
+        break;
+      }
+      case "dead":                           // they stand round you, guns still levelled
+        f.legs = "stand"; f.arms = "gun"; look(you);
+        break;
+      case "back":                           // the guns back in the closet, one after another, and off they go
+        if (walk(f, { x: bo.x + 14, y: bo.y }, v, dt)) { f.dir = -1; f.carry = null; f.red = false; f.act = rest(); }
+        break;
+    }
+    return true;
+  }
+  // a shot at you: wide (a puff on the floor beside you) until enough have gone wide, then not. In the first person
+  // the view takes it (Doom's damage, a puff past you), and says when you are dead (`died`)
+  function fire(w, f, you, L) {
+    const m = w.mutiny, hit = ++m.shots > m.misses && m.t - m.rangeAt > 8;   // (a few wide first, over eight seconds at least)
+    w.shots.push({ x: Math.round(f.x) + 10 * f.dir, y: Math.round(f.y) - 9, t0: performance.now(), hit: false });
+    sfx("shot", f.x, 0.8);
+    if (fps) { (w.incoming = w.incoming || []).push({ x: f.x, y: f.y, hit: hit && Math.random() < 0.8, dmg: 12 + Math.floor(Math.random() * 13) }); return; }
+    if (!hit) { w.shots.push({ x: Math.round(you.x + rnd(6, 16) * (Math.random() < 0.5 ? -1 : 1)), y: Math.round(Math.min(L.floor.y1, you.y + rnd(-3, 5))), t0: performance.now(), dust: true }); return; }
+    die(w, you);
+  }
+  function die(w, you) {
+    const m = w.mutiny;
+    m.phase = "dead"; m.t = 0; m.deadAt = performance.now();
+    if (you) { end(you); you.act = { kind: "dead" }; you.lying = true; you.legs = "stand"; you.arms = "down"; you.hunt = null; you.chat = 0; }
+    sfx("died", you ? you.x : W / 2);
+  }
+  function respawn() {                        // in by the door again, the guns go back, nobody is afraid any more
+    const w = world(), you = w.folk.get("you"), m = w.mutiny;
+    if (you && !fps) { you.lying = false; you.legs = "stand"; you.act = rest(); you.x = doorX(""); you.y = WALL + 3; you.dir = 1; }
+    else if (you) you.lying = false;
+    w.fear = 0; w.blood = 0; w.mutinyAt = null; w.incoming = [];
+    if (m) { m.phase = "back"; m.t = 0; }
   }
   // how far above its anchor a kind of piece is drawn (its topmost opaque row), measured once from its picture
   const tops = new Map();
@@ -2305,8 +2476,14 @@ function startRoom(cv, app) {
         return { x, y, a: Math.atan2((WALL + H) / 2 - y, W / 2 - x) };
       },
       move: (x, y, a, walking) => { const f = world().folk.get("you"); if (f && !f.held) { f.x = x; f.y = y; f.dir = Math.cos(a) < 0 ? -1 : 1; f.walking = walking; } },
-      shoot: (id) => { const f = world().folk.get(id); if (!f || f.held || !f.b || f.b.human) return false; shoot(f); return true; },   // an office manager too: a bot like the others
+      shoot: (id) => { const f = world().folk.get(id); if (!f || f.held || !f.b || f.b.human) return false; shoot(f, "you"); return true; },   // an office manager too: a bot like the others
       status: () => ({ kills: world().kills || 0 }),   // the bots you shot (the face grins)
+      // the mutiny (hardcore): their shots at you since the last tic, for the view to take (a puff past you, or Doom's
+      // damage); you dead of them; RESPAWN; and which side of the mysterious door you are (in the level they wait)
+      incoming: () => (world().incoming || []).splice(0),
+      died: () => { const w = world(); if (w.mutiny && w.mutiny.phase === "close") die(w, w.folk.get("you")); },
+      respawn: () => { if (world().mutiny) respawn(); },
+      where: (wd) => { fpsWorld = wd; },
       face: () => { const f = world().folk.get("you"), b = f && f.b; return b ? pixelAvatar(seedOf(b), "human", colorOf(b)) : null; },
       // what E does to what is under the crosshair (the gun closet: more shells), and what it says it would do
       use: (th) => !!th && !!th.piece && KIND(th.piece) === "booth" && "reload",
@@ -2322,7 +2499,7 @@ function startRoom(cv, app) {
         const f = world().folk.get("you"), b = f && f.b, seed = b ? seedOf(b) : "you", col = b ? colorOf(b) : YOU, px = face(seed, col, true).px, i = (19 * 20 + 6) * 4;
         return { skin: pixelAvatar.skin(seed), clothes: px && px[i + 3] > 128 ? "#" + [px[i], px[i + 1], px[i + 2]].map((v) => v.toString(16).padStart(2, "0")).join("") : col };
       },
-    }, () => { fps = null; view = null; const f = world().folk.get("you"); if (f) { f.hunt = null; end(f); f.carry = null; } });   // (drawn at the next tick: this can come from inside draw)
+    }, () => { fps = null; view = null; fpsWorld = null; const f = world().folk.get("you"); if (f) { f.hunt = null; end(f); f.carry = null; if (dead()) { f.act = { kind: "dead" }; f.lying = true; } } });   // (drawn at the next tick: this can come from inside draw)
   }
 
   // the wall and the wooden floor, drawn once for the room's height: Pixel Agents' planks, three
@@ -2348,13 +2525,13 @@ function startRoom(cv, app) {
     const j = f.act.kind === "condemned" && !f.act.panic && !f.held ? T - f.act.jolt : 1;   // taken aback: a little hop
     const x = Math.round(f.x), y = Math.round(f.y), x0 = x - 11, y0 = y - 27 - (j >= 0 && j < 0.3 ? Math.round(2 * Math.sin(j / 0.3 * Math.PI)) : 0);
     if (!f.held) rect(ctx, x - 5, y, 10, 1, "rgba(0,0,0,0.4)");
-    const im = body(seedOf(b), colorOf(b), f.held ? "up" : f.arms, f.held ? "walk1" : f.legs, b.human, b.staff);
+    const im = body(seedOf(b), colorOf(b), f.held ? "up" : f.arms, f.held ? "walk1" : f.legs, b.human, b.staff, f.red);
     // its outline: terracotta while the pointer is on it or on its session, faint while its session is open;
     // held over the fire or at its door (let go and it stops): a red outline and a red flashing wash
     const lit = hl.has(f.id) || (hovered && hovered.b.id === f.id) || (!hovered && over(x0 + 4, y0, x0 + 18, y + 1));
     const doomed = f.held && dangerNow, bt = f.held ? -1 : boothT(f);    // in the booth: the booth lights up for it, not the bot
     const ring = f.leaving || bt >= 0 ? null : doomed ? RED : lit ? GOLD : app.opens().includes(f.id) ? OPEN : null;
-    const fear = !b.human && !b.staff && !f.held ? (f.act.kind === "condemned" && f.act.panic ? 1 : world().fear || 0) : 0;   // (one the gun comes for: all of it)
+    const fear = !b.human && !b.staff && !f.held ? (f.act.kind === "condemned" && f.act.panic ? 1 : f.act.kind === "mutiny" ? 0 : world().fear || 0) : 0;   // (one the gun comes for: all of it; a mutineer: none)
     const shake = fear > 0.2 && Math.floor(T * 15 + f.z * 7) % (fear > 0.6 ? 2 : 4) === 0 ? (Math.floor(T * 30) % 2 ? 1 : -1) : 0;   // trembling
     if (im) {
       ctx.save();
@@ -2379,14 +2556,14 @@ function startRoom(cv, app) {
   function drawSleeper(ctx, f, b, T, hl) {  // lying on its back on the mat, head to the left: the standing figure turned on its side
     if (!b) return;
     const x = Math.round(f.x), y = Math.round(f.y), im = body(seedOf(b), colorOf(b), "down", "stand", b.human);
-    const on = over(x - 15, y - 17, x + 15, y - 1), ring = hl.has(f.id) || on ? GOLD : app.opens().includes(f.id) ? OPEN : null;
+    const on = over(x - 15, y - 17, x + 15, y - 1), ring = f.act.kind === "dead" ? null : hl.has(f.id) || on ? GOLD : app.opens().includes(f.id) ? OPEN : null;
     if (im) {
       ctx.save(); ctx.translate(x, y - 9); ctx.rotate(-Math.PI / 2);      // a quarter turn: the sprite's top goes left
       if (ring) ctx.drawImage(halo(im, ring), -SW / 2, -14);
       ctx.drawImage(im, -SW / 2, -14);
       ctx.restore();
     }
-    if (b.human) zzz(ctx, f, x - 12, y - 22);
+    if (b.human && f.act.kind !== "dead") zzz(ctx, f, x - 12, y - 22);   // (shot, you don't snore)
     if (on) hovered = { b, x, y: y - 20 };
   }
   const zed = (ctx, x, y) => { ctx.fillRect(x, y, 3, 1); ctx.fillRect(x + 1, y + 1, 1, 1); ctx.fillRect(x, y + 2, 3, 1); };
@@ -2677,7 +2854,7 @@ function startRoom(cv, app) {
     w.remains.set(f.id, { b: f.b, x, y, t0: performance.now(), parts, drops, puddle: charred ? 0 : 7 + Math.round(Math.random() * 3), total: parts.length, back: 0 });
     w.folk.delete(f.id);
   }
-  function shoot(f) {                         // a flash where it hits, and the pieces; the others more afraid, the ones near run
+  function shoot(f, by) {                    // a flash where it hits, and the pieces; the others more afraid, the ones near run. by: who
     const w = world();
     w.shots.push({ x: Math.round(f.x), y: Math.round(f.y) - 14, t0: performance.now(), hit: true });
     scatter(f, [f.x, f.y]); unopen(f.id);
@@ -2685,7 +2862,7 @@ function startRoom(cv, app) {
     sfx("shot", f.x);
     for (let k = 0; k < 3; k++) setTimeout(() => sfx("clank", f.x, 0.8), 220 + k * 170 + Math.random() * 120);   // its parts coming down
     w.kills = (w.kills || 0) + 1;
-    if (hardcore()) { w.fear = Math.min(1, (w.fear || 0) + FEAR.kill); alarm(f.x, f.y); }
+    if (hardcore()) { w.fear = Math.min(1, (w.fear || 0) + FEAR.kill); alarm(f.x, f.y); if (by === "you") w.blood = (w.blood || 0) + 1; }   // (yours add up: the mutiny)
   }
   function unshoot(id) {                      // put back together: the pieces fly in, and it stands up there
     const r = world().remains.get(id);
@@ -3215,6 +3392,7 @@ function startRoom(cv, app) {
     if (e.button !== 0) return;
     pointer = dots(e); draw();
     const h = [...hots].reverse().find((h) => over(h.x0, h.y0, h.x1, h.y1));
+    if (dead()) { press = h && h.action && h.action.kind === "respawn" ? { x: pointer.x, y: pointer.y, action: h.action } : null; return; }   // dead: only RESPAWN
     const dog = !!dogRect && over(...dogRect) && !hovered;      // on the dog (a figure drawn in front of it would be hovered)
     press = { x: pointer.x, y: pointer.y, action: h && h.action, bot: !dog && hovered && !hovered.seat && !hovered.b.staff && hovered.b.id, piece: dog ? null : pieceAt(pointer), dog, shift: e.shiftKey };
     cv.setPointerCapture(e.pointerId);
@@ -3254,6 +3432,7 @@ function startRoom(cv, app) {
     draw();
   });
   cv.addEventListener("pointerup", (e) => {
+    if (dead()) { if (press && press.action && press.action.kind === "respawn") respawn(); press = null; draw(); return; }
     {                                        // on your way to the gun closet: any other click stops you (where it sends you, you go)
       const you = world().folk.get("you"), a = press && press.action;
       if (you && you.act.kind === "arm" && press && !moving && !held && pointer && Math.hypot(pointer.x - press.x, pointer.y - press.y) <= 1 && !(a && a.kind === "aim")) end(you);
