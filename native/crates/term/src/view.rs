@@ -13,7 +13,7 @@ use futures::channel::mpsc::UnboundedReceiver;
 use gpui::{
     App, Bounds, ClipboardItem, Context, CursorStyle, DispatchPhase, Element, ElementId, ElementInputHandler, Entity,
     EntityInputHandler, EventEmitter, FocusHandle, Focusable, Font, FontFeatures, FontStyle, FontWeight, GlobalElementId,
-    Hitbox, HitboxBehavior, Hsla, InspectorElementId, InteractiveElement, IntoElement, KeyDownEvent, LayoutId,
+    Hitbox, HitboxBehavior, Hsla, InputHandler, InspectorElementId, InteractiveElement, IntoElement, KeyDownEvent, LayoutId,
     MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, PathBuilder, Pixels, Point, Render,
     ScrollWheelEvent, ShapedLine, SharedString, StrikethroughStyle, Styled, Subscription, Task, TextRun,
     UTF16Selection, UnderlineStyle, Window, div, fill, outline, point, px, relative, size,
@@ -89,6 +89,7 @@ pub struct TermView {
     screen: Screen,
     sink: Box<dyn FnMut(&[u8])>,
     focus: FocusHandle,
+    focused: bool,
     metrics: Option<Metrics>,
     /// the grid's top left in the window, where the last frame put it
     origin: Point<Pixels>,
@@ -118,11 +119,13 @@ impl TermView {
         let focus = cx.focus_handle();
         let subs = vec![
             cx.on_focus(&focus, window, |v, _, cx| {
+                v.focused = true;
                 v.screen.focus(true);
                 v.restart_blink(cx);
                 v.flush(cx);
             }),
             cx.on_blur(&focus, window, |v, _, cx| {
+                v.focused = false;
                 v.screen.focus(false);
                 v.blink = None;
                 v.blink_on = true;
@@ -133,6 +136,7 @@ impl TermView {
             screen: Screen::new(80, 24),
             sink: Box::new(sink),
             focus,
+            focused: false,
             metrics: None,
             origin: Point::default(),
             hover: None,
@@ -243,6 +247,9 @@ impl TermView {
 
     fn restart_blink(&mut self, cx: &mut Context<Self>) {
         self.blink_on = true;
+        if !self.focused {
+            return;
+        }
         self.blink = Some(cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor().timer(BLINK).await;
@@ -435,6 +442,47 @@ impl EntityInputHandler for TermView {
     }
     fn character_index_for_point(&mut self, _: Point<Pixels>, _: &mut Window, _: &mut Context<Self>) -> Option<usize> {
         None
+    }
+}
+
+// the view's input handler, but a held key repeats (as in a terminal) instead of opening macOS's
+// accent menu
+struct TermInput(ElementInputHandler<TermView>);
+
+impl InputHandler for TermInput {
+    fn selected_text_range(&mut self, ignore: bool, window: &mut Window, cx: &mut App) -> Option<UTF16Selection> {
+        self.0.selected_text_range(ignore, window, cx)
+    }
+    fn marked_text_range(&mut self, window: &mut Window, cx: &mut App) -> Option<Range<usize>> {
+        self.0.marked_text_range(window, cx)
+    }
+    fn text_for_range(&mut self, r: Range<usize>, adj: &mut Option<Range<usize>>, window: &mut Window, cx: &mut App) -> Option<String> {
+        self.0.text_for_range(r, adj, window, cx)
+    }
+    fn replace_text_in_range(&mut self, r: Option<Range<usize>>, text: &str, window: &mut Window, cx: &mut App) {
+        self.0.replace_text_in_range(r, text, window, cx)
+    }
+    fn replace_and_mark_text_in_range(
+        &mut self,
+        r: Option<Range<usize>>,
+        text: &str,
+        sel: Option<Range<usize>>,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        self.0.replace_and_mark_text_in_range(r, text, sel, window, cx)
+    }
+    fn unmark_text(&mut self, window: &mut Window, cx: &mut App) {
+        self.0.unmark_text(window, cx)
+    }
+    fn bounds_for_range(&mut self, r: Range<usize>, window: &mut Window, cx: &mut App) -> Option<Bounds<Pixels>> {
+        self.0.bounds_for_range(r, window, cx)
+    }
+    fn character_index_for_point(&mut self, p: Point<Pixels>, window: &mut Window, cx: &mut App) -> Option<usize> {
+        self.0.character_index_for_point(p, window, cx)
+    }
+    fn apple_press_and_hold_enabled(&mut self) -> bool {
+        false
     }
 }
 
@@ -773,7 +821,7 @@ impl Element for TermElement {
         let focus = view.focus.clone();
         let style = view.cursor_style(window.modifiers().alt);
         window.set_cursor_style(style, hitbox);
-        window.handle_input(&focus, ElementInputHandler::new(bounds, self.view.clone()), cx);
+        window.handle_input(&focus, TermInput(ElementInputHandler::new(bounds, self.view.clone())), cx);
         frame.paint(bounds, window, cx);
 
         let (v, hb) = (self.view.clone(), hitbox.clone());
