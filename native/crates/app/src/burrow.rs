@@ -119,6 +119,10 @@ impl Burrow {
             if !on && b.fps.is_some() {
                 b.stop_fps(cx); // the pointer let go: out of the first person, as when the browser's lock was lost
             }
+            if !on {
+                b.outside.blur(); // a key held while the window went: let go
+                b.pong.blur();
+            }
             b.blur_at = if on { None } else { b.blur_at.or(Some(Instant::now())) };
             b.hub.focus(on);
         })
