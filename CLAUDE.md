@@ -190,8 +190,9 @@ message is the log. When something goes, take it out here. Keep the file under a
   light rises, the bot dissolves feet first); a click on the booth or the bot runs it back, carrying it out undoes;
   then `claude stop` + `claude rm`. Never a countdown sign.
 - **Hardcore** (a setting): the booth is a gun closet. A bot dropped on it, a burnt desk's bots, what an office
-  manager is asked to remove: condemned (it panics near the closet, freezes when aimed at); an office manager, or
-  you, takes a gun and shoots. The remains (its body in parts, cogs, oil) are the undo: a click puts it back
+  manager is asked to remove: condemned. An office manager, or you, takes a gun and shoots. While she fetches the
+  gun it is only taken aback (a start, then it stands watching her, and starts at every shot); it panics once the gun
+  comes its way (she walks over to it; you in the first person), and freezes when aimed at. The remains (its body in parts, cogs, oil) are the undo: a click puts it back
   together. Idle bots sweep the pieces; the last one gone, the session is deleted (rust after 30 s). Fear grows with
   kills (trembling, hiding, fleeing whoever holds a gun).
 - The fire takes furniture and desks, not bots (a bot at the fire warms its hands). A bot that is to go loses its

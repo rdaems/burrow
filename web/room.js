@@ -1158,14 +1158,28 @@ function startRoom(cv, app) {
         if (act.there) { f.legs = "stand"; f.dir = -side; f.arms = "down"; }
         break;
       }
-      case "condemned": {                    // hardcore: someone takes a gun for it. Meanwhile it wanders about where it was put, at a
-        // loss: a few hurried steps flailing its hands, a stop to look this way and that, off again (slower than the one with
-        // the gun walks, so it is caught). The gun levelled at it: it freezes, hands up, facing it
-        const by = [...folk.values()].find((g) => g.hunt && g.hunt.id === f.id && g.carry === "gun");
+      case "condemned": {                    // hardcore: someone takes a gun for it. While she (or you) goes for the gun it is only
+        // taken aback: a start, then it stands there watching her, looking about now and then, and starts again at a shot.
+        // Once the gun comes its way (the one with it walks over to it; you, in the first person) it panics: away, then a
+        // few hurried steps flailing its hands, a stop to look this way and that, off again (slower than the one with the
+        // gun walks, so it is caught). The gun levelled at it: it freezes, hands up, facing it
+        const hunters = [...folk.values()].filter((g) => g.hunt), by = hunters.find((g) => g.hunt.id === f.id && g.carry === "gun");
+        const you = [...folk.values()].find((g) => g.human && g.act.kind === "fps");
         if (by && by.hunt.phase === "aim") { act.to = null; f.legs = "stand"; f.arms = "up"; f.dir = by.x < f.x ? -1 : 1; break; }
-        if (!act.home) {                     // first away from the gun closet, as far as it dares; then it dithers there
-          const bo = L.booths[0], d = bo ? Math.hypot(f.x - bo.x, f.y - bo.y) || 1 : 1;
-          act.home = bo ? { x: Math.max(L.floor.x0, Math.min(L.floor.x1, f.x + (f.x - bo.x) / d * 44)), y: Math.max(L.floor.y0, Math.min(L.floor.y1, f.y + (f.y - bo.y) / d * 24)) } : { x: f.x, y: f.y };
+        if (!act.panic && !(by && by.hunt.phase === "hunt") && !you) {
+          if (act.bang === undefined) { act.bang = w.bang || 0; act.jolt = w.T; }        // just now: a start
+          if ((w.bang || 0) > act.bang) { act.bang = w.bang; act.jolt = w.T; }        // a shot: another
+          const her = hunters.find((g) => g.hunt.id === f.id) || hunters[0], j = w.T - act.jolt;
+          f.legs = "stand"; f.arms = j < 0.4 ? "up" : "down";
+          if ((act.look = (act.look ?? rnd(1.5, 3)) - dt) < 0) { if (act.look < -0.4) act.look = rnd(1.5, 3); }   // a glance the other way
+          const at = her || L.booths[0];
+          if (at) f.dir = (at.x < f.x ? -1 : 1) * (act.look < 0 ? -1 : 1);
+          break;
+        }
+        if (!act.panic) {                    // first away from the gun coming, as far as it dares; then it dithers there
+          act.panic = true; act.to = null;
+          const from = by || you || L.booths[0], d = from ? Math.hypot(f.x - from.x, f.y - from.y) || 1 : 1;
+          act.home = from ? { x: Math.max(L.floor.x0, Math.min(L.floor.x1, f.x + (f.x - from.x) / d * 44)), y: Math.max(L.floor.y0, Math.min(L.floor.y1, f.y + (f.y - from.y) / d * 24)) } : { x: f.x, y: f.y };
           act.to = { ...act.home }; act.v = 30;
         }
         if (act.to) {
@@ -2341,7 +2355,8 @@ function startRoom(cv, app) {
 
   function drawFigure(ctx, f, b, T, hl) {
     if (!b) return;
-    const x = Math.round(f.x), y = Math.round(f.y), x0 = x - 11, y0 = y - 27;
+    const j = f.act.kind === "condemned" && !f.act.panic && !f.held ? T - f.act.jolt : 1;   // taken aback: a little hop
+    const x = Math.round(f.x), y = Math.round(f.y), x0 = x - 11, y0 = y - 27 - (j >= 0 && j < 0.3 ? Math.round(2 * Math.sin(j / 0.3 * Math.PI)) : 0);
     if (!f.held) rect(ctx, x - 5, y, 10, 1, "rgba(0,0,0,0.4)");
     const im = body(seedOf(b), colorOf(b), f.held ? "up" : f.arms, f.held ? "walk1" : f.legs, b.human, b.staff);
     // its outline: terracotta while the pointer is on it or on its session, faint while its session is open;
@@ -2349,7 +2364,7 @@ function startRoom(cv, app) {
     const lit = hl.has(f.id) || (hovered && hovered.b.id === f.id) || (!hovered && over(x0 + 4, y0, x0 + 18, y + 1));
     const doomed = f.held && dangerNow, bt = f.held ? -1 : boothT(f);    // in the booth: the booth lights up for it, not the bot
     const ring = f.leaving || bt >= 0 ? null : doomed ? RED : lit ? GOLD : app.opens().includes(f.id) ? OPEN : null;
-    const fear = !b.human && !b.staff && !f.held ? (f.act.kind === "condemned" ? 1 : world().fear || 0) : 0;   // (one waiting to be shot: all of it)
+    const fear = !b.human && !b.staff && !f.held ? (f.act.kind === "condemned" && f.act.panic ? 1 : world().fear || 0) : 0;   // (one the gun comes for: all of it)
     const shake = fear > 0.2 && Math.floor(T * 15 + f.z * 7) % (fear > 0.6 ? 2 : 4) === 0 ? (Math.floor(T * 30) % 2 ? 1 : -1) : 0;   // trembling
     if (im) {
       ctx.save();
@@ -2688,6 +2703,7 @@ function startRoom(cv, app) {
     const w = world();
     w.shots.push({ x: Math.round(f.x), y: Math.round(f.y) - 14, t0: performance.now(), hit: true });
     scatter(f, [f.x, f.y]); unopen(f.id);
+    w.bang = w.T;                             // (the condemned still waiting start at it)
     sfx("shot", f.x);
     for (let k = 0; k < 3; k++) setTimeout(() => sfx("clank", f.x, 0.8), 220 + k * 170 + Math.random() * 120);   // its parts coming down
     w.kills = (w.kills || 0) + 1;
