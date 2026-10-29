@@ -274,6 +274,7 @@ impl Burrow {
                 Event::State(s) => self.state = *s,
                 Event::Digest(d) => self.digest = d,
                 Event::Shells(sh) => self.state.shells = sh,
+                Event::PairTalk { .. } => {} // (the room's pair beams: next)
                 Event::Talk { from, to } => {
                     let inp = self.input();
                     let mut out = Output::default();
@@ -363,6 +364,7 @@ impl Burrow {
             chess,
             pong,
             outside,
+            pair: (self.view == Some(ViewKind::Pair)).then(|| self.views.pair_key.clone()).flatten(), // on its phone
             view: self.view.map(|v| v.name().to_string()),
             digest: Some(digest),
             away: self.blur_at.map(|t| t.elapsed().as_secs_f64()).unwrap_or(0.0),

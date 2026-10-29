@@ -98,8 +98,10 @@ pub fn draw_board(ctx: &mut Ctx, x: i32, y: i32, cells: &[(i32, i32, Color)]) {
 
 /// a pair room: a small round table with a speakerphone on it, its light on while a room is linked,
 /// blinking while a bot is held over it (it would join the chat)
-pub fn draw_pair(ctx: &mut Ctx, x: i32, y: i32, linked: bool, t: f64, over: bool) {
-    let (pk, pd, pm) = (Color::rgb(0x3f3740), Color::rgb(0x595e60), Color::rgb(0x757b7c));
+/// hand: where you hold its handset while its room is open, and the side you stand (the cradle empty, the cord
+/// coiling from the base to your hand)
+pub fn draw_pair(ctx: &mut Ctx, x: i32, y: i32, linked: bool, t: f64, over: bool, hand: Option<(i32, i32, i32)>) {
+    let (pk, pd, pm, phi) = (Color::rgb(0x3f3740), Color::rgb(0x595e60), Color::rgb(0x757b7c), Color::rgb(0xb5bfc7));
     for (j, hw) in ell(13, 4, 8).into_iter().enumerate() {
         let j = j as i32;
         rect(ctx, x - hw, y - 20 + j, hw * 2, 1, WOOD.k);
@@ -116,15 +118,36 @@ pub fn draw_pair(ctx: &mut Ctx, x: i32, y: i32, linked: bool, t: f64, over: bool
     rect(ctx, x - 6, y - 1, 12, 2, WOOD.k);
     rect(ctx, x - 5, y - 1, 10, 1, WOOD.d);
     rect(ctx, x - 5, y + 1, 10, 1, SHADOW);
-    // the speakerphone: a dark triangle-ish puck, a light on top
-    rect(ctx, x - 4, y - 18, 8, 4, pk);
-    rect(ctx, x - 3, y - 18, 6, 3, pd);
-    rect(ctx, x - 3, y - 18, 6, 1, pm);
-    rect(ctx, x - 6, y - 16, 2, 2, pk);
-    rect(ctx, x + 4, y - 16, 2, 2, pk);
-    rect(ctx, x - 1, y - 20, 2, 2, pk);
+    // the telephone: its base, three keys and the light along its front, the handset across the cradle on top
+    rect(ctx, x - 5, y - 18, 10, 5, pk);
+    rect(ctx, x - 4, y - 18, 8, 2, pd);
+    rect(ctx, x - 4, y - 18, 8, 1, pm);
+    for kx in [-3, -1, 1] {
+        rect(ctx, x + kx, y - 15, 1, 1, phi);
+    }
     let on = linked && (!over || (t * 6.).floor() as i64 % 2 != 0);
-    rect(ctx, x, y - 17, 1, 1, if on { SP::g } else { Color::rgb(0x2a2f33) });
+    rect(ctx, x + 3, y - 15, 1, 1, if on { SP::g } else { Color::rgb(0x2a2f33) });
+    let Some((hx, hy, side)) = hand else {
+        // the handset at rest: a bone across the cradle, its two ends bulging
+        rect(ctx, x - 4, y - 20, 8, 2, pk);
+        rect(ctx, x - 3, y - 20, 6, 1, pd);
+        for ex in [x - 7, x + 4] {
+            rect(ctx, ex, y - 21, 3, 4, pk);
+            rect(ctx, ex + 1, y - 20, 1, 2, pm);
+        }
+        return;
+    };
+    rect(ctx, x - 5, y - 20, 1, 2, pk); // the cradle, empty
+    rect(ctx, x + 4, y - 20, 1, 2, pk);
+    // the cord: from the base's side down in a sag to your hand, coiled (every other dot a dot higher)
+    let (x0, y0) = (x + side * 5, y - 15);
+    let n = js_round(((hx - x0) as f64).hypot((hy - y0) as f64)).max(2);
+    for k in 0..=n {
+        let u = k as f64 / n as f64;
+        let cx = js_round(x0 as f64 + (hx - x0) as f64 * u);
+        let cy = js_round(y0 as f64 + (hy - y0) as f64 * u + (u * std::f64::consts::PI).sin() * 3.0);
+        rect(ctx, cx, cy - k % 2, 1, 1, pk);
+    }
 }
 
 /// the empty cabinet that adds a project: a plate with a + on it (x0, y0 its top left)

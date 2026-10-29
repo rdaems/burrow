@@ -404,14 +404,16 @@ fn the_floor_is_room_js() {
         }))
     });
     check("paint-pair-", exact, |name| {
-        let (linked, t, over) = match name.strip_prefix("paint-pair-")? {
-            "unlinked" => (false, 0., false),
-            "linked" => (true, 0., false),
-            "over-off" => (true, 0.1, true),
-            "over-on" => (true, 0.2, true),
+        let (linked, t, over, hand) = match name.strip_prefix("paint-pair-")? {
+            "unlinked" => (false, 0., false, None),
+            "linked" => (true, 0., false, None),
+            "over-off" => (true, 0.1, true, None),
+            "over-on" => (true, 0.2, true, None),
+            "hand-r" => (true, 0., false, Some((27, 11, 1))),
+            "hand-l" => (true, 0., false, Some((2, 11, -1))),
             _ => return None,
         };
-        Some(on(30, 26, PLANK, |c| draw_pair(c, 15, 22, linked, t, over)))
+        Some(on(30, 26, PLANK, |c| draw_pair(c, 15, 22, linked, t, over, hand)))
     });
     check("paint-add-", exact, |name| Some(on(34, 20, PLANK, |c| draw_add(c, 2, 2, name.ends_with('1')))));
     check("paint-radio-", exact, |name| Some(on(18, 26, PLANK, |c| draw_radio(c, 9, 23, name.ends_with('1')))));

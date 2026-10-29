@@ -709,7 +709,9 @@ impl Room {
             let h = self.hot((pr.x - 13) as f64, (pr.y - 20) as f64, (pr.x + 13) as f64, (pr.y + 1) as f64, json!({"kind": "pairOpen", "key": pr.key}));
             let over_ = heldbot.as_ref().and_then(|id| self.w.get(id)).is_some_and(|f| think::in_rect(think::spot_of_fig(f), foot("pair", [pr.x, pr.y], None)));
             let linked = info.is_some();
-            piece(&mut items, &pr.key, "pair", pr.x, pr.y, Box::new(move |c| D::draw_pair(c, pr.x, pr.y, linked, t, over_)), 0.5);
+            // you on its phone: the handset's foot (body()'s "phone")
+            let hand = self.w.get("you").filter(|me| me.act.kind == "phone" && me.act.at.as_ref() == Some(&pr.key) && me.act.there && !me.held).map(|me| (jround(me.x) + if me.dir < 0.0 { -8 } else { 7 }, jround(me.y) - 12, me.act.side));
+            piece(&mut items, &pr.key, "pair", pr.x, pr.y, Box::new(move |c| D::draw_pair(c, pr.x, pr.y, linked, t, over_, hand)), 0.5);
             if h {
                 set_tip(&mut tip, info.as_ref().map(|i| if i.room.is_empty() { "pair".to_string() } else { i.room.clone() }).unwrap_or("pair: open a room".into()), pr.x as f64, (pr.y - 22) as f64);
             } else if over_ {

@@ -51,7 +51,7 @@ pub fn draw_kind(ctx: &mut Ctx, kind: &str, x: i32, y: i32, t: f64, env: &KindEn
             draw_reception(ctx, x, y, &o, false);
             draw_reception(ctx, x, y, &o, true);
         }
-        "pair" => draw_pair(ctx, x, y, true, t, false),
+        "pair" => draw_pair(ctx, x, y, true, t, false, None),
         "add" => draw_add(ctx, x, y - 15, false),
         "booth" => {
             draw_booth(ctx, x, y, false, -1., -1., false, t, false);

@@ -31,6 +31,7 @@ pub enum Arms {
     Fwd1,
     Fwd2,
     Reach,
+    Phone,
     Mug,
     Gun,
     Paper,
@@ -59,6 +60,7 @@ impl Arms {
             "fwd1" => Arms::Fwd1,
             "fwd2" => Arms::Fwd2,
             "reach" => Arms::Reach,
+            "phone" => Arms::Phone,
             "mug" => Arms::Mug,
             "gun" => Arms::Gun,
             "paper" => Arms::Paper,
@@ -193,6 +195,18 @@ pub fn body(seed: &str, color: Color, arms: Arms, legs: Legs, human: bool, femme
             rect(&mut px, 14, 14, 2, 4, c1);
             rect(&mut px, 16, 13, 2, 2, c1);
             rect(&mut px, 18, 12, 2, 2, skin);
+        }
+        Arms::Phone => {
+            // a handset held to the ear
+            back(&mut px);
+            let (d, hi) = (Color::rgb(0x595e60), Color::rgb(0xb5bfc7));
+            rect(&mut px, 14, 13, 2, 5, c1);
+            rect(&mut px, 16, 7, 3, 2, d);
+            rect(&mut px, 16, 9, 2, 3, d);
+            rect(&mut px, 16, 12, 3, 2, d);
+            rect(&mut px, 17, 7, 1, 1, hi);
+            rect(&mut px, 17, 12, 1, 1, hi);
+            rect(&mut px, 15, 10, 2, 2, skin);
         }
         Arms::Mug => {
             back(&mut px);

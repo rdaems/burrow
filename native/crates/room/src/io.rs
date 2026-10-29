@@ -70,6 +70,8 @@ pub struct Input {
     pub chess: Option<Chess>,
     pub pong: Option<PongInfo>,
     pub outside: Option<OutsideInfo>,
+    /// the pair table whose room is open (the view): you are on its phone
+    pub pair: Option<String>,
     /// the view (panel) that is open: closet, settings, chess, ...
     pub view: Option<String>,
     pub digest: Option<DigestInfo>,

@@ -164,3 +164,22 @@ fn a_condemned_bot_only_starts_until_the_gun_comes_its_way() {
     }
     assert!(panicked, "the gun came and it never panicked");
 }
+
+#[test]
+fn a_pair_room_open_puts_you_on_its_phone() {
+    let mut s = demo();
+    s.furniture.push("pair0".into());
+    let mut inp = Input { state: s.clone(), now: 0.0, hour: 14, ..Default::default() };
+    let mut room = Room::new(9, 0.0);
+    room.resize(&inp, 820.0);
+    run(&mut room, &mut inp, 3.0);
+    let pt = room.last.clone().unwrap().pairs[0].clone();
+    inp.pair = Some(pt.key.clone());
+    run(&mut room, &mut inp, 20.0);
+    let you = room.w.get("you").unwrap();
+    assert_eq!((you.act.kind, you.act.there, you.arms), ("phone", true, "phone"));
+    assert!(((you.x - pt.x as f64).abs() - 20.0).abs() < 0.5 && you.dir * (you.x - pt.x as f64) < 0.0, "beside the table, facing it");
+    inp.pair = None;
+    run(&mut room, &mut inp, 1.0);
+    assert_ne!(room.w.get("you").unwrap().act.kind, "phone", "closing the room hangs up");
+}

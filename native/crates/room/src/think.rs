@@ -479,6 +479,11 @@ pub fn think_one(w: &mut World, i: usize, l: &Layout, _now: f64, dt: f64, home: 
                 end(f);
                 f.act = Act { kind: "window", at: Some(ow.at.clone()), side: 0, you: true, left: Some(1e9), ..Default::default() };
             }
+        } else if let Some(pr) = &t.inp.pair {
+            if !(a.kind == "phone" && a.at.as_ref() == Some(pr)) {
+                end(f);
+                f.act = Act { kind: "phone", at: Some(pr.clone()), you: true, ..Default::default() }; // its pair room open: on its phone
+            }
         } else if let Some(g) = o {
             if !(a.kind == "with" && a.to.as_ref() == Some(&g)) && !a.chosen {
                 end(f);
@@ -962,6 +967,24 @@ pub fn think_one(w: &mut World, i: usize, l: &Layout, _now: f64, dt: f64, home: 
                     }
                     w.folk[i].act = rest(rnd_rest);
                 }
+            }
+        }
+        "phone" => {
+            // you, in a table's pair room: beside the table, facing it, the handset at your ear
+            let at = w.folk[i].act.at.clone();
+            let Some(pt) = l.pairs.iter().find(|p| Some(&p.key) == at.as_ref()).cloned() else {
+                w.folk[i].act = rest(rnd_rest);
+                return;
+            };
+            let f = &mut w.folk[i];
+            if f.act.side == 0 {
+                f.act.side = if f.x < pt.x as f64 { -1 } else { 1 }; // the side you come from
+            }
+            let side = f.act.side;
+            f.act.there = walk(f, &Spot::on((pt.x + side * 20) as f64, (pt.y + 1) as f64, &pt.key), v, dt);
+            if f.act.there {
+                f.dir = -side as f64;
+                f.arms = "phone";
             }
         }
         "chair" => {
