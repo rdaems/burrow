@@ -12,6 +12,7 @@ pub mod layout;
 pub mod paint;
 pub mod remains;
 pub mod room;
+pub mod scene;
 pub mod sprites;
 #[rustfmt::skip]
 pub mod sprites_gen;

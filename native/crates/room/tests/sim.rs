@@ -91,3 +91,19 @@ fn the_booth_deletes_after_five_seconds_and_the_undo_keeps() {
     assert!(acts.iter().any(|a| a["kind"] == "stop" && a["id"] == id.as_str() && a["rm"] == true), "{acts:?}");
     assert!(room.w.get(&id).is_none());
 }
+
+#[test]
+fn the_room_draws() {
+    // a picture of the demo room after a minute, for looking at (target/room-demo.png)
+    let s = demo();
+    let mut inp = Input { state: s, now: 0.0, hour: 14, ..Default::default() };
+    let mut room = Room::new(11, 0.0);
+    room.resize(&inp, 820.0);
+    run(&mut room, &mut inp, 60.0);
+    let mut out = Output::default();
+    let l = room.step(&inp, &mut out);
+    room.draw(&inp, &mut out, &l);
+    assert_eq!(room.img.w, 512);
+    assert!(room.img.px.iter().all(|p| p[3] == 255), "the room is opaque");
+    room.img.save_png(concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/room-demo.png")).unwrap();
+}
