@@ -39,6 +39,13 @@ message is the log. When something goes, take it out here. Keep the file under a
 - `src/` is the first app, pure Rust (eframe/egui 0.37 + alacritty_terminal 0.26), frozen at Oct 21's features.
   Keep it building (`cargo check`), don't port to it while the room changes daily; port, freeze or a webview is
   his call. It still uses `rooms.json`. `.app`: `macos/bundle.sh`.
+- `native/` (branch `gpui`, 2026-10-29, Stijn asked for it): the whole of web/ ported to a macOS app on GPUI, no
+  Python and no browser; `native/README.md` and `native/PORT.md`. The room is burrow-room drawing into a buffer as
+  room.js drew its canvas (golden tests against the real room.js, pixel for pixel, via `native/tools/golden.mjs`);
+  server.py is burrow-core in process; xterm.js is burrow-term. Same `~/.config/burrow/` as web/: don't run both on
+  it. Looking at it without anyone's eyes: `BURROW_SHOT=<png>` (the window photographs itself), `BURROW_OPEN`,
+  `BURROW_CLICKS`, always with `BURROW_DEMO=1` and a throwaway `BURROW_CONFIG_DIR`. A change to web/ should be made
+  in native/ too while both live.
 - burrow's own state, `~/.config/burrow/`: `room.json` (layout, furniture, desks kept, names, width, you,
   settings, paint, pair, managers, awake; `v` is its migration number, `furnish` in server.py, now 13),
   `digest.json` (the notes), `office/<name>/` (the office managers' sessions). Uploads in `~/.cache/burrow/drop`.

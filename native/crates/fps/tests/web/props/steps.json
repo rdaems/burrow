@@ -1,0 +1,4 @@
+[
+ {"wait": 2500},
+ {"js": "(() => { const out = []; const r = (seed, color, arms, legs, femme) => ({ kind: 'robot', seed, color, arms, legs, femme }); const figs = [['robot_a0', r('demo0001', '#4a76b8', 'fwd1', 'sit', false), 0], ['robot_a3', r('demo0001', '#4a76b8', 'fwd1', 'sit', false), 3], ['robot_b1', r('clever-cleo', '#2fa087', 'wave', 'walk1', false), 1], ['robot_c6', r('manager-16', '#f06b72', 'gun', 'stand', true), 6], ['dog_2', { kind: 'dog', pose: 'walk2', wag: true }, 2]]; for (const [n, sp, k] of figs) out.push(n + ' ' + Props3D.figure(sp, k).c.toDataURL()); out.push('lying ' + Props3D.lying(r('demo0001', '#4a76b8', 'fwd1', 'sit', false)).c.toDataURL()); out.push('plant1 ' + Props3D.plant(1).c.toDataURL()); out.push('flames2 ' + Props3D.flames(2, true).c.toDataURL()); return out.join('\\n'); })()"}
+]

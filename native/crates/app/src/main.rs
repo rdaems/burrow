@@ -3,9 +3,12 @@
 
 mod burrow;
 mod field;
+mod fpsview;
+mod icon;
 mod kit;
 mod notes;
 mod panels;
+mod shot;
 mod stars;
 mod term;
 mod tiles;
@@ -15,6 +18,13 @@ use gpui::{App, AppContext, Application, Bounds, TitlebarOptions, WindowBackgrou
 use std::borrow::Cow;
 
 fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    if let Some(i) = args.iter().position(|a| a == "--icon") {
+        // for macos/bundle.sh
+        let out = args.get(i + 1).map(String::as_str).unwrap_or("icon.png");
+        icon::icon().save_png(out).expect("the icon");
+        return;
+    }
     Application::new().run(|cx: &mut App| {
         cx.text_system()
             .add_fonts(vec![
@@ -32,10 +42,26 @@ fn main() {
             window_background: WindowBackgroundAppearance::Opaque,
             window_min_size: Some(size(px(720.), px(480.))),
             focus,
+            // a picture of itself (BURROW_SHOT): above the others, or a covered window is never drawn
+            kind: if std::env::var_os("BURROW_SHOT").is_some() { gpui::WindowKind::PopUp } else { gpui::WindowKind::Normal },
             app_id: Some("burrow".into()),
             ..Default::default()
         };
         cx.open_window(opts, |window, cx| cx.new(|cx| burrow::Burrow::new(window, cx))).expect("a window");
+        // BURROW_SHOT=<png>: a picture of the window after a few seconds, then quit (see shot.rs)
+        if let Ok(path) = std::env::var("BURROW_SHOT") {
+            let wait: u64 = std::env::var("BURROW_SHOT_AFTER").ok().and_then(|s| s.parse().ok()).unwrap_or(5);
+            cx.spawn(async move |cx| {
+                cx.background_executor().timer(std::time::Duration::from_secs(wait)).await;
+                let _ = cx.update(|cx| {
+                    if let Some(w) = cx.windows().first().copied() {
+                        let _ = w.update(cx, |_, window, _| eprintln!("shot: {}", shot::shoot(window, &path)));
+                    }
+                    cx.quit();
+                });
+            })
+            .detach();
+        }
         cx.activate(focus);
     });
 }

@@ -89,6 +89,8 @@ pub struct Room {
     pub floor: Option<Image>,
     /// the pointer's look over the room: default, pointer, grab, grabbing
     pub cursor: &'static str,
+    /// what the first person keeps of the room
+    pub third: crate::scene3::Third,
 }
 
 impl Room {
@@ -121,6 +123,7 @@ impl Room {
             img: Image::new(512, 800),
             floor: None,
             cursor: "default",
+            third: Default::default(),
         }
     }
 
@@ -326,6 +329,59 @@ impl Room {
         let mut t = Tick { inp, out, dice: &mut self.dice, fresh: &mut self.fresh, moving_fire: false, w: self.size.w };
         think::condemn(&mut self.w, &mut t, ids, None)
     }
+    /// the first person shot a bot: its pieces fly (false if it cannot be shot: held, gone, you)
+    pub fn shoot(&mut self, inp: &Input, out: &mut Output, id: &str) -> bool {
+        let ok = self.w.get(id).is_some_and(|f| !f.held && f.b.is_some() && !f.human);
+        if ok {
+            let l = self.last.clone();
+            let mut t = Tick { inp, out, dice: &mut self.dice, fresh: &mut self.fresh, moving_fire: false, w: self.size.w };
+            if let Some(l) = l {
+                think::shoot(&mut self.w, &l, id, &mut t);
+            }
+        }
+        ok
+    }
+    /// put back together (E on its remains, in the first person)
+    pub fn unshoot(&mut self, now: f64, id: &str) {
+        think::unshoot(&mut self.w, id, now);
+    }
+    /// a shot heard: the idle bots near it run off
+    pub fn alarm(&mut self, inp: &Input, out: &mut Output, x: f64, y: f64) {
+        let Some(l) = self.last.clone() else { return };
+        let mut t = Tick { inp, out, dice: &mut self.dice, fresh: &mut self.fresh, moving_fire: false, w: self.size.w };
+        think::alarm(&mut self.w, &l, x, y, &mut t);
+    }
+    /// you are where the first person says
+    pub fn move_you(&mut self, x: f64, y: f64, a: f64, walking: bool) {
+        if let Some(f) = self.w.get_mut("you")
+            && !f.held
+        {
+            f.x = x;
+            f.y = y;
+            f.dir = if a.cos() < 0.0 { -1.0 } else { 1.0 };
+            f.walking = walking;
+        }
+    }
+    /// out of the first person: you stand where you went, the gun put away
+    pub fn left_fps(&mut self) {
+        if let Some(f) = self.w.get_mut("you") {
+            f.hunt = None;
+            end(f);
+            f.carry = None;
+        }
+    }
+    /// where the first person starts: where you stand (by the closet, the gun just taken), looking into the room
+    pub fn fps_start(&self, key: &str) -> (f64, f64, f64) {
+        let (w, h) = (self.size.w as f64, self.size.h as f64);
+        let p = self.last.as_ref().and_then(|l| l.piece_of(key).or(l.booths.first().and_then(|b| l.piece_of(&b.key)))).cloned();
+        let (x, y) = match (self.w.get("you"), p) {
+            (Some(me), _) => (me.x, me.y),
+            (None, Some(p)) => (((p.r[0] + p.r[2]) as f64 / 2.0).clamp(14.0, w - 14.0), ((p.r[3] + 22) as f64).min(h - 8.0)),
+            _ => (w / 2.0, h / 2.0),
+        };
+        (x, y, (((WALL as f64) + h) / 2.0 - y).atan2(w / 2.0 - x))
+    }
+
     /// the two at a game table right now (chess, pong), white or the left side first: the app lets you watch them
     pub fn playing(&self, kind: &str) -> Vec<String> {
         let mut v: Vec<&Fig> = self.w.folk.iter().filter(|f| f.act.kind == kind && f.act.there && f.act.with.is_some() && !f.act.you && !f.human).collect();

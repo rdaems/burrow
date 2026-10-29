@@ -83,6 +83,11 @@ pub struct Burrow {
     pub sound: burrow_sound::Sound,
     pub outside: burrow_games::outside::Outside,
     pub pong: burrow_games::pong::Pong,
+    /// the gun closet's first person, and its melt after
+    pub fps: Option<crate::fpsview::FpsRun>,
+    pub leaving: Option<crate::fpsview::Leaving>,
+    /// pictures to drop from the GPU at the next paint
+    pub stale_pictures: Vec<Arc<RenderImage>>,
 }
 
 impl Burrow {
@@ -109,12 +114,104 @@ impl Burrow {
         })
         .detach();
         // the window's focus: away a minute, you nap (and the polls slow down)
-        cx.observe_window_activation(window, |b, window, _| {
+        cx.observe_window_activation(window, |b, window, cx| {
             let on = window.is_window_active();
+            if !on && b.fps.is_some() {
+                b.stop_fps(cx); // the pointer let go: out of the first person, as when the browser's lock was lost
+            }
             b.blur_at = if on { None } else { b.blur_at.or(Some(Instant::now())) };
             b.hub.focus(on);
         })
         .detach();
+        // BURROW_OPEN (debug, with BURROW_SHOT): what to open once the state is in: bot:<id>, shell:<dir>, view:<kind>,
+        // several split by commas
+        if let Ok(what) = std::env::var("BURROW_OPEN") {
+            cx.spawn_in(window, async move |this, cx| {
+                cx.background_executor().timer(Duration::from_millis(1500)).await;
+                let _ = this.update_in(cx, |b, window, cx| {
+                    for w in what.split(',') {
+                        let (k, v) = w.split_once(':').unwrap_or((w, ""));
+                        match k {
+                            "bot" => {
+                                let m = b.state.bots.iter().find(|x| x.id == v).map(|x| x.m.clone()).unwrap_or_default();
+                                b.open_bot(&m, v, true, None, window, cx);
+                            }
+                            "shell" => b.open_shell("", v, true, window, cx),
+                            "notes" => b.open_notes(true, window, cx),
+                            "fps" => {
+                                // the demo in hardcore, at the gun closet
+                                b.hub.settings(&[("hardcore", true)]);
+                                b.state.settings.hardcore = true;
+                                if let Some(k) = b.room.last.as_ref().and_then(|l| l.booths.first()).map(|p| p.key.clone()) {
+                                    b.start_fps(&k, window, cx);
+                                }
+                            }
+                            // a desk's panel, a pair table's (the first there is, if none is named)
+                            "desk" => {
+                                let u = if v.is_empty() { b.state.desks.first().map(|d| d.unit.clone()).unwrap_or_default() } else { v.to_string() };
+                                b.act(json!({"kind": "desk", "unit": u}), window, cx);
+                            }
+                            "pair" => {
+                                let k = if v.is_empty() { b.state.furniture.iter().find(|k| k.starts_with("pair")).cloned().unwrap_or_default() } else { v.to_string() };
+                                b.act(json!({"kind": "pairOpen", "key": k}), window, cx);
+                            }
+                            "view" => {
+                                if let Some(kind) = ViewKind::parse(v) {
+                                    b.open_view(kind, window, cx);
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                });
+            })
+            .detach();
+        }
+        // BURROW_CLICKS (debug): clicks in the room, in dots, "x,y;x,y", one every 700 ms after two seconds
+        if let Ok(clicks) = std::env::var("BURROW_CLICKS") {
+            cx.spawn_in(window, async move |this, cx| {
+                cx.background_executor().timer(Duration::from_millis(2000)).await;
+                let pt = |s: &str| s.split_once(',').and_then(|(x, y)| Some((x.trim().parse::<f64>().ok()?, y.trim().parse::<f64>().ok()?)));
+                for c in clicks.split(';') {
+                    if let Some((a, z)) = c.split_once('>') {
+                        // a drag: pressed at a, moved there in steps, let go at z (held at z: "x,y>x,y!")
+                        let hold = z.ends_with('!');
+                        let (Some(a), Some(z)) = (pt(a), pt(z.trim_end_matches('!'))) else { continue };
+                        let _ = this.update_in(cx, |b, window, cx| {
+                            let mut out = Output::default();
+                            b.room.pointer_move(a.0, a.1, (0.0, 0.0), &mut out);
+                            b.redraw(window, cx);
+                            b.room.pointer_down(a.0, a.1, false);
+                            b.drag = Some(Drag::Room);
+                        });
+                        for k in 1..=10 {
+                            let (x, y) = (a.0 + (z.0 - a.0) * k as f64 / 10.0, a.1 + (z.1 - a.1) * k as f64 / 10.0);
+                            let _ = this.update_in(cx, |b, window, cx| {
+                                let mut out = Output::default();
+                                b.room.pointer_move(x, y, (0.0, 0.0), &mut out);
+                                b.after(out, window, cx);
+                                b.dirty = true;
+                            });
+                            cx.background_executor().timer(Duration::from_millis(60)).await;
+                        }
+                        if !hold {
+                            let _ = this.update_in(cx, |b, window, cx| {
+                                let mut out = Output::default();
+                                let inp = b.input();
+                                b.room.pointer_up(&inp, &mut out, (0.0, 0.0));
+                                b.drag = None;
+                                b.after(out, window, cx);
+                                b.dirty = true;
+                            });
+                        }
+                    } else if let Some((x, y)) = pt(c) {
+                        let _ = this.update_in(cx, |b, window, cx| b.click_room(x, y, window, cx));
+                    }
+                    cx.background_executor().timer(Duration::from_millis(700)).await;
+                }
+            })
+            .detach();
+        }
         let now = Instant::now();
         Burrow {
             hub,
@@ -145,6 +242,9 @@ impl Burrow {
             sound: burrow_sound::Sound::new(),
             outside: burrow_games::outside::Outside::new(seed),
             pong: burrow_games::pong::Pong::new(seed ^ 0x9e37),
+            fps: None,
+            leaving: None,
+            stale_pictures: Vec::new(),
         }
     }
 
@@ -175,11 +275,22 @@ impl Burrow {
         if news {
             self.on_state(window, cx);
         }
+        // a terminal whose program ended (or whose session went to agent view) closes its tile
+        let done: Vec<u64> = self.tile.iter().filter_map(|(k, t)| t.body.as_ref().filter(|b| b.update(cx, |b, _| b.done())).map(|_| *k)).collect();
+        for t in done {
+            self.close_tile(t, window, cx);
+        }
         self.tick_games(dt, cx);
         let ticked = self.room.advance(dt);
         if ticked || self.dirty || news {
             self.redraw(window, cx);
             cx.notify();
+        }
+        if self.fps.is_some() {
+            self.fps_frame(dt, ticked, window, cx);
+        } else if self.leaving.is_some() {
+            let now = self.now_ms();
+            self.leaving_frame(now, window, cx);
         }
     }
 
@@ -249,8 +360,8 @@ impl Burrow {
             shell,
             shells,
             hl_shell,
-            still: false,
-            fps: false,
+            still: reduce_motion(),
+            fps: self.fps.is_some(),
         }
     }
 
@@ -273,6 +384,9 @@ impl Burrow {
         let l = self.room.step(&self.inp, &mut out);
         self.room.draw(&self.inp, &mut out, &l);
         let k = self.scale.round().max(1.0) as u32;
+        if std::env::var_os("BURROW_DEBUG").is_some() {
+            eprintln!("redraw {}x{} k={k} bots={} folk={}", self.room.img.w, self.room.img.h, self.state.bots.len(), self.room.w.folk.len());
+        }
         let bytes = self.room.img.upscale_bgra(k, [0x0b, 0x08, 0x12, 255]);
         let (w, h) = (self.room.img.w * k, self.room.img.h * k);
         if let Some(buf) = image::RgbaImage::from_raw(w, h, bytes)
@@ -284,7 +398,7 @@ impl Burrow {
     }
 
     /// what the room asked for: actions, sounds, the tile under a carried bot
-    fn after(&mut self, out: Output, window: &mut Window, cx: &mut Context<Self>) {
+    pub fn after(&mut self, mut out: Output, window: &mut Window, cx: &mut Context<Self>) {
         self.sound.set(out.sound_on);
         for s in &out.sounds {
             self.sound.play(s.name, s.pan, s.vol, false, None);
@@ -297,6 +411,9 @@ impl Burrow {
             self.lit_shell = hs;
             cx.notify();
         }
+        if let Some(key) = out.first_person.take() {
+            self.start_fps(&key, window, cx);
+        }
         for a in out.acts {
             self.act(a, window, cx);
         }
@@ -305,6 +422,9 @@ impl Burrow {
     /// the room's `act`: what a click or a drop in the room asks for
     pub fn act(&mut self, a: Value, window: &mut Window, cx: &mut Context<Self>) {
         let kind = a["kind"].as_str().unwrap_or_default().to_string();
+        if std::env::var_os("BURROW_DEBUG").is_some() {
+            eprintln!("act {a}");
+        }
         let s = |k: &str| a[k].as_str().unwrap_or_default().to_string();
         let shift = a["shift"].as_bool().unwrap_or(false);
         let hub = self.hub.clone();
@@ -514,6 +634,15 @@ impl Burrow {
         }
         let t = self.new_tile(TileKind::Bot { m: m.to_string(), id: id.to_string() });
         let body = crate::term::TermTile::bot(self.hub.clone(), m, id, window, cx);
+        // what you type there: a bubble over your head in the room, the bot answers when you pause
+        let folk = self.as_folk(id);
+        cx.subscribe(&body, move |this, _, ev: &crate::term::TileEvent, _| {
+            let crate::term::TileEvent::Typed { enter } = ev;
+            let now = this.now_ms();
+            this.room.typed(now, Some(&folk), *enter);
+            this.dirty = true;
+        })
+        .detach();
         self.tile.get_mut(&t).unwrap().body = Some(body);
         match at {
             Some(at) => {
@@ -537,6 +666,13 @@ impl Burrow {
         self.make_room(retain, window, cx);
         let t = self.new_tile(TileKind::Shell { m: m.to_string(), dir: dir.to_string() });
         let body = crate::term::TermTile::shell(self.hub.clone(), m, dir, window, cx);
+        cx.subscribe(&body, move |this, _, ev: &crate::term::TileEvent, _| {
+            let crate::term::TileEvent::Typed { enter } = ev;
+            let now = this.now_ms();
+            this.room.typed(now, None, *enter);
+            this.dirty = true;
+        })
+        .detach();
         self.tile.get_mut(&t).unwrap().body = Some(body);
         self.tiles.add(t);
         self.focus_tile(t, window, cx);
@@ -761,6 +897,73 @@ impl Burrow {
         cx.notify();
     }
 
+    /// files dropped from the Finder: on a bot, into its session; on a desk's screen, into your terminal there; on a
+    /// tile, into its terminal. A path on another machine is copied there first (scp)
+    fn drop_on_room(&mut self, paths: Vec<std::path::PathBuf>, window: &mut Window, cx: &mut Context<Self>) {
+        let Some((x, y)) = self.dots(window.mouse_position()) else { return };
+        let mut out = Output::default();
+        self.room.pointer_move(x, y, (0.0, 0.0), &mut out);
+        self.redraw(window, cx);
+        if let Some(h) = self.room.hovered.clone().filter(|h| !h.id.starts_with("mgr:") && h.id != "you")
+            && let Some(b) = self.state.bots.iter().find(|b| b.id == h.id).cloned()
+        {
+            self.open_bot(&b.m, &b.id, false, None, window, cx);
+            if let Some(t) = self.tile_of_bot(&b.id) {
+                self.hand(t, paths, cx);
+            }
+        } else if let Some((m, dir)) = self.room.screen_hover.clone() {
+            self.open_shell(&m, &dir, false, window, cx);
+            if let Some(t) = self.tiles.focused() {
+                self.hand(t, paths, cx);
+            }
+        }
+    }
+
+    /// files handed to a tile's terminal: their paths pasted (quoted when they need it), copied to its machine first
+    pub fn hand(&mut self, t: u64, paths: Vec<std::path::PathBuf>, cx: &mut Context<Self>) {
+        let Some(tile) = self.tile.get(&t) else { return };
+        let Some(body) = tile.body.clone() else { return };
+        let m = match &tile.kind {
+            TileKind::Bot { m, .. } | TileKind::Shell { m, .. } => m.clone(),
+            TileKind::Notes => return,
+        };
+        let hub = self.hub.clone();
+        let task = cx.background_executor().spawn(async move {
+            let mut out = Vec::new();
+            for p in paths {
+                if m.is_empty() {
+                    out.push(p.to_string_lossy().to_string());
+                } else if let Ok(bytes) = std::fs::read(&p) {
+                    let name = p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                    match hub.upload(&m, &name, &bytes) {
+                        Ok(there) => out.push(there),
+                        Err(e) => eprintln!("burrow: {e}"),
+                    }
+                }
+            }
+            out
+        });
+        cx.spawn(async move |_, cx| {
+            let ps = task.await;
+            let text: String = ps.iter().map(|p| if p.contains([' ', '\'', '"', '\\', '\t', '\n']) { format!("'{}' ", p.replace('\'', "'\\''")) } else { format!("{p} ") }).collect();
+            let _ = body.update(cx, |b, cx| b.hand(text, cx));
+        })
+        .detach();
+    }
+
+    /// a click in the room at x, y dots, as the pointer would make it (for BURROW_CLICKS)
+    pub fn click_room(&mut self, x: f64, y: f64, window: &mut Window, cx: &mut Context<Self>) {
+        let mut out = Output::default();
+        self.room.pointer_move(x, y, (0.0, 0.0), &mut out);
+        self.redraw(window, cx);
+        self.room.pointer_down(x, y, false);
+        let inp = self.input();
+        self.room.pointer_up(&inp, &mut out, (0.0, 0.0));
+        self.after(out, window, cx);
+        self.dirty = true;
+        cx.notify();
+    }
+
     fn room_element(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let pic = self.picture.clone();
         let bounds = self.room_bounds.clone();
@@ -781,7 +984,12 @@ impl Burrow {
                     move |b, _, _| bounds.set(Some(b)),
                     move |b, _, window, _| {
                         if let Some(pic) = pic {
-                            let _ = window.paint_image(b, Corners::default(), pic, 0, false);
+                            let r = window.paint_image(b, Corners::default(), pic, 0, false);
+                            if std::env::var_os("BURROW_DEBUG").is_some() {
+                                eprintln!("paint room {:?} -> {:?}", b.size, r.is_ok());
+                            }
+                        } else if std::env::var_os("BURROW_DEBUG").is_some() {
+                            eprintln!("paint room: no picture");
                         }
                     },
                 )
@@ -804,6 +1012,7 @@ impl Burrow {
                     this.pointer_move(e, window, cx);
                 }
             }))
+            .on_drop(cx.listener(|this, paths: &gpui::ExternalPaths, window, cx| this.drop_on_room(paths.paths().to_vec(), window, cx)))
             .on_hover(cx.listener(|this, on: &bool, _, _| {
                 if !*on && this.drag.is_none() {
                     this.room.pointer_leave();
@@ -876,6 +1085,7 @@ impl Burrow {
             .when(matches!(self.drag, Some(Drag::Tile { id, on: true, .. }) if id == t), |d| d.opacity(0.6))
             .child(frame_bg(Frame::tile(lit)))
             .child(div().absolute().inset(px(6.)).flex().flex_col().child(band).child(div().flex_1().min_h(px(0.)).bg(rgb(col::BOX)).child(body)))
+            .on_drop(cx.listener(move |this, paths: &gpui::ExternalPaths, _, cx| this.hand(t, paths.paths().to_vec(), cx)))
             .on_hover(cx.listener(move |this, on: &bool, _, cx| {
                 this.hover_tile = if *on { Some(t) } else if this.hover_tile == Some(t) { None } else { this.hover_tile };
                 this.dirty = true;
@@ -959,7 +1169,7 @@ impl Render for Burrow {
         if (w0, h0) != (self.room.size.w, self.room.size.h) {
             self.dirty = true;
         }
-        for old in self.stale.drain(..) {
+        for old in self.stale.drain(..).chain(self.stale_pictures.drain(..)) {
             let _ = window.drop_image(old);
         }
         let room = self.room_element(cx);
@@ -983,7 +1193,30 @@ impl Render for Burrow {
                 ),
             )
             .child(pane)
-            .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| views::key(this, e, window, cx)))
+            .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| {
+                if !this.fps_key(e) {
+                    views::key(this, e, window, cx)
+                }
+            }))
+            .on_key_up(cx.listener(|this, e: &gpui::KeyUpEvent, _, _| {
+                this.fps_key_up(e);
+            }))
+            .on_modifiers_changed(cx.listener(|this, e: &gpui::ModifiersChangedEvent, _, _| this.fps_modifiers(e)))
+            .when_some(self.fps.as_ref().and_then(|r| r.picture.clone()).or(self.leaving.as_ref().and_then(|l| l.picture.clone())), |d, pic| {
+                // the first person over everything (or its melt over the room, on the way out)
+                let black = self.fps.is_some();
+                d.child(
+                    div()
+                        .id("fps")
+                        .absolute()
+                        .inset_0()
+                        .when(black, |d| d.bg(rgb(0x000000)))
+                        .child(canvas(|_, _, _| {}, move |b, _, window, _| {
+                            let _ = window.paint_image(b, Corners::default(), pic, 0, false);
+                        }).size_full())
+                        .when(black, |d| d.on_mouse_down(MouseButton::Left, cx.listener(|this, _, _, _| this.fps_click()))),
+                )
+            })
             // while something is dragged, the pointer is followed over the whole window
             .when(dragging, |d| {
                 let (a, b) = (this.clone(), this.clone());
@@ -1010,6 +1243,24 @@ impl Render for Burrow {
                 )
             })
     }
+}
+
+/// macOS's Reduce Motion (the page's prefers-reduced-motion): asked at most once a second
+pub fn reduce_motion() -> bool {
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+    static AT: AtomicU64 = AtomicU64::new(0);
+    static ON: AtomicBool = AtomicBool::new(false);
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    if AT.swap(now, Ordering::Relaxed) != now {
+        let on: bool = unsafe {
+            use objc::{class, msg_send, sel, sel_impl};
+            let ws: *mut objc::runtime::Object = msg_send![class!(NSWorkspace), sharedWorkspace];
+            let v: objc::runtime::BOOL = msg_send![ws, accessibilityDisplayShouldReduceMotion];
+            v != objc::runtime::NO
+        };
+        ON.store(on, Ordering::Relaxed);
+    }
+    ON.load(Ordering::Relaxed)
 }
 
 /// this computer's clock: hours and minutes, local time

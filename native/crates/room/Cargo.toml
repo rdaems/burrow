@@ -8,5 +8,6 @@ description = "burrow's room: its state, logic and pixel art, drawn into a buffe
 [dependencies]
 pix = { path = "../pix" }
 burrow-model = { path = "../model" }
+burrow-fps = { path = "../fps" }
 serde.workspace = true
 serde_json.workspace = true
