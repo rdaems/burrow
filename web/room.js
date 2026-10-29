@@ -1874,7 +1874,7 @@ function startRoom(cv, app) {
       box(ctx, lx - 2, ly - 2, tw + 4, 9, INK2);
       tiny(ctx, t, lx, ly, C.steel4);
     }
-    const id = hovered && !held ? hovered.b.id : null;
+    const id = held ? held.id : hovered ? hovered.b.id : null;   // (a bot carried stays lit: its chair, its session)
     if (id !== hoverId) { hoverId = id; app.hover(id); }
     const sk = screenHover && !held && !moving ? screenHover.m + ":" + screenHover.dir : null;
     if (sk !== hoverScreen) { hoverScreen = sk; app.hoverShell(sk); }
