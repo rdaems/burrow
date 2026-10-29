@@ -31,6 +31,8 @@ pub enum Event {
     Shells(Vec<model::ShellView>),
     /// a message between two bots (ids; an office manager is mgr:<her booth>)
     Talk { from: String, to: String },
+    /// a bot posting in a pair room ("say": a beam to that room's table) or reading it ("read": from the table)
+    PairTalk { id: String, key: String, dir: String },
 }
 
 /// the notes, as the page had them: {sessions: {id: notes}, desks: {unit: paragraph}, writing, explaining, on}
@@ -137,6 +139,10 @@ pub(crate) struct Inner {
     pub mrows: IndexMap<String, Bot>,
     /// id → when: sessions she asked to remove, walked to the booth by her in the room
     pub removing: IndexMap<String, f64>,
+    /// a pair agent's token → its room's name (from its join, `pair_table`)
+    pub pair_rooms: HashMap<String, String>,
+    /// token → when its join was last looked for in its whole transcript
+    pub pair_asked: HashMap<String, f64>,
     /// the ones you took out of the booth again (she is told, and leaves them be)
     pub kept: Vec<String>,
 }
@@ -250,6 +256,8 @@ impl Hub {
                 seen: HashMap::new(),
                 mrows: IndexMap::new(),
                 removing: IndexMap::new(),
+                pair_rooms: HashMap::new(),
+                pair_asked: HashMap::new(),
                 kept: vec![],
             }),
             caff: Mutex::new(None),
@@ -493,6 +501,7 @@ impl Hub {
             all.extend(self.lock().mrows.values().cloned());
         }
         let talks = parse::parse_peers(parts[2], &all);
+        let (pairs, rooms) = parse::parse_pair(parts[2]);
         self.fold(mid, &m, &mut bots)?;
         self.lock().feeds.insert(mid.to_string(), Feed { bots: bots.clone(), light, error: None });
         self.fade(mid, util::now());
@@ -505,6 +514,17 @@ impl Hub {
                 self.push(Event::Talk { from, to });
             }
         }
+        // a bot talking in a pair room, or reading it: a beam to its table
+        self.lock().pair_rooms.extend(rooms);
+        for (eid, session, token, dir) in pairs {
+            if !heard.insert(eid) || *first {
+                continue;
+            }
+            let Some(b) = all.iter().find(|b| b.session == session) else { continue };
+            if let Some(key) = self.pair_table(&m, &session, &token) {
+                self.push(Event::PairTalk { id: self.folk_of(&b.id), key, dir: dir.into() });
+            }
+        }
         *first = false;
         // what she asked to remove and is gone (or was not taken in ten minutes)
         let mut g = self.lock();
@@ -512,6 +532,34 @@ impl Hub {
         let now = util::now();
         g.removing.retain(|i, t| ids.contains(i) && now - *t <= 600.0);
         Ok(())
+    }
+
+    /// the pair table a bot's pair token belongs to: the one linked to its room, by the name pair gave in answer to
+    /// its join (looked for once in its whole transcript when the last minutes did not have it); with the room
+    /// unknown, the only table if there is one
+    pub(crate) fn pair_table(&self, m: &Mach, session: &str, token: &str) -> Option<String> {
+        static HEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[0-9a-fA-F-]+$").unwrap());
+        let ask = {
+            let mut g = self.lock();
+            if g.room.get("pair").and_then(Value::as_object).is_none_or(|t| t.is_empty()) {
+                return None;
+            }
+            let ask = !g.pair_rooms.contains_key(token) && util::now() - g.pair_asked.get(token).copied().unwrap_or(0.0) > 600.0 && HEX.is_match(session);
+            if ask {
+                g.pair_asked.insert(token.to_string(), util::now());
+            }
+            ask
+        };
+        if ask && let Ok(out) = run(self.runner(), m, &scripts::pair_join(session), MIN) {
+            let rooms = parse::parse_pair(&out).1;
+            self.lock().pair_rooms.extend(rooms);
+        }
+        let g = self.lock();
+        let tables = g.room.get("pair").and_then(Value::as_object)?;
+        match g.pair_rooms.get(token) {
+            None => (tables.len() == 1).then(|| tables.keys().next().cloned()).flatten(),
+            Some(name) => tables.iter().find(|(_, v)| v.get("room").and_then(Value::as_str) == Some(name.as_str())).map(|(k, _)| k.clone()),
+        }
     }
 
     /// each bot's desk: the directory it started in, or its repo's for a worktree

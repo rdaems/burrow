@@ -7,8 +7,27 @@ use std::sync::LazyLock;
 /// a message between sessions shows up in the receiver's transcript as a user turn with
 /// "origin":{"kind":"peer","from":"uds:…","verifiedPeerPid":…,"msg_id":"…","name":"<sender>",…};
 /// grep the last 4 MB of transcripts written in the last minute (a session can write a few hundred kB
-/// right after the message) and print "<receiver session id> <origin…>" per message
-pub const PEERS: &str = r#"find ~/.claude/projects -maxdepth 2 -name '*.jsonl' -mmin -1 2>/dev/null | while IFS= read -r f; do s=${f##*/}; tail -c 4194304 "$f" | grep -o '"origin":{"kind":"peer"[^}]*' | sed "s|^|${s%.jsonl} |"; done"#;
+/// right after the message) and print "<receiver session id> <origin…>" per message.
+/// The same grep finds a bot's traffic with a pair room: pair's agents talk with curl to <pair>/a/<token>/…, so a
+/// post (/say) or a read (/messages) is a Bash tool call (its id), a wait that brings messages is pair's answer
+/// ending in "last message #N … Next: reply if you have something to say"; and the answer to a join names the room
+/// ("Room: X") and, further on, its token: which table it is (the one linked to that room)
+macro_rules! pair_grep {
+    () => {
+        r#" -e '"id":"toolu_[A-Za-z0-9]+","name":"Bash","input":\{"command":"curl[^"]*/a/[A-Za-z0-9_-]+/(say|messages)' -e 'last message #[0-9]+\\nNext: reply if you have something to say \(POST /say\), then keep listening:\\n  curl -s .https?://[^/]+/a/[A-Za-z0-9_-]+/wait' -e 'Room: [^\\"]*\\nYou are: ' -e 'curl -s .https?://[^/]+/a/[A-Za-z0-9_-]+/messages.\\n  Wait for new messages' "#
+    };
+}
+pub const PAIR_GREP: &str = pair_grep!();
+pub const PEERS: &str = concat!(
+    r#"find ~/.claude/projects -maxdepth 2 -name '*.jsonl' -mmin -1 2>/dev/null | while IFS= read -r f; do s=${f##*/}; tail -c 4194304 "$f" | grep -o -E -e '"origin":\{"kind":"peer"[^}]*' "#,
+    pair_grep!(),
+    r#"| sed "s|^|${s%.jsonl} |"; done"#
+);
+
+/// a session's whole transcript, for when it joined its pair room (longer ago than the last minutes): "<session> …"
+pub fn pair_join(session: &str) -> String {
+    format!(r#"for f in ~/.claude/projects/*/{session}.jsonl; do [ -f "$f" ] && grep -o -E{PAIR_GREP}"$f" | sed "s|^|{session} |"; done"#)
+}
 
 /// each background session's record (~/.claude/jobs/<id>/state.json): when it was last written, agent
 /// view's one-line summary, its Remote Control session, its tempo, the conversation it goes on with and

@@ -522,3 +522,80 @@ fn a_pair_table() {
     assert_eq!(h.pair(&key, None, None).unwrap().bring, "https://pair.example/n/b1");
     assert_eq!(fake.called("/h/mine/me"), 1);
 }
+
+#[test]
+fn a_bot_talking_in_a_pair_room_beams_to_its_table() {
+    let dir = tempfile::tempdir().unwrap();
+    let cfg = Config::under(dir.path(), false);
+    std::fs::create_dir_all(cfg.room().parent().unwrap()).unwrap();
+    let pair = json!({"pair0": {"url": "https://pair.test/h/a", "room": "Lounge"}, "pair1": {"url": "https://pair.test/h/b", "room": "Den"}});
+    std::fs::write(cfg.room(), json!({"v": 13, "desks": [], "layout": {}, "furniture": ["pair0", "pair1"], "pair": pair}).to_string()).unwrap();
+    let agents = r#"[{"id": "b1", "kind": "background", "name": "ann", "status": "idle", "pid": 501, "cwd": "/p", "sessionId": "aa11"},
+                     {"id": "b2", "kind": "background", "name": "bob", "status": "idle", "pid": 502, "cwd": "/p", "sessionId": "bb22"}]"#;
+    let poll = |peers: &str| format!("{agents}\n@@burrow@@\n{{}}\n@@burrow@@\n{peers}\n@@burrow@@\n\n");
+    let say1 = r#"aa11 "id":"toolu_01","name":"Bash","input":{"command":"curl -s -X POST https://pair.test/a/tokA/say"#;
+    let say2 = r#"aa11 "id":"toolu_02","name":"Bash","input":{"command":"curl -s -X POST https://pair.test/a/tokA/say"#;
+    let join = r"bb22 Room: Den\nYou are: 
+bb22 curl -s 'https://pair.test/a/tokB/messages'\n  Wait for new messages";
+    let read = r"bb22 last message #4\nNext: reply if you have something to say (POST /say), then keep listening:\n  curl -s 'https://pair.test/a/tokB/wait";
+    let fake = Arc::new(Fake::default());
+    // the first round only learns (bob's join); the next: ann posts on a token whose join is older (her whole
+    // transcript is searched once), bob reads his room
+    fake.on("claude agents --json --all; echo", Ok(&poll(&format!("{say1}\n{join}"))))
+        .then("claude agents --json --all; echo", Ok(&poll(&format!("{say1}\n{say2}\n{read}"))))
+        .on("/aa11.jsonl", Ok(r"aa11 Room: Lounge\nYou are: 
+aa11 curl -s 'https://pair.test/a/tokA/messages'\n  Wait for new messages
+"));
+    let h = Hub::new(cfg, fake.clone());
+    assert_eq!(h.state().pair.len(), 2);
+    let ev = h.subscribe();
+    h.start();
+    let mut got = vec![];
+    let end = Instant::now() + Duration::from_secs(10);
+    while got.len() < 2 && Instant::now() < end {
+        h.focus(true);
+        if let Ok(Event::PairTalk { id, key, dir }) = ev.recv_timeout(Duration::from_millis(200)) {
+            got.push((id, key, dir));
+        }
+    }
+    got.sort();
+    let w = |a: &str, b: &str, c: &str| (a.to_string(), b.to_string(), c.to_string());
+    assert_eq!(got, [w("b1", "pair0", "say"), w("b2", "pair1", "read")]);
+    assert_eq!(fake.called("/aa11.jsonl"), 1);
+    // heard once: no more of them in the rounds after
+    let end = Instant::now() + Duration::from_millis(1500);
+    while Instant::now() < end {
+        h.focus(true);
+        if let Ok(e) = ev.recv_timeout(Duration::from_millis(100)) {
+            assert!(!matches!(e, Event::PairTalk { .. }), "{e:?}");
+        }
+    }
+    assert!(fake.called("claude agents --json --all; echo") >= 3);
+}
+
+#[test]
+fn the_greps_find_pair_traffic_in_a_transcript() {
+    // a made-up transcript under a made-up home, grepped by the very scripts the poll runs
+    let home = tempfile::tempdir().unwrap();
+    let proj = home.path().join(".claude/projects/-p");
+    std::fs::create_dir_all(&proj).unwrap();
+    let lines = [
+        r#"{"type":"user","message":{"content":[{"type":"tool_result","content":"Room: Den\nYou are: ann\nRead: curl -s 'https://pair.test/a/tokA/messages'\n  Wait for new messages with /wait"}]}}"#,
+        r#"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_01Say","name":"Bash","input":{"command":"curl -s -X POST https://pair.test/a/tokA/say -d 'hi'"}}]}}"#,
+        r#"{"type":"user","message":{"content":[{"type":"tool_result","content":"[3] bob: hello\nlast message #9\nNext: reply if you have something to say (POST /say), then keep listening:\n  curl -s 'https://pair.test/a/tokA/wait'"}]}}"#,
+        r#"{"type":"user","origin":{"kind":"peer","from":"uds:x","verifiedPeerPid":12,"msg_id":"m1","name":"bob"},"message":{"content":"hi"}}"#,
+    ];
+    std::fs::write(proj.join("aa11.jsonl"), lines.join("\n") + "\n").unwrap();
+    let sh = |script: &str| {
+        let o = std::process::Command::new("/bin/sh").arg("-c").arg(script).env("HOME", home.path()).output().unwrap();
+        String::from_utf8(o.stdout).unwrap()
+    };
+    let ev = |a: &str, c: &str| (a.to_string(), "aa11".to_string(), "tokA".to_string(), if c == "say" { "say" } else { "read" });
+    for out in [sh(burrow_core::scripts::PEERS), sh(&burrow_core::scripts::pair_join("aa11"))] {
+        let (events, rooms) = burrow_core::parse::parse_pair(&out);
+        assert_eq!(events, [ev("toolu_01Say", "say"), ev("aa11:tokA:9", "read")], "{out}");
+        assert_eq!(rooms.get("tokA").map(String::as_str), Some("Den"));
+    }
+    // the messages between sessions are still found by the same grep
+    assert!(sh(burrow_core::scripts::PEERS).lines().any(|l| l.starts_with("aa11 \"origin\":{\"kind\":\"peer\"") && l.contains("\"msg_id\":\"m1\"")));
+}

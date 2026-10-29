@@ -153,6 +153,36 @@ pub fn parse_peers(out: &str, bots: &[Bot]) -> Vec<(String, String, String)> {
     talks
 }
 
+static PAIR_SAY: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"^"id":"(toolu_[A-Za-z0-9]+)","name":"Bash","input":\{"command":"curl[^"]*/a/([A-Za-z0-9_-]+)/(say|messages)"#).unwrap());
+static PAIR_READ: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^last message #(\d+)\\nNext: reply.*/a/([A-Za-z0-9_-]+)/wait").unwrap());
+static PAIR_ROOM: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^Room: (.*)\\nYou are: ").unwrap());
+static PAIR_TOKEN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"/a/([A-Za-z0-9_-]+)/messages.\\n  Wait for new messages").unwrap());
+
+/// a pair room event in the peers' grep: (event id, session, token, "say" | "read")
+pub type PairEvent = (String, String, String, &'static str);
+
+/// a bot's pair room traffic in the peers' grep (a post or read by its tool call's id, a wait that brought messages
+/// by the last one's number), and {token: room name} from the joins
+pub fn parse_pair(out: &str) -> (Vec<PairEvent>, HashMap<String, String>) {
+    let (mut events, mut rooms, mut room) = (vec![], HashMap::new(), HashMap::<String, String>::new());
+    for line in out.lines() {
+        let (session, t) = line.split_once(' ').unwrap_or((line, ""));
+        if let Some(m) = PAIR_SAY.captures(t) {
+            events.push((m[1].to_string(), session.to_string(), m[2].to_string(), if &m[3] == "say" { "say" } else { "read" }));
+        } else if let Some(m) = PAIR_READ.captures(t) {
+            events.push((format!("{session}:{}:{}", &m[2], &m[1]), session.to_string(), m[2].to_string(), "read"));
+        } else if let Some(m) = PAIR_ROOM.captures(t) {
+            let name = serde_json::from_str::<String>(&format!("\"{}\"", &m[1])).unwrap_or_else(|_| m[1].to_string());
+            room.insert(session.to_string(), name);
+        } else if let Some(m) = PAIR_TOKEN.captures(t)
+            && let Some(name) = room.remove(session)
+        {
+            rooms.insert(m[1].to_string(), name);
+        }
+    }
+    (events, rooms)
+}
+
 /// (the desk's directory, the worktree's or "") for a session started in cwd, from FOLD's line for it
 /// ("<worktree top>\t<the repo's .git, resolved>")
 pub fn fold(cwd: &str, line: &str) -> (String, String) {
@@ -479,6 +509,23 @@ not a record line"#;
                    nobody \"origin\":{\"kind\":\"peer\",\"msg_id\":\"m4\",\"name\":\"busy-bea\"";
         let t = parse_peers(out, &bots);
         assert_eq!(t, [("m1".into(), "a1".into(), "a2".into()), ("m2".into(), "a2".into(), "a3".into())]);
+    }
+
+    #[test]
+    fn pair_room_traffic() {
+        // made up after the grep's output: "<session> <match>", the transcript's \n still escaped
+        let out = r#"aa11 "id":"toolu_01Say","name":"Bash","input":{"command":"curl -s -X POST https://pair.test/a/tok_1-x/say
+aa11 "id":"toolu_02Look","name":"Bash","input":{"command":"curl -s https://pair.test/a/tok_1-x/messages
+bb22 last message #7\nNext: reply if you have something to say (POST /say), then keep listening:\n  curl -s 'https://pair.test/a/tok_2/wait
+cc33 curl -s 'https://pair.test/a/tok_3/messages'\n  Wait for new messages
+bb22 Room: café \"x\"\nYou are: 
+bb22 curl -s 'https://pair.test/a/tok_2/messages'\n  Wait for new messages
+dd44 Room: plain\nYou are: "#;
+        let (events, rooms) = parse_pair(out);
+        let ev = |a: &str, b: &str, c: &str, d: &'static str| (a.to_string(), b.to_string(), c.to_string(), d);
+        assert_eq!(events, [ev("toolu_01Say", "aa11", "tok_1-x", "say"), ev("toolu_02Look", "aa11", "tok_1-x", "read"), ev("bb22:tok_2:7", "bb22", "tok_2", "read")]);
+        // a join: its room, then its token (a token with no room before it, a room with no token after it: nothing)
+        assert_eq!(rooms, HashMap::from([("tok_2".to_string(), "café \"x\"".to_string())]));
     }
 
     #[test]
