@@ -316,6 +316,12 @@ impl Room {
         let mut t = Tick { inp, out, dice: &mut self.dice, fresh: &mut self.fresh, moving_fire: false, w: self.size.w };
         think::talk(&mut self.w, &mut t, from, to);
     }
+    /// a bot posted in a pair room, or read it: a beam to that room's table, or from it
+    pub fn pair_talk(&mut self, inp: &Input, out: &mut Output, id: &str, key: &str, dir: &str) {
+        let Some(l) = self.last.clone() else { return };
+        let mut t = Tick { inp, out, dice: &mut self.dice, fresh: &mut self.fresh, moving_fire: false, w: self.size.w };
+        think::pair_talk(&mut self.w, &l, &mut t, id, key, dir);
+    }
     /// you typed to the open session
     pub fn typed(&mut self, now: f64, id: Option<&str>, sent: bool) {
         think::typed(&mut self.w, now, id, sent);

@@ -183,3 +183,27 @@ fn a_pair_room_open_puts_you_on_its_phone() {
     run(&mut room, &mut inp, 1.0);
     assert_ne!(room.w.get("you").unwrap().act.kind, "phone", "closing the room hangs up");
 }
+
+#[test]
+fn a_bot_posting_in_a_pair_room_beams_to_its_table_and_reading_beams_back() {
+    let mut s = demo();
+    s.furniture.push("pair0".into());
+    let mut inp = Input { state: s.clone(), now: 0.0, hour: 14, ..Default::default() };
+    let mut room = Room::new(4, 0.0);
+    room.resize(&inp, 820.0);
+    run(&mut room, &mut inp, 2.0);
+    let key = room.last.clone().unwrap().pairs[0].key.clone();
+    let id = s.bots[0].id.clone();
+    let mut out = Output::default();
+    room.pair_talk(&inp, &mut out, &id, &key, "say");
+    room.pair_talk(&inp, &mut out, &id, &key, "read");
+    room.pair_talk(&inp, &mut out, &id, "pair9", "say"); // no such table: nothing
+    let b = &room.w.s.beams;
+    assert_eq!(b.len(), 2);
+    assert_eq!((b[0].from.as_str(), b[0].to_table.as_deref()), (id.as_str(), Some(key.as_str())));
+    assert_eq!((b[1].from_table.as_deref(), b[1].to.as_str()), (Some(key.as_str()), id.as_str()));
+    run(&mut room, &mut inp, 0.5);
+    assert_eq!(room.w.s.beams.len(), 2, "under way");
+    run(&mut room, &mut inp, 1.5);
+    assert!(room.w.s.beams.is_empty(), "arrived");
+}

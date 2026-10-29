@@ -99,11 +99,29 @@ pub fn talk(w: &mut World, t: &mut Tick, from: &str, to: &str) {
     }
     w.stat(from).sent += 1;
     w.stat(to).got += 1;
-    w.s.beams.push(Beam { from: from.into(), to: to.into(), t: 0.0 });
+    w.s.beams.push(Beam { from: from.into(), to: to.into(), ..Default::default() });
     let x = w.get(from).unwrap().x;
     t.sfx("beam", x);
     let f = w.get_mut(from).unwrap();
     f.chat = f.chat.max(1.0);
+}
+
+/// a bot posted in a pair room (`dir` "say") or read it: a beam from its antenna to the telephone on that room's
+/// table, or from the table to it
+pub fn pair_talk(w: &mut World, l: &Layout, t: &mut Tick, id: &str, key: &str, dir: &str) {
+    let Some(x) = w.get(id).map(|f| f.x) else { return };
+    if !l.pairs.iter().any(|p| p.key == key) {
+        return;
+    }
+    if dir == "say" {
+        w.stat(id).sent += 1;
+        let f = w.get_mut(id).unwrap();
+        f.chat = f.chat.max(1.0);
+        w.s.beams.push(Beam { from: id.into(), to_table: Some(key.into()), ..Default::default() });
+    } else {
+        w.s.beams.push(Beam { from_table: Some(key.into()), to: id.into(), ..Default::default() });
+    }
+    t.sfx("beam", x);
 }
 
 /// you typed to the open session (`id`): a bubble over your head; the one you talk to answers when you pause
@@ -226,7 +244,12 @@ pub fn think(w: &mut World, bots: &[Bot], l: &Layout, dt: f64, t: &mut Tick) {
         }
     }
     let ids: HashSet<String> = w.folk.iter().map(|f| f.id.clone()).collect();
-    w.s.beams.retain(|bm| bm.t < BEAM + 0.4 && ids.contains(&bm.from) && ids.contains(&bm.to));
+    let table = |k: &String| l.pairs.iter().any(|p| &p.key == k);
+    w.s.beams.retain(|bm| {
+        bm.t < BEAM + 0.4
+            && bm.from_table.as_ref().map_or(ids.contains(&bm.from), table)
+            && bm.to_table.as_ref().map_or(ids.contains(&bm.to), table)
+    });
     // heard: the booth's hum stopping when the bot in it is taken back
     let hums: Vec<String> = w.s.hums.keys().cloned().collect();
     for id in hums {

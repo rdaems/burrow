@@ -274,7 +274,12 @@ impl Burrow {
                 Event::State(s) => self.state = *s,
                 Event::Digest(d) => self.digest = d,
                 Event::Shells(sh) => self.state.shells = sh,
-                Event::PairTalk { .. } => {} // (the room's pair beams: next)
+                Event::PairTalk { id, key, dir } => {
+                    let inp = self.input();
+                    let mut out = Output::default();
+                    self.room.pair_talk(&inp, &mut out, &id, &key, &dir);
+                    self.after(out, window, cx);
+                }
                 Event::Talk { from, to } => {
                     let inp = self.input();
                     let mut out = Output::default();

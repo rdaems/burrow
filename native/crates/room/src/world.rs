@@ -163,11 +163,14 @@ impl Fig {
     }
 }
 
-/// a message under way: a beam from one antenna to another
-#[derive(Clone, Debug)]
+/// a message under way: a beam from one antenna to another, or between one and the telephone on a pair table
+/// (`from_table`, `to_table`: its key; `from`/`to` empty then)
+#[derive(Clone, Debug, Default)]
 pub struct Beam {
     pub from: String,
     pub to: String,
+    pub from_table: Option<String>,
+    pub to_table: Option<String>,
     pub t: f64,
 }
 

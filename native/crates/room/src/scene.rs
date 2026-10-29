@@ -92,14 +92,20 @@ impl Room {
     fn draw_over(&mut self, ctx: &mut Ctx, inp: &Input, out: &mut Output, l: &Layout) {
         let t = self.w.s.t;
         // a message on its way: a beam in the sender's colour, up from its antenna, across the room over everyone's
-        // heads, down into the receiver's antenna; its bright head leads, its tail follows
+        // heads, down into the receiver's antenna; its bright head leads, its tail follows. Its ends: a figure's
+        // antenna, or the telephone on a pair table (over its handset)
         let beams = self.w.s.beams.clone();
         for bm in beams {
-            let (Some(f), Some(g)) = (self.w.get(&bm.from), self.w.get(&bm.to)) else { continue };
-            let top = |h: &Fig| jround(h.y) - if h.lying { 20 } else { 29 };
+            let end = |id: &str, key: &Option<String>| -> Option<(f64, f64)> {
+                if let Some(k) = key {
+                    return l.pairs.iter().find(|p| &p.key == k).map(|p| (p.x as f64, (p.y - 22) as f64));
+                }
+                let h = self.w.get(id)?;
+                Some(((jround(h.x) + if h.dir < 0.0 { -1 } else { 0 }) as f64, (jround(h.y) - if h.lying { 20 } else { 29 }) as f64))
+            };
+            let (Some((ax, ay)), Some((bx, by))) = (end(&bm.from, &bm.from_table), end(&bm.to, &bm.to_table)) else { continue };
+            let Some(f) = self.w.get(if bm.from_table.is_some() { &bm.to } else { &bm.from }) else { continue };
             let up = 6.0;
-            let (ax, ay) = ((jround(f.x) + if f.dir < 0.0 { -1 } else { 0 }) as f64, top(f) as f64);
-            let (bx, by) = ((jround(g.x) + if g.dir < 0.0 { -1 } else { 0 }) as f64, top(g) as f64);
             let pts = [(ax, ay), (ax, ay - up), (bx, by - up), (bx, by)];
             let len = [up, (bx - ax).hypot(by - ay), up];
             let total = len[0] + len[1] + len[2];
