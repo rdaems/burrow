@@ -198,6 +198,12 @@ impl TermView {
     }
 
     fn flush(&mut self, cx: &mut Context<Self>) {
+        self.send(cx);
+        cx.notify();
+    }
+
+    // what came out, without a new frame (a mouse report changes nothing on the screen)
+    fn send(&mut self, cx: &mut Context<Self>) {
         for o in self.screen.drain() {
             match o {
                 Out::Write(b) => (self.sink)(&b),
@@ -211,7 +217,6 @@ impl TermView {
                 Out::Link(u) => cx.emit(TermEvent::Link(u)),
             }
         }
-        cx.notify();
     }
 
     // a synchronized update that never ends must not freeze the terminal: show it when it runs out
@@ -276,8 +281,9 @@ impl TermView {
         let y = ((p.y - self.origin.y) / m.h).max(0.0);
         let col = (x as usize).min(self.screen.cols() - 1);
         let row = (y as usize).min(self.screen.rows() - 1);
-        let side = if x.fract() < 0.5 || x as usize >= self.screen.cols() { Side::Left } else { Side::Right };
-        ((col, row), if x as usize >= self.screen.cols() { Side::Right } else { side })
+        // past the last column is the right side of the last cell
+        let side = if x as usize >= self.screen.cols() || x.fract() >= 0.5 { Side::Right } else { Side::Left };
+        ((col, row), side)
     }
 
     fn mouse_down(&mut self, ev: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
@@ -292,7 +298,11 @@ impl TermView {
         let (at, side) = self.cell_at(ev.position);
         if self.screen.pressed() {
             self.screen.mouse_move(at, side, &ev.modifiers);
-            self.flush(cx);
+            if self.screen.selecting() {
+                self.flush(cx);
+            } else {
+                self.send(cx);
+            }
             return;
         }
         let link = if hovered { self.screen.link_at(at) } else { None };
@@ -302,7 +312,7 @@ impl TermView {
         }
         if hovered && self.screen.mode().contains(TermMode::MOUSE_MOTION) {
             self.screen.mouse_move(at, side, &ev.modifiers);
-            self.flush(cx);
+            self.send(cx);
         }
     }
 
@@ -436,7 +446,9 @@ struct Frame {
     lines: Vec<(Point<Pixels>, ShapedLine)>,
     /// rounded corners: (cell origin, opening right, opening down, colour)
     rounds: Vec<(Point<Pixels>, bool, bool, Hsla)>,
-    /// drawn over the text: beam and underline cursors, a link's underline, the selection
+    /// the selection, under the text
+    sel: Vec<(Bounds<Pixels>, Hsla)>,
+    /// drawn over the text: beam and underline cursors, a link's underline
     over: Vec<(Bounds<Pixels>, Hsla)>,
     hollow: Option<(Bounds<Pixels>, Hsla)>,
     m: Metrics,
@@ -470,6 +482,7 @@ fn build(
         quads: Vec::new(),
         lines: Vec::new(),
         rounds: Vec::new(),
+        sel: Vec::new(),
         over: Vec::new(),
         hollow: None,
         m,
@@ -563,13 +576,13 @@ fn build(
                 (Some(r), true) if r.end == col => r.end += w,
                 (_, true) => {
                     if let Some(r) = sel_run.take() {
-                        f.over.push((Bounds::new(at(r.start, row), size(m.w * r.len() as f32, m.h)), sel_color));
+                        f.sel.push((Bounds::new(at(r.start, row), size(m.w * r.len() as f32, m.h)), sel_color));
                     }
                     sel_run = Some(col..col + w);
                 }
                 (_, false) => {
                     if let Some(r) = sel_run.take() {
-                        f.over.push((Bounds::new(at(r.start, row), size(m.w * r.len() as f32, m.h)), sel_color));
+                        f.sel.push((Bounds::new(at(r.start, row), size(m.w * r.len() as f32, m.h)), sel_color));
                     }
                 }
             }
@@ -628,7 +641,7 @@ fn build(
             f.quads.push((Bounds::new(at(s, row), size(m.w * (e - s) as f32, m.h)), hsla(c)));
         }
         if let Some(r) = sel_run {
-            f.over.push((Bounds::new(at(r.start, row), size(m.w * r.len() as f32, m.h)), sel_color));
+            f.sel.push((Bounds::new(at(r.start, row), size(m.w * r.len() as f32, m.h)), sel_color));
         }
     }
 
@@ -678,6 +691,9 @@ impl Frame {
             if let Ok(path) = pb.build() {
                 window.paint_path(path, *c);
             }
+        }
+        for (b, c) in &self.sel {
+            window.paint_quad(fill(*b, *c));
         }
         for (o, l) in &self.lines {
             let _ = l.paint(*o, h, window, cx);

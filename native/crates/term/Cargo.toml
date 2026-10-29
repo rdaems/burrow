@@ -9,3 +9,6 @@ description = "a terminal in a GPUI element: alacritty_terminal's grid, drawn an
 gpui = { version = "0.2.2", default-features = false, features = ["font-kit", "runtime_shaders"] }
 alacritty_terminal = "0.26.0"
 futures = "0.3"
+
+[dev-dependencies]
+gpui = { version = "0.2.2", default-features = false, features = ["font-kit", "runtime_shaders", "test-support"] }

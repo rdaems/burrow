@@ -313,6 +313,11 @@ impl Screen {
         }
     }
 
+    /// is a selection being dragged out
+    pub fn selecting(&self) -> bool {
+        self.press.as_ref().is_some_and(|p| !p.report && p.button == Button::Left)
+    }
+
     /// is a button down (a drag or a selection going on)
     pub fn pressed(&self) -> bool {
         self.press.is_some()
