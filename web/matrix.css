@@ -1,0 +1,64 @@
+/* burrow's other face, the operator's (matrix.html): black, phosphor green, one monospace */
+@font-face { font-family: "Burrow Mono"; src: url(/mono.woff2) format("woff2"); font-weight: 400; font-display: block; }
+@font-face { font-family: "Burrow Mono"; src: url(/mono-bold.woff2) format("woff2"); font-weight: 700; font-display: block; }
+:root {
+  --bg: #000300; --g: #00ff41; --g2: #00c032; --g3: #008f1f; --g4: #004d12; --g5: #0a1f0f;
+  --hot: #e9ffee; --warn: #ff5f56; --mono: "Burrow Mono", "JetBrains Mono", Menlo, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--g); font: 13px/1.4 var(--mono); overflow: hidden; }
+body { display: flex; flex-direction: column; }
+button { font: inherit; color: var(--g); background: transparent; border: 1px solid var(--g3); padding: 1px 8px; cursor: pointer; letter-spacing: 0.08em; }
+button:hover, button:focus-visible { color: var(--bg); background: var(--g); border-color: var(--g); outline: none; }
+
+#top { display: flex; gap: 24px; align-items: baseline; padding: 6px 14px; border-bottom: 1px solid var(--g5); white-space: nowrap; overflow: hidden;
+  text-shadow: 0 0 6px rgba(0, 255, 65, 0.45); }
+#top .brand { font-weight: 700; letter-spacing: 0.18em; }
+#top .brand i { font-style: normal; color: var(--g3); }
+#counts { color: var(--g2); }
+#counts b { color: var(--hot); font-weight: 700; }
+#limits { color: var(--g3); margin-left: auto; }
+#clock { color: var(--g3); }
+
+#main { flex: 1; display: flex; min-height: 0; }
+#rainbox { position: relative; flex: 1; min-width: 0; overflow: hidden; cursor: default; }
+#rain { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#labels { position: absolute; inset: 0; pointer-events: none; }
+#labels .grp { position: absolute; bottom: 4px; height: 16px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 11px; color: var(--g3);
+  border-top: 1px solid var(--g4); padding-top: 1px; text-align: center; letter-spacing: 0.06em; }
+#labels .grp.lost { color: var(--warn); border-color: #4d1210; }
+
+#info { position: absolute; z-index: 3; width: 360px; overflow-wrap: anywhere; padding: 10px 12px; background: rgba(0, 8, 2, 0.94); border: 1px solid var(--g3);
+  box-shadow: 0 0 24px rgba(0, 255, 65, 0.12); pointer-events: none; }
+#info .nm { color: var(--hot); font-weight: 700; font-size: 14px; text-shadow: 0 0 8px rgba(0, 255, 65, 0.6); }
+#info .st { margin: 2px 0 6px; letter-spacing: 0.1em; }
+#info .st.need { color: var(--hot); }
+#info .k { color: var(--g3); }
+#info p { margin: 6px 0 0; color: var(--g2); }
+
+#out { position: absolute; left: 0; bottom: 24px; z-index: 2; max-width: min(960px, 100%); padding: 6px 14px; pointer-events: none;
+  white-space: pre-wrap; word-break: break-word; text-shadow: 0 0 6px rgba(0, 255, 65, 0.4); background: rgba(0, 4, 1, 0.94);
+  border: 1px solid var(--g4); border-bottom: 0; border-left: 0; }
+#out:empty { display: none; }
+#out .echo { color: var(--g3); }
+#out .err { color: var(--warn); }
+#out .hot { color: var(--hot); }
+#out.fade div { transition: opacity 1.2s; }
+
+#jack { display: flex; flex-direction: column; width: 58%; min-width: 420px; border-left: 1px solid var(--g3); background: #000a02;
+  box-shadow: -12px 0 40px rgba(0, 255, 65, 0.06); }
+#jack[hidden] { display: none; }
+.jbar { display: flex; align-items: center; gap: 10px; padding: 5px 10px; border-bottom: 1px solid var(--g4); white-space: nowrap; overflow: hidden; }
+#jname { color: var(--hot); font-weight: 700; text-shadow: 0 0 8px rgba(0, 255, 65, 0.6); }
+#jsub { color: var(--g3); overflow: hidden; text-overflow: ellipsis; }
+.jbar .sp { flex: 1; }
+#jterm { flex: 1; min-height: 0; padding: 6px 4px 4px 8px; }
+#jterm .term { width: 100%; height: 100%; box-sizing: content-box; }
+#jack.in { animation: jackin 0.35s ease-out; }
+@keyframes jackin { from { opacity: 0; filter: brightness(3) saturate(0); } to { opacity: 1; filter: none; } }
+
+#op { display: flex; align-items: center; gap: 8px; padding: 5px 14px 7px; border-top: 1px solid var(--g5); background: #000500; }
+#ps { color: var(--g2); white-space: nowrap; cursor: text; }
+#cmd { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; color: var(--hot); font: inherit; caret-color: var(--g);
+  text-shadow: 0 0 6px rgba(0, 255, 65, 0.5); }
+#hint { color: var(--g4); white-space: nowrap; overflow: hidden; }

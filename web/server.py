@@ -967,6 +967,8 @@ class Hub:
         self.own = collections.deque(maxlen=4)  # its pids: `claude -p` shows up in `claude agents` while it runs
         self.game = None            # the chess game you play against one of the idle bots
         self.demo_bots = {}         # the demo's made-up bots, by machine (stopped and deleted from here)
+        self.streams = {}           # the matrix's rain: {session id: (its record's updatedAt, the text)} (stream)
+        self.streamed = {}          # and when each machine was last asked for some: {machine id: time}
         self.awake = {"mode": (self.room.get("awake") or {}).get("mode", "off"), "until": 0}   # the clock: this computer kept awake
         self.caff = None            # the sleep inhibitor while it runs
         self.caff_lock = threading.Lock()   # every machine's poll thread ticks it: two at once started two, and one was never stopped
@@ -1526,6 +1528,49 @@ class Hub:
             self.save_digest()
         self.push_digest()
         return x
+
+    def stream(self, ids):
+        """the matrix's rain (matrix.html): the newest of what each of these sessions said and did, as text. One command
+        a machine for all of its sessions asked for, the newest 256 kB of each transcript; kept until the session's
+        record changes, and a machine asked at most every ten seconds (odyssey's CPU)"""
+        bots, out, ask = {b["id"]: b for b in self.bots()}, {}, {}
+        for bid in ids[:200]:
+            b = bots.get(bid)
+            if not b:
+                continue
+            have = self.streams.get(bid)
+            if have and have[0] == b.get("updated"):
+                out[bid] = have[1]
+                continue
+            if have:
+                out[bid] = have[1]
+            if re.fullmatch(r"[A-Za-z0-9-]+", b.get("session") or ""):
+                ask.setdefault(b["m"], []).append(b)
+        now = time.time()
+        for mid, bs in ask.items():
+            if now - self.streamed.get(mid, 0) < 10:
+                continue
+            self.streamed[mid] = now
+            m = self.machine(mid)
+            if m.get("ssh") == "@demo":
+                for b in bs:
+                    self.streams[b["id"]] = (b.get("updated"), demo_stream(b))
+                    out[b["id"]] = self.streams[b["id"]][1]
+                continue
+            cmd = " ".join(sq(b["session"]) for b in bs)
+            try:
+                raw = run(m, f'for s in {cmd}; do echo "@@burrow@@ $s"; f=$(ls ~/.claude/projects/*/"$s".jsonl 2>/dev/null | head -1); [ -n "$f" ] && tail -c 262144 "$f"; echo; done', timeout=30)
+            except Exception:
+                continue
+            by = {}
+            for part in raw.split("@@burrow@@ ")[1:]:
+                sid, _, body = part.partition("\n")
+                by[sid.strip()] = body
+            for b in bs:
+                text = rain_text(by.get(b["session"], ""))
+                self.streams[b["id"]] = (b.get("updated"), text)
+                out[b["id"]] = text
+        return out
 
     def answer(self, bid, question, text):
         """your decision typed into the session (deliver), and kept with the notes as answered"""
@@ -2107,6 +2152,41 @@ def terminal(sock, m, bot):
         threading.Thread(target=lambda: os.waitpid(pid, 0), daemon=True).start()
 
 
+def rain_text(raw):
+    """a transcript's tail as the matrix's rain: what was said, the tools' calls (a command, a file, a pattern) and the
+    start of what came back, in order, as one line; the newest 4000 characters"""
+    out = []
+    for line in raw.splitlines()[1:]:          # the first may be cut
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        msg = d.get("message") if isinstance(d.get("message"), dict) else {}
+        c = msg.get("content")
+        for x in [{"type": "text", "text": c}] if isinstance(c, str) else c if isinstance(c, list) else []:
+            if not isinstance(x, dict):
+                continue
+            if x.get("type") == "text":
+                out.append(TAGS.sub("", x.get("text") or "")[:1500])
+            elif x.get("type") == "tool_use":
+                inp = x.get("input") or {}
+                out.append(" ".join([str(x.get("name") or "")] + [str(inp[k])[:300] for k in ("command", "file_path", "pattern", "path", "url", "description") if inp.get(k)]))
+            elif x.get("type") == "tool_result":
+                r = x.get("content")
+                r = " ".join(y.get("text", "") for y in r if isinstance(y, dict)) if isinstance(r, list) else str(r or "")
+                out.append(r[:240])
+    return re.sub(r"\s+", " ", " ".join(out))[-4000:]
+
+
+def demo_stream(b):
+    """the demo's rain: made up, the same for a bot each time"""
+    r = random.Random(b["id"])
+    words = ["Reading", "src/room.js", "web/server.py", "Running the tests", "14 passed", "git diff --stat", "Edited", "README.md",
+             "the layout keeps its desks", "fixed the off-by-one in the seat rows", "cargo test", "all green", "Committed", b["name"],
+             "npm run build", "the fold of worktrees", "TypeError at line 212", "tracing the poll", "looks right now"]
+    return " ".join(r.choice(words) for _ in range(160))
+
+
 def deliver(m, bot, text, timeout=60):
     """an answer typed into a background session without a terminal: `claude attach` in a pty of its own,
     the text pasted at its prompt once the screen has settled (a session whose process was off is
@@ -2356,7 +2436,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(404, b"not here", "text/plain")
         if u.path == "/doom.wad":            # the gun closet's Doom data: id's own WAD if you put one here, else Freedoom's (doom/)
             return self.reply(200, open(doom_wad(), "rb").read(), "application/octet-stream")
-        name = "index.html" if u.path == "/" else u.path.lstrip("/")
+        name = "index.html" if u.path == "/" else "matrix.html" if u.path == "/matrix" else u.path.lstrip("/")
         path = os.path.normpath(os.path.join(HERE, name))
         if not path.startswith(HERE + os.sep) or not os.path.isfile(path) or name.endswith(".py"):
             return self.reply(404, b"not here", "text/plain")
@@ -2600,6 +2680,8 @@ class Handler(BaseHTTPRequestHandler):
             return {"styles": [{"key": k, "here": k in here, **{f: M[f] for f in ("name", "seed", "color", "line", "how", "session")}} for k, M in MANAGERS.items()]}
         if path == "/api/office":            # what she does in the office: remove, desk, start, say (and, from the room, kept)
             return hub.office_do(b)
+        if path == "/api/stream":            # the matrix's rain: {ids} → {texts: {id: what it said and did}}
+            return {"texts": hub.stream([str(x) for x in (b.get("ids") or [])])}
         if path == "/api/explain":           # a decision left to you, explained by Claude (kept with the notes)
             return hub.explain(b.get("id") or "", b.get("question") or "")
         if path == "/api/answer":            # your decision, typed into the session
@@ -2668,6 +2750,20 @@ class Handler(BaseHTTPRequestHandler):
             if m.get("ssh") == "@demo":
                 return {"error": "demo bots can't be started"}
             return {"id": hub.spawn(m, b["dir"], (b.get("name") or "").strip())}
+        if path == "/api/tell":              # the matrix's `tell`: a message typed into a session (deliver)
+            bot = next((x for x in hub.bots() if x["id"] == b.get("id")), None)
+            text = (b.get("text") or "").strip()[:4000]
+            if not bot or not text:
+                raise RuntimeError("tell whom what")
+            if bot.get("dialog"):
+                raise RuntimeError("it has a prompt open in its session: answer it there")
+            if m.get("ssh") == "@demo":
+                for x in hub.demo_bots.get(mid, []):
+                    if x["id"] == bot["id"]:
+                        x.update(busy=True, waiting=False, state="working", over="", alive=True)
+            else:
+                threading.Thread(target=deliver, args=(m, bot["id"], text), daemon=True).start()
+            return {}
         if path == "/api/clear":             # the neuralyzer: /clear typed into the session, in the background
             if m.get("ssh") != "@demo":
                 threading.Thread(target=clear_session, args=(m, b["id"]), daemon=True).start()
