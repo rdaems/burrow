@@ -47,6 +47,9 @@ pub struct Act {
     pub v: f64,
     pub pause: Option<f64>,
     pub panic: bool,
+    /// the condemned taken aback: the shots it has heard (None: not yet), when it last gave a start
+    pub bang: Option<f64>,
+    pub jolt: f64,
     pub n: i32,
     pub look: f64,
     pub game: Option<&'static str>,
@@ -393,6 +396,8 @@ pub struct Shared {
     /// seconds the room has run
     pub t: f64,
     pub fear: f64,
+    /// when the last bot was shot (the condemned still waiting start at it)
+    pub bang: f64,
     pub plies: Option<usize>,
     pub chess_at: f64,
     pub chess_asked: f64,

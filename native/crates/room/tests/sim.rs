@@ -136,3 +136,31 @@ fn the_room_in_the_first_person() {
     assert!(distinct.len() > 30, "a frame with something in it ({} colours)", distinct.len());
     img.save_png(concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/room-fps.png")).unwrap();
 }
+
+#[test]
+fn a_condemned_bot_only_starts_until_the_gun_comes_its_way() {
+    let mut s = demo();
+    s.furniture.push("booth0".into());
+    s.settings.hardcore = true;
+    let mut inp = Input { state: s.clone(), now: 0.0, hour: 14, ..Default::default() };
+    let mut room = Room::new(5, 0.0);
+    room.resize(&inp, 820.0);
+    run(&mut room, &mut inp, 5.0);
+    let id = s.bots.iter().find(|b| !b.busy && !b.waiting).expect("an idle bot").id.clone();
+    let mut out = Output::default();
+    assert_eq!(room.condemn(&inp, &mut out, std::slice::from_ref(&id)), vec![id.clone()]);
+    let (x0, y0) = { let f = room.w.get(&id).unwrap(); (f.x, f.y) };
+    let mut panicked = false;
+    for _ in 0..60 * 40 {
+        run(&mut room, &mut inp, 1.0 / 60.0);
+        let Some(f) = room.w.get(&id) else { break }; // shot
+        let gun_coming = room.w.folk.iter().any(|g| g.carry == Some("gun") && g.hunt.as_ref().is_some_and(|h| h.id.as_deref() == Some(id.as_str())));
+        if !f.act.panic {
+            assert!(f.act.kind != "condemned" || ((f.x - x0).abs() < 0.01 && (f.y - y0).abs() < 0.01), "it walked off before the gun came");
+        } else {
+            assert!(gun_coming || panicked, "it panicked with no gun coming");
+            panicked = true;
+        }
+    }
+    assert!(panicked, "the gun came and it never panicked");
+}

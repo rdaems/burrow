@@ -1399,13 +1399,15 @@ fn think_serve(w: &mut World, i: usize, l: &Layout, dt: f64, t: &mut Tick, rnd_r
 }
 
 fn think_condemned(w: &mut World, i: usize, l: &Layout, dt: f64, t: &mut Tick) {
-    // hardcore: someone takes a gun for it. Meanwhile it wanders about where it was put, at a loss: a few hurried
-    // steps flailing its hands, a stop to look this way and that, off again (slower than the one with the gun walks,
-    // so it is caught). The gun levelled at it: it freezes, hands up, facing it
+    // hardcore: someone takes a gun for it. While she (or you) goes for the gun it is only taken aback: a start,
+    // then it stands there watching her, looking about now and then, and starts again at a shot. Once the gun comes
+    // its way (the one with it walks over to it; you, in the first person) it panics: away, then a few hurried steps
+    // flailing its hands, a stop to look this way and that, off again (slower than the one with the gun walks, so it
+    // is caught). The gun levelled at it: it freezes, hands up, facing it
     let id = w.folk[i].id.clone();
     let wt = w.s.t;
-    let by = w.folk.iter().find(|g| g.hunt.as_ref().is_some_and(|h| h.id.as_ref() == Some(&id)) && g.carry == Some("gun")).map(|g| (g.x, g.hunt.as_ref().unwrap().phase));
-    if let Some((bx, "aim")) = by {
+    let by = w.folk.iter().find(|g| g.hunt.as_ref().is_some_and(|h| h.id.as_ref() == Some(&id)) && g.carry == Some("gun")).map(|g| (g.x, g.y, g.hunt.as_ref().unwrap().phase));
+    if let Some((bx, _, "aim")) = by {
         let f = &mut w.folk[i];
         f.act.dest = None;
         f.legs = "stand";
@@ -1413,17 +1415,52 @@ fn think_condemned(w: &mut World, i: usize, l: &Layout, dt: f64, t: &mut Tick) {
         f.dir = if bx < f.x { -1.0 } else { 1.0 };
         return;
     }
+    let you = w.folk.iter().find(|g| g.human && g.act.kind == "fps").map(|g| (g.x, g.y));
+    if !w.folk[i].act.panic && !matches!(by, Some((_, _, "hunt"))) && you.is_none() {
+        // her: the one going for the gun for it (else whoever is), else the gun closet
+        let mine = |g: &&Fig| g.hunt.as_ref().is_some_and(|h| h.id.as_ref() == Some(&id));
+        let her = w.folk.iter().find(mine).or_else(|| w.folk.iter().find(|g| g.hunt.is_some())).map(|g| g.x);
+        let at = her.or_else(|| l.booths.first().map(|b| b.x as f64));
+        let bang = w.s.bang;
+        let first = w.folk[i].act.bang.is_none();
+        let r0 = if first { t.rnd(1.5, 3.0) } else { 0.0 };
+        let again = !first && w.folk[i].act.look - dt < -0.4;
+        let r1 = if again { t.rnd(1.5, 3.0) } else { 0.0 };
+        let f = &mut w.folk[i];
+        if first {
+            f.act.bang = Some(bang); // just now: a start
+            f.act.jolt = wt;
+            f.act.look = r0;
+        }
+        if f.act.bang.is_some_and(|b| bang > b) {
+            f.act.bang = Some(bang); // a shot: another
+            f.act.jolt = wt;
+        }
+        f.legs = "stand";
+        f.arms = if wt - f.act.jolt < 0.4 { "up" } else { "down" };
+        f.act.look -= dt;
+        if again {
+            f.act.look = r1; // a glance the other way, over
+        }
+        if let Some(ax) = at {
+            f.dir = if ax < f.x { -1.0 } else { 1.0 } * if f.act.look < 0.0 { -1.0 } else { 1.0 };
+        }
+        return;
+    }
     let fl = l.floor;
     let clampx = |x: f64| x.clamp(fl.x0, fl.x1);
     let clampy = |y: f64| y.clamp(fl.y0, fl.y1);
-    if w.folk[i].act.home.is_none() {
-        // first away from the gun closet, as far as it dares; then it dithers there
+    if !w.folk[i].act.panic {
+        // first away from the gun coming, as far as it dares; then it dithers there
+        let from = by.map(|(x, y, _)| (x, y)).or(you).or_else(|| l.booths.first().map(|b| (b.x as f64, b.y as f64)));
         let f = &mut w.folk[i];
-        let home = match l.booths.first() {
-            Some(bo) => {
-                let d = (f.x - bo.x as f64).hypot(f.y - bo.y as f64).max(1e-9);
+        f.act.panic = true;
+        f.act.dest = None;
+        let home = match from {
+            Some((bx, by)) => {
+                let d = (f.x - bx).hypot(f.y - by);
                 let d = if d == 0.0 { 1.0 } else { d };
-                Spot::at(clampx(f.x + (f.x - bo.x as f64) / d * 44.0), clampy(f.y + (f.y - bo.y as f64) / d * 24.0))
+                Spot::at(clampx(f.x + (f.x - bx) / d * 44.0), clampy(f.y + (f.y - by) / d * 24.0))
             }
             None => Spot::at(f.x, f.y),
         };
@@ -2279,6 +2316,7 @@ pub fn shoot(w: &mut World, l: &Layout, id: &str, t: &mut Tick) {
     w.s.shots.push(Shot { x: jround(x) as f64, y: (jround(y) - 14) as f64, t0: t.now() });
     crate::remains::scatter(w, i, t);
     t.out.act(json!({"kind": "close", "id": id}));
+    w.s.bang = w.s.t; // (the condemned still waiting start at it)
     t.sfx("shot", x);
     for _ in 0..3 {
         t.sfx_vol("clank", x, 0.8); // its parts coming down (the app spaces them out)

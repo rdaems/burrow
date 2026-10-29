@@ -218,7 +218,10 @@ impl Room {
             ctx.rect(lx - 2, ly - 2, tw + 4, 9, c::INK2);
             tiny(ctx, &tip.text, lx as f64, ly as f64, c::STEEL4);
         }
-        let id = if self.held.is_none() { self.hovered.as_ref().map(|h| h.id.clone()) } else { None };
+        let id = match &self.held {
+            Some(h) => Some(h.clone()), // (a bot carried stays lit: its chair, its session)
+            None => self.hovered.as_ref().map(|h| h.id.clone()),
+        };
         if id != self.hover_id {
             self.hover_id = id.clone();
             out.hover = Some(id);
@@ -243,7 +246,10 @@ impl Room {
             return;
         }
         let (x, y) = (jround(f.x), jround(f.y));
-        let (x0, y0) = (x - 11, y - 27);
+        // taken aback (condemned, the gun not yet coming): a little hop
+        let j = if f.act.kind == "condemned" && !f.act.panic && !f.held { t - f.act.jolt } else { 1.0 };
+        let hop = if (0.0..0.3).contains(&j) { jround(2.0 * (j / 0.3 * std::f64::consts::PI).sin()) } else { 0 };
+        let (x0, y0) = (x - 11, y - 27 - hop);
         if !f.held {
             ctx.rect(x - 5, y, 10, 1, Color::rgba(0, 0, 0, 102));
         }
@@ -270,7 +276,7 @@ impl Room {
         } else {
             None
         };
-        let fear = if !f.human && !f.staff && !f.held { if f.act.kind == "condemned" { 1.0 } else { self.w.s.fear } } else { 0.0 };
+        let fear = if !f.human && !f.staff && !f.held { if f.act.kind == "condemned" && f.act.panic { 1.0 } else { self.w.s.fear } } else { 0.0 };
         let shake = if fear > 0.2 && (t * 15.0 + f.z * 7.0).floor() as i64 % (if fear > 0.6 { 2 } else { 4 }) == 0 {
             if (t * 30.0).floor() as i64 % 2 != 0 { 1.0 } else { -1.0 }
         } else {
