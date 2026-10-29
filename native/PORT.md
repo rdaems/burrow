@@ -13,9 +13,9 @@ One line per web module; status: todo, wip, done (tested), n/a.
 | index.html (page, panels)    | crates/app                           | todo   |
 | burrow.css                   | crates/app (theme)                   | todo   |
 | xterm.js terminals           | crates/app (alacritty_terminal)      | todo   |
-| server.py + chess.py         | crates/core                          | todo   |
-| outside.js                   | crates/games/outside                 | done   |
-| pong.js (vs a bot, watch)    | crates/games/pong                    | done   |
+| server.py + chess.py         | crates/core                          | done   |
+| outside.js                   | crates/games/outside                 | todo   |
+| pong.js                      | crates/games/pong                    | todo   |
 | chessboard.js                | crates/app (chess view)              | todo   |
 | sound.js                     | crates/sound                         | done   |
 | fps.js, props3d.js, doom/    | crates/fps                           | todo   |

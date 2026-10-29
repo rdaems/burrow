@@ -8,4 +8,10 @@ description = "burrow's backend: Claude Code's sessions on every machine, room.j
 [dependencies]
 burrow-model = { path = "../model" }
 serde.workspace = true
-serde_json.workspace = true
+serde_json = { workspace = true, features = ["preserve_order"] }   # Claude Code's settings.json written back in its own order
+regex = "1.13"
+libc = "0.2.191"
+indexmap = "2.14"
+
+[dev-dependencies]
+tempfile = "3.27"
