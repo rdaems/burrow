@@ -16,6 +16,7 @@ pub mod remains;
 pub mod room;
 pub mod scene;
 pub mod sprites;
+pub mod stage;
 #[rustfmt::skip]
 pub mod sprites_gen;
 pub mod think;

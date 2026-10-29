@@ -124,6 +124,8 @@ pub struct Output {
     pub first_person: Option<String>,
     /// leave the first person (hardcore went off)
     pub leave_fps: bool,
+    /// the room makes its sounds (on, and a radio stands in it)
+    pub sound_on: bool,
 }
 
 impl Output {

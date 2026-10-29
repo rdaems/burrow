@@ -84,30 +84,13 @@ impl Room {
             ctx.set_op(Op::SourceOver);
             ctx.rect(w - 1, 0, 1, h, c::INK2);
             self.draw_room(&mut ctx, inp, out, l);
+            self.draw_over(&mut ctx, inp, out, l);
         }
         self.img = img;
     }
 
-    fn draw_room(&mut self, ctx: &mut Ctx, inp: &Input, out: &mut Output, l: &Layout) {
+    fn draw_over(&mut self, ctx: &mut Ctx, inp: &Input, out: &mut Output, l: &Layout) {
         let t = self.w.s.t;
-        let hl: Vec<String> = inp.hl.iter().cloned().chain(self.hover_id.iter().cloned()).collect();
-        // everything that stands, back to front (the furniture is the painters')
-        let mut items: Vec<(f64, usize)> = Vec::new();
-        for (i, f) in self.w.folk.iter().enumerate() {
-            if !f.lying && !f.held {
-                items.push((f.y, i));
-            }
-        }
-        items.sort_by(|a, b| a.0.total_cmp(&b.0));
-        self.hovered = None;
-        for (_, i) in items {
-            self.draw_figure(ctx, i, inp, &hl, t);
-        }
-        // a bot being carried, over everything
-        if let Some(i) = self.held.as_ref().and_then(|id| self.w.idx(id)) {
-            self.draw_figure(ctx, i, inp, &hl, t);
-            self.hovered = None;
-        }
         // a message on its way: a beam in the sender's colour, up from its antenna, across the room over everyone's
         // heads, down into the receiver's antenna; its bright head leads, its tail follows
         let beams = self.w.s.beams.clone();
@@ -254,7 +237,7 @@ impl Room {
         let _ = l;
     }
 
-    fn draw_figure(&mut self, ctx: &mut Ctx, i: usize, inp: &Input, hl: &[String], t: f64) {
+    pub(crate) fn draw_figure_at(&mut self, ctx: &mut Ctx, i: usize, inp: &Input, hl: &[String], t: f64) {
         let f = &self.w.folk[i];
         if f.b.is_none() {
             return;

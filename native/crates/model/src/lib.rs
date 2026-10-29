@@ -144,7 +144,7 @@ pub struct Chess {
     pub id: i64,
     pub white: Player,
     pub black: Player,
-    /// 64 squares, a8 first, "." for none (upper case white)
+    /// 64 squares, a1 first, "." for none (upper case white)
     pub board: String,
     pub sans: Vec<String>,
     pub last: Option<String>,
