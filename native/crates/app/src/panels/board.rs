@@ -2,10 +2,9 @@
 //! four pixels an ink pixel on pair's paper white; draw on it with the pointer, a black marker; wipe.
 
 use crate::burrow::Burrow;
-use gpui::prelude::*;
 use crate::kit::{self, col};
 use burrow_room::dream::{INK_H, INK_W, INKS, ink, ink_line, wipe};
-use gpui::{AnyElement, App, Bounds, Context, Corners, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, ParentElement, Pixels, Point, RenderImage, Styled, Window, canvas, div, px, rgb};
+use gpui::{AnyElement, App, Bounds, Context, Corners, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, ParentElement, Pixels, Point, RenderImage, Styled, Window, canvas, div, px, rgb, prelude::*};
 use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::Arc;

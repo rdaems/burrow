@@ -2,10 +2,9 @@
 //! the cooler's bottle the second), and the rest of what it said.
 
 use crate::burrow::Burrow;
-use gpui::prelude::*;
 use crate::kit::{self, col};
 use burrow_model::Limit;
-use gpui::{AnyElement, IntoElement, ParentElement, Styled, div, px, rgb};
+use gpui::{AnyElement, IntoElement, ParentElement, Styled, div, px, rgb, prelude::*};
 
 /// "Oct 30 at 3pm" as the bar says it: "new Oct 30 3pm"
 pub fn resets(r: &str) -> String {

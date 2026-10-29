@@ -3,9 +3,8 @@
 
 use super::{call, note, row};
 use crate::burrow::Burrow;
-use gpui::prelude::*;
 use crate::kit::{self, col};
-use gpui::{AnyElement, Context, IntoElement, ParentElement, Styled, Window, div};
+use gpui::{AnyElement, Context, IntoElement, ParentElement, Styled, Window, div, prelude::*};
 
 /// the choices: mode, label, minutes
 pub const AWAKE: [(&str, &str, i64); 5] = [("off", "off", 0), ("work", "when local bots work", 0), ("for", "1 h", 60), ("for", "3 h", 180), ("for", "8 h", 480)];

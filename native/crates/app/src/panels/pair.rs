@@ -5,10 +5,9 @@
 
 use super::{Slot, call, err_line, note, row};
 use crate::burrow::Burrow;
-use gpui::prelude::*;
 use crate::kit::{self, Run, col};
 use burrow_room::room::TERRACOTTA;
-use gpui::{AnyElement, Context, IntoElement, ParentElement, Styled, Window, div, px};
+use gpui::{AnyElement, Context, IntoElement, ParentElement, Styled, Window, div, px, prelude::*};
 
 fn key(b: &Burrow) -> String {
     b.views.pair_key.clone().unwrap_or_default()

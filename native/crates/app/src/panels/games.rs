@@ -25,8 +25,12 @@ pub struct Pics {
 fn frame_pic(b: &mut Burrow, img: &Image, k: u32) -> Option<Arc<RenderImage>> {
     let g = &mut b.views.p.game;
     let fresh = g.at.is_none_or(|t| t.elapsed().as_millis() >= 33);
-    if g.pic.is_none() || (fresh && g.last != bytes(img, k)) {
-        g.last = bytes(img, k);
+    if g.pic.is_none() || fresh {
+        let now = bytes(img, k);
+        if g.pic.is_some() && g.last == now {
+            return g.pic.clone();
+        }
+        g.last = now;
         g.at = Some(Instant::now());
         if let Some(old) = g.pic.replace(kit::picture(img, k)) {
             b.views.p.stale.push(old);

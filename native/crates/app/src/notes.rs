@@ -459,18 +459,38 @@ impl Render for Notes {
         }
         let wr = digest.writing.clone();
         let nav = self.nav_pane(&m, wr.as_deref(), cx);
-        let detail = self.detail_pane(&m.items[k], &state, &digest, wr.as_deref(), window, cx);
+        let (out, lit_at) = self.detail_pane(&m.items[k], &state, &digest, wr.as_deref(), window, cx);
+        // (the page's 76ch)
+        let out = out.into_iter().map(|el| div().max_w(px(660.)).child(el));
+        let jump = std::mem::take(&mut self.jump);
         // a narrow tile: the list, then the notes under it
         let narrow = self.width.get() > 0. && self.width.get() < 620.;
         let body = if narrow {
-            div().id("nv").size_full().overflow_y_scroll().child(nav.border_b_1().border_color(rgb(col::LINE))).child(detail).into_any_element()
+            if jump {
+                self.detail.set_offset(point(px(0.), px(0.)));
+            }
+            div()
+                .id("nv")
+                .size_full()
+                .overflow_y_scroll()
+                .track_scroll(&self.detail)
+                .child(nav.border_b_1().border_color(rgb(col::LINE)))
+                .child(div().flex().flex_col().pt(px(16.)).px(px(24.)).pb(px(32.)).children(out))
+                .into_any_element()
         } else {
+            // a new pick: the detail at its top, or at the decision picked (its lines are the scroller's own children)
+            if jump {
+                match lit_at {
+                    Some(i) => self.detail.scroll_to_top_of_item(i),
+                    None => self.detail.set_offset(point(px(0.), px(0.))),
+                }
+            }
             let w = (self.width.get() * 0.4).max(260.);
             div()
                 .flex()
                 .size_full()
                 .child(div().id("nav").w(px(w)).flex_none().h_full().overflow_y_scroll().track_scroll(&self.nav).border_r_1().border_color(rgb(col::LINE)).child(nav))
-                .child(div().id("detail").flex_1().min_w(px(0.)).h_full().overflow_y_scroll().track_scroll(&self.detail).child(detail))
+                .child(div().id("detail").flex_1().min_w(px(0.)).h_full().flex().flex_col().pt(px(16.)).px(px(24.)).pb(px(32.)).overflow_y_scroll().track_scroll(&self.detail).children(out))
                 .into_any_element()
         };
         base.child(body).into_any_element()
@@ -553,7 +573,7 @@ impl Notes {
         nav
     }
 
-    fn detail_pane(&mut self, it: &Item, state: &State, digest: &burrow_core::DigestView, wr: Option<&str>, window: &mut Window, cx: &mut Context<Notes>) -> gpui::Div {
+    fn detail_pane(&mut self, it: &Item, state: &State, digest: &burrow_core::DigestView, wr: Option<&str>, window: &mut Window, cx: &mut Context<Notes>) -> (Vec<AnyElement>, Option<usize>) {
         let b = &it.b;
         let (cls, label) = state_of(b);
         let mut out: Vec<AnyElement> = Vec::new();
@@ -617,7 +637,7 @@ impl Notes {
         }
         let Some(e) = &it.e else {
             out.push(div().text_color(rgb(col::DIM)).child(if wr == Some(b.id.as_str()) { "Being written…" } else { "No notes yet." }).into_any_element());
-            return self.detail_box(out, None);
+            return (out, None);
         };
         if !s(e, "goal").is_empty() {
             out.push(div().mt(px(2.)).mb(px(6.)).italic().text_color(rgb(col::DIM)).child(s(e, "goal").to_string()).into_any_element());
@@ -683,20 +703,7 @@ impl Notes {
                 .child(format!("· written {} ago from {read}", ago((now_ms() - at) / 1000.)))
                 .into_any_element(),
         );
-        self.detail_box(out, lit_at)
-    }
-
-    /// the detail's column; a new pick scrolls it to its top, or to the decision picked
-    fn detail_box(&mut self, out: Vec<AnyElement>, lit_at: Option<usize>) -> gpui::Div {
-        if self.jump {
-            self.jump = false;
-            match lit_at {
-                Some(i) => self.detail.scroll_to_item(i),
-                None => self.detail.set_offset(point(px(0.), px(0.))),
-            }
-        }
-        // (the page's 76ch)
-        div().flex().flex_col().pt(px(16.)).px(px(24.)).pb(px(32.)).max_w(px(660.)).children(out)
+        (out, lit_at)
     }
 
     fn decision(&mut self, b: &Bot, e: &Value, q: &Value, i: usize, window: &mut Window, cx: &mut Context<Notes>) -> AnyElement {

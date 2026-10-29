@@ -180,7 +180,7 @@ pub fn opened(b: &mut Burrow, kind: ViewKind, window: &mut Window, cx: &mut Cont
     }
 }
 
-pub fn closed(b: &mut Burrow, kind: ViewKind, window: &mut Window, _cx: &mut Context<Burrow>) {
+pub fn closed(b: &mut Burrow, kind: ViewKind, window: &mut Window, cx: &mut Context<Burrow>) {
     let now = b.now_ms();
     match kind {
         ViewKind::Chess => chess::closed(b),
@@ -200,6 +200,8 @@ pub fn closed(b: &mut Burrow, kind: ViewKind, window: &mut Window, _cx: &mut Con
         ViewKind::Report => b.views.p.report = None,
         // (opened again, the chat opens in the browser again)
         ViewKind::Pair => b.views.p.pair_opened = None,
+        // the name as it was left (the page's onchange): the field's blur comes once the view is gone
+        ViewKind::You => you::save_name(b, window, cx),
         _ => {}
     }
     b.views.p.list.clear();
