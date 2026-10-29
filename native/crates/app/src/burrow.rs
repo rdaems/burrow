@@ -140,6 +140,18 @@ impl Burrow {
             })
             .detach();
         }
+        // BURROW_CLICKS (debug): clicks in the room, in dots, "x,y;x,y", one every 700 ms after two seconds
+        if let Ok(clicks) = std::env::var("BURROW_CLICKS") {
+            cx.spawn_in(window, async move |this, cx| {
+                cx.background_executor().timer(Duration::from_millis(2000)).await;
+                for c in clicks.split(';') {
+                    let Some((x, y)) = c.split_once(',').and_then(|(x, y)| Some((x.trim().parse::<f64>().ok()?, y.trim().parse::<f64>().ok()?))) else { continue };
+                    let _ = this.update_in(cx, |b, window, cx| b.click_room(x, y, window, cx));
+                    cx.background_executor().timer(Duration::from_millis(700)).await;
+                }
+            })
+            .detach();
+        }
         let now = Instant::now();
         Burrow {
             hub,
@@ -338,6 +350,9 @@ impl Burrow {
     /// the room's `act`: what a click or a drop in the room asks for
     pub fn act(&mut self, a: Value, window: &mut Window, cx: &mut Context<Self>) {
         let kind = a["kind"].as_str().unwrap_or_default().to_string();
+        if std::env::var_os("BURROW_DEBUG").is_some() {
+            eprintln!("act {a}");
+        }
         let s = |k: &str| a[k].as_str().unwrap_or_default().to_string();
         let shift = a["shift"].as_bool().unwrap_or(false);
         let hub = self.hub.clone();
@@ -834,6 +849,19 @@ impl Burrow {
             let _ = body.update(cx, |b, cx| b.hand(text, cx));
         })
         .detach();
+    }
+
+    /// a click in the room at x, y dots, as the pointer would make it (for BURROW_CLICKS)
+    pub fn click_room(&mut self, x: f64, y: f64, window: &mut Window, cx: &mut Context<Self>) {
+        let mut out = Output::default();
+        self.room.pointer_move(x, y, (0.0, 0.0), &mut out);
+        self.redraw(window, cx);
+        self.room.pointer_down(x, y, false);
+        let inp = self.input();
+        self.room.pointer_up(&inp, &mut out, (0.0, 0.0));
+        self.after(out, window, cx);
+        self.dirty = true;
+        cx.notify();
     }
 
     fn room_element(&mut self, cx: &mut Context<Self>) -> AnyElement {
