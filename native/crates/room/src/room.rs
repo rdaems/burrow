@@ -391,3 +391,26 @@ pub fn is_doomed(f: &Fig) -> bool {
 pub fn footprint(key: &str, at: [i32; 2], u: Option<i32>) -> layout::Rect {
     foot(key, at, u)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_piece_carried_in_from_the_closet() {
+        let mut r = Room::new(1, 0.0);
+        let at = r.carry_kind(Some("plant"), 60.4, 120.6);
+        assert_eq!(r.carrying, Some(("plant".to_string(), at)));
+        assert!(at.is_some(), "inside the room: where it lands");
+        assert_eq!(r.pointer, Some((60.4, 120.6)));
+        assert_eq!(r.carry_kind(Some("plant"), -5.0, 10.0), None, "outside the room: nowhere");
+        assert_eq!(r.carrying, Some(("plant".to_string(), None)));
+        let put = r.place_kind("window", 100.0, 200.0).unwrap();
+        assert_eq!(put[1], layout::wall_y("window"), "a wall piece hangs on the wall");
+        assert!(r.carrying.is_none());
+        r.pend(Some(put), None, "door", 5.0);
+        assert!(r.pending.is_some());
+        r.pend(None, None, "door", 6.0);
+        assert!(r.pending.is_none());
+    }
+}

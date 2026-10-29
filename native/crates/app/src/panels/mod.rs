@@ -198,6 +198,8 @@ pub fn closed(b: &mut Burrow, kind: ViewKind, window: &mut Window, _cx: &mut Con
             }
         }
         ViewKind::Report => b.views.p.report = None,
+        // (opened again, the chat opens in the browser again)
+        ViewKind::Pair => b.views.p.pair_opened = None,
         _ => {}
     }
     b.views.p.list.clear();
@@ -295,18 +297,6 @@ pub fn err_line(b: &Burrow) -> gpui::Div {
 /// a row of buttons
 pub fn row() -> gpui::Div {
     div().flex().flex_wrap().gap(px(8.)).mt(px(10.))
-}
-
-pub fn dim(s: impl Into<SharedString>) -> gpui::Div {
-    kit::pixel_text(s, col::STEEL3, true)
-}
-
-pub fn gold(s: impl Into<SharedString>) -> gpui::Div {
-    kit::pixel_text(s, col::GOLD2, true)
-}
-
-pub fn plain(s: impl Into<SharedString>) -> gpui::Div {
-    kit::pixel_text(s, col::WHITE, true)
 }
 
 /// the idle bots, for a game: not at work, not waiting for you

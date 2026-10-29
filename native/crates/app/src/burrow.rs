@@ -550,7 +550,8 @@ impl Burrow {
         }
         self.make_room(retain, window, cx);
         let t = self.new_tile(TileKind::Notes);
-        let notes = cx.new(|cx| crate::notes::Notes::new(self.hub.clone(), cx));
+        let me = cx.entity().downgrade();
+        let notes = cx.new(|cx| crate::notes::Notes::new(self.hub.clone(), me, cx));
         self.tile.get_mut(&t).unwrap().notes = Some(notes);
         self.tiles.add(t);
         self.hub.digest_refresh();
