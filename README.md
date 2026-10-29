@@ -81,8 +81,9 @@ cargo run --release            # or in a window of its own (it starts the server
 macos/bundle.sh                # or as burrow.app: cp -R target/release/burrow.app /Applications/
 ```
 
-Python 3 (the standard library only), Claude Code, and a browser or Rust. A door from the closet adds a machine. A
-new directory has to be trusted by Claude Code once (run `claude` there) before a session can start in it.
+Python 3 (the standard library only), Claude Code, and a browser or Rust. A door from the closet adds a machine, a
+desk from the closet a working directory. A new directory has to be trusted by Claude Code once (run `claude` there)
+before a session can start in it.
 
 The window (`src/`) is the system's own webview around the same page, with what a browser tab can't have: a dock
 icon, the keys a browser keeps (⌘W closes a tile), links in your browser, and Restart Server in its menu. The server

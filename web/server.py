@@ -58,7 +58,7 @@ PAIR_JOIN = r'''for f in ~/.claude/projects/*/%s.jsonl; do [ -f "$f" ] && grep -
 # conversation it goes on with (resumeSessionId: a /clear starts a new one) and the worktree it moved into
 # (worktreePath): what `claude agents` shows while its process runs, and forgets once it is gone (parse_agents)
 JOBS = r'''grep -o -E '"(updatedAt|detail|bridgeSessionId|tempo|resumeSessionId|worktreePath)": *"([^"\\]|\\.)*"' ~/.claude/jobs/*/state.json 2>/dev/null || true'''
-# where Claude Code ran lately, for the project cabinet's form: its home, then the working directory of the newest
+# where Claude Code ran lately, for a new desk's form: its home, then the working directory of the newest
 # transcript of each of its projects (~/.claude/projects/<the path, encoded>/<session>.jsonl), the latest first
 RECENT = r'''echo "$HOME"; cd ~/.claude/projects 2>/dev/null || exit 0
 for d in $(ls -t | head -100); do
@@ -435,7 +435,7 @@ def split_unit(u):
 # the first room's pieces have no number). There can be any number of a kind. The closet in the
 # room adds a piece, the fireplace burns one; the fire, the closet and the switchboard themselves stay.
 FURNITURE = ["meet", "pong", "chess", "coffee", "cooler", "printer", "armchair",
-             "plant0", "plant1", "board", "window", "clock", "fire", "closet", "add", "settings0", "manager0", "booth0", "neuralyzer0"]
+             "plant0", "plant1", "board", "window", "clock", "fire", "closet", "settings0", "manager0", "booth0", "neuralyzer0"]
 # (a new machine is a door taken from the closet and hung on the wall; the doors themselves are no furniture:
 # one a machine in Claude Code's sshConfigs, their places in the layout as door:<machine id>)
 FIXED = {"fire", "closet", "settings", "clock"}
@@ -468,7 +468,7 @@ def doom_wad():
     except OSError:
         pass
     return os.path.join(HERE, "doom", "freedoom.wad")
-KINDS = {"meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "add", "pair", "manager",
+KINDS = {"meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "pair", "manager",
          "booth", "neuralyzer", "doghouse", "radio", "files"}
 
 
@@ -746,8 +746,8 @@ def furnish(room):
     for k in [k for k in ms if k not in room["furniture"]]:
         ms.pop(k)
     room["v"] = max(room["v"], 13)
-    room["furniture"] = [k for k in room["furniture"] if kind_of(k) not in ("goggles", "bench")]   # the 3d goggles: the first person is the gun closet's only; the bench: every session is at its desk
-    for k in [k for k in room["layout"] if kind_of(k) == "bench"]:
+    room["furniture"] = [k for k in room["furniture"] if kind_of(k) not in ("goggles", "bench", "add")]   # the 3d goggles: the first person is the gun closet's only; the bench: every session is at its desk; the project cabinet: a desk comes out of the closet
+    for k in [k for k in room["layout"] if kind_of(k) in ("bench", "add")]:
         room["layout"].pop(k)
     if not any(kind_of(k) == "clock" for k in room["furniture"]):   # the clock is always there (it can't be burnt any more)
         room["furniture"].append("clock")
@@ -1012,7 +1012,7 @@ class Hub:
         return sorted((b for f in self.feeds.values() for b in f.get("bots", [])), key=lambda b: b["started"])
 
     def desks(self):
-        """the desks: the ones you keep (put down from the project cabinet, or kept at a desk's panel), which
+        """the desks: the ones you keep (a desk out of the closet, or kept at a desk's panel), which
         stay, then one for every other directory a session is in, in the order its first one started: it
         comes with its sessions and goes with the last of them (`fade`). So the room is as full as
         `claude agents --all` is: clearing out sessions is what frees it"""
@@ -1055,7 +1055,7 @@ class Hub:
         self.push("state", self.state())
 
     def off_floor(self, mid, recent=()):
-        """where Claude Code ran lately there (`recent`) that has no desk now, for the project cabinet's form"""
+        """where Claude Code ran lately there (`recent`) that has no desk now, for a new desk's form"""
         desks = {d["unit"] for d in self.desks()}
         return [{"dir": d} for d in dict.fromkeys(recent)
                 if unit(mid, d) not in desks and not re.search(r"/\.claude/worktrees/|/scratch-workspaces/|^(/private)?/tmp/|^/var/folders/", d)]   # not worktrees, the Desktop app's scratch chats, temporary dirs
@@ -2658,6 +2658,10 @@ class Handler(BaseHTTPRequestHandler):
                 d = d.replace("~", HOME, 1)
             else:
                 d = run(m, f"cd {sq(d)} && pwd -P", timeout=20).strip()
+            at = b.get("at")
+            if isinstance(at, list) and len(at) == 2:   # out of the closet: where it was let go (before the state that
+                with hub.lock:                           # brings it goes out, or the page finds it a place of its own)
+                    hub.room["layout"]["u:" + unit(mid, d)] = [int(at[0]), int(at[1])]
             hub.keep(unit(mid, d), True)
             return {"unit": unit(mid, d)}
         if path == "/api/spawn":             # a new bot at a desk; returns its id

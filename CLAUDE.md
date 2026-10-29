@@ -149,7 +149,7 @@ message is the log. When something goes, take it out here. Keep the file under a
   once per new cwd: `git rev-parse --show-toplevel` ≠ the parent of `--git-common-dir`; `/.claude/worktrees/` as a
   fallback), shown as a laptop on the repo's cabinet, cabled to the big screen.
 - Every session has a desk. A desk nobody keeps goes with its last session (the page drops it at once, the server
-  forgets its place two minutes later). Kept desks (room.json `desks`: put down from the project cabinet, or KEEP in
+  forgets its place two minutes later). Kept desks (room.json `desks`: dragged out of the closet, or KEEP in
   the desk's panel) stay empty. A bot whose directory changes gets up and walks to the new desk (never jumps: the
   seat snap is only within one piece). A full room is a full room: the booth clears it.
 - A chair for every session, in arrival order (`seatRows`: who sits keeps the chair, a newcomer takes the far
@@ -159,8 +159,11 @@ message is the log. When something goes, take it out here. Keep the file under a
   Code there doesn't trust yet `claude --bg` refuses, so that terminal opens with `claude` in it, its trust prompt
   showing, and the bot is asked for again every 3 s, taking the terminal's place once it starts: `trustFirst`), the name plate
   (8 letters, a given name 14; a click: the desk's panel, rename, its sessions, TERMINAL, KEEP).
-- The project cabinet adds a desk: a folder browser as VS Code's Open Folder (a path field over the folder list,
-  where Claude Code ran lately first). No prose, no placeholder.
+- A new desk comes out of the closet (`desk` in `CATALOGUE`, not a furniture kind): dragged into the room it stands
+  where it was let go (`room.pend(at, null, "desk")`, in the paint of the machine picked) while its form asks the
+  machine and the folder: a folder browser as VS Code's Open Folder (a path field over the folder list, where Claude
+  Code ran lately first), no prose, no placeholder; ADD posts `/api/dir {m, dir, at}` and the server puts `u:<unit>`
+  there. ✕ or Esc puts it back. (The project cabinet that did this is gone, `furnish` drops it.)
 
 ## You
 
@@ -185,7 +188,7 @@ message is the log. When something goes, take it out here. Keep the file under a
   ping-pong = play or watch; coffee or cooler = the limits; clock = keep awake; switchboard (one lever) = settings
   (rc, yolo, hardcore: a slider and a name a line, a help box under them for the line under the pointer, empty
   once the pointer leaves the panel; hardcore stays vague); pair table = its
-  pair room; dog house = the dog; radio = sound; filing cabinet = FILES on the bands; door = the doors' panel; project cabinet = a new desk; reception =
+  pair room; dog house = the dog; radio = sound; filing cabinet = FILES on the bands; door = the doors' panel; reception =
   the office manager. Dropped on: the neuralyzer gives an idle bot `/clear`; the booth deletes.
 - Whoever is at a piece rides along when it is dragged: a spot at a piece carries its key (`on`), `ride()` moves
   them each frame. One rule for every piece: reuse it, don't add a fix per piece.

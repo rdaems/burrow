@@ -3,7 +3,7 @@
 // directory, here or on another machine) is a desk: a cabinet with the project's screen and name at its left
 // end, a long desktop to the right where its bots sit facing the screen, a chair a bot. The desk is
 // handled at its screen: hover it for the path, the + beside it starts another bot there. The desks are
-// the ones you put down (the project cabinet) and stay until you burn one. A bot in a
+// the ones you put down (a desk from the closet) and stay until you burn one. A bot in a
 // git worktree of the project sits at the project's desk, its own copy of the files a laptop on the
 // cabinet, plugged in.
 // The bots are the sessions `claude agents --all` lists whose directory has a desk (the rest are not in
@@ -32,8 +32,8 @@
 // machine in its name; a machine out of reach has its door boarded up.
 //
 // What you do happens in the room as well: click a bot to open its session (shift-click keeps the
-// tile that was open), the + by a desk's screen for a new bot, the empty cabinet for a project, the
-// empty door frame for a machine; drag furniture where you want it; carry a bot into the booth (gently,
+// tile that was open), the + by a desk's screen for a new bot; drag furniture where you want it, a desk or a door
+// out of the closet for a project or a machine; carry a bot into the booth (gently,
 // with five seconds to undo) or the fire to delete it (a desk or a piece of furniture burns there too), to
 // the neuralyzer to `/clear` its conversation; drop a file on a bot to
 // hand it over.
@@ -63,7 +63,7 @@ function startRoom(cv, app) {
   const WALLC = "#28374b", BASEBOARD = "#1b2433";
   const PLANK = "#734728", SEAM = "#6a4224";
   const PROJECT = ["#4a76b8", "#e8402a", "#2fa087", "#f2a531", "#9a74d6", "#5fcf4a", "#f06b72", "#8fc0e8"];
-  const WALL = 26, SEAT = 18, ADD_W = 30, ROW = 46, LAP = 13, DOOR = 20, NAME = 8;
+  const WALL = 26, SEAT = 18, ROW = 46, LAP = 13, DOOR = 20, NAME = 8;
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const shade = (hex, k) => "#" + [1, 3, 5].map((i) => Math.min(255, Math.round(parseInt(hex.slice(i, i + 2), 16) * k)).toString(16).padStart(2, "0")).join("");
   const mix = (a, b, k) => "#" + [1, 3, 5].map((i) => { const x = parseInt(a.slice(i, i + 2), 16), y = parseInt(b.slice(i, i + 2), 16); return Math.round(x + (y - x) * k).toString(16).padStart(2, "0"); }).join("");
@@ -293,9 +293,9 @@ function startRoom(cv, app) {
   // This computer's door (`door:`) only slides along the wall
   const KIND = (key) => key.startsWith("door:") ? "door" : key.replace(/\d+$/, "");
   const FIXED = new Set(["fire", "closet", "settings", "clock"]), fixed = (key) => FIXED.has(KIND(key)) || key === "door:";
-  const CLICK = new Set(["radio", "files", "doghouse", "add", "closet", "chess", "pong", "printer", "pair", "board", "coffee", "cooler", "window", "armchair", "settings", "clock", "plant", "manager", "door"]);   // a click does something there
+  const CLICK = new Set(["radio", "files", "doghouse", "closet", "chess", "pong", "printer", "pair", "board", "coffee", "cooler", "window", "armchair", "settings", "clock", "plant", "manager", "door"]);   // a click does something there
   const NAMES = { meet: "meeting table", pong: "ping-pong table", chess: "chess table", coffee: "coffee machine", cooler: "water cooler",
-    printer: "printer", armchair: "pouf", plant: "plant", board: "easel", window: "window", clock: "clock", add: "project cabinet", pair: "pair room", settings: "switchboard", manager: "reception",
+    printer: "printer", armchair: "pouf", plant: "plant", board: "easel", window: "window", clock: "clock", desk: "desk", pair: "pair room", settings: "switchboard", manager: "reception",
     booth: "booth", neuralyzer: "neuralyzer", door: "door", doghouse: "dog house", radio: "radio", files: "filing cabinet" };
   // a clear spot on the floor for a figure that has no chair when the page opens (spread by its id, the same each time)
   function freeAt(L, id) {
@@ -316,7 +316,7 @@ function startRoom(cv, app) {
   function foot(key, [x, y], u) {
     if (u) return [x - 2, y - 35, x + u.w + 2, y + 2];
     switch (KIND(key)) {
-      case "add": return [x - 2, y - 16, x + ADD_W + 2, y + 2];
+      case "desk": return [x - 2, y - 35, x + 28, y + 2];   // a new one, out of the closet (blank: drawBlankDesk)
       case "meet": return [x - 28, y - 20, x + 28, y + 4];
       case "pong": return [x - 38, y - 23, x + 38, y + 8];
       case "chess": return [x - 19, y - 18, x + 19, y + 2];
@@ -423,9 +423,9 @@ function startRoom(cv, app) {
       return { key: u.key, ...u.d, label: u.label, trees: u.trees, x0: x, w: u.w, cab: u.cab, y, color: projectColor(u.d.unit),
         seats: mine.map((b, k) => [b.id, seat(k), b.tree]), at: u.at, u };
     });
-    const b0 = one("board"), c0 = one("clock"), f0 = one("fire"), cl = one("closet"), a0 = one("add"), sw = one("settings");
+    const b0 = one("board"), c0 = one("clock"), f0 = one("fire"), cl = one("closet"), sw = one("settings");
     const L = {
-      desks, add: a0 && { key: a0.key, x0: a0.x, y0: a0.y - 15, x1: a0.x + ADD_W, y1: a0.y },
+      desks,
       floorY: FLOORY, board: b0 && { key: b0.key, x: b0.x, y: b0.y, x0: b0.x - 12, y0: b0.y - 34, x1: b0.x + 12, y1: b0.y }, clock: c0 && { key: c0.key, x0: c0.x, y0: c0.y },
       windows: all("window").map((p) => ({ key: p.key, x0: p.x, y0: p.y, x1: p.x + 21, y1: p.y + 18 })),
       fire: f0 && { key: f0.key, x0: f0.x, y0: f0.y - FIRE.h, x1: f0.x + FIRE.w, y1: f0.y }, closet: cl && { key: cl.key, x0: cl.x, y0: cl.y, x1: cl.x + 22, y1: cl.y + 24 },
@@ -1542,8 +1542,8 @@ function startRoom(cv, app) {
       onTheWall(dr.key, foot("door", [x0, y0]), h, (c) => drawDoor(c, x0, paintOf(m.id), ajar && !m.error, !!m.error, y0));
       if (h) { for (const b of bots) if ((b.m || "") === m.id) hl.add(b.id); tip = { text: clip(m.error ? m.name + ": " + m.error : m.name, W - 8), x: x0 + 8, y: 20 }; }
     }
-    if (pending && pending.mid != null && (s.machines.some((m) => m.id === pending.mid) || performance.now() - pending.t > 10000)) pending = null;
-    if (pending) drawKind(ctx, pending.kind, pending.at, w, T);
+    if (pending && pending.mid != null && ((pending.kind === "desk" ? s.desks.some((d) => d.unit === pending.mid) : s.machines.some((m) => m.id === pending.mid)) || performance.now() - pending.t > 10000)) pending = null;
+    if (pending) { if (pending.kind === "desk") drawBlankDesk(ctx, ...pending.at, pending.m); else drawKind(ctx, pending.kind, pending.at, w, T); }
     for (const win of L.windows) {
       const h = hot(win.x0, win.y0, win.x1, win.y1, { kind: "outside", key: win.key });
       onTheWall(win.key, [win.x0, win.y0, win.x1, win.y1], h, (c) => drawWindow(c, win));
@@ -1579,13 +1579,7 @@ function startRoom(cv, app) {
     if (!moving && !held) for (const d of L.desks) for (const [id, x] of d.seats) if (over(x - 3, d.y - 16, x + 9, d.y + 1)) seatHover = { id, x, y: d.y };
     if (seatHover) hl.add(seatHover.id);
 
-    // flat on the floor: the empty cabinet that adds a project, the mats rolled out for a nap, the ping-pong rug
-    if (L.add) {
-      const a = L.add, h = hot(a.x0 - 2, a.y0 - 10, a.x1 + 2, a.y1 + 1, { kind: "addDir" });
-      outlined(ctx, foot("add", [a.x0, a.y1]), h || danger(a.key), (c) => drawAdd(c, a, h), danger(a.key) ? RED : GOLD, tintOf(a.key));
-      pics.push({ key: a.key, kind: "add", x: a.x0, y: a.y1, fn: (c) => drawAdd(c, a, false) });
-      if (h) tip = { text: "project", x: a.x0 + ADD_W / 2, y: a.y0 - 2 };
-    }
+    // flat on the floor: the mats rolled out for a nap, the ping-pong rug
     for (const f of w.folk.values()) if (f.act.kind === "sleep" && f.act.there && f.act.at) drawMat(ctx, f.act.at);
     if (w.scorch) {                         // where a piece was shot to bits: the floor scorched, embers a while, fading
       w.scorch = w.scorch.filter((sc) => performance.now() - sc.t0 < 120000);
@@ -2036,7 +2030,6 @@ function startRoom(cv, app) {
         const M = (s.managers || []).find((x) => x.key === p.key) || {}, dg = app.digest(), live = new Set((s.bots || []).map((b) => b.id));
         Object.assign(st, M.vacant ? { name: "", color: M.color, screen: M.session ? "off" : null, notes: 0 } : { name: M.name, color: M.color, screen: M.session ? (M.busy ? "busy" : M.waiting ? "asks" : M.alive ? "on" : "off") : null, notes: M.style === "notes" && dg ? Object.keys(dg.sessions || {}).filter((id) => live.has(id)).length : 0 });
       }
-      if (p.kind === "add") st.w = ADD_W;
       if (p.kind === "booth") {
         const inside = [...w.folk.values()].find((f) => f.act.kind === "doom" && f.act.at === p.key);
         Object.assign(st, { gun: hardcore(), out: [...w.folk.values()].filter((f) => f.carry === "gun").length + (fps ? 1 : 0), t: boothT(inside) });
@@ -2486,7 +2479,7 @@ function startRoom(cv, app) {
     let best = null, score = -1e9;
     for (const p of L.pieces) {
       const k = KIND(p.key), r = p.r;
-      if (p.u || ON_WALL.has(k) || ["booth", "fire", "neuralyzer", "add"].includes(k) || r[3] - r[1] < 16 || r[2] - r[0] < 14) continue;   // (a desk is too low to hide behind)
+      if (p.u || ON_WALL.has(k) || ["booth", "fire", "neuralyzer"].includes(k) || r[3] - r[1] < 16 || r[2] - r[0] < 14) continue;   // (a desk is too low to hide behind)
       const x = Math.round((r[0] + r[2]) / 2 + rnd(-6, 6)), y = Math.round(Math.min(p.at[1] - 1, p.at[1] + visTop(k) + 15));   // its eyes peek over the top
 
       if (y - 20 < L.floor.y0 || taken.some((a) => Math.abs(a.x - x) < 12 && Math.abs(a.y - y) < 8)) continue;
@@ -2871,11 +2864,14 @@ function startRoom(cv, app) {
       rect(ctx, cx, cy - (k % 2), 1, 1, PL.k);
     }
   }
-  // the empty cabinet that adds a project: a plate with a + on it
-  function drawAdd(ctx, a, lit) {
-    slab(ctx, a.x0, a.y0, ADD_W, 4, 11, WOOD);
-    plate(ctx, a.x0 + 3, a.y0 + 6, ADD_W - 6, lit);
-    tiny(ctx, "+", Math.round(a.x0 + ADD_W / 2 - 1), a.y0 + 7, lit ? C.steel4 : C.steel2);
+  // a desk out of the closet, and standing where it was let go while its folder is picked: the cabinet with a blank
+  // plate, its screen dark (drawDesk draws it once it is a desk)
+  function drawBlankDesk(ctx, x0, y, m = "") {
+    const p = paintOf(m), cab = 26, sx = x0 + 2, sy = y - 32;
+    slab(ctx, x0, y - 15, cab, 4, 11, p);
+    plate(ctx, x0 + 2, y - 9, cab - 4, false, p);
+    rect(ctx, sx + 2, sy + 2, 18, 11, "#10141f");
+    put(ctx, sprites.get("monitor"), sx, sy);
   }
   // a piece drawn into a canvas of its footprint (plus a little around)
   function snapshot(r, fn, pad = 2) {
@@ -3046,7 +3042,7 @@ function startRoom(cv, app) {
       case "settings": drawSwitchboard(ctx, { x0: x, y0: y }, {}, false); break;
       case "manager": { const o = { n: 0, name: "", color: "#9a74d6", screen: "on", T: 0 }; drawReception(ctx, pt, o, false); drawReception(ctx, pt, o, true); break; }
       case "pair": drawPair(ctx, pt, true, T, false); break;
-      case "add": drawAdd(ctx, { x0: x, y0: y - 15, x1: x + ADD_W, y1: y }, false); break;
+      case "desk": drawBlankDesk(ctx, x, y); break;
       case "booth": drawBooth(ctx, pt, false, -1, -1); drawBooth(ctx, pt, true, -1, -1); break;
       case "neuralyzer": drawNeuralyzer(ctx, pt, false); break;
       case "radio": drawRadio(ctx, pt, true); break;
@@ -3092,14 +3088,17 @@ function startRoom(cv, app) {
   let carrying = null;
   // a new machine's door, let go on the wall from the closet: it hangs there while its form is open
   // (its machine added, until the state brings its door: `mid`)
+  // A new desk, the same: it stands where it was let go, in its machine's paint (`m`), until the state brings it (`mid`
+  // its unit then)
   let pending = null;
-  const pend = (at, mid, kind = "door") => { pending = at ? { at, mid, kind, t: performance.now() } : null; draw(); };
+  const pend = (at, mid, kind = "door", m = "") => { pending = at ? { at, mid, kind, m, t: performance.now() } : null; draw(); };
   function carryKind(kind, cx, cy) {
     if (!kind) { carrying = null; draw(); return null; }
     const b = cv.getBoundingClientRect(), x = (cx - b.left) / K, y = (cy - b.top) / K;
     const inside = x >= 0 && x < W && y >= 0 && y < H;
     pointer = inside ? { x, y } : null;      // the room's pointer follows the carried piece (the canvas gets no events: the closet holds the pointer)
-    carrying = { kind, at: inside ? clampAt(kind, [Math.round(x), Math.round(y)]) : null };   // where it will land: there
+    const [ox, oy] = kind === "desk" ? [-13, 8] : [0, 0];   // (a desk by the middle of its cabinet: its place is its left end)
+    carrying = { kind, at: inside ? clampAt(kind, [Math.round(x + ox), Math.round(y + oy)]) : null };   // where it will land: there
     draw();
     return carrying.at;
   }

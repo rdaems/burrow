@@ -161,8 +161,7 @@ const room = startRoom($("#room"), {
 
 async function act(a) {
   const b = a.id && byId(a.id);
-  if (a.kind === "addDir") ask("dir");
-  else if (a.kind === "unmachine") { const r = await api("/api/unmachine", { m: a.m }); if (r.error) note(r.error); }   // a door into the fire
+  if (a.kind === "unmachine") { const r = await api("/api/unmachine", { m: a.m }); if (r.error) note(r.error); }   // a door into the fire
   else if (a.kind === "you") askYou();
   else if (a.kind === "closet") { openView("closet"); fillCloset(); }
   else if (a.kind === "report") { openView("report"); fillReport(); }
@@ -300,6 +299,7 @@ function closeView(keep) {                 // keep: another view takes its place
   if (was === "pong") pongUI.close();
   if (was === "outside") outsideUI.close();
   if (was === "machine" && machineAt) { machineAt = null; room.pend(null); }   // the new door goes back into the closet
+  if (was === "dir" && deskAt) { deskAt = null; room.pend(null); }             // the new desk too
   if (was === "manager" && managerAt) { managerAt = null; room.pend(null); }   // the booth too, with nobody picked
   if (!keep) { view.hidden = true; $("#pane").classList.toggle("empty", !tiles.all().length); room.draw(); }
 }
@@ -315,7 +315,7 @@ function ask(kind) {
   const row = d.querySelector(".machines");
   if (row && state) {                      // which machine: a steel button each, shown only when there is a choice
     const ms = state.machines, hid = d.querySelector("input[name=m]");
-    const pickM = (id) => { hid.value = id; for (const b of row.children) b.classList.toggle("on", b.dataset.id === id); if (kind === "dir") browse.open(id); };
+    const pickM = (id) => { hid.value = id; for (const b of row.children) b.classList.toggle("on", b.dataset.id === id); if (kind === "dir") { browse.open(id); if (deskAt) room.pend(deskAt, null, "desk", id); } };   // (the new desk in that machine's paint)
     row.innerHTML = ms.map((m) => `<button type="button" class="btn" data-id="${m.id}">${m.name}</button>`).join("");
     for (const b of row.children) b.onclick = () => { pickM(b.dataset.id); d.querySelector("input.field").focus(); };
     row.hidden = ms.length < 2;
@@ -326,14 +326,16 @@ function ask(kind) {
   if (kind !== "dir") inp.dispatchEvent(new Event("focus"));   // its completions open at once (a window without the focus gets no focus event)
 }
 let machineAt = null;                       // where the new machine's door was let go (from the closet)
+let deskAt = null;                          // where the new desk was let go (from the closet)
 for (const d of [$("#vDir"), $("#vMachine")]) {
   d.addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.target)), err = d.querySelector(".err");
     err.textContent = "…";
-    const r = d.id === "vDir" ? await api("/api/dir", { m: f.m || "", dir: f.dir.replace(/(.)\/+$/, "$1") }) : await api("/api/machine", { ...f, at: machineAt });
+    const r = d.id === "vDir" ? await api("/api/dir", { m: f.m || "", dir: f.dir.replace(/(.)\/+$/, "$1"), at: deskAt }) : await api("/api/machine", { ...f, at: machineAt });
     if (r.error) { err.textContent = r.error; return; }
     if (d.id === "vMachine") { room.pend(machineAt, r.m); machineAt = null; }   // its door stays up until the state brings it
+    if (d.id === "vDir" && deskAt) { room.pend(deskAt, r.unit, "desk", f.m || ""); deskAt = null; }   // so does the desk
     closeView();
   });
 }
@@ -509,7 +511,7 @@ function askYou() {
 
 // ---- the closet: the furniture there is, drawn as it stands in the room; drag a piece into the
 // room to put it there, as many as you like. The fireplace takes a piece back out (it burns)
-const CATALOGUE = ["plant", "armchair", "window", "board", "meet", "chess", "pong", "coffee", "cooler", "printer", "add", "pair", "manager", "booth", "neuralyzer", "doghouse", "radio", "files", "door"];
+const CATALOGUE = ["desk", "plant", "armchair", "window", "board", "meet", "chess", "pong", "coffee", "cooler", "printer", "pair", "manager", "booth", "neuralyzer", "doghouse", "radio", "files", "door"];
 // Built when it opens, and again on a state update only while its pictures were still loading: never while
 // something is being carried out of it. Rebuilding it on every update (each second or two in a room with
 // many bots) took the picture being held away mid-drag, and the piece never arrived
@@ -770,6 +772,7 @@ function carryOut(e, kind, it) {
     if (!on) return;
     const at = room.place(kind, ev.clientX, ev.clientY);
     if (at && kind === "door") { ask("machine"); machineAt = at; room.pend(at); }   // a door is a machine: which one, then it hangs there
+    else if (at && kind === "desk") { deskAt = at; room.pend(at, null, "desk"); ask("dir"); }   // a desk is a folder on a machine: which, then it is one
     else if (at && kind === "manager") askManager(at);                              // the reception: who sits there
     else if (at) { const r = await api("/api/furniture", { add: kind, at }); if (r.error) note(r.error); }
   };

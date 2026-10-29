@@ -405,13 +405,6 @@ window.Props3D = (() => {
         solid(x, y - 16.5, x + 46, y);
         break;
       }
-      case "add": {                              // the project cabinet: a low cabinet, a + on its front
-        const w = p.w || 30, front = once("add" + w, () => face(over(woodTex(w, 9, WOODP.top), (r) => { r(w / 2 - 6, 2, 12, 5, [46, 31, 40]); r(w / 2 - 0.5, 3, 1, 3, [194, 201, 217]); r(w / 2 - 1.5, 4, 3, 1, [194, 201, 217]); })));
-        B(x, y - 8, x + w, y, 0, 9, wood, { front });
-        B(x - 0.4, y - 8.4, x + w + 0.4, y + 0.4, 9, 10, woodHi);
-        solid(x, y - 8, x + w, y);
-        break;
-      }
       case "booth": {
         if (p.gun) {                             // hardcore: the gun closet, its glass doors, the shotguns in it (one gone a gun out), a red lamp
           const front = once("guns" + Math.min(2, p.out || 0), () => face(over(plainTex(18, 30, "#4f5844", 0.06), (r) => {
