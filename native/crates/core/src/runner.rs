@@ -246,6 +246,7 @@ impl Pty {
         let (master, slave) = unsafe { (OwnedFd::from_raw_fd(m), OwnedFd::from_raw_fd(s)) };
         unsafe {
             libc::fcntl(m, libc::F_SETFD, libc::FD_CLOEXEC);
+            libc::fcntl(s, libc::F_SETFD, libc::FD_CLOEXEC); // the child gets it as 0, 1, 2 only
         }
         let mut c = Command::new(&argv[0]);
         c.args(&argv[1..]);

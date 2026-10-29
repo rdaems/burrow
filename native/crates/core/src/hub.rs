@@ -154,6 +154,7 @@ pub struct Hub {
     pub(crate) dq: Mutex<Vec<String>>,
     pub(crate) dcv: Condvar,
     pub(crate) me_round: std::sync::atomic::AtomicU64,
+    pub(crate) port: std::sync::atomic::AtomicU16,
 }
 
 static BACKGROUNDED: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?m)^\s*backgrounded · ([^\s·]+)").unwrap());
@@ -257,6 +258,7 @@ impl Hub {
             dq: Mutex::new(vec![]),
             dcv: Condvar::new(),
             me_round: Default::default(),
+            port: std::sync::atomic::AtomicU16::new(cfg.port),
             cfg,
         })
     }

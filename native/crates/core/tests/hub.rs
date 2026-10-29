@@ -429,6 +429,7 @@ fn the_office_over_http() {
     let port = h.serve_office(0).unwrap();
     let (code, o) = http(port, "GET /api/office HTTP/1.1\r\nHost: x\r\n\r\n");
     assert_eq!(code, 200);
+    assert_eq!(o["room"], format!("http://localhost:{port}"));
     for k in ["you", "room", "machines", "desks", "sessions", "settings", "removing", "kept"] {
         assert!(o.get(k).is_some(), "{k}");
     }

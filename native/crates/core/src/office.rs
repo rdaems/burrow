@@ -273,7 +273,7 @@ impl Hub {
             let others: Vec<String> = here.iter().filter(|x| *x != st.key).map(|x| style(x).unwrap()).map(|o| format!("{} ({})", o.name, o.how)).collect();
             let d = self.desk_of(st, mg.get("id").and_then(Value::as_str));
             let _ = std::fs::create_dir_all(&d);
-            let _ = std::fs::write(d.join("CLAUDE.md"), manual(st, &you, self.cfg.port, &others.join(", ")));
+            let _ = std::fs::write(d.join("CLAUDE.md"), manual(st, &you, self.port(), &others.join(", ")));
         }
     }
 
@@ -479,7 +479,7 @@ impl Hub {
         let none = |s: &str| if s.is_empty() { Value::Null } else { json!(s) };
         let s = room::options(&g.room);
         json!({
-            "you": room::you_of(&g.room, &self.cfg.user).0, "room": format!("http://localhost:{}", self.cfg.port),
+            "you": room::you_of(&g.room, &self.cfg.user).0, "room": format!("http://localhost:{}", self.port()),
             "machines": g.machines.values().map(|m| json!({"id": m.id, "name": m.name, "ssh": none(&m.ssh), "error": g.feeds.get(&m.id).and_then(|f| f.error.clone())})).collect::<Vec<_>>(),
             "desks": g.desks().iter().map(|d| json!({"m": d.m, "dir": d.dir, "name": none(&d.name), "kept": d.kept})).collect::<Vec<_>>(),
             "sessions": g.bots().iter().map(|b| json!({"id": b.id, "name": b.name, "m": b.m, "cwd": b.cwd, "desk": split_unit(&b.unit).1,
@@ -569,11 +569,18 @@ impl Hub {
         }
     }
 
-    /// the office managers' curl: GET and POST /api/office on 127.0.0.1:`port` (0: any free one). The port
-    /// it listens on
+    /// the port her CLAUDE.md tells her to curl: the one served on, else BURROW_PORT's
+    pub fn port(&self) -> u16 {
+        self.port.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// the office managers' curl: GET and POST /api/office on 127.0.0.1:`port` (0: any free one), the port
+    /// their manuals give from then on. The port it listens on. While the web app runs too, give the app a
+    /// port of its own (BURROW_PORT): 7777 is the web server's
     pub fn serve_office(&self, port: u16) -> std::io::Result<u16> {
         let l = TcpListener::bind(("127.0.0.1", port))?;
         let at = l.local_addr()?.port();
+        self.port.store(at, std::sync::atomic::Ordering::Relaxed);
         let h = self.arc();
         std::thread::spawn(move || {
             for s in l.incoming().flatten() {

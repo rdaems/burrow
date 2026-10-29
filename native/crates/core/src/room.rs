@@ -293,7 +293,7 @@ mod tests {
         let r = furnish(room(json!({})));
         assert_eq!(r["v"], 13);
         let fs = furniture(&r);
-        assert_eq!(fs.len(), FURNITURE.len()); // + add, bench0 (dropped again), settings0, manager0, booth0, neuralyzer0 were there
+        assert_eq!(fs, FURNITURE); // bench0 came at v 3 and went again; the rest were there
         assert!(fs.contains(&"manager0".into()) && fs.contains(&"clock".into()));
         assert_eq!(r["managers"], json!({"manager0": {"style": "notes"}}));
     }
