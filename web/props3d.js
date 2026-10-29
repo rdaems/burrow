@@ -505,22 +505,23 @@ window.Props3D = (() => {
         solid(x - 16, y - 18, x + 16, y - 5);
         break;
       }
-      case "board": {                            // the whiteboard on wheels: two posts, the board with the dream on it
-        for (const px of [x - 15, x + 14]) B(px, y - 3.5, px + 1, y - 2, 0, 28, steel);
-        B(x - 15, y - 4, x + 15, y - 2, 1, 2, darkSteel);
-        for (const px of [x - 15, x - 10, x + 9, x + 14]) B(px, y - 4.5, px + 1.2, y - 1.5, 0, 1, black);
-        if (p.ink) {
-          const c = memo("boardc", () => { const c = document.createElement("canvas"); c.width = 150; c.height = 75; c.v = 0; return c; });
-          if (c.inkV !== p.inkV) {
+      case "board": {                            // the easel: legs splayed in steps, one behind, a ledge, the painting on it (a third of its dots a dot)
+        const pw = p.art ? p.art.width / 3 : 16, ph = p.art ? p.art.height / 3 : 20;
+        for (const s of [-1, 1]) for (let k = 0; k < 4; k++) B(x + s * (8.5 - k * 1.2) - 0.5, y - 1.2, x + s * (8.5 - k * 1.2) + 0.5, y - 0.2, k * 2.75, (k + 1) * 2.75, wood);
+        B(x - 0.5, y - 6, x + 0.5, y - 5, 0, 11, woodD);
+        B(x - 0.5, y - 4, x + 0.5, y - 3, 11, 14 + ph, woodD);   // the mast, behind the canvas
+        B(x - pw / 2 - 2, y - 3.5, x + pw / 2 + 2, y - 0.8, 10, 11, woodHi);
+        if (p.art) {
+          const c = memo("easel" + pw + "x" + ph, () => { const c = document.createElement("canvas"); c.width = p.art.width + 2; c.height = p.art.height + 2; c.v = 0; return c; });
+          if (c.artV !== p.artV) {
             const g = c.getContext("2d"); g.imageSmoothingEnabled = false;
-            g.fillStyle = "#3f3740"; g.fillRect(0, 0, 150, 75); g.fillStyle = "#efebe8"; g.fillRect(8, 8, 134, 59);
-            g.drawImage(p.ink, 10, 10); g.fillStyle = "#595e60"; g.fillRect(8, 67, 134, 5);
-            g.fillStyle = "#eb4c3f"; g.fillRect(20, 67, 12, 3); g.fillStyle = "#4a76b8"; g.fillRect(36, 67, 12, 3);
-            c.inkV = p.inkV; c.v++;
+            g.fillStyle = "#3f3740"; g.fillRect(0, 0, c.width, c.height); g.drawImage(p.art, 1, 1);
+            c.artV = p.artV; c.v++;
           }
-          out.boxes.push({ ...blk(x - 15, y - 2.8, x + 15, y - 2, 13, 28, M.plain("#d8d4cf", 0.03)), front: face(c) });
+          out.boxes.push({ ...blk(x - pw / 2, y - 2.6, x + pw / 2, y - 2, 11, 11 + ph, M.plain("#e8e2d4", 0.03)), front: face(c) });
         }
-        solid(x - 15, y - 4.5, x + 15, y - 1.5);
+        B(x - 1.5, y - 3.6, x + 1.5, y - 1.8, 11 + ph, 12.5 + ph, woodD);   // the clamp over its top edge
+        solid(x - 9, y - 6, x + 9, y);
         break;
       }
       case "armchair": {                     // under whoever sits on it (at y - 4), as high as a seated robot's thighs (its shins hang over the edge), on four wooden feet

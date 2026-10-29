@@ -141,7 +141,10 @@ button, input, select { font:inherit; color:inherit; }
 #view[data-kind="pair"]:has(.pair-room:not([hidden])) .vbody, #view[data-kind="pair"]:has(.pair-room:not([hidden])) #vPair { flex:1 1 auto; height:100%; overflow:hidden; }
 #view[data-kind="pair"]:has(.pair-room:not([hidden])) .pair-room { height:100%; border:0; }
 /* the whiteboard, big: four pixels an ink pixel, pair's paper white */
-.board { display:block; width:520px; max-width:100%; aspect-ratio:130/55; background:#efebe8; border:2px solid var(--ink); image-rendering:pixelated; touch-action:none; cursor:crosshair; }
+/* the painting in a gilded frame, lit along its top and left, in shadow along the others */
+#vBoard .frame { width:fit-content; max-width:100%; margin:0 auto; padding:10px; background:#c8962e; border:2px solid var(--ink); box-shadow: inset 3px 3px 0 #f2d27a, inset -3px -3px 0 #7a5418; }
+#vBoard .art { display:block; border:2px solid #4a3410; image-rendering:pixelated; }
+#vBoard .by { margin:10px 0 0; text-align:center; color:var(--steel3); min-height:22px; }
 .row { display:flex; gap:8px; margin-top:10px; }
 /* the printer: big, the sheet coming out of its front, printed row by row */
 /* the report has no panel: the printer itself stands at the bottom of the pane and the paper comes out
@@ -224,7 +227,7 @@ img.sm { width:20px; height:20px; }
 .who-chip { cursor:pointer; background:none; border:0; padding:0; display:inline-flex; align-items:center; gap:5px; color:var(--c); }
 .who-chip small { color:var(--dim); font-size:12px; }
 .ch-who { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; margin-bottom:10px; }
-.ch-pl { display:inline-flex; align-items:center; gap:7px; padding:2px 8px 2px 2px; border:1px solid transparent; border-radius:6px; }
+.ch-pl { display:inline-flex; align-items:center; gap:7px; padding:2px 8px 2px 2px; border:2px solid transparent; }
 .ch-pl.on { border-color:var(--c); }
 .ch-pl b { color:var(--c); }
 .ch-pl small { color:var(--dim); font-size:12px; }
@@ -251,13 +254,10 @@ img.sm { width:20px; height:20px; }
 .ch-promo { display:flex; align-items:center; gap:6px; margin-bottom:8px; color:var(--dim); }
 .ch-promo .btn { padding:2px 4px; background:#d9c49a; }
 .ch-promo img { width:32px; height:32px; image-rendering:pixelated; display:block; }
-.ch-moves { list-style:none; margin:0 0 10px; padding:6px 8px; max-height:190px; overflow-y:auto; background:var(--code); border:1px solid var(--line); border-radius:6px; columns:2; column-gap:16px; font-size:13px; }
-.ch-moves li { break-inside:avoid; white-space:nowrap; }
-.ch-moves span { color:var(--faint); display:inline-block; min-width:2.6em; }
 .ch-acts { display:flex; gap:8px; }
 .ch-play { display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; margin-top:12px; padding-top:10px; border-top:1px solid var(--line); }
 .ch-play span { color:var(--dim); }
-.ch-play .who-chip { padding:3px 8px 3px 3px; border:1px solid var(--line); border-radius:6px; }
+.ch-play .who-chip { padding:3px 8px 3px 3px; border:2px solid var(--line); }
 .ch-play .who-chip:hover { border-color:var(--c); }
 
 /* ping-pong: pair's card (room.css), in the view */
@@ -271,13 +271,13 @@ img.sm { width:20px; height:20px; }
 .pg-pl small { color:var(--gold); font-size:12px; }
 .pg-score { font:16px/16px "Burrow Pixel", monospace; color:var(--gold); letter-spacing:2px; white-space:nowrap; }
 .pg-close { display:none; }
-.pong canvas { display:block; width:100%; image-rendering:pixelated; image-rendering:crisp-edges; border-radius:4px; }
+.pong canvas { display:block; width:100%; image-rendering:pixelated; image-rendering:crisp-edges; }
 .pong canvas[hidden] { display:none; }
 .pg-msg h2 { margin:0 0 6px; font-size:14px; color:var(--me); }
 .pg-msg p { margin:8px 0; color:var(--dim); }
 .pg-msg p b { font-weight:700; }
 .pg-who { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0; }
-.pg-who .who-chip { padding:3px 8px 3px 3px; border:1px solid var(--line); border-radius:6px; }
+.pg-who .who-chip { padding:3px 8px 3px 3px; border:2px solid var(--line); }
 .pg-who .who-chip:hover { border-color:var(--c); }
 .pg-acts { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
 .pg-hint { color:var(--faint); font-size:12px; margin-top:8px; text-align:center; }

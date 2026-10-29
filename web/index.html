@@ -7,6 +7,7 @@
 <script src="/pixel.js"></script>
 <script src="/sprites.js"></script>
 <script src="/sound.js"></script>
+<script src="/paintings.js"></script>
 <script src="/room.js"></script>
 <script src="/tiles.js"></script>
 <script src="/chessboard.js"></script>
@@ -68,7 +69,7 @@
         <div id="vManager" class="managers" hidden><p>Who sits at the reception? Pick one; burn her booth to let her go.</p><div class="styles"></div></div>
         <div id="vClock" class="awake" hidden><p>Keep this computer awake</p><div class="row"></div></div>
         <div id="vOutside" hidden><canvas class="outside" width="256" height="144"></canvas><p class="hint"><code>↑ ↓</code> angle · <code>← →</code> power · <code>space</code> fires</p></div>
-        <div id="vBoard" hidden><canvas class="board" width="130" height="55"></canvas><div class="row"><button type="button" class="btn" id="wipe">wipe</button></div></div>
+        <div id="vBoard" hidden><div class="frame"><canvas class="art" width="48" height="60"></canvas></div><p class="by"></p></div>
         <div id="vPair" hidden>
           <div class="pair-setup">
             <form class="vform pair-new">
@@ -250,7 +251,7 @@ addEventListener("focus", focus); addEventListener("blur", focus); document.addE
 
 // ---- the view: one thing at a time on the right, in place of the tiles, framed like one
 const PANELS = { dir: "#vDir", machine: "#vMachine", you: "#vYou", closet: "#vCloset", chess: "#chess", pong: "#pong", report: "#vReport", pair: "#vPair", board: "#vBoard", limits: "#vLimits", outside: "#vOutside", settings: "#vSettings", clock: "#vClock", doors: "#vDoors", manager: "#vManager", desk: "#vDesk" };
-const TITLES = { dir: "NEW DESK", machine: "A MACHINE", you: "YOU", closet: "THE CLOSET", chess: "CHESS", pong: "PING-PONG", report: "REPORT", pair: "PAIR ROOM", board: "WHITEBOARD", limits: "LIMITS", outside: "OUTSIDE", settings: "SETTINGS", clock: "CLOCK", doors: "DOORS", manager: "OFFICE MANAGER", desk: "DESK" };
+const TITLES = { dir: "NEW DESK", machine: "A MACHINE", you: "YOU", closet: "THE CLOSET", chess: "CHESS", pong: "PING-PONG", report: "REPORT", pair: "PAIR ROOM", board: "PAINTING", limits: "LIMITS", outside: "OUTSIDE", settings: "SETTINGS", clock: "CLOCK", doors: "DOORS", manager: "OFFICE MANAGER", desk: "DESK" };
 function openView(kind) {
   if (viewKind && viewKind !== kind) closeView(true);
   for (const t of tiles.all()) closeTile(t);
@@ -558,24 +559,28 @@ function openOutside(key) {
   $("#vOutside .hint").hidden = !yours;
   room.draw();
 }
-// ---- the whiteboard, big: the same ink the bots draw on (room.js), four pixels an ink pixel; draw
-// on it with the pointer, in your colour
+// ---- the easel, big: the painting the robots are painting (room.js, paintings.js) in a gilded frame, seven pixels a
+// dot; what it is after in the band, who has painted at it under it
 const bcv = $("#vBoard canvas"), bctx = bcv.getContext("2d");
+const and = (xs) => (xs.length < 2 ? xs.join("") : xs.slice(0, -1).join(", ") + " and " + xs.at(-1));
 function openBoard() {
   openView("board");
   let shown = -1;
-  const show = () => { if (viewKind !== "board") return; const v = room.board.version(); if (v !== shown) { shown = v; bctx.clearRect(0, 0, bcv.width, bcv.height); bctx.drawImage(room.board.ink(), 0, 0); } requestAnimationFrame(show); };
+  const show = () => {
+    if (viewKind !== "board") return;
+    const v = room.board.version(), info = room.board.info(), c = room.board.canvas();
+    if (v !== shown && info && c) {
+      shown = v;
+      if (bcv.width !== info.w || bcv.height !== info.h) { bcv.width = info.w; bcv.height = info.h; }
+      bcv.style.width = info.w * 7 + "px";
+      bctx.drawImage(c, 0, 0);
+      view.querySelector(".tas").textContent = `${info.title}, after ${info.after}`;
+      const names = info.by.map((id) => (byId(id) || {}).name || id);
+      $("#vBoard .by").textContent = [names.length ? "painted by " + and(names) : "", info.done ? "" : "not finished yet"].filter(Boolean).join(", ");
+    }
+    requestAnimationFrame(show);
+  };
   show();
-}
-{
-  let last = null;
-  const at = (e) => { const r = bcv.getBoundingClientRect(); return [Math.floor((e.clientX - r.left) * bcv.width / r.width), Math.floor((e.clientY - r.top) * bcv.height / r.height)]; };
-  const col = () => "#140f1e";             // a black marker
-  bcv.addEventListener("pointerdown", (e) => { if (e.button !== 0) return; e.preventDefault(); try { bcv.setPointerCapture(e.pointerId); } catch {} last = at(e); room.board.line(...last, ...last, col()); });
-  bcv.addEventListener("pointermove", (e) => { if (!last) return; const p = at(e); room.board.line(...last, ...p, col()); last = p; });
-  bcv.addEventListener("pointerup", () => { last = null; });
-  bcv.addEventListener("pointercancel", () => { last = null; });
-  $("#wipe").onclick = () => room.board.wipe();
 }
 // ---- the limits: what /usage says, as bars (the coffee pot is the first, the cooler's bottle the second)
 function fillLimits() {
@@ -595,6 +600,8 @@ const OPTIONS = [
   { key: "hardcore", name: "Hardcore", help: "Not for the faint of heart." },
 ];
 let settingAt = -1;                         // the line explained (-1: none yet since the panel opened)
+let unexplain = () => {};                    // the pointer has left the panel: no line is explained (the box keeps its room)
+view.addEventListener("pointerleave", () => { if (viewKind === "settings") unexplain(); });
 function fillSettings(open) {              // rebuilt only when a setting changed (an update mid-click swallowed the click)
   const cfg = (state && state.settings) || {}, el = $("#vSettings"), key = JSON.stringify(cfg);
   if (open) { settingAt = -1; el.dataset.key = ""; }
@@ -605,6 +612,7 @@ function fillSettings(open) {              // rebuilt only when a setting change
   const lines = el.querySelectorAll(".opt"), help = el.querySelector(".help");
   const explain = (i) => { settingAt = i; lines.forEach((l, j) => l.classList.toggle("cur", j === i)); help.innerHTML = i < 0 ? "" : OPTIONS[i].help; };
   lines.forEach((l, i) => { l.onpointerenter = () => explain(i); l.onfocusin = () => explain(i); });
+  unexplain = () => explain(-1);
   explain(settingAt);
   el.querySelectorAll(".slide").forEach((bt, i) => bt.onclick = () => {   // it slides at once; the push that follows agrees
     const v = !bt.classList.contains("on");
@@ -693,7 +701,8 @@ function fillReport() {
   L.push(prints ? `  printed: ${n(prints, "page")} by the bots, plus this one` : "  printed: this page only");
   const pong = sum("pong"), chess = sum("chess"), beams = sum("sent"), talker = top("sent"), worker = top("busy"), present = top("present");
   L.push("", `GAMES  ping-pong ${pong}, chess ${chess}`);
-  L.push(`MEETINGS  ${st.meetings ? `${st.meetings} held${present ? ", " + name(present.b.id) + " at the board" : ""}` : "none"}, board ${Math.round(st.inked * 100)}% inked`);
+  L.push(`MEETINGS  ${st.meetings ? `${st.meetings} held${present ? ", " + name(present.b.id) + " by the easel" : ""}` : "none"}`);
+  L.push(`EASEL     ${st.art ? `${st.art.title}, ${st.art.k >= 1 ? "done" : Math.round(st.art.k * 100) + "% painted"}` : "bare"}`);
   L.push(`MESSAGES  ${beams ? `${beams} beamed${talker ? ", most by " + name(talker.b.id) : ""}` : "none, everyone minds their desk"}`);
   if (worker && worker.n > 30) L.push("", `EMPLOYEE OF THE SHIFT  ${name(worker.b.id)}, ${mins(worker.n)} at the keys`);
   L.push("", `LIMITS  5h ${left(u.session)} left, week ${left(u.week)} left`, "", "recycled pixels, keep away from the fire");

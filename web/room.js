@@ -13,8 +13,8 @@
 //   a dialog open       at its desk with its hand up and a ? in a bubble (a multiple-choice question, a
 //                       permission prompt), its screen's cursor blinking
 //   idle                by its desk, or on a break: coffee, the printer, the cooler, ping-pong,
-//                       chess, the plants, the window, the armchair, a meeting at the
-//                       whiteboard, a visit, a nap on a mat it rolls out, warming its hands at the fire,
+//                       chess, the plants, the window, the armchair, painting at the easel, a meeting
+//                       by it, a visit, a nap on a mat it rolls out, warming its hands at the fire,
 //                       watching a game, a stretch, a coffee for a busy colleague. Whatever its state:
 //                       done, completed long ago, its process stopped after an hour, a last message
 //                       that reads as a question; opening one restarts it
@@ -177,6 +177,12 @@ function startRoom(cv, app) {
       case "fwd1": rect(4, 17, 2, 2, c1); rect(4, 19, 2, 1, skin); fwd(19); break;
       case "fwd2": rect(4, 17, 2, 2, c1); rect(4, 19, 2, 1, skin); fwd(20); break;
       case "reach": back(); rect(14, 14, 2, 4, c1); rect(16, 13, 2, 2, c1); rect(18, 12, 2, 2, skin); break;
+      case "paint1": case "paint2": {        // a palette on the back hand, a brush in the front one, up at the canvas and down
+        rect(4, 17, 2, 3, c1); rect(1, 19, 5, 3, "#d8b07a"); rect(2, 20, 1, 1, C.red1); rect(3, 19, 1, 1, C.blue2); rect(4, 21, 1, 1, C.gold2);
+        if (arms === "paint1") { rect(14, 14, 2, 4, c1); rect(16, 13, 2, 2, c1); rect(18, 12, 2, 2, skin); rect(20, 11, 1, 1, "#8a5a32"); }
+        else { rect(14, 16, 3, 2, c1); rect(17, 16, 2, 2, skin); rect(19, 15, 1, 1, "#8a5a32"); rect(20, 14, 1, 1, C.red1); }
+        break;
+      }
       case "phone": back(); rect(14, 13, 2, 5, c1); rect(16, 7, 3, 2, "#595e60"); rect(16, 9, 2, 3, "#595e60"); rect(16, 12, 3, 2, "#595e60"); rect(17, 7, 1, 1, "#b5bfc7"); rect(17, 12, 1, 1, "#b5bfc7"); rect(15, 10, 2, 2, skin); break;   // a handset held to the ear
       case "mug": back(); fwd(19, 2); rect(17, 16, 3, 3, color); rect(19, 17, 1, 1, INK); break;
       case "gun": back(); fwd(19, 1); rect(13, 18, 3, 2, "#7a4a2a"); rect(15, 17, 6, 1, "#a7aebb"); rect(15, 18, 5, 1, "#6c7380"); break;   // a shotgun, levelled
@@ -267,7 +273,7 @@ function startRoom(cv, app) {
     DEF = {
       meet: [W / 2, WALL + 34], pong: [60, 62], chess: [70, FLOORY - 32], mat0: [104, FLOORY - 30], mat1: [132, FLOORY - 30], mat2: [160, FLOORY - 30],
       coffee: [3, FLOORY], cooler: [36, FLOORY - 1], printer: [W / 2 + 4, FLOORY], armchair: [W - 32, FLOORY],
-      plant0: [W - 8, FLOORY], plant1: [W - 12, 64], board: [W / 2 + 46, WALL + 34], window: [W - 40, 4], clock: [W - 15, 5], fire: [W - 92, FLOORY],
+      plant0: [W - 8, FLOORY], plant1: [W - 12, 64], board: [W / 2 + 46, WALL + 42], window: [W - 40, 4], clock: [W - 15, 5], fire: [W - 92, FLOORY],
       closet: [W - 72, 2], settings0: [W - 92, 5],
     };
   }
@@ -310,7 +316,7 @@ function startRoom(cv, app) {
       case "cooler": return [x - 5, y - 26, x + 5, y + 1];
       case "printer": return [x - 7, y - 15, x + 7, y + 1];
       case "armchair": return [x - 8, y - 14, x + 8, y + 1];
-      case "board": return [x - 16, y - 26, x + 16, y + 1];
+      case "board": return [x - 12, y - 34, x + 12, y + 1];   // the easel
       case "window": return [x, y, x + 21, y + 18];
       case "clock": return [x, y, x + 17, y + 17];
       case "fire": return [x, y - FIRE.h, x + FIRE.w, y + 1];
@@ -411,7 +417,7 @@ function startRoom(cv, app) {
     const b0 = one("board"), c0 = one("clock"), f0 = one("fire"), cl = one("closet"), a0 = one("add"), sw = one("settings");
     const L = {
       desks, add: a0 && { key: a0.key, x0: a0.x, y0: a0.y - 15, x1: a0.x + ADD_W, y1: a0.y },
-      floorY: FLOORY, board: b0 && { key: b0.key, x: b0.x, y: b0.y, x0: b0.x - 16, y0: b0.y - 26, x1: b0.x + 16, y1: b0.y }, clock: c0 && { key: c0.key, x0: c0.x, y0: c0.y },
+      floorY: FLOORY, board: b0 && { key: b0.key, x: b0.x, y: b0.y, x0: b0.x - 12, y0: b0.y - 34, x1: b0.x + 12, y1: b0.y }, clock: c0 && { key: c0.key, x0: c0.x, y0: c0.y },
       windows: all("window").map((p) => ({ key: p.key, x0: p.x, y0: p.y, x1: p.x + 21, y1: p.y + 18 })),
       fire: f0 && { key: f0.key, x0: f0.x, y0: f0.y - FIRE.h, x1: f0.x + FIRE.w, y1: f0.y }, closet: cl && { key: cl.key, x0: cl.x, y0: cl.y, x1: cl.x + 22, y1: cl.y + 24 },
       settings: sw && { key: sw.key, x0: sw.x, y0: sw.y, x1: sw.x + SB_W(), y1: sw.y + SB_H() },
@@ -606,7 +612,7 @@ function startRoom(cv, app) {
     if ((playing("pong") || (app.pong() && app.pong().ball)) && (w.pong.t += dt / 0.8) >= 1) { w.pong.t = 0; w.pong.from = 1 - w.pong.from; }
     // the football, if one is in play
     kickabout(w, dt);
-    dreamStep(w, dt);
+    artStep(w, dt);
     // an idle bot's place: at the end of its project's desk, by the empty chair, one per project
     // (the first idle one); the others are off on a break
     const homes = new Map();
@@ -1074,10 +1080,20 @@ function startRoom(cv, app) {
         if (sitAt(f, poufSeat(ch), v, dt)) { f.dir = poufFace(ch); f.legs = "sit"; f.arms = "book"; if ((act.left -= dt) <= 0) f.act = rest(); }
         break;
       }
+      case "paint": {                        // at the easel, a palette in one hand, the brush going in the other (artStep paints)
+        if (!L.board) { f.act = rest(); break; }
+        act.there = walk(f, { x: L.board.x - 17, y: L.board.y + 1, on: L.board.key }, v, dt);
+        if (act.there) {
+          f.dir = 1; f.arms = Math.floor(w.T * 2.5 + f.z) % 2 ? "paint1" : "paint2";
+          if (!artWanted(w)) act.left = Math.min(act.left, 3);   // finished not long ago: a last look, then off
+          if ((act.left -= dt) <= 0) f.act = rest();
+        }
+        break;
+      }
       case "present":
         if (!w.meeting || w.meeting.host !== f.id || !L.board) { f.act = rest(); break; }
         if (walk(f, { x: L.board.x0 - 6, y: L.board.y + 1, on: L.board.key }, v, dt)) {
-          f.dir = 1; f.arms = Math.floor(w.T * 2) % 3 ? "reach" : "down"; act.drawing = true;   // drawing the dream on (dreamStep)
+          f.dir = 1; f.arms = Math.floor(w.T * 2) % 3 ? "reach" : "down";   // showing the painting round
         }
         break;
       case "meeting": {
@@ -1264,9 +1280,9 @@ function startRoom(cv, app) {
       waiter.act.with = f.id; waiter.act.left = left;
       return { kind: "chess", side: 1 - waiter.act.side, with: waiter.id, left, there: false };
     }
+    if (L.board && !taken("paint") && artWanted(w) && Math.random() < 0.08) return { kind: "paint", left: rnd(40, 75) };   // now and then, to the easel
     if (L.meet && L.board && mates.length >= 2 && !w.meeting && w.T - w.lastMeeting > 180 && r < 0.08) {
       w.meeting = { host: f.id, left: rnd(45, 75) }; w.lastMeeting = w.T; w.meetings++;
-      if (w.dream && w.dream.done !== null && w.T - w.dream.done > 240) nextDream(w);   // a dream done a while: wiped, the host starts the next
       mates.slice(0, 4).forEach((g, i) => { g.carry = null; g.act = { kind: "meeting", seat: i }; });
       return { kind: "present", wait: 0 };
     }
@@ -1354,88 +1370,37 @@ function startRoom(cv, app) {
       ball.x = ball.x0 + (tx - ball.x0) * ball.t; ball.y = ball.y0 + (ty - ball.y0) * ball.t; ball.h = Math.sin(ball.t * Math.PI) * 6;
     }
   }
-  // The robots' dream, on the whiteboard: a pixel-art picture that appears bit by bit, two happy robots in love,
-  // hand in hand, running over a sunny hill, or along a beach. A scene is 65 x 27 dream pixels, each two by two of
-  // the board's ink; it comes in as a drawing would, layer by layer (the sky, the ground, the things on it, the two
-  // of them, the heart last), outlines before colours, left to right. It grows by itself, slowly; faster for every
-  // robot taking a nap (it is their dream) and while the host of a meeting draws at the board. Done, it stays; a
-  // meeting a while later starts the next one on a wiped board. Your own marker is never drawn over
-  const DREAM_PAL = { k: "#2b2433", S: "#e9f3ff", A: "#4fb3a9", B: "#f06b72", p: "#f59ab0", q: "#d6457a", r: "#e8505b", y: "#f7d154", o: "#f29b38",
-    g: "#7cc96a", G: "#3f8f45", c: "#9fd3f2", b: "#5aa9e6", w: "#d6efff", n: "#f3d99b", N: "#d9b26a", t: "#8a5a32", m: "#b8bcc6" };
-  const DREAM_W = 65, DREAM_H = 27, DREAM_LINE = new Set(["k", "G", "o", "N", "t", "q"]);
-  const DREAM_BOT = ["....k....", "....k....", "..kkkkk..", ".kSSSSSk.", ".kSkSkSk.", ".kpSSSpk.", "..kkkkk..", ".kCCCCCk.", "kCCCCCCCk", ".kCCCCCk.", "..kk.kk..", ".k.....k."];
-  const DREAM_BOW = ["..qq.qq..", "...qkq..."];        // hers: a bow on her antenna
-  const DREAM_HEART = [".kk.kk.", "krrkrrk", "krrrrrk", ".krrrk.", "..krk..", "...k..."];
-  const DREAM_SMALL = ["p.p", "ppp", ".p."], DREAM_BIRD = ["k...k", ".k.k.", "..k.."], DREAM_CLOUD = ["..cccc...", ".cccccccc", "ccccccccc", ".ccccccc."];
-  function dreamScene(i) {
-    const px = new Map();
-    const put = (x, y, c, layer) => { if (c !== "." && x >= 0 && x < DREAM_W && y >= 0 && y < DREAM_H) px.set(layer + ":" + x + "," + y, { x, y, c, layer }); };   // (a layer over another paints over it later)
-    const sprite = (rows, x0, y0, layer, C) => rows.forEach((r, j) => [...r].forEach((ch, i) => put(x0 + i, y0 + j, ch === "C" ? C : ch, layer)));
-    const sun = (cx, cy) => {
-      for (let y = -3; y <= 3; y++) for (let x = -3; x <= 3; x++) { const d = Math.hypot(x, y); if (d <= 3.3) put(cx + x, cy + y, d > 2.4 ? "o" : "y", 0); }
-      for (let k = 0; k < 8; k++) { const a = (k * Math.PI) / 4; for (const r of [5, 6]) put(cx + Math.round(Math.cos(a) * r), cy + Math.round(Math.sin(a) * r), "o", 0); }
-    };
-    const lovers = (x0, ground) => {                 // him, her (the bow), holding hands; running lines behind, the heart over them
-      const y0 = ground - 12;
-      for (const dy of [5, 8]) for (let x = x0 - 5; x < x0 - 2; x++) put(x, y0 + dy, "m", 3);
-      sprite(DREAM_BOT, x0, y0, 3, "A");
-      sprite(DREAM_BOT, x0 + 9, y0, 3, "B"); sprite(DREAM_BOW, x0 + 9, y0, 3);
-      sprite(DREAM_HEART, x0 + 6, y0 - 7, 4);
-      sprite(DREAM_SMALL, x0 + 15, y0 - 7, 4); sprite(DREAM_SMALL, x0 + 19, y0 - 3, 4);
-    };
-    if (i === 0) {                                   // the hill: the sun, two clouds, birds; the grass, flowers, a tree
-      sun(7, 6);
-      sprite(DREAM_CLOUD, 47, 1, 0); sprite(DREAM_CLOUD, 15, 7, 0);
-      sprite(DREAM_BIRD, 16, 2, 0); sprite(DREAM_BIRD, 46, 8, 0);
-      const s = (x) => Math.round(26 - (2 + 4.5 * Math.exp(-(((x - 33) / 17) ** 2))));
-      for (let x = 0; x < DREAM_W; x++) for (let y = s(x); y < DREAM_H; y++) put(x, y, y === s(x) ? "G" : "g", 1);
-      [4, 9, 14, 46, 50, 61].forEach((x, k) => { put(x, s(x) + 2, k % 2 ? "y" : "r", 2); put(x, s(x) + 1, "G", 2); });
-      for (let y = s(56) - 4; y < s(56); y++) put(56, y, "t", 2);
-      for (let y = -3; y <= 3; y++) for (let x = -3; x <= 3; x++) { const d = Math.hypot(x, y); if (d <= 3.3) put(56 + x, s(56) - 7 + y, d > 2.4 ? "G" : "g", 2); }
-      lovers(24, s(28));
-    } else {                                         // the beach: the sun over the sea, waves, the sand, a palm, a crab, gulls
-      sun(56, 6);
-      sprite(DREAM_BIRD, 16, 3, 0); sprite(DREAM_BIRD, 23, 1, 0);
-      const shore = (x) => Math.round(19 + 1.5 * Math.sin(x / 6));
-      for (let x = 0; x < DREAM_W; x++) {
-        for (let y = 12; y < shore(x); y++) put(x, y, y > 12 && ((x * 7 + y * 3) % 11 === 0 || ((x - 1) * 7 + y * 3) % 11 === 0) ? "w" : "b", 1);   // little waves
-        for (let y = shore(x); y < DREAM_H; y++) put(x, y, y === shore(x) ? "N" : "n", 1);
-      }
-      for (let k = 0; k < 15; k++) { const y = 25 - k, x = 6 + Math.round(4 * Math.sin((k / 15) * 1.6)); put(x, y, "t", 2); put(x + 1, y, "t", 2); }   // the palm's trunk, bending
-      sprite(["...GGG...GGG...", ".GGgggG.GgggGG.", "Ggg...GgG...ggG", "G....G.t.G....G", "....G.ttt.G...."], 3, 9, 2);   // its leaves, coconuts under them
-      sprite(["rk...kr", ".rrrrr.", "r.r.r.r"], 50, 22, 2);                                // a crab
-      lovers(24, 25);
+  // The painting on the easel: the robots paint famous paintings (paintings.js), every person in them a robot. It
+  // grows only while a robot stands at the easel painting (`paint`, a break of its own, now and then), layer by layer
+  // as a painter would, ART_SPEED dots a second; done, it stays, and once it has hung there ART_REST seconds the next
+  // robot to come starts another on a fresh canvas. The page opens on one well begun. Who painted it is kept
+  const ART = window.Paintings, ART_SPEED = 30, ART_REST = 600;
+  function newArt(w, i, start) {
+    const p = ART.list[i], cv = document.createElement("canvas");
+    cv.width = p.w; cv.height = p.h;
+    const g = cv.getContext("2d"); g.fillStyle = ART.PRIMER; g.fillRect(0, 0, p.w, p.h);
+    w.art = { i, order: ART.order(p.make()), n: 0, done: null, by: new Set(), f: 0, cv };
+    w.artV = (w.artV || 0) + 1; w.artSmall = null;
+    paintArt(w, Math.floor(w.art.order.length * start));
+  }
+  function paintArt(w, upto) {
+    const a = w.art, g = a.cv.getContext("2d"), end = Math.min(upto, a.order.length);
+    if (a.n < end) {
+      for (; a.n < end; a.n++) { const d = a.order[a.n]; g.fillStyle = d.c; g.fillRect(d.x, d.y, 1, 1); }
+      w.artV++; w.artSmall = null;
     }
-    const hash = (x, y) => ((Math.imul(x * 73856093 ^ y * 19349663, 2654435761) >>> 0) % 1000) / 1000;
-    return [...px.values()].sort((a, b) => a.layer - b.layer || +!DREAM_LINE.has(a.c) - +!DREAM_LINE.has(b.c) || (a.x + hash(a.x, a.y) * 6) - (b.x + hash(b.x, b.y) * 6));
+    if (a.n >= a.order.length && a.done === null) a.done = w.T;
   }
-  const DREAMS = 2;
-  function newDream(w, scene, start) {
-    w.dream = { scene, order: dreamScene(scene), n: 0, done: null, mine: new Map() };
-    paintDream(w, Math.floor(w.dream.order.length * start));
+  const artWanted = (w) => !w.art || w.art.done === null || w.T - w.art.done >= ART_REST;   // unfinished, or done a while
+  function artStep(w, dt) {
+    if (!w.art) { newArt(w, Math.floor(Math.random() * ART.list.length), 0.4 + Math.random() * 0.6); if (w.art.done !== null) w.art.done = w.T - ART_REST / 2; }
+    const painter = [...w.folk.values()].find((f) => f.act.kind === "paint" && f.act.there);
+    if (!painter || !artWanted(w)) return;
+    if (w.art.done !== null) newArt(w, (w.art.i + 1 + Math.floor(Math.random() * (ART.list.length - 1))) % ART.list.length, 0);   // the next one, never the same
+    const a = w.art;
+    a.by.add(painter.id);
+    if ((a.f += dt * ART_SPEED) >= 1) { const k = Math.floor(a.f); a.f -= k; paintArt(w, a.n + k); }
   }
-  function paintDream(w, upto) {
-    const d = w.dream, c = ink(w).getContext("2d");
-    let painted = false;
-    for (; d.n < Math.min(upto, d.order.length); d.n++) {
-      const p = d.order[d.n], a = c.getImageData(p.x * 2, p.y * 2, 2, 2).data, cell = p.y * DREAM_W + p.x;
-      const was = "#" + [a[0], a[1], a[2]].map((v) => v.toString(16).padStart(2, "0")).join("");
-      if ((a[3] || a[7] || a[11] || a[15]) && !(a[3] && d.mine.get(cell) === was)) continue;   // your marker is there: left as it is
-      c.fillStyle = DREAM_PAL[p.c]; c.fillRect(p.x * 2, p.y * 2, 2, 2); d.mine.set(cell, DREAM_PAL[p.c]); painted = true;
-    }
-    if (painted) { w.inkV++; w.cells = null; }
-    if (d.n >= d.order.length && d.done === null) d.done = w.T;
-  }
-  function dreamStep(w, dt) {
-    if (!w.dream) newDream(w, Math.floor(Math.random() * DREAMS), 0.3);    // the page opens on a dream half begun
-    const d = w.dream, folk = [...w.folk.values()];
-    const sleepers = folk.filter((f) => !f.human && (f.act.kind === "sleep" || f.act.kind === "doze") && f.act.there).length;
-    const drawing = folk.some((f) => f.act.kind === "present" && f.act.drawing);
-    d.f = (d.f || 0) + dt * (0.6 + 1.5 * sleepers + (drawing ? 8 : 0));
-    if (d.f >= 1) { const k = Math.floor(d.f); d.f -= k; paintDream(w, d.n + k); }
-    if (d.done !== null && w.T - d.done > 1200) nextDream(w);     // done twenty minutes and no meeting came to start another: the next one
-  }
-  const nextDream = (w) => { const s = w.dream ? (w.dream.scene + 1) % DREAMS : 0; wipe(w); newDream(w, s, 0); };
 
   // ---- drawing, and what is under the pointer: hot spots are collected while drawing
   let pointer = null, hots = [], hovered = null, tip = null, lastL = null, moving = null, held = null, hoverId = null, lastHp = null, dangerNow = false;
@@ -1646,10 +1611,10 @@ function startRoom(cv, app) {
       piece(ch, "armchair", (c) => drawArmchair(c, ch), 4.5);
       if (h) tip = { text: "have a seat", x: ch.x, y: ch.y - 14 };
     }
-    if (L.board) {
-      const b = L.board, h = hot(b.x - 15, b.y - 26, b.x + 15, b.y - 11, { kind: "board" });
-      piece(b, "board", (c) => drawBoard(c, b, w));
-      if (h) tip = { text: "whiteboard", x: b.x, y: b.y - 28 };
+    if (L.board) {                           // the easel: a click shows the painting; the tip says which it is
+      const b = L.board, h = hot(b.x - 11, b.y - 33, b.x + 11, b.y - 8, { kind: "board" });
+      piece(b, "board", (c) => drawEasel(c, b, w.art));
+      if (h) tip = { text: w.art ? ART.list[w.art.i].title : "easel", x: b.x, y: b.y - 36 };
     }
     if (L.fire) {
       // the fireplace: what is held over it (a desk, a piece of furniture, a bot) is about to burn:
@@ -1898,7 +1863,7 @@ function startRoom(cv, app) {
   // ---- the office in the first person (fps.js): what is in the room right now, for props3d.js to make its 3d
   // things of: the floor and what lies on it (an overlay, two texels a dot), what hangs on the wall, every desk and
   // piece of furniture with what it shows (the coffee left, a screen at work, the game on the chess board, the
-  // dream on the whiteboard), the lights (the fire, a booth in use), and everyone in the pose the room gives them
+  // painting on the easel), the lights (the fire, a booth in use), and everyone in the pose the room gives them
   const canvases = new Map();
   function canvas(name, w, h) {              // one per name, redrawn in place (its `v` says it was)
     let c = canvases.get(name);
@@ -1998,7 +1963,7 @@ function startRoom(cv, app) {
       if (p.kind === "radio") st.on = !!app.settings().sound;
       if (p.kind === "chess") { const g = s.chess && !s.chess.result ? s.chess : null; st.board = g ? g.board : START; st.seats = [L.chessSeat(0), L.chessSeat(1)]; }
       if (p.kind === "meet") st.seats = [L.meetSeat(0), L.meetSeat(1)];
-      if (p.kind === "board") { st.ink = ink(w); st.inkV = w.inkV; }
+      if (p.kind === "board" && w.art) { st.art = w.art.cv; st.artV = w.artV; }
       if (p.kind === "plant") st.variant = +(p.key.match(/\d+$/) || [0])[0] % 2;
       if (p.kind === "pair") st.linked = !!(s.pair || {})[p.key];
       if (add(Props3D.build(st))) continue;
@@ -2595,57 +2560,32 @@ function startRoom(cv, app) {
     rect(ctx, x0 + 9, y0 + 13, 1, 2, SP.C); if (!open) rect(ctx, x0 + 12, y0 + 13, 1, 2, SP.C);
     rect(ctx, x0 + 2, y0 + 23, 2, 1, WOOD.k); rect(ctx, x0 + 18, y0 + 23, 2, 1, WOOD.k);     // its feet
   }
-  // the whiteboard on wheels, on the floor: its face 30 x 15, two posts, a base on four wheels. What is
-  // drawn on it is ink at five pixels a board dot (`w.ink`, 130 x 55): the host of a meeting draws
-  // boxes, lines and dots in its colour, you draw on it big in the view. A board dot is inked when any
-  // of its pixels is (the colour of the first)
-  const INK_AREA = { x: 2, y: 2, w: 26, h: 11 }, INKS = 5;
-  function ink(w) {
-    if (!w.ink) { w.ink = document.createElement("canvas"); w.ink.width = INK_AREA.w * INKS; w.ink.height = INK_AREA.h * INKS; w.inkV = 0; }
-    return w.ink;
-  }
-  function inkLine(w, x0, y0, x1, y1, col, width = 1) {
-    const c = ink(w).getContext("2d");
-    c.fillStyle = col;
-    const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
-    let e = dx + dy, x = x0, y = y0;
-    for (;;) {
-      c.fillRect(x, y, width, width);
-      if (x === x1 && y === y1) break;
-      const e2 = 2 * e;
-      if (e2 >= dy) { e += dy; x += sx; }
-      if (e2 <= dx) { e += dx; y += sy; }
+  // the easel: two legs splayed in front and one behind, a ledge with a few spots of paint, the canvas on it (upright
+  // or across, as the painting is) clamped at the top; on it the painting at a third of its size, each dot the mean
+  // of its three by three (kept until the painting changes)
+  function artSmall(w) {
+    if (w.artSmall) return w.artSmall;
+    const a = w.art, p = ART.list[a.i], d = a.cv.getContext("2d").getImageData(0, 0, p.w, p.h).data, out = [];
+    for (let j = 0; j < p.h / 3; j++) for (let i = 0; i < p.w / 3; i++) {
+      let r = 0, g = 0, b = 0;
+      for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) { const k = ((j * 3 + y) * p.w + i * 3 + x) * 4; r += d[k]; g += d[k + 1]; b += d[k + 2]; }
+      out.push([i, j, "#" + [r, g, b].map((v) => Math.round(v / 9).toString(16).padStart(2, "0")).join("")]);
     }
-    w.inkV++; w.cells = null;
+    return (w.artSmall = out);
   }
-  function wipe(w) { ink(w).getContext("2d").clearRect(0, 0, ink(w).width, ink(w).height); w.inkV++; w.cells = null; if (w.dream) { w.dream.n = 0; w.dream.done = null; w.dream.mine.clear(); } }   // the dream begins again
-  const inked = (w) => { const d = ink(w).getContext("2d").getImageData(0, 0, ink(w).width, ink(w).height).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 128) n++; return n / (d.length / 4); };
-  function cells(w) {                        // the board's dots from the ink, kept until the ink changes: a dot's middle pixel, else its first inked one
-    if (w.cells) return w.cells;
-    const im = ink(w), d = im.getContext("2d").getImageData(0, 0, im.width, im.height).data, out = [];
-    for (let j = 0; j < INK_AREA.h; j++) for (let i = 0; i < INK_AREA.w; i++) {
-      let col = null;
-      const m = ((j * INKS + 2) * im.width + i * INKS + 2) * 4;
-      if (d[m + 3] > 128) col = "#" + [d[m], d[m + 1], d[m + 2]].map((v) => v.toString(16).padStart(2, "0")).join("");
-      for (let y = j * INKS; y < (j + 1) * INKS && !col; y++) for (let x = i * INKS; x < (i + 1) * INKS; x++) {
-        const k = (y * im.width + x) * 4;
-        if (d[k + 3] > 128) { col = "#" + [d[k], d[k + 1], d[k + 2]].map((v) => v.toString(16).padStart(2, "0")).join(""); break; }
-      }
-      if (col) out.push([i, j, col]);
-    }
-    return (w.cells = out);
-  }
-  function drawBoard(ctx, b, w) {
-    const fx = b.x - 15, fy = b.y - 26;
-    rect(ctx, fx, fy, 30, 15, SP.F); rect(ctx, fx + 1, fy + 1, 28, 13, "#efebe8");
-    rect(ctx, fx + 1, fy + 14, 28, 1, SP.E);                      // the tray
-    rect(ctx, fx + 3, fy + 13, 3, 1, SP.r); rect(ctx, fx + 7, fy + 13, 3, 1, SP.v);   // markers
-    for (const px of [fx + 3, fx + 26]) { rect(ctx, px, fy + 15, 1, 8, SP.F); rect(ctx, px + 1, fy + 15, 1, 8, SP.E); }
-    rect(ctx, fx + 1, fy + 23, 28, 2, SP.F); rect(ctx, fx + 2, fy + 23, 26, 1, SP.E);
-    for (const px of [fx, fx + 5, fx + 24, fx + 29]) rect(ctx, px, fy + 25, 1, 2, SP.F);
-    rect(ctx, fx + 1, fy + 27, 28, 1, SHADOW);
-    const ix = fx + INK_AREA.x, iy = fy + INK_AREA.y;
-    if (w.ink) for (const [i, j, col] of cells(w)) rect(ctx, ix + i, iy + j, 1, 1, col);
+  function drawEasel(ctx, b, art) {
+    const { x, y } = b, p = ART.list[art ? art.i : 0], cw = p.w / 3, ch = p.h / 3, cx0 = x - Math.floor(cw / 2), cy1 = y - 11, cy0 = cy1 - ch;
+    const leg = (x0, y0, x1, y1, col) => { const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0)); for (let k = 0; k <= n; k++) rect(ctx, Math.round(x0 + ((x1 - x0) * k) / n), Math.round(y0 + ((y1 - y0) * k) / n), 1, 1, col); };
+    rect(ctx, x - 10, y + 1, 21, 1, SHADOW);
+    leg(x, cy1, x + 1, y, WOOD.k); leg(x - 1, cy0 - 3, x - 1, cy1, WOOD.k); leg(x, cy0 - 3, x, cy1, WOOD.d);    // the back leg, the mast
+    for (const s of [-1, 1]) { leg(x + s * 4, cy1 + 1, x + s * 9, y, WOOD.k); leg(x + s * 4 + (s < 0 ? 1 : -1), cy1 + 1, x + s * 9 + (s < 0 ? 1 : -1), y, WOOD.top); }
+    rect(ctx, x - 6, y - 6, 13, 1, WOOD.k);                                     // the crossbar
+    rect(ctx, cx0 - 1, cy0 - 1, cw + 2, ch + 2, "#3f3740");                     // the canvas, its edge
+    if (art) for (const [i, j, col] of artSmall(world())) rect(ctx, cx0 + i, cy0 + j, 1, 1, col);
+    else rect(ctx, cx0, cy0, cw, ch, ART.PRIMER);
+    rect(ctx, x - 2, cy0 - 3, 5, 2, WOOD.k); rect(ctx, x - 1, cy0 - 3, 3, 1, WOOD.top);   // the clamp
+    rect(ctx, cx0 - 3, cy1 + 1, cw + 6, 2, WOOD.k); rect(ctx, cx0 - 2, cy1 + 1, cw + 4, 1, WOOD.top);   // the ledge
+    rect(ctx, cx0, cy1 + 1, 1, 1, C.red1); rect(ctx, cx0 + 2, cy1 + 1, 1, 1, C.blue2); rect(ctx, cx0 + cw - 2, cy1 + 1, 1, 1, C.gold2);
   }
   // a pair room: a small round table with a telephone on it, its light on while a room is linked, blinking while a
   // bot is held over it (it would join the chat). hand: where you hold its handset while its room is open (the
@@ -2835,7 +2775,7 @@ function startRoom(cv, app) {
       case "chess": drawChess(ctx, pt, null); for (const d of [-13, 13]) drawStool(ctx, { x: x + d, y }); break;
       case "pong": drawRug(ctx, pt); drawPong(ctx, pt, w); break;
       case "meet": drawTable(ctx, pt); for (const d of [-23, 23]) drawStool(ctx, { x: x + d, y }); break;
-      case "board": drawBoard(ctx, pt, { ink: null }); break;
+      case "board": drawEasel(ctx, pt, null); break;
       case "window": drawWindow(ctx, { x0: x, y0: y, x1: x + 21, y1: y + 18 }); break;
       case "clock": drawClock(ctx, x, y); break;
       case "fire": drawFire(ctx, { x0: x, y0: y - FIRE.h, x1: x + FIRE.w, y1: y }, T, false); break;
@@ -3434,12 +3374,15 @@ function startRoom(cv, app) {
   size();
   requestAnimationFrame(frame);
   window.__room = { world, size: () => ({ W, H, K }), layout: () => lastL, hp: () => lastHp, fps: (key) => firstPerson(key),
-    shoot: (id) => { const f = world().folk.get(id); if (f) shoot(f); }, unshoot, dogPic, dog: () => world().dog, stick: () => world().stick, dream: (scene, k) => { const w = world(); wipe(w); newDream(w, scene, k); return w.dream.order.length; }, fear: (v) => { if (v !== undefined) world().fear = v; return world().fear; } };   // for poking at it from the console
-  const stats = () => { const w = world(); return { since: w.born, bots: Object.fromEntries(w.stats), meetings: w.meetings, inked: w.ink ? inked(w) : 0 }; };
+    shoot: (id) => { const f = world().folk.get(id); if (f) shoot(f); }, unshoot, dogPic, dog: () => world().dog, stick: () => world().stick, art: (i, k) => { const w = world(); newArt(w, i, k); return w.art.order.length; }, fear: (v) => { if (v !== undefined) world().fear = v; return world().fear; } };   // for poking at it from the console
+  const stats = () => { const w = world(), a = w.art; return { since: w.born, bots: Object.fromEntries(w.stats), meetings: w.meetings, art: a && { title: ART.list[a.i].title, k: a.n / a.order.length } }; };
   // at(id): where a figure stands, in CSS pixels of the page (for look.mjs, to drive the room from outside)
   const at = (id) => { const f = world().folk.get(id), b = cv.getBoundingClientRect(); return f ? [b.left + f.x * K, b.top + (f.y - 12) * K] : null; };
-  // the whiteboard's ink, for the view: the canvas itself, a line on it (in ink pixels), a wipe
-  const board = { ink: () => ink(world()), line: (x0, y0, x1, y1, col) => inkLine(world(), x0, y0, x1, y1, col), wipe: () => wipe(world()), version: () => world().inkV || 0 };
+  // the painting, for the view: its canvas, a number that changes as it is painted, what it is and who painted it
+  const board = {
+    canvas: () => world().art && world().art.cv, version: () => world().artV || 0,
+    info: () => { const a = world().art; if (!a) return null; const p = ART.list[a.i]; return { title: p.title, after: p.after, w: p.w, h: p.h, by: [...a.by], done: a.done !== null }; },
+  };
   // the two at a game table right now (chess, pong), white or the left side first: the page lets you watch them
   const playingAt = (kind) => [...world().folk.values()].filter((f) => f.act.kind === kind && f.act.there && f.act.with && !f.act.you && !f.human).sort((a, b) => a.act.side - b.act.side).map((f) => f.id);
   // for look.mjs: two bots sent to a game, a kickabout for some
