@@ -313,16 +313,23 @@ window.Props3D = (() => {
     });
   }
 
-  // ---- the screens: a screen's picture by what it shows (off, on, busy, waits), in the desk's colour
+  // ---- the screens: a screen's picture by what it shows (off, on, busy, waits, snow: its machine out of reach), in the
+  // desk's colour
+  const SNOW = [[16, 20, 31], [16, 20, 31], [59, 58, 85], [59, 58, 85], [93, 98, 128], [139, 147, 173], [194, 201, 217]];
   function screenTex(w, h, state, color, T) {
-    const frame = state === "busy" ? Math.floor(T * 5) % 26 : state === "waits" ? Math.floor(T * 2) % 2 : 0;
+    const frame = state === "busy" ? Math.floor(T * 5) % 26 : state === "waits" ? Math.floor(T * 2) % 2 : state === "snow" ? Math.floor(T * 8) % 6 : 0;
     return memo(`scr${w}x${h}${state}${color}${frame}`, () => screenPaint(w, h, state, color, frame / 5, frame));
   }
   function screenPaint(w, h, state, color, T, frame) {
-    const col = hex(color), on = state !== "off";
+    const col = hex(color), on = state !== "off" && state !== "snow";
     const c = pix(w * TS, h * TS, (i, j) => {
       const bz = 1.2 * TS;
       if (i < bz || j < bz || i >= w * TS - bz || j >= h * TS - bz) return [40, 42, 52];
+      if (state === "snow") {                  // a dot of the room's screen a texel block, as the room draws it
+        let n = Math.imul(Math.floor(i / TS) + 1, 374761393) + Math.imul(Math.floor(j / TS) + 1, 668265263) + Math.imul(frame + 1, 1274126177);
+        n = Math.imul(n ^ (n >>> 13), 1103515245);
+        return [...SNOW[Math.floor(((n ^ (n >>> 16)) >>> 0) / 4294967296 * SNOW.length)], GLOW];
+      }
       if (!on) return (i - j) % 9 === 0 && i > w * TS * 0.6 && j < h * TS * 0.4 ? [44, 54, 78] : [16, 20, 31];
       return [22, 32, 68, GLOW];
     });

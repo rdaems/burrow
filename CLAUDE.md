@@ -118,6 +118,10 @@ message is the log. When something goes, take it out here. Keep the file under a
   reach = boarded up, why on hover. A door from the closet hung on the wall adds a machine (the ssh host, completed
   from `~/.ssh/config`); a door into the fire, or "remove" (asked twice) in the doors' panel, takes it out of
   sshConfigs (the machine itself is left alone). This computer's door only slides and never burns.
+- A machine out of reach (`cutOff`: its poll failed; the server keeps its last bots) is out of reach in the room as
+  well: its desks' screens and laptops show snow (no click, no +, "out of reach" on hover; in 3d too), and its bots
+  stand still as last seen (`f.frozen`: no think, nobody fetches them for a break), a call's picture frozen, until
+  the line is back. He asked for it on a train: the boarded doors alone left the desks saying nothing.
 - A click on a door: the doors' panel, a line a machine with its paint. A machine's paint (a palette swap,
   `PAINT`, room.json `paint`, else by order; this machine wood) is on its door and its desks: no name prefixes.
 

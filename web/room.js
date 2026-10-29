@@ -70,6 +70,9 @@ function startRoom(cv, app) {
   const rnd = (a, b) => a + Math.random() * (b - a);
   const any = (a) => a[Math.floor(Math.random() * a.length)];
   const fnv = (s) => { let h = 2166136261; for (const ch of s) h = Math.imul(h ^ ch.codePointAt(0), 16777619); return h >>> 0; };
+  // a dot's noise, 0..1, the same for the same (x, y, frame): a screen's snow
+  const noise = (i, j, k) => { let h = Math.imul(i + 1, 374761393) + Math.imul(j + 1, 668265263) + Math.imul(k + 1, 1274126177); h = Math.imul(h ^ (h >>> 13), 1103515245); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+  const SNOW = ["#10141f", "#10141f", "#3b3a55", "#3b3a55", "#5d6280", "#8b93ad", "#c2c9d9"];
   const projectColor = (unit) => PROJECT[fnv(unit) % PROJECT.length];
   function projectLabel(cwd) {
     const n = cwd.replace(/\/+$/, "").split("/");
@@ -77,6 +80,8 @@ function startRoom(cv, app) {
     return n[n.length - 1] || cwd;
   }
   const machineName = (id) => { const m = id && app.state().machines.find((x) => x.id === id); return m ? m.name : ""; };
+  // a machine out of reach (its door boarded up): its desks' screens lose the signal, its bots freeze as last seen
+  const cutOff = (id) => { const s = app.state(), m = s && s.machines.find((x) => x.id === (id || "")); return !!(m && m.error); };
   // a desk's name: its project's, cut to eight letters like a name in a 16-bit game (its machine is
   // its paint, the whole path is on its screen under the pointer)
   const deskLabel = (d) => [...(d.name ? d.name.toUpperCase() : projectLabel(d.dir))].slice(0, d.name ? 14 : NAME).join("").replace(/(.)[-_. ]+$/, "$1");   // its own name, or its folder's
@@ -610,6 +615,9 @@ function startRoom(cv, app) {
     for (const b of bots) {
       const f = folk.get(b.id), work = b.waiting || b.busy;
       if (!f) continue;
+      // its machine out of reach: what it does there is not known, so it stands still as it was last seen (a call's
+      // picture frozen), until the line is back; one on its way out or held goes on
+      if ((f.frozen = cutOff(b.m) && !f.held && !f.leaving && !DOOMED.has(f.act.kind))) continue;
       f.chat = Math.max(0, f.chat - dt);
       if (b.waiting && f.waiting === false) sfx("ask", f.x);   // a hand goes up
       f.busy = b.busy; f.waiting = b.waiting;
@@ -642,7 +650,7 @@ function startRoom(cv, app) {
       if (r.back || !r.parts.length || performance.now() - r.t0 < 1500) continue;
       if ([...folk.values()].filter((g) => g.act.kind === "sweep" && g.act.at === id).length >= 2) continue;
       if (w.fear > 0.35 && Math.random() > 1.2 - w.fear) continue;     // afraid: they hesitate to come over
-      const crew = [...folk.values()].filter((g) => g.b && !g.b.human && !g.b.staff && !g.work && !g.held && !g.lying && !g.open && SWEEPERS.has(g.act.kind) && !(g.act.kind === "loiter" && g.act.panic) && !(g.act.kind === "window" && (g.act.you || g.act.with)))
+      const crew = [...folk.values()].filter((g) => g.b && !g.b.human && !g.b.staff && !g.work && !g.held && !g.frozen && !g.lying && !g.open && SWEEPERS.has(g.act.kind) && !(g.act.kind === "loiter" && g.act.panic) && !(g.act.kind === "window" && (g.act.you || g.act.with)))
         .sort((a, b) => Math.hypot(a.x - r.x, a.y - r.y) - Math.hypot(b.x - r.x, b.y - r.y))[0];
       if (crew) { end(crew); crew.act = { kind: "sweep", at: id, wait: 0 }; }
     }
@@ -663,7 +671,7 @@ function startRoom(cv, app) {
       const first = d.seats.find(([id]) => { const f = folk.get(id); return f && !f.work && f.act.kind === "stand"; });
       if (first) homes.set(first[0], { x: Math.min(W - 8, d.x0 + d.w + 8), y: d.y + 1, on: d.key });
     }
-    for (const b of bots) { const f = folk.get(b.id); if (f && !f.held && !mutinyStep(w, f, L, dt)) thinkOne(w, f, L, now, dt, homes.get(b.id), usage); }
+    for (const b of bots) { const f = folk.get(b.id); if (f && !f.held && !f.frozen && !mutinyStep(w, f, L, dt)) thinkOne(w, f, L, now, dt, homes.get(b.id), usage); }
     if (you && !you.held && !dead(w) && (fps || you.act.kind === "arm" || !huntStep(w, you, L, dt))) thinkOne(w, you, L, now, dt, null, usage);   // (in the first person the shooting is yours)
     for (const f of folk.values()) if (f.staff && !f.leaving && f.b) thinkManager(w, f, L, dt);
     thinkDog(w, L, dt);
@@ -863,7 +871,7 @@ function startRoom(cv, app) {
   // kind; seconds at work, idle, asleep; messages sent and got
   const stat = (w, id) => w.stats.get(id) || (w.stats.set(id, { busy: 0, idle: 0, asleep: 0, sent: 0, got: 0 }), w.stats.get(id));
   function thinkOne(w, f, L, now, dt, home, usage) {
-    const folk = w.folk, others = [...folk.values()].filter((g) => g !== f && !g.leaving), v = 22;
+    const folk = w.folk, others = [...folk.values()].filter((g) => g !== f && !g.leaving && !g.frozen), v = 22;
     const seat = L.seat(f.id), st = stat(w, f.id);
     f.on = null;                             // (its act walks it to its spot again, and says whose it is)
     if (f.act.kind !== f.lastKind) { f.lastKind = f.act.kind; st[f.act.kind] = (st[f.act.kind] || 0) + 1; }
@@ -1993,8 +2001,10 @@ function startRoom(cv, app) {
       else for (let q = 0; q < 4; q++) rect(x, q % 2, q, 2, 1, C.steel3);
     });
   }
-  // what a desk's screen shows (as drawDesk paints it): off, on (its sitter idles), busy, waits; a shell keeps it on
+  // what a desk's screen shows (as drawDesk paints it): off, on (its sitter idles), busy, waits; a shell keeps it on;
+  // snow while its machine is out of reach
   function screenOf(d, w, tree) {
+    if (cutOff(d.m)) return "snow";
     const seated = (f) => f && f.legs === "sit" && !f.lying && (f.act.kind === "desk" || f.act.kind === "sleep") && f.b && f.b.alive !== false;
     const f = d.seats.filter((st) => st[2] === tree).map(([id]) => w.folk.get(id)).filter(seated);
     if (f.some((x) => x.busy)) return "busy";
@@ -2130,7 +2140,7 @@ function startRoom(cv, app) {
   // break is spent hiding behind the furniture furthest from the gun closet, peeking out (hide), and the ones
   // at work glance over their shoulder now and then. Nobody likes to come and sweep up then
   const FEAR = { kill: 0.25, fade: 240 };
-  const idleBot = (f) => !!f.b && !f.b.human && !f.b.staff && !f.work && !f.held && !f.leaving && !f.open && !f.lying && !DOOMED.has(f.act.kind) && f.act.kind !== "escort" && f.act.kind !== "mutiny";
+  const idleBot = (f) => !!f.b && !f.b.human && !f.b.staff && !f.work && !f.held && !f.frozen && !f.leaving && !f.open && !f.lying && !DOOMED.has(f.act.kind) && f.act.kind !== "escort" && f.act.kind !== "mutiny";
   function flee(f, L, x, y, k) {
     const d = Math.hypot(f.x - x, f.y - y) || 1;
     end(f);
@@ -2678,7 +2688,13 @@ function startRoom(cv, app) {
     // screen's last row, the cursor blinking, a grey line running while output comes
     const shells = app.shells(), shellAt = (dir) => shells.find((s) => s.m === (d.m || "") && s.dir === dir);
     const hs = app.hlShell(), hsAt = (dir) => !!hs && hs.m === (d.m || "") && hs.dir === dir;   // its tile under the pointer
+    const cut = cutOff(d.m);
     function paint(g, gw, gh, tree, seed) {
+      if (cut) {                             // its machine out of reach: no signal, the snow of a set between stations
+        const k = Math.floor(T * 8);
+        for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) rect(ctx, g.x + i, g.y + j, 1, 1, SNOW[Math.floor(noise(i + seed, j, k) * SNOW.length)]);
+        return;
+      }
       // off while nobody sits there, or while the sitter's process is stopped
       const f = at(tree).filter((x) => x.b && x.b.alive !== false), busy = f.some((x) => x.busy), waits = f.some((x) => x.waiting);
       const sh = shellAt(tree || d.dir), py = g.y + gh - 2;
@@ -2721,9 +2737,11 @@ function startRoom(cv, app) {
     // letter (two for a dotted one), the home to ~
     const abbrev = (p) => { const s = p.split("/"); return s.map((x, i) => (i < s.length - 1 && x.length > 1 && x !== "~" ? x.slice(0, x.startsWith(".") ? 2 : 1) : x)).join("/"); };
     const where = (dir) => (d.m ? machineName(d.m) + ":" : "") + abbrev(dir.replace(/^\/(Users|home)\/[^/]+/, "~"));
-    const onScreen = hot(sx, sy, sx + 22, sy + 18, { kind: "shell", m: d.m || "", dir: d.dir });
+    // out of reach nothing opens there and no bot starts: no click, no +, and the pointer on the screen says why
+    const onScreen = !cut && hot(sx, sy, sx + 22, sy + 18, { kind: "shell", m: d.m || "", dir: d.dir });
     if (onScreen) { for (const [id] of d.seats) hl.add(id); tip = { text: where(d.dir), x: sx + 11, y: sy - 1 }; screenHover = { m: d.m || "", dir: d.dir }; }
-    {
+    else if (cut && !moving && !held && over(sx, sy, sx + 22, sy + 18)) tip = { text: where(d.dir) + " - out of reach", x: sx + 11, y: sy - 1 };
+    if (!cut) {
       const px = sx + gw + 2, h = hot(px - 3, sy - 3, px + 8, sy + 8, { kind: "spawn", m: d.m, dir: d.dir });
       ctx.fillStyle = h ? d.color : C.steel2; ctx.fillRect(px + 2, sy, 1, 5); ctx.fillRect(px, sy + 2, 5, 1);   // a 5 x 5 plus
       if (h) tip = { text: "new bot", x: px + 2, y: sy - 2 };
@@ -2735,7 +2753,7 @@ function startRoom(cv, app) {
     if (d.trees.length) rect(ctx, sx + 17, y - 13, gw - 22, 1, SP.F);       // the cable, along the top
     d.trees.forEach((tree, k) => {
       const px = sx + 23 + k * LAP, py = y - 22, lap = sprites.get("laptop");
-      const on = hot(px, py, px + 12, py + 11, { kind: "shell", m: d.m || "", dir: tree }), mine = d.seats.filter((st) => st[2] === tree);
+      const on = !cut && hot(px, py, px + 12, py + 11, { kind: "shell", m: d.m || "", dir: tree }), mine = d.seats.filter((st) => st[2] === tree);
       if (on) { for (const [id] of mine) hl.add(id); tip = { text: tree.split("/").pop() + ": a worktree", x: px + 6, y: py - 1 }; screenHover = { m: d.m || "", dir: tree }; }
       paint({ x: px + 2, y: py + 2 }, 8, 5, tree, tree.length);
       if (on || hsAt(tree) || mine.some(([id]) => hl.has(id))) put(ctx, halo(lap, on ? C.steel3 : GOLD), px, py);
