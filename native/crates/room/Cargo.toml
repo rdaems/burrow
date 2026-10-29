@@ -6,6 +6,7 @@ license.workspace = true
 description = "burrow's room: its state, logic and pixel art, drawn into a buffer (no UI toolkit)"
 
 [dependencies]
+pix = { path = "../pix" }
+burrow-model = { path = "../model" }
 serde.workspace = true
 serde_json.workspace = true
-png = "0.18"
