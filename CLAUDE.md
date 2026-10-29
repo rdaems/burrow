@@ -29,8 +29,10 @@ message is the log. When something goes, take it out here. Keep the file under a
 ## The code
 
 - `web/` is the app. `python3 web/server.py` (stdlib only: polls, ptys, a hand-written websocket, SSE) serves
-  http://localhost:7777 from the main checkout; it reads the files per request, so a reload shows a change to the
-  page; a change to server.py needs a restart (his server runs detached, see memory). It answers only its own page
+  http://localhost:7777 from the main checkout; it reads the files per request. He works *in* burrow (the app) since
+  2026-10-29, on main as it is: a change to the page shows when he reloads (⌘R), a change to server.py when he restarts
+  the server (burrow ▸ Restart Server, ⌘⇧R), which closes his attached terminals and ends his shells (the sessions go
+  on). So never restart or kill his server yourself: say a restart is needed. Test on the demo before it lands. It answers only its own page
   and programs that send no Origin (`trusted`: Host localhost or 127.0.0.1 at its port; a foreign Origin gets 403):
   a websocket is not held to the same-origin rule, so any page in his browser could otherwise open a shell here.
   - `index.html` the page (tiles, terminals, the view's panels, the act handler), `room.js` the room (layout,
@@ -43,7 +45,8 @@ message is the log. When something goes, take it out here. Keep the file under a
   the system's webview on the same page, plus a dock icon, the keys a browser keeps (no menu takes ⌘W: the page
   closes the focused tile), links in the browser, OSC 52 copies via IPC (`clip:`). No server on the port: it starts
   one, detached, from `$SHELL -lc` (log `~/.cache/burrow/server.log`) in the checkout it was built in, `BURROW_WEB`,
-  or the bundle's copy; Restart Server in its menu. `macos/bundle.sh`: burrow.app. Test with `BURROW_PORT`,
+  or the bundle's copy; Restart Server in its menu. `macos/bundle.sh` (in the main checkout only: the app keeps the
+  path it was built in) builds and installs /Applications/burrow.app, nothing left in target/. Test with `BURROW_PORT`,
   `BURROW_SHOT=<png>`, `BURROW_TEST_JS` (a window opens for a few seconds).
 - burrow's own state, `~/.config/burrow/`: `room.json` (layout, furniture, desks kept, names, width, you,
   settings, paint, pair, managers, awake; `v` is its migration number, `furnish` in server.py, now 13),

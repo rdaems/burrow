@@ -2,10 +2,16 @@
 # Build burrow.app: the window around the room (src/main.rs), an Info.plist, an icon drawn from one of the room's
 # robots (macos/icon-dots.txt), and a copy of web/ for a Mac without this checkout (built here, the app serves this
 # checkout's web/ itself, so a change shows on a reload).
-#   macos/bundle.sh            -> target/release/burrow.app
-#   cp -R target/release/burrow.app /Applications/
+#   macos/bundle.sh            -> /Applications/burrow.app (built in target/release, moved there: one burrow on the Mac,
+#                                 not a second one in target/ for Spotlight and Launchpad to find)
+# Only from the main checkout: the app keeps the path of the checkout it was built in, and a worktree's goes away
+# (then it would quietly serve the stale copy inside the bundle).
 set -e
 cd "$(dirname "$0")/.."
+if [ "$(git rev-parse --git-dir)" != "$(git rev-parse --git-common-dir)" ]; then
+  echo "bundle.sh: run it in the main checkout, not a worktree: the app serves the web/ of the checkout it was built in" >&2
+  exit 1
+fi
 cargo build --release
 app=target/release/burrow.app
 work=target/release/icon
@@ -71,4 +77,5 @@ cat > "$app/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 codesign --force --sign - "$app" 2>/dev/null || true
-echo "$app"
+rm -rf /Applications/burrow.app && ditto "$app" /Applications/burrow.app && rm -rf "$app" "$work"   # (a running burrow goes on; it is the new one when opened again)
+echo /Applications/burrow.app
