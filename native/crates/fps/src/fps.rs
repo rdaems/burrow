@@ -1681,11 +1681,10 @@ impl Fps {
     /// the office from `start`, Doom's data from `wad` (and the skull door's from `door_wad`, for a WAD without it)
     pub fn new(wad: Wad, door_wad: Option<Wad>, scene: Arc<Scene>, start: Start, opt: Options) -> Result<Fps, String> {
         let level_name = Level::first(&wad).ok_or("no level in the WAD")?;
-        let mut rng = Rng::new(opt.seed);
         let lvl = Level::new(&wad, level_name, opt.seed.wrapping_add(1)).ok_or("the level would not load")?;
         let mut f = Fps {
             view: View::new(opt.still),
-            rng: Rng::new(0),
+            rng: Rng::new(opt.seed),
             still: opt.still,
             world: World::Office,
             lvl,
@@ -1735,10 +1734,9 @@ impl Fps {
         if let Some(first) = opt.snapshot {
             f.win = (first.w, first.h);
             if !f.still {
-                f.melt = Some(Melt::start(first, &mut rng, 0.0));
+                f.melt = Some(Melt::start(first, &mut f.rng, 0.0));
             }
         }
-        f.rng = rng;
         Ok(f)
     }
     /// the WAD it plays (its sound lumps: `wad().lump(name)`)
