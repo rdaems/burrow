@@ -223,8 +223,8 @@ message is the log. When something goes, take it out here. Keep the file under a
   comes its way (she walks over to it; you in the first person), and freezes when aimed at. The remains (its body in parts, cogs, oil) are the undo: a click puts it back
   together. Idle bots sweep the pieces; the last one gone, the session is deleted (rust after 30 s). Fear grows with
   kills (trembling, hiding, fleeing whoever holds a gun).
-- **The mutiny** (hardcore, `mutinyTick`/`mutinyStep`): three of *your* kills within about 45 s (`w.blood`, not an
-  office manager's) and the idle bots gather away from you, talk in turn (dots), stroll to the gun closet one by one,
+- **The mutiny** (hardcore, `mutinyTick`/`mutinyStep`): three kills within about 45 s (`w.blood`: yours or an
+  office manager's, she works for you) and the idle bots gather away from you, talk in turn (dots), stroll to the gun closet one by one,
   each takes a gun and its eyes go red (`f.red`: `body(…, red)`, props3d `sp.red`), then close in on you, slowly,
   one shot at a time across them: 3–5 wide (dust beside you), then you are hit. You lie in a pool, the room goes red,
   YOU DIED and RESPAWN drawn in the room (only that takes a click); RESPAWN brings you in by the door, they carry the

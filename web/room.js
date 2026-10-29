@@ -734,7 +734,7 @@ function startRoom(cv, app) {
         const g = w.folk.get(h.id);
         if (!g || g.held || g.act.kind !== "condemned") { h.phase = "hunt"; return true; }
         f.legs = "stand"; f.arms = "gun"; f.dir = g.x < f.x ? -1 : 1;
-        if ((h.t += dt) > 0.9) { w.shots.push({ x: Math.round(f.x) + 10 * f.dir, y: Math.round(f.y) - 9, t0: performance.now(), hit: false }); shoot(g, f.human ? "you" : f.id); h.phase = "after"; h.t = 0; }
+        if ((h.t += dt) > 0.9) { w.shots.push({ x: Math.round(f.x) + 10 * f.dir, y: Math.round(f.y) - 9, t0: performance.now(), hit: false }); shoot(g); h.phase = "after"; h.t = 0; }
         return true;
       }
       case "after":
@@ -2111,14 +2111,14 @@ function startRoom(cv, app) {
       if (g) flee(f, L, g.x, g.y, reach);
     }
   }
-  // Hardcore, and you shoot one after another (`w.blood`: yours, not an office manager's; it fades): their fear turns
-  // into cooperation. The idle ones gather somewhere away from you and put their heads together a while (dots), then
-  // stroll over to the gun closet one after another as if nothing were up; each takes a gun and its eyes go red. Then
-  // they close in on you, slowly, from their side, and fire: the first few go wide, then one does not. You lie there,
-  // the room goes red, YOU DIED, and RESPAWN brings you in by the door (they take the guns back). One that gets work,
-  // or whose session you open, drops out. In the first person their shots are Doom's damage (fps.js `incoming`), and
-  // you can shoot back: none of them left standing, it is over
-  const MUTINY = { after: 2.5, fade: 90, v: 18, slow: 12 };   // three of yours within about 45 s
+  // Hardcore, and bots are shot one after another (`w.blood`: every kill, yours or an office manager's, for she works
+  // for you; it fades): their fear turns into cooperation. The idle ones gather somewhere away from you and put their
+  // heads together a while (dots), then stroll over to the gun closet one after another as if nothing were up; each
+  // takes a gun and its eyes go red. Then they close in on you, slowly, from their side, and fire: the first few go
+  // wide, then one does not. You lie there, the room goes red, YOU DIED, and RESPAWN brings you in by the door (they
+  // take the guns back). One that gets work, or whose session you open, drops out. In the first person their shots are
+  // Doom's damage (fps.js `incoming`), and you can shoot back: none of them left standing, it is over
+  const MUTINY = { after: 2.5, fade: 90, v: 18, slow: 12 };   // three kills within about 45 s
   const dead = (w = world()) => !!w.mutiny && w.mutiny.phase === "dead";
   function clearAt(L, x, y) {                 // the nearest bit of free floor
     for (const r of [0, 8, 16, 26, 38, 52, 70]) for (let k = 0; k < (r ? 8 : 1); k++) {
@@ -2504,7 +2504,7 @@ function startRoom(cv, app) {
         return { x, y, a: Math.atan2((WALL + H) / 2 - y, W / 2 - x) };
       },
       move: (x, y, a, walking) => { const f = world().folk.get("you"); if (f && !f.held) { f.x = x; f.y = y; f.dir = Math.cos(a) < 0 ? -1 : 1; f.walking = walking; } },
-      shoot: (id) => { const f = world().folk.get(id); if (!f || f.held || !f.b || f.b.human) return false; shoot(f, "you"); return true; },   // an office manager too: a bot like the others
+      shoot: (id) => { const f = world().folk.get(id); if (!f || f.held || !f.b || f.b.human) return false; shoot(f); return true; },   // an office manager too: a bot like the others
       status: () => ({ kills: world().kills || 0 }),   // the bots you shot (the face grins)
       // the mutiny (hardcore): their shots at you since the last tic, for the view to take (a puff past you, or Doom's
       // damage); you dead of them; RESPAWN; and which side of the mysterious door you are (in the level they wait)
@@ -2917,7 +2917,7 @@ function startRoom(cv, app) {
     w.remains.set(f.id, { b: f.b, x, y, t0: performance.now(), parts, drops, puddle: charred ? 0 : 7 + Math.round(Math.random() * 3), total: parts.length, back: 0 });
     w.folk.delete(f.id);
   }
-  function shoot(f, by) {                    // a flash where it hits, and the pieces; the others more afraid, the ones near run. by: who
+  function shoot(f) {                        // a flash where it hits, and the pieces; the others more afraid, the ones near run
     const w = world();
     w.shots.push({ x: Math.round(f.x), y: Math.round(f.y) - 14, t0: performance.now(), hit: true });
     scatter(f, [f.x, f.y]); unopen(f.id);
@@ -2925,7 +2925,7 @@ function startRoom(cv, app) {
     sfx("shot", f.x);
     for (let k = 0; k < 3; k++) setTimeout(() => sfx("clank", f.x, 0.8), 220 + k * 170 + Math.random() * 120);   // its parts coming down
     w.kills = (w.kills || 0) + 1;
-    if (hardcore()) { w.fear = Math.min(1, (w.fear || 0) + FEAR.kill); alarm(f.x, f.y); if (by === "you") w.blood = (w.blood || 0) + 1; }   // (yours add up: the mutiny)
+    if (hardcore()) { w.fear = Math.min(1, (w.fear || 0) + FEAR.kill); alarm(f.x, f.y); w.blood = (w.blood || 0) + 1; }   // (they add up: the mutiny)
   }
   function breakPiece(w, th) {                // shot to bits (the first person, hardcore): gone as into the fire, scorched floor where it stood
     const L = lastL, d = th.desk && L.desks.find((x) => x.unit === th.desk), p = th.piece && L.pieceOf(th.piece), t0 = performance.now();
