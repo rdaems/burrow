@@ -2,6 +2,7 @@
 //! painted here), the pane on the right (tiles of terminals, or a panel). GPUI draws it on the GPU.
 
 mod burrow;
+mod icon;
 mod kit;
 mod notes;
 mod panels;
@@ -14,6 +15,13 @@ use gpui::{App, AppContext, Application, Bounds, TitlebarOptions, WindowBackgrou
 use std::borrow::Cow;
 
 fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    if let Some(i) = args.iter().position(|a| a == "--icon") {
+        // for macos/bundle.sh
+        let out = args.get(i + 1).map(String::as_str).unwrap_or("icon.png");
+        icon::icon().save_png(out).expect("the icon");
+        return;
+    }
     Application::new().run(|cx: &mut App| {
         cx.text_system()
             .add_fonts(vec![
