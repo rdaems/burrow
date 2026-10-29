@@ -48,6 +48,8 @@ enum Drag {
     Tile { id: u64, x0: f32, y0: f32, on: bool, target: Option<Target> },
     /// the room's own pointer (a press in the room, a bot carried)
     Room,
+    /// a piece carried out of the closet into the room: its kind, where the press was, whether it moved yet
+    Closet { kind: String, x0: f32, y0: f32, on: bool },
 }
 
 pub struct Burrow {
@@ -658,6 +660,17 @@ impl Burrow {
         cx.notify();
     }
 
+    /// a piece pressed in the closet: carried while the pointer moves (panels::closet)
+    pub fn closet_carry(&mut self, kind: &str, at: Point<Pixels>) {
+        self.drag = Some(Drag::Closet { kind: kind.to_string(), x0: f32::from(at.x), y0: f32::from(at.y), on: false });
+    }
+    pub fn closet_carrying(&self) -> Option<&str> {
+        match &self.drag {
+            Some(Drag::Closet { kind, on: true, .. }) => Some(kind),
+            _ => None,
+        }
+    }
+
     fn dots(&self, p: Point<Pixels>) -> Option<(f64, f64)> {
         let b = self.room_bounds.get()?;
         Some((f64::from(p.x - b.origin.x) / K as f64, f64::from(p.y - b.origin.y) / K as f64))
@@ -689,6 +702,16 @@ impl Burrow {
                     self.drag = Some(Drag::Tile { id, x0, y0, on: true, target });
                 }
             }
+            Some(Drag::Closet { kind, x0, y0, on }) => {
+                let (x, y) = (f32::from(e.position.x), f32::from(e.position.y));
+                if on || (x - x0).hypot(y - y0) >= 4.0 {
+                    self.drag = Some(Drag::Closet { kind: kind.clone(), x0, y0, on: true });
+                    if let Some((dx, dy)) = self.dots(e.position) {
+                        self.room.carry_kind(Some(&kind), dx, dy);
+                    }
+                    self.dirty = true;
+                }
+            }
             Some(Drag::Room) | None => {
                 if let Some((x, y)) = self.dots(e.position) {
                     let mut out = Output::default();
@@ -711,6 +734,12 @@ impl Burrow {
         match self.drag.take() {
             Some(Drag::Divider { .. }) => self.hub.set_width(self.room.size.w as f64),
             Some(Drag::Tile { id, on: true, target: Some(t), .. }) => self.tiles.move_to(id, &t),
+            Some(Drag::Closet { kind, on: true, .. }) => {
+                let at = self.dots(e.position).and_then(|(x, y)| self.room.place_kind(&kind, x, y));
+                self.room.carrying = None;
+                self.dirty = true;
+                crate::panels::closet::put(self, &kind, at, window, cx);
+            }
             Some(Drag::Room) => {
                 let mut out = Output::default();
                 let inp = self.input();

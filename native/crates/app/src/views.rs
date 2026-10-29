@@ -94,6 +94,8 @@ pub struct Views {
     pub err: String,
     /// the subtitle on the band
     pub sub: String,
+    /// what the panels keep
+    pub p: crate::panels::State,
 }
 
 /// a view was opened: what it needs set up
@@ -148,7 +150,7 @@ pub fn render(b: &mut Burrow, kind: ViewKind, window: &mut Window, cx: &mut Cont
                 .w_full()
                 .max_w(px(kind.width()))
                 .max_h_full()
-                .when(kind == ViewKind::You, |d| d.w_auto())
+                .when(matches!(kind, ViewKind::You | ViewKind::Settings), |d| d.w_auto())
                 .child(frame_bg(Frame::panel()))
                 .child(
                     div()

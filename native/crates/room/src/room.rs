@@ -336,6 +336,32 @@ impl Room {
     pub fn at(&self, id: &str) -> Option<(f64, f64)> {
         self.w.get(id).map(|f| (f.x, f.y))
     }
+    /// a piece carried in from the closet, the pointer at (x, y) in dots: its ghost where it would land, and that
+    /// place (none outside the room); no kind: the carrying is over. The room's pointer follows it (the closet
+    /// holds the pointer meanwhile)
+    pub fn carry_kind(&mut self, kind: Option<&str>, x: f64, y: f64) -> Option<[i32; 2]> {
+        let Some(kind) = kind else {
+            self.carrying = None;
+            return None;
+        };
+        let inside = x >= 0.0 && x < self.size.w as f64 && y >= 0.0 && y < self.size.h as f64;
+        self.pointer = inside.then_some((x, y));
+        let at = inside.then(|| self.size.clamp_at(kind, [layout::jround(x), layout::jround(y)], None));
+        self.carrying = Some((kind.to_string(), at));
+        at
+    }
+    /// put down where it was carried: its place
+    pub fn place_kind(&mut self, kind: &str, x: f64, y: f64) -> Option<[i32; 2]> {
+        let at = self.carry_kind(Some(kind), x, y);
+        self.carrying = None;
+        at
+    }
+    /// a door (or a reception) let go from the closet: it stands there while its panel is open, and until the
+    /// state brings the machine `mid`; none takes it back
+    pub fn pend(&mut self, at: Option<[i32; 2]>, mid: Option<String>, kind: &str, now: f64) {
+        self.pending = at.map(|at| (at, mid, kind.to_string(), now));
+    }
+
     /// is anything in the room being dragged or carried
     pub fn busy_hand(&self) -> bool {
         self.moving.is_some() || self.held.is_some() || self.w.s.dog_held
