@@ -353,7 +353,8 @@ function startFps(room, done) {
     }
     aimThrough = !win && wTop[CX] < CY && CY < wBot[CX];
     // the blocks (desks and what stands as one): the face a ray meets first, and their tops seen from above
-    for (const b of sc.boxes) officeBox(b, px, py, dx, dy, rx, ry, eye, win);
+    drawn = []; vis = [];
+    for (const b of sc.boxes) { let id = 0; if (b.piece || b.desk) { drawn.push(b); id = win ? 0 : drawn.length; } officeBox(b, px, py, dx, dy, rx, ry, eye, win, id); }   // (whose it is: what a shot hits)
     // the pictures and the models; who walks is on the way from one tick's place to the next
     if (sc.v !== sv) {
       sv = sc.v;
@@ -364,7 +365,6 @@ function startFps(room, done) {
       }
       seen = next;
     }
-    drawn = []; vis = [];
     for (const th of sc.things) {
       const o = th.key && seen.get(th.key), at = o ? place(o, now) : th;
       drawn.push(th);
@@ -384,7 +384,7 @@ function startFps(room, done) {
     for (const v of vis) drawVis(v);
   }
   const place = (o, now) => { const k = Math.min(1, (now - o.t0) / (1000 / 12)); return { x: o.fx + (o.tx - o.fx) * k, y: o.fy + (o.ty - o.fy) * k, z: o.fz + (o.tz - o.fz) * k }; };
-  function officeBox(b, px, py, dx, dy, rx, ry, eye, win) {
+  function officeBox(b, px, py, dx, dy, rx, ry, eye, win, id = 0) {
     const x0 = b.x0 * U, x1 = b.x1 * U, y0 = b.y0 * U, y1 = b.y1 * U, z0 = b.z0 * U, z1 = b.z1 * U;
     if (px > x0 && px < x1 && py > y0 && py < y1) return;
     let c0 = SW, c1 = -1;
@@ -418,7 +418,7 @@ function startFps(room, done) {
         if (tn >= zb[i]) continue;
         const z = eye - (y + 0.5 - CY) * tn / PROJ, k = Math.min(p.h - 1, Math.max(0, Math.floor((z1 - z) / (z1 - z0) * p.h))) * p.w + Math.floor(u * p.w), o = p.op[k];
         if (!o) continue;
-        fb[i] = glow || o === 2 ? p.px[k] : cmap[base + p.px[k]]; zb[i] = tn; idb[i] = 0;
+        fb[i] = glow || o === 2 ? p.px[k] : cmap[base + p.px[k]]; zb[i] = tn; idb[i] = id;
       }
       if (eye <= z1 || !F.top) continue;
       const h = eye - z1, ya = Math.max(ylo, Math.ceil(CY + h * PROJ / tx - 0.5)), yb2 = Math.min(yhi, Math.floor(CY + h * PROJ / tn - 0.5)), tp = F.top;
@@ -428,7 +428,7 @@ function startFps(room, done) {
         const wx = px + rdx * d, wy = py + rdy * d;
         const k = Math.min(tp.h - 1, Math.max(0, Math.floor((wy - y0) / (y1 - y0) * tp.h))) * tp.w + Math.min(tp.w - 1, Math.max(0, Math.floor((wx - x0) / (x1 - x0) * tp.w))), o = tp.op[k];
         if (!o) continue;
-        fb[i] = b.top.glow || o === 2 ? tp.px[k] : cmap[planeLevel((officeLight(wx, wy) >> 4) + extralight, d) * 256 + tp.px[k]]; zb[i] = d; idb[i] = 0;
+        fb[i] = b.top.glow || o === 2 ? tp.px[k] : cmap[planeLevel((officeLight(wx, wy) >> 4) + extralight, d) * 256 + tp.px[k]]; zb[i] = d; idb[i] = id;
       }
     }
   }
@@ -454,10 +454,10 @@ function startFps(room, done) {
   function puffVis(f, px, py, dx, dy, rx, ry, eye, lightAt, win) {
     const vx = f.x - px, vy = f.y - py, z = vx * dx + vy * dy;
     if (z < 8) return;
-    const fr = f.blood ? wad.spriteFrame("BLUD", 2 - Math.min(2, f.t >> 2), 1) : wad.spriteFrame("PUFF", Math.min(3, f.t >> 2), 1);
+    const fr = f.boom ? wad.spriteFrame("BEXP", 2 + Math.min(2, Math.floor(f.t / 6)), 1) : f.blood ? wad.spriteFrame("BLUD", 2 - Math.min(2, f.t >> 2), 1) : wad.spriteFrame("PUFF", Math.min(3, f.t >> 2), 1);
     if (!fr || !fr.pic) return;
     const scale = PROJ / z;
-    vis.push({ p: fr.pic, sx: CX + (vx * rx + vy * ry) * scale, sy: CY - (f.z + f.t * 0.5 + fr.pic.to - eye) * scale, scale, z, flip: false, bright: !f.blood && f.t < 4, level: spriteLevel(lightAt(f.x, f.y), z),
+    vis.push({ p: fr.pic, sx: CX + (vx * rx + vy * ry) * scale, sy: CY - (f.z + (f.boom ? 0 : f.t * 0.5) + fr.pic.to - eye) * scale, scale, z, flip: false, bright: f.boom || (!f.blood && f.t < 4), level: spriteLevel(lightAt(f.x, f.y), z),
       clipTop: win && win.top, clipBot: win && win.bot });
   }
 
@@ -695,6 +695,19 @@ function startFps(room, done) {
       best = th; bd = d;
     }
     if (P && door.open > 0) lvl.noise(p);       // the door open: the level hears it
+    // no bot in the way: the piece of furniture in the line of fire takes it, whatever its height (Doom aims up and
+    // down for you); hardcore: three blasts and it goes, Doom's barrel going up where it stood
+    const at = !best && inLine(), th = at && at.th, hit = th && room.hit ? room.hit(th) : null;
+    if (hit) {
+      p.ammo.shells--;
+      puffs.push({ x: me.x + dx * at.d * 0.97, y: Math.max(WALL + 2, me.y + dy * at.d * 0.97), z: Math.max(4, eyeZ() - (at.y + 0.5 - CY) * at.d / PROJ - 8), t: 0 });
+      if (hit === "broken") {
+        const bx = th.x0 !== undefined ? (th.x0 + th.x1) / 2 : th.x, by = th.y0 !== undefined ? (th.y0 + th.y1) / 2 : th.y, bz = th.z1 !== undefined ? (th.z0 + th.z1) / 2 : 8;
+        puffs.push({ x: bx * U, y: by * U, z: bz * U, t: 0, boom: true });
+        Sound.doom(wad, "DSBAREXP", 1, 0, "boom");
+      } else Sound.play("clank", 0, 0.7);
+      return void room.alarm(me.x / U, me.y / U);
+    }
     if (!best && P && aimThrough) { lvl.fire(p); room.alarm(me.x / U, me.y / U); return; }
     p.ammo.shells--;
     if (best && room.shoot(best.bot)) {         // in pieces: its parts come down
@@ -705,6 +718,17 @@ function startFps(room, done) {
     puffs.push({ x: me.x + dx * d, y: Math.max(WALL + 2, me.y + dy * d), z: 41, t: 0 });
     room.alarm(me.x / U, me.y / U);
   }
+  // what stands in the line of fire, nearest first, at whatever height: the middle columns of the view, top to
+  // bottom (bots and remains are the autoaim's)
+  function inLine() {
+    let best = null;
+    for (let x = CX - 2 * S; x <= CX + 2 * S; x++) for (let y = 0; y < VH; y++) {
+      const i = y * SW + x, n = idb[i], th = n && drawn[n - 1];
+      if (th && !th.bot && !th.rem && (!best || zb[i] < best.d)) best = { th, d: zb[i], y };
+    }
+    return best;
+  }
+  const eyeZ = () => lvl.player.viewh + (still ? 0 : Math.sin(time * 2 * Math.PI / 20) * me.bob / 2);
   function drawGun() {
     const p = lvl.player;
     if (p.dead) return;
@@ -1004,7 +1028,7 @@ function startFps(room, done) {
     if (gunState < 0) { const ang = (128 * time) % 8192 / 8192 * 2 * Math.PI; wsx = 1 + bob * Math.cos(ang); wsy = 32 + bob * Math.abs(Math.sin(ang)); }
     gunTic();
     for (const f of puffs) f.t++;
-    puffs = puffs.filter((f) => f.t < 16);
+    puffs = puffs.filter((f) => f.t < (f.boom ? 18 : 16));
   }
 
   // a sound in the level, as Doom places it (S_AdjustSoundParams): from what made it to you (in the office: you behind
@@ -1135,7 +1159,7 @@ function startFps(room, done) {
     set: (x, y, ang) => { if (world === "level") { lvl.player.x = x; lvl.player.y = y; if (ang !== undefined) lvl.player.angle = ang; } else { me.x = x * U; me.y = y * U; if (ang !== undefined) me.a = ang; } },
     fire: () => act(), use: () => { useReq = true; }, leave, world: () => world, lvl: () => lvl, ready: () => ready, melting: () => !!melt, keys, door, units, doorX,
     level: () => { door.open = DOORH; door.dir = 0; door.wait = 150; me.x = doorX(); me.y = units().H + 1; me.a = Math.PI / 2; throughToLevel(); },   // straight through the door into the level
-    under: () => { const t = under(2); return t && { bot: t.bot, rem: t.rem, name: t.name }; },
+    under: () => { const t = under(2); return t && { bot: t.bot, rem: t.rem, name: t.name, piece: t.piece, desk: t.desk }; },
     cam: () => (world === "level" ? levelCam() : null),
     snap: (x, y, z, a) => {                  // the level from there, as a picture (the view only)
       renderLevel(performance.now(), { x, y, z, a }, null);

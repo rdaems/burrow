@@ -221,6 +221,11 @@ message is the log. When something goes, take it out here. Keep the file under a
   shoot, as any bot).
 - The fire takes furniture and desks, not bots (a bot at the fire warms its hands). A bot that is to go loses its
   tile at once.
+- In the first person a shot that finds no bot hits the furniture in the line of fire, at any height (Doom aims up and
+  down for you; `inLine()` reads the id buffer's middle columns, boxes carry their piece or desk: `whose()` in
+  scene3). Three blasts within 20 s and it goes as into the fire (`room.hit`, `breakPiece`): Doom's barrel explosion,
+  a scorch on the room's floor fading over two minutes. Not what the fire won't take (the fixed ones, a desk with
+  bots), nor the gun closet.
 
 ## Office managers
 

@@ -1572,6 +1572,16 @@ function startRoom(cv, app) {
       if (h) tip = { text: "project", x: a.x0 + ADD_W / 2, y: a.y0 - 2 };
     }
     for (const f of w.folk.values()) if (f.act.kind === "sleep" && f.act.there && f.act.at) drawMat(ctx, f.act.at);
+    if (w.scorch) {                         // where a piece was shot to bits: the floor scorched, embers a while, fading
+      w.scorch = w.scorch.filter((sc) => performance.now() - sc.t0 < 120000);
+      for (const sc of w.scorch) {
+        const age = (performance.now() - sc.t0) / 1000, h = Math.max(2, Math.round(sc.rx * 0.35));
+        ctx.globalAlpha = 0.55 * (1 - age / 120);
+        for (let j = -h; j <= h; j++) { const q = Math.round(sc.rx * Math.sqrt(1 - (j / (h + 0.5)) ** 2) * (0.85 + 0.15 * Math.sin(j * 2.3 + sc.rx))); rect(ctx, Math.round(sc.x) - q, Math.round(sc.y) + j, 2 * q + 1, 1, "#1a1210"); }
+        ctx.globalAlpha = 1;
+        if (age < 12) for (let k = 0; k < 6; k++) if ((Math.floor(w.T * 3) + k) % 4) rect(ctx, Math.round(sc.x + Math.sin(k * 2.7) * sc.rx * 0.7), Math.round(sc.y + Math.cos(k * 1.9) * h * 0.6), 1, 1, age < 6 ? "#ffb347" : "#c0502a");
+      }
+    }
     if (dead(w) && w.folk.get("you") && !fps) {   // you, shot: a pool spreading under you
       const f = w.folk.get("you"), r = 4 + Math.round(Math.min(1, (performance.now() - w.mutiny.deadAt) / 1800) * 14), h = Math.ceil(r * 0.45);
       for (let j = -h; j <= h; j++) { const q = Math.round(r * Math.sqrt(1 - (j / (h + 0.5)) ** 2)); rect(ctx, Math.round(f.x) + 1 - q, Math.round(f.y) - 4 + j, 2 * q + 1, 1, "#6e0a0e"); }
@@ -1978,10 +1988,12 @@ function startRoom(cv, app) {
       ...[L.closet && "closet", L.settings && "settings"].filter(Boolean).map((k) => ({ kind: k, x0: L[k].x0, x1: L[k].x1, y0: L[k].y0, y1: L[k].y1 })),
     ];
     const wkey = JSON.stringify(items.map((it) => [it.kind, it.x0, it.y0, it.paint && it.paint.top, it.ok])) + now.getHours() + ":" + now.getMinutes() + !!aw.on;
+    // whose a block or a picture is: the piece's key, the desk's unit (what a shot in the first person hits)
+    const whose = (o, t) => o && { ...o, boxes: o.boxes.map((b) => ({ ...b, ...t })), things: o.things.map((x) => (x.bot || x.rem ? x : { ...x, ...t })) };
     // the desks: their cabinet, desktop, screen (and laptops) and chairs, what each screen shows
-    for (const d of L.desks) add(Props3D.desk({ x0: d.x0, y: d.y, w: d.w, cab: d.cab, label: d.label, paint: paintOf(d.m), color: d.color, T,
+    for (const d of L.desks) add(whose(Props3D.desk({ x0: d.x0, y: d.y, w: d.w, cab: d.cab, label: d.label, paint: paintOf(d.m), color: d.color, T,
       seats: d.seats.map(([id, x, tree]) => ({ x, tree })), mugs: d.seats.filter(([id]) => w.mugs.get(id) > T && w.folk.get(id)).map(([id, x]) => ({ x, color: colorOf(w.folk.get(id).b) })),
-      screen: screenOf(d, w, ""), laptops: d.trees.map((t) => screenOf(d, w, t)) }));
+      screen: screenOf(d, w, ""), laptops: d.trees.map((t) => screenOf(d, w, t)) }), { desk: d.unit, deskName: d.label }));
     // every piece of furniture with what it shows; the fire's flames (a light of their own), its pit on the floor
     const usage = s.usage || {}, left = (u) => (u && u.used !== undefined ? Math.max(0, 1 - u.used / 100) : 0);
     for (const p of pics) {
@@ -2013,7 +2025,7 @@ function startRoom(cv, app) {
       if (p.kind === "board" && w.art) { st.art = w.art.cv; st.artV = w.artV; }
       if (p.kind === "plant") st.variant = +(p.key.match(/\d+$/) || [0])[0] % 2;
       if (p.kind === "pair") st.linked = !!(s.pair || {})[p.key];
-      if (add(Props3D.build(st))) continue;
+      if (add(whose(Props3D.build(st), { piece: p.key }))) continue;
       // anything else: the room's own picture of it, standing where it stands
       const r = foot(p.kind, [p.x, p.y]), P = 1, cw = r[2] - r[0] + 2 * P, ch = r[3] - r[1] + 2 * P;
       const [c, x] = canvas("p:" + p.key, cw, ch);
@@ -2491,7 +2503,21 @@ function startRoom(cv, app) {
         const k = th && th.piece && KIND(th.piece);
         if (k === "booth") return "E: reload";
         if (th && (th.bot || th.staff)) return th.name;
+        if (th && th.desk) return th.deskName;
         return k ? NAMES[k] || k : null;
+      },
+      // a piece of furniture (or an empty desk) shot at: three blasts within twenty seconds and it goes, as into the fire
+      // (a stray pellet meant for a bot breaks nothing). What the fire won't take a shot won't either (the fixed ones,
+      // a desk with bots at it), nor the gun closet your shells come from. "hit", "broken", or null: nothing to break
+      hit: (th) => {
+        const w = world(), key = th && (th.piece || (th.desk && "u:" + th.desk));
+        if (!key || !hardcore() || !lastL) return null;
+        if (th.piece && (fixed(th.piece) || KIND(th.piece) === "booth")) return null;
+        if (th.desk && (lastL.desks.find((d) => d.unit === th.desk) || { seats: [0] }).seats.length) return null;
+        const dents = w.dents || (w.dents = new Map()), was = dents.get(key), n = was && performance.now() - was.t < 20000 ? was.n + 1 : 1;
+        if (n < 3) { dents.set(key, { n, t: performance.now() }); return "hit"; }
+        dents.delete(key); breakPiece(w, th);
+        return "broken";
       },
       unshoot, alarm, tiny, tinyW,
       snapshot: () => ({ canvas: cv, rect: cv.getBoundingClientRect() }),   // the room as it is on the page: what melts away (Doom's wipe)
@@ -2863,6 +2889,12 @@ function startRoom(cv, app) {
     for (let k = 0; k < 3; k++) setTimeout(() => sfx("clank", f.x, 0.8), 220 + k * 170 + Math.random() * 120);   // its parts coming down
     w.kills = (w.kills || 0) + 1;
     if (hardcore()) { w.fear = Math.min(1, (w.fear || 0) + FEAR.kill); alarm(f.x, f.y); if (by === "you") w.blood = (w.blood || 0) + 1; }   // (yours add up: the mutiny)
+  }
+  function breakPiece(w, th) {                // shot to bits (the first person, hardcore): gone as into the fire, scorched floor where it stood
+    const L = lastL, d = th.desk && L.desks.find((x) => x.unit === th.desk), p = th.piece && L.pieceOf(th.piece), t0 = performance.now();
+    (w.scorch = w.scorch || []).push(d ? { x: d.x0 + d.w / 2, y: d.y - 2, rx: d.w / 2 + 4, t0 } : p ? { x: (p.r[0] + p.r[2]) / 2, y: p.r[3] - 2, rx: (p.r[2] - p.r[0]) / 2 + 3, t0 } : { x: th.x, y: th.y, rx: 8, t0 });
+    if (d) app.act({ kind: "forget", unit: d.unit });
+    else app.act({ kind: "burn", key: th.piece });
   }
   function unshoot(id) {                      // put back together: the pieces fly in, and it stands up there
     const r = world().remains.get(id);
