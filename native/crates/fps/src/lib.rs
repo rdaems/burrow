@@ -12,7 +12,7 @@ pub mod wad;
 
 pub use level::Level;
 pub use wad::Wad;
-pub use fps::{Event, Fps, Key, LCam, Melt, Options, Sound, Start, World, You};
+pub use fps::{Event, Fps, Incoming, Key, LCam, Melt, Options, Sound, Start, World, You};
 pub use level::Origin;
 pub use props::{Desk, Fig, Piece, Props};
 pub use scene::{Block, Face, Figure, Light, Paint, Parts, Robot, Scene, Tex, Thing, WallItem, WallKind};

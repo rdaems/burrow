@@ -61,7 +61,7 @@ fn wood() -> Paint {
     Paint { hi: css("#cfa86d"), top: css("#b38857"), d: css("#885c47"), k: css("#532e3d"), plate: css("#2e1f28") }
 }
 fn robot(seed: &str, color: &str, arms: &str, legs: &str) -> Figure {
-    Figure::Robot(Robot { seed: seed.into(), color: color.into(), femme: false, arms: arms.into(), legs: legs.into() })
+    Figure::Robot(Robot { seed: seed.into(), color: color.into(), femme: false, arms: arms.into(), legs: legs.into(), red: false })
 }
 /// an office with a desk, bots, furniture, the wall's things and a fire pit on the floor
 fn furnished(props: &mut Props, label: &str) -> Scene {
@@ -276,4 +276,48 @@ fn timing() {
         f.draw(&mut im);
     }
     println!("level: {:.2} ms a frame", t.elapsed().as_secs_f64() * 10.0);
+}
+
+/// the room's mutiny: a shot at you from where a mutineer stands, a tic later
+fn shot_at(f: &mut Fps, hit: bool) -> Vec<Event> {
+    f.incoming(vec![Incoming { x: 128.0, y: 110.0, hit, dmg: 30 }]);
+    f.tick(1000.0 / 35.0 + 0.5);
+    f.events()
+}
+
+#[test]
+fn a_mutineer_s_shot_gone_wide_is_a_puff_beside_you() {
+    let mut f = stub(true);
+    f.tick(30.0);
+    f.events();
+    let (health, puffs) = (f.level().player.health, f.puffs());
+    let ev = shot_at(&mut f, false);
+    assert!(ev.iter().any(|e| matches!(e, Event::Sound(Sound::Doom { name: "DSSHOTGN", .. }))), "{ev:?}");
+    assert_eq!(f.level().player.health, health);
+    assert_eq!(f.puffs(), puffs + 1);
+    assert!(!f.in_level());
+}
+
+#[test]
+fn mutineers_hits_kill_you_once_and_a_click_respawns_you() {
+    let mut f = stub(true);
+    f.tick(30.0);
+    f.events();
+    let mut died = 0;
+    for _ in 0..20 {
+        died += shot_at(&mut f, true).iter().filter(|e| **e == Event::Died).count();
+    }
+    assert!(f.level().player.dead && f.level().player.health <= 0);
+    for _ in 0..40 {
+        f.tick(1000.0 / 35.0 + 0.5);
+    }
+    died += f.events().iter().filter(|e| **e == Event::Died).count();
+    assert_eq!(died, 1, "dead once");
+    let mut im = Image::new(640, 400);
+    f.draw(&mut im); // (YOU DIED and how to come back across it)
+    f.click();
+    let ev = f.events();
+    assert!(ev.contains(&Event::Respawn), "{ev:?}");
+    assert!(!f.level().player.dead);
+    assert_eq!(f.level().player.health, 100);
 }

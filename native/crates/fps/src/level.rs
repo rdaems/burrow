@@ -52,6 +52,8 @@ pub enum Origin {
     Gun,
     /// a box of shells from the gun closet
     Pickup,
+    /// a mutineer's shot at you from the room (its x, a thousandth of a dot)
+    Mutiny(i64),
 }
 
 /// a sound in the level this tic: Doom's lump, where, from what

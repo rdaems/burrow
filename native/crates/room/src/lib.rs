@@ -13,6 +13,7 @@ pub mod figure;
 pub mod font;
 pub mod io;
 pub mod layout;
+pub mod mutiny;
 pub mod paint;
 pub mod paintings;
 pub mod pointer;

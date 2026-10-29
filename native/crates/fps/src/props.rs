@@ -479,7 +479,7 @@ impl Props {
     /// a figure from one of the eight sides (k: 0 its front, counting round to its right), kept
     pub fn figure(&mut self, sp: &Figure, k: usize) -> Fig {
         let key = match sp {
-            Figure::Robot(r) => format!("robot|{}|{}|{}|{}|{}|{k}", r.seed, r.color, r.femme, r.arms, r.legs),
+            Figure::Robot(r) => format!("robot|{}|{}|{}|{}|{}|{}|{k}", r.seed, r.color, r.femme, r.arms, r.legs, r.red),
             Figure::Dog { pose, wag } => format!("dog|{pose}|{wag}|{k}"),
         };
         if let Some(v) = self.figs.get(&key) {
@@ -500,7 +500,7 @@ impl Props {
     }
     /// lying down (a nap): its side, turned a quarter, head first
     pub fn lying(&mut self, sp: &Robot) -> Fig {
-        let key = format!("lie|{}{}{}", sp.seed, sp.color, sp.femme);
+        let key = format!("lie|{}{}{}{}", sp.seed, sp.color, sp.femme, sp.red);
         if let Some(v) = self.figs.get(&key) {
             return v.clone();
         }
@@ -964,7 +964,7 @@ impl Props {
                 });
                 b!(x - 9.5, y - 9.5, x + 9.5, y + 0.5, 30.0, 33.0, steel, Over { front: Some(sign), ..Default::default() });
                 if glow != 0.0 {
-                    out.lights.push(Light { x, y: y - 5.0, z: 16.0, r: 50.0, col: [1.0, 0.95, 0.8], k: 0.9 * glow, flicker: false });
+                    out.lights.push(Light { x, y: y - 5.0, z: 16.0, r: 50.0, col: [1.0, 0.95, 0.8], k: 0.9 * glow, flicker: false, muzzle: false });
                 }
                 out.solid.push([x - 9.0, y - 9.0, x + 9.0, y]);
             }
@@ -982,7 +982,7 @@ impl Props {
                 });
                 b!(x - 5.0, y - 4.0, x + 5.0, y - 1.0, 14.0, 18.0, Mat::Plain("#b5bfc7", 0.04), Over { front: Some(front), ..Default::default() });
                 if flash {
-                    out.lights.push(Light { x, y: y - 3.0, z: 16.0, r: 160.0, col: [1.0, 1.0, 1.0], k: 2.2, flicker: false });
+                    out.lights.push(Light { x, y: y - 3.0, z: 16.0, r: 160.0, col: [1.0, 1.0, 1.0], k: 2.2, flicker: false, muzzle: false });
                 }
                 out.solid.push([x - 4.0, y - 4.0, x + 4.0, y]);
             }
@@ -1026,7 +1026,7 @@ impl Props {
                     b!(lx, ly, lx + 1.0, ly + 1.0, 0.0, 4.0, Mat::Wood(WOODP_D, 4.0));
                 }
                 if on {
-                    out.lights.push(Light { x, y: y - 3.0, z: 15.0, r: 60.0, col: [1.0, 0.85, 0.5], k: 0.8, flicker: false });
+                    out.lights.push(Light { x, y: y - 3.0, z: 15.0, r: 60.0, col: [1.0, 0.85, 0.5], k: 0.8, flicker: false, muzzle: false });
                 }
                 out.solid.push([x - 7.0, y - 5.0, x + 7.0, y]);
             }
@@ -1282,7 +1282,7 @@ impl Props {
         }
         if matches!(d.screen.as_str(), "busy" | "waits" | "on") {
             let c = hex(&d.color).map(|v| v / 255.0);
-            out.lights.push(Light { x: cx, y: y - 4.0, z: 19.0, r: 34.0, col: mix([0.5, 0.6, 1.0], c, 0.5), k: if d.screen == "busy" { 0.5 } else { 0.25 }, flicker: false });
+            out.lights.push(Light { x: cx, y: y - 4.0, z: 19.0, r: 34.0, col: mix([0.5, 0.6, 1.0], c, 0.5), k: if d.screen == "busy" { 0.5 } else { 0.25 }, flicker: false, muzzle: false });
         }
         out.solid.push([x0, y - 12.0, x0 + w, y - 3.0]);
         out
@@ -1482,6 +1482,8 @@ fn robot_boxes(sp: &Robot) -> Vec<MBox> {
     let p = robot_parts(&sp.seed);
     let col = hex(&sp.color);
     let (light, light_d) = (col, mul(col, 0.62));
+    // its eyes: its own light, or red (a mutineer)
+    let (eye, eye_d) = if sp.red { ([255.0, 52.0, 40.0], [170.0, 20.0, 14.0]) } else { (light, light_d) };
     // its casing a cool steel, darker than the room's steel3 (lit warm, that went the colour of skin)
     let (s1, s2, s3, s4, dark, screen, ink2) = (hex("#3f4660"), hex("#6c7590"), hex("#8f9ab2"), hex("#c3cbdb"), hex("#2a2d3d"), hex(c::BLUE0), hex(c::INK2));
     let mut b: Vec<MBox> = Vec::new();
@@ -1544,22 +1546,22 @@ fn robot_boxes(sp: &Robot) -> Vec<MBox> {
         let lit = |x0: i32, y0: i32| gx == x0 && gy == y0;
         let e = pt.eyes;
         if e == "dots" && (lit(6, ey) || lit(9, ey)) {
-            return g3(light);
+            return g3(eye);
         }
         if e == "dots" && (lit(6, ey + 1) || lit(9, ey + 1)) {
-            return g3(light_d);
+            return g3(eye_d);
         }
         if e == "visor" && gy == ey && (5..11).contains(&gx) {
-            return g3(if gx % 2 != 0 { light } else { light_d });
+            return g3(if gx % 2 != 0 { eye } else { eye_d });
         }
         if e == "cyclops" && (lit(7, ey) || lit(8, ey) || lit(7, ey + 1)) {
-            return g3(light);
+            return g3(eye);
         }
         if e == "cyclops" && lit(8, ey + 1) {
-            return g3(light_d);
+            return g3(eye_d);
         }
         if e == "happy" && (lit(6, ey + 1) || lit(5, ey) || lit(7, ey) || lit(9, ey + 1) || lit(8, ey) || lit(10, ey)) {
-            return g3(light);
+            return g3(eye);
         }
         if gy == 10 && (6..10).contains(&gx) {
             c = if pt.teeth && gx % 2 == 0 { ink2 } else { s1 };

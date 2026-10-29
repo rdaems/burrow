@@ -154,6 +154,9 @@ impl Burrow {
         if dx != 0.0 {
             run.fps.mouse_moved(dx);
         }
+        let shots = self.room.take_incoming().into_iter().map(|s| burrow_fps::Incoming { x: s.x, y: s.y, hit: s.hit, dmg: s.dmg }).collect();
+        let run = self.fps.as_mut().unwrap();
+        run.fps.incoming(shots);
         run.fps.tick(dt * 1000.0);
         let events = run.fps.events();
         let you = run.fps.you();
@@ -183,6 +186,9 @@ impl Burrow {
                     self.sound.play(name, pan, vol, false, None);
                 }
                 FEv::Leave => leave = true,
+                // the mutiny: you dead of their shots, then Doom's respawn (the room's too)
+                FEv::Died => self.room.died(&inp, &mut out),
+                FEv::Respawn => self.room.respawn(&inp),
             }
             self.after(out, window, cx);
         }

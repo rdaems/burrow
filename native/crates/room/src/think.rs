@@ -89,7 +89,7 @@ impl Tick<'_> {
 
 /// a figure that may be shot at, or flee: an idle bot, not held, not leaving, not open, not lying, not doomed
 pub fn idle_bot(f: &Fig) -> bool {
-    f.is_bot() && !f.work && !f.held && !f.leaving && !f.open && !f.lying && !doomed(&f.act) && f.act.kind != "escort"
+    f.is_bot() && !f.work && !f.held && !f.leaving && !f.open && !f.lying && !doomed(&f.act) && f.act.kind != "escort" && f.act.kind != "mutiny"
 }
 
 /// `from` sent `to` a message: a beam from its antenna to the other's, wherever they are
@@ -172,6 +172,7 @@ pub fn think(w: &mut World, bots: &[Bot], l: &Layout, dt: f64, t: &mut Tick) {
     let now_s = t.now() / 1000.0;
     w.s.fear = if t.hardcore() { (w.s.fear - dt / FEAR_FADE).max(0.0) } else { 0.0 };
     scare(w, l, t);
+    crate::mutiny::tick(w, l, dt, t);
     // the bot you play chess with sits at the table until the game is over (or it gets work)
     let game = t.inp.chess.clone();
     let vs = game.as_ref().filter(|g| g.result.is_none()).map(|g| if g.white.id == "you" { g.black.id.clone() } else { g.white.id.clone() });
@@ -402,11 +403,14 @@ pub fn think(w: &mut World, bots: &[Bot], l: &Layout, dt: f64, t: &mut Tick) {
             && !w.folk[i].held
         {
             let home = homes.iter().find(|(id, _)| *id == b.id).map(|(_, s)| s.clone());
-            think_one(w, i, l, now_s, dt, home.as_ref(), t);
+            if !crate::mutiny::step(w, i, l, dt, t) {
+                think_one(w, i, l, now_s, dt, home.as_ref(), t);
+            }
         }
     }
     if let Some(i) = w.idx("you")
         && !w.folk[i].held
+        && !crate::mutiny::dead(w)
     {
         let hunting = !t.inp.fps && w.folk[i].act.kind != "arm" && hunt_step(w, i, l, dt, t);
         if !hunting {
@@ -2155,8 +2159,9 @@ pub fn hunt_step(w: &mut World, i: usize, l: &Layout, dt: f64, t: &mut Tick) -> 
                 h.phase = "after";
                 h.t = 0.0;
                 let (fx, fy, fd) = (f.x, f.y, f.dir);
-                w.s.shots.push(Shot { x: (jround(fx) as f64) + 10.0 * fd, y: (jround(fy) - 9) as f64, t0: t.now() });
-                shoot(w, l, &gid, t);
+                let by = if f.human { "you".to_string() } else { f.id.clone() };
+                w.s.shots.push(Shot { x: (jround(fx) as f64) + 10.0 * fd, y: (jround(fy) - 9) as f64, t0: t.now(), ..Default::default() });
+                shoot(w, l, &gid, &by, t);
             }
             true
         }
@@ -2376,11 +2381,12 @@ fn think_manager(w: &mut World, i: usize, l: &Layout, dt: f64, t: &mut Tick) {
 
 // ---- remains: a shot bot in pieces, its undo until they are cleared away
 
-/// a flash where it hits, and the pieces; the others more afraid, the ones near run
-pub fn shoot(w: &mut World, l: &Layout, id: &str, t: &mut Tick) {
+/// a flash where it hits, and the pieces; the others more afraid, the ones near run. `by`: who ("you": yours add
+/// up, the mutiny)
+pub fn shoot(w: &mut World, l: &Layout, id: &str, by: &str, t: &mut Tick) {
     let Some(i) = w.idx(id) else { return };
     let (x, y) = (w.folk[i].x, w.folk[i].y);
-    w.s.shots.push(Shot { x: jround(x) as f64, y: (jround(y) - 14) as f64, t0: t.now() });
+    w.s.shots.push(Shot { x: jround(x) as f64, y: (jround(y) - 14) as f64, t0: t.now(), hit: true, ..Default::default() });
     crate::remains::scatter(w, i, t);
     t.out.act(json!({"kind": "close", "id": id}));
     w.s.bang = w.s.t; // (the condemned still waiting start at it)
@@ -2392,6 +2398,9 @@ pub fn shoot(w: &mut World, l: &Layout, id: &str, t: &mut Tick) {
     if t.hardcore() {
         w.s.fear = (w.s.fear + FEAR_KILL).min(1.0);
         alarm(w, l, x, y, t);
+        if by == "you" {
+            w.s.blood += 1.0;
+        }
     }
 }
 

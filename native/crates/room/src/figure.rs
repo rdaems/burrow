@@ -86,7 +86,7 @@ impl Legs {
     }
 }
 
-type Key = (String, Color, Arms, Legs, bool, bool);
+type Key = (String, Color, Arms, Legs, bool, bool, bool);
 thread_local! {
     static BODIES: RefCell<HashMap<Key, Rc<Image>>> = RefCell::new(HashMap::new());
 }
@@ -99,7 +99,12 @@ fn at(face: &Image, x: i32, y: i32) -> Option<Color> {
 
 /// a full figure: `human` a person (else a robot), `femme` the office manager (a bow on her head, a skirt)
 pub fn body(seed: &str, color: Color, arms: Arms, legs: Legs, human: bool, femme: bool) -> Rc<Image> {
-    let key = (seed.to_string(), color, arms, legs, human, femme);
+    body_red(seed, color, arms, legs, human, femme, false)
+}
+
+/// the same, `red`: a robot with its eyes red (a mutineer, gun in hand)
+pub fn body_red(seed: &str, color: Color, arms: Arms, legs: Legs, human: bool, femme: bool, red: bool) -> Rc<Image> {
+    let key = (seed.to_string(), color, arms, legs, human, femme, red);
     if let Some(im) = BODIES.with(|b| b.borrow().get(&key).cloned()) {
         return im;
     }
@@ -132,6 +137,24 @@ pub fn body(seed: &str, color: Color, arms: Arms, legs: Legs, human: bool, femme
                     line[idx(x, y)] = true;
                 }
             }
+        }
+    }
+    if red && !human {
+        // the eyes: what is not screen on its face's screen (pixel.js robot(): x 7..12, four rows under its top)
+        let top = avatar::robot_parts(seed).top + 6;
+        let scr = at(&f, 7, top);
+        let lum = |c: Color| c.0[0] as f64 * 0.3 + c.0[1] as f64 * 0.59 + c.0[2] as f64 * 0.11;
+        let mut eyes = Vec::new();
+        for y in top..top + 4 {
+            for x in 7..13 {
+                if let Some(c) = at(&f, x, y).filter(|&c| Some(c) != scr) {
+                    eyes.push((x, y, lum(c)));
+                }
+            }
+        }
+        let hi = eyes.iter().map(|e| e.2).fold(f64::NEG_INFINITY, f64::max);
+        for (x, y, l) in eyes {
+            set(&mut px, x, y, if l >= hi * 0.85 { Color::rgb(0xff3b2f) } else { Color::rgb(0xa3170f) });
         }
     }
     // a person wears what their portrait wears (a coat is white, a suit grey): its shoulders' colours

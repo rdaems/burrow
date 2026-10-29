@@ -8,7 +8,7 @@ url = sys.argv[1]
 here = os.path.dirname(os.path.abspath(__file__))
 look = os.path.join(here, "../../../../../web/look.mjs")
 names = ["ask", "beam", "door", "booth", "poof", "back", "shot", "clank", "flash", "bark", "clack", "print", "whoosh",
-         "tune", "click", "paper", "cannon", "whistle", "blast", "wreck", "thud", "win", "lose"]
+         "tune", "click", "paper", "cannon", "whistle", "blast", "wreck", "thud", "win", "died", "lose"]
 js = """(async () => {
   const src = await (await fetch('/sound.js')).text(), out = {};
   Object.defineProperty(navigator, 'userActivation', { value: undefined, configurable: true });

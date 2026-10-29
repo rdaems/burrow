@@ -209,6 +209,22 @@ impl Room {
                 D::draw_mat(ctx, at.x as i32, at.y as i32);
             }
         }
+        if crate::mutiny::dead(&self.w)
+            && !inp.fps
+            && let Some(f) = self.w.get("you")
+        {
+            // you, shot: a pool spreading under you
+            let since = inp.now - self.w.s.mutiny.as_ref().map_or(inp.now, |m| m.dead_at);
+            let (fx, fy) = (jround(f.x), jround(f.y));
+            let r = 4 + jround((since / 1800.0).min(1.0) * 14.0);
+            let h = (r as f64 * 0.45).ceil() as i32;
+            for j in -h..=h {
+                let q = jround(r as f64 * (1.0 - (j as f64 / (h as f64 + 0.5)).powi(2)).sqrt());
+                ctx.rect(fx + 1 - q, fy - 4 + j, 2 * q + 1, 1, Color::rgb(0x6e0a0e));
+            }
+            ctx.rect(fx + r - 6, fy - 3, 3, 1, Color::rgb(0xa8191d));
+            ctx.rect(fx - r + 4, fy - 1, 2, 1, Color::rgb(0xa8191d));
+        }
         if let Some(p) = &l.pong {
             D::draw_rug(ctx, p.x, p.y);
         }
@@ -872,14 +888,17 @@ impl Room {
         let im = body(&f.seed, color_of(f), Arms::Down, Legs::Stand, f.human, false);
         let hr = D::sleeper_hot(x, y);
         let on = self.over(hr[0] as f64, hr[1] as f64, hr[2] as f64, hr[3] as f64);
-        let ring = if hl.contains(&f.id) || on {
+        let shot = f.act.kind == "dead";
+        let ring = if shot {
+            None
+        } else if hl.contains(&f.id) || on {
             Some(GOLD)
         } else if inp.opens.contains(&f.id) {
             Some(crate::scene::OPEN)
         } else {
             None
         };
-        D::draw_sleeper(ctx, x, y, &im, ring, f.human, f.z);
+        D::draw_sleeper(ctx, x, y, &im, ring, f.human && !shot, f.z); // (shot, you don't snore)
         if on {
             self.hovered = Some(Hovered { id: f.id.clone(), x: x as f64, y: (y - 20) as f64, seat: false });
         }

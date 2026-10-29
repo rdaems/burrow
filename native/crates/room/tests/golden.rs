@@ -63,13 +63,16 @@ fn avatars_are_pairs() {
 
 #[test]
 fn figures_are_room_js_bodies() {
-    // body-<seed>-<arms>-<legs>-<h|r><f?>-<colour>
+    // body-<seed>-<arms>-<legs>-<h|r><f?><x?>-<colour> (x: its eyes red, a mutineer)
     check("body-", |name| {
         let parts: Vec<&str> = name.strip_prefix("body-")?.rsplitn(5, '-').collect();
         let [col, kind, legs, arms, seed] = parts[..] else { return None };
         let human = kind.starts_with('h');
-        let femme = kind.ends_with('f');
-        Some((*figure::body(seed, css(&format!("#{col}")), figure::Arms::parse(arms), figure::Legs::parse(legs), human, femme)).clone())
+        let femme = kind.contains('f');
+        let red = kind.contains('x');
+        let im = (*figure::body_red(seed, css(&format!("#{col}")), figure::Arms::parse(arms), figure::Legs::parse(legs), human, femme, red)).clone();
+        assert_eq!(red, im.px.contains(&[0xff, 0x3b, 0x2f, 0xff]), "{name}: red eyes, or none");
+        Some(im)
     });
 }
 

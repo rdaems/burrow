@@ -85,6 +85,8 @@ pub struct Robot {
     pub arms: String,
     /// stand, sit, walk1, walk2
     pub legs: String,
+    /// its eyes red: a mutineer, gun in hand (room.js's mutiny)
+    pub red: bool,
 }
 /// what a figure is: a model the view turns to the side that faces you
 #[derive(Clone, Debug, PartialEq)]
@@ -142,6 +144,8 @@ pub struct Light {
     pub col: [f64; 3],
     pub k: f64,
     pub flicker: bool,
+    /// a mutineer's shot just fired: full light round it
+    pub muzzle: bool,
 }
 
 /// a desk's (or a door's) paint

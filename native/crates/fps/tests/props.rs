@@ -23,7 +23,7 @@ fn differ(a: &Image, b: &Image) -> (usize, usize, i32) {
     (da, dc, most)
 }
 fn robot(seed: &str, color: &str, arms: &str, legs: &str, femme: bool) -> Robot {
-    Robot { seed: seed.into(), color: color.into(), arms: arms.into(), legs: legs.into(), femme }
+    Robot { seed: seed.into(), color: color.into(), arms: arms.into(), legs: legs.into(), femme, red: false }
 }
 
 #[test]
@@ -82,4 +82,20 @@ fn every_kind_builds() {
     let wall = p.wall(256.0, 40.0, 26.0, &[], "k");
     assert_eq!((wall.w(), wall.h()), (1024, 160));
     assert_eq!(p.wall(256.0, 40.0, 26.0, &[], "k").id, wall.id, "kept while its key stays");
+}
+
+#[test]
+fn a_mutineer_s_eyes_are_red() {
+    let mut p = Props::new();
+    let a = robot("demo0001", "#4a76b8", "gun", "stand", false);
+    let calm = p.figure(&Figure::Robot(a.clone()), 0).tex.img.clone();
+    let red = p.figure(&Figure::Robot(Robot { red: true, ..a }), 0).tex.img.clone();
+    let (da, dc, _) = differ(&calm, &red);
+    assert!(da == 0 && dc > 0, "its shape the same, its eyes another colour");
+    // what differs is red: its eyes, nothing else
+    for (p, q) in calm.px.iter().zip(&red.px) {
+        if p != q {
+            assert!(q[0] > 2 * q[1].max(q[2]), "{q:?} is not red");
+        }
+    }
 }

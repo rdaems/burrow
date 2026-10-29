@@ -26,7 +26,7 @@
 //! `tick(dt)`, `draw` (Doom's screen) or `draw_window` (letterboxed at 4:3, with the melt), `events()` after each
 //! tick, `you()` for where you stand in the room.
 
-use crate::level::{Cmd, Level, Origin, Portal, Puff};
+use crate::level::{Cmd, Level, Origin, Portal, Puff, Who};
 use crate::props::Props;
 use crate::rng::{Rng, jround};
 use crate::scene::{Face, Scene, TS, Tex, Thing, WallKind};
@@ -101,6 +101,20 @@ pub enum Event {
     Sound(Sound),
     /// Esc: out of the first person (take the melt with `take_leave_melt`)
     Leave,
+    /// you are dead (the room's mutiny: you lie there, they stand round you)
+    Died,
+    /// Doom's respawn after you died: in the office again (the room's mutiny ends)
+    Respawn,
+}
+
+/// a shot at you from one of the room's mutineers (room.js `incoming`): from where it stands (room dots); `hit` or
+/// wide, Doom's damage if it hits
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Incoming {
+    pub x: f64,
+    pub y: f64,
+    pub hit: bool,
+    pub dmg: i32,
 }
 
 /// where you start in the office: room dots, the angle you look (radians, the room's y down)
@@ -539,7 +553,7 @@ impl View {
                 for li in &r.sc.lights {
                     let (ddx, ddy) = (x - li.x * U, y - li.y * U);
                     if ddx * ddx + ddy * ddy < 9000.0 {
-                        l = l.max(if li.flicker && !self.still { 192 + (self.fire_flick & 48) } else { 224 });
+                        l = l.max(if li.muzzle { 255 } else if li.flicker && !self.still { 192 + (self.fire_flick & 48) } else { 224 });
                     }
                 }
                 if r.p().is_some() && (x - dx).abs() < 112.0 && y > h - 112.0 {
@@ -1653,6 +1667,9 @@ pub struct Fps {
     now: f64,
     acc: f64,
     events: Vec<Event>,
+    /// the mutiny's shots at you, for the next tic; whether you were dead at the last
+    incoming: Vec<Incoming>,
+    dead_seen: bool,
     letters: HashMap<String, (i32, Vec<bool>)>,
     frame: Image,
     win: (u32, u32),
@@ -1717,6 +1734,8 @@ impl Fps {
             now: 0.0,
             acc: 0.0,
             events: Vec::new(),
+            incoming: Vec::new(),
+            dead_seen: false,
             letters: HashMap::new(),
             frame: Image::new(SW as u32, SH as u32),
             win: (0, 0),
@@ -1763,6 +1782,18 @@ impl Fps {
     /// where you stand in the room (dots), the way you look, whether you walk (in the office)
     pub fn you(&self) -> You {
         self.you
+    }
+    /// the room's mutiny: shots at you since the last call (taken at the next tic)
+    pub fn incoming(&mut self, shots: Vec<Incoming>) {
+        self.incoming.extend(shots);
+    }
+    /// how many puffs of dust are in the air (a shot that hit a wall or went wide)
+    pub fn puffs(&self) -> usize {
+        self.puffs.len()
+    }
+    /// through the mysterious door, in the level (the room's mutineers wait for you at it)
+    pub fn in_level(&self) -> bool {
+        self.world == World::Level
     }
     /// what happened since the last call
     pub fn events(&mut self) -> Vec<Event> {
@@ -2282,6 +2313,9 @@ impl Fps {
     fn tic(&mut self) {
         self.time += 1;
         let c = self.cmd();
+        for s in std::mem::take(&mut self.incoming) {
+            self.take_shot(s);
+        }
         self.sync_portal();
         if self.world == World::Level {
             self.lvl.away = false;
@@ -2316,11 +2350,40 @@ impl Fps {
             self.wsx = 1.0 + bob * ang.cos();
             self.wsy = 32.0 + bob * ang.sin().abs();
         }
+        if self.lvl.player.dead && !self.dead_seen {
+            self.events.push(Event::Died); // (the room's mutiny: you lie there, they stand round you)
+        }
+        self.dead_seen = self.lvl.player.dead;
         self.gun_tic();
         self.puffs.retain_mut(|f| {
             f.t += 1;
             f.t < 16
         });
+    }
+    // the mutiny (room.js, hardcore): a shot at you from one of them, from where it stands. Doom's shotgun from there;
+    // wide, a puff past you; else Doom's damage (the pain, the face, the red)
+    fn take_shot(&mut self, s: Incoming) {
+        let (w, h, wall) = self.units();
+        let (sx, sy) = (s.x * U, s.y * U);
+        let (dx, dy) = (self.me.x - sx, self.me.y - sy);
+        let d = dx.hypot(dy);
+        let d = if d == 0.0 { 1.0 } else { d };
+        let office = self.world == World::Office;
+        let vol = if office { if d < 160.0 { 1.0 } else { 0.15f64.max((1200.0 - d) / 1040.0) } } else { 0.3 };
+        let pan = 0.75 * ((sy - self.me.y).atan2(sx - self.me.x) - self.me.a).sin();
+        self.snd("DSSHOTGN", vol, pan, Origin::Mutiny((s.x * 1000.0).round() as i64));
+        if !office || self.lvl.player.dead {
+            return;
+        }
+        if !s.hit {
+            let k = (d + 40.0 + self.rng.random() * 60.0) / d;
+            let x = (sx + dx * k + (self.rng.random() - 0.5) * 30.0).clamp(4.0, w - 4.0);
+            let y = (sy + dy * k + (self.rng.random() - 0.5) * 30.0).clamp(wall + 2.0, h - 4.0);
+            let z = 14.0 + self.rng.random() * 36.0;
+            self.puffs.push(Puff { x, y, z, t: 0, blood: false });
+            return;
+        }
+        self.lvl.damage(Who::Player, s.dmg, None);
     }
     fn level_heard(&mut self) {
         for h in std::mem::take(&mut self.lvl.sounds) {
@@ -2511,7 +2574,8 @@ impl Fps {
             }
     }
     fn respawn(&mut self) {
-        self.back_home(false)
+        self.back_home(false);
+        self.events.push(Event::Respawn);
     }
     fn exit_level(&mut self) {
         self.back_home(true)
@@ -2610,6 +2674,10 @@ impl Fps {
         } else if p.bonuscount > 0 {
             pal = 8 + 4.min((p.bonuscount + 7) >> 3);
         }
+        if p.dead {
+            pal = pal.max(3);
+            self.died();
+        }
         let rgb = self.wad.rgb.get(pal as usize).unwrap_or(&self.wad.rgb[0]);
         for (o, &i) in self.frame.px.iter_mut().zip(self.view.fb.iter()) {
             *o = rgb[i as usize];
@@ -2634,6 +2702,33 @@ impl Fps {
             && !m.draw(out, now) {
                 self.melt = None;
             }
+    }
+    /// dead: a dark band across the view, YOU DIED in it, then how to come back
+    fn died(&mut self) {
+        let t = self.lvl.time - self.lvl.player.dead_at;
+        if t < 18 {
+            return;
+        }
+        let (k, txt) = (6 * S, "YOU DIED");
+        let y0 = jround(VH as f64 / 2.0 - 5.0 * k as f64 / 2.0) as i32 - 8 * S;
+        for y in (y0 - 7 * S)..(y0 + 5 * k + if t > 35 { 19 } else { 7 } * S) {
+            if !(0..SH).contains(&y) {
+                continue;
+            }
+            for x in 0..SW {
+                let i = (y * SW + x) as usize;
+                self.view.fb[i] = self.wad.cmap[27 * 256 + self.view.fb[i] as usize];
+            }
+        }
+        let x0 = jround(CX - crate::font::tiny_w(txt) as f64 * k as f64 / 2.0) as i32;
+        let (shadow, red) = (self.wad.nearest(40, 0, 0), self.wad.nearest(200, 30, 24));
+        self.words(txt, x0 + S, y0 + S, shadow, k);
+        self.words(txt, x0, y0, red, k);
+        if t > 35 {
+            let again = "CLICK TO RESPAWN";
+            let white = self.wad.nearest(232, 232, 238);
+            self.words(again, jround(CX - crate::font::tiny_w(again) as f64 * S as f64 / 2.0) as i32, y0 + 5 * k + 7 * S, white, S);
+        }
     }
     fn help(&mut self) {
         let c = self.wad.nearest(190, 190, 200);

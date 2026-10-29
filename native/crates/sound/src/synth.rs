@@ -24,7 +24,7 @@ impl Rng {
 }
 
 /// every sound there is, and how loud it is (each one's `vol` in sound.js)
-pub const SOUNDS: [(&str, f64); 23] = [
+pub const SOUNDS: [(&str, f64); 24] = [
     ("ask", 0.16),
     ("beam", 0.1),
     ("door", 0.2),
@@ -47,6 +47,7 @@ pub const SOUNDS: [(&str, f64); 23] = [
     ("wreck", 0.38),
     ("thud", 0.16),
     ("win", 0.13),
+    ("died", 0.2),
     ("lose", 0.12),
 ];
 
@@ -902,6 +903,12 @@ pub fn synth(name: &str, rate: u32, dur: Option<f64>, seed: u64) -> Option<Vec<f
                     None,
                 );
             }
+        }
+        "died" => {
+            // you, shot (the mutiny): down and out
+            tone(d, t, Tone { f: 196., f2: Some(49.), dur: 1.6, wave: Wave::Triangle, vol: 0.9, ..TONE }, None);
+            tone(d, t + 0.05, Tone { f: 98., f2: Some(30.), dur: 1.8, vol: 0.6, ..TONE }, None);
+            hiss(d, t, Hiss { dur: 0.7, kind: Filter::Lowpass, f: 500., f2: Some(120.), vol: 0.4, ..HISS });
         }
         "lose" => {
             for (i, f) in [392., 349., 262.].into_iter().enumerate() {

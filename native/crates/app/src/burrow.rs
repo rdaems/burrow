@@ -165,6 +165,15 @@ impl Burrow {
                                 let k = if v.is_empty() { b.state.furniture.iter().find(|k| k.starts_with("pair")).cloned().unwrap_or_default() } else { v.to_string() };
                                 b.act(json!({"kind": "pairOpen", "key": k}), window, cx);
                             }
+                            // the mutiny's end in the demo (hardcore): you shot, three of them round you
+                            "dead" => {
+                                b.hub.settings(&[("hardcore", true)]);
+                                b.state.settings.hardcore = true;
+                                let inp = b.input();
+                                let mut out = Output::default();
+                                b.room.debug_dead(&inp, &mut out);
+                                b.after(out, window, cx);
+                            }
                             "view" => {
                                 if let Some(kind) = ViewKind::parse(v) {
                                     b.open_view(kind, window, cx);
@@ -379,6 +388,7 @@ impl Burrow {
             hl_shell,
             still: reduce_motion(),
             fps: self.fps.is_some(),
+            fps_level: self.fps.as_ref().is_some_and(|r| r.fps.in_level()),
         }
     }
 

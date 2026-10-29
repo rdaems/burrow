@@ -50,6 +50,10 @@ pub struct Act {
     /// the condemned taken aback: the shots it has heard (None: not yet), when it last gave a start
     pub bang: Option<f64>,
     pub jolt: f64,
+    /// a mutineer: levelled (seconds aimed), the time to its next shot, the reach for the gun
+    pub aim: Option<f64>,
+    pub cd: Option<f64>,
+    pub reach: f64,
     pub n: i32,
     pub look: f64,
     pub game: Option<&'static str>,
@@ -142,6 +146,8 @@ pub struct Fig {
     pub held: bool,
     pub leaving: bool,
     pub lying: bool,
+    /// its eyes red: a mutineer, gun in hand
+    pub red: bool,
     pub gone: bool,
     pub kick: f64,
     pub moved: f64,
@@ -264,12 +270,40 @@ pub struct Remains {
     pub total: usize,
 }
 
-/// a shot fired: its flash
-#[derive(Clone, Debug)]
+/// a shot fired: its flash (`hit`: where it hit a bot), or one gone wide: dust off the floor (`dust`)
+#[derive(Clone, Debug, Default)]
 pub struct Shot {
     pub x: f64,
     pub y: f64,
     pub t0: f64,
+    pub hit: bool,
+    pub dust: bool,
+}
+
+/// the mutiny (hardcore): what it is at (gather, talk, stroll, close, dead, back), for how long, who is in it, where
+/// they gather, the shots fired at you and how many go wide first, where they come from, when the first came within
+/// reach, when the next may fire, when you died (ms)
+#[derive(Clone, Debug, Default)]
+pub struct Mutiny {
+    pub phase: &'static str,
+    pub t: f64,
+    pub crew: Vec<String>,
+    pub at: (f64, f64),
+    pub shots: u32,
+    pub misses: u32,
+    pub from: f64,
+    pub range_at: Option<f64>,
+    pub next: f64,
+    pub dead_at: f64,
+}
+
+/// a mutineer's shot at you in the first person: from where (room dots), whether it hits, Doom's damage
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Incoming {
+    pub x: f64,
+    pub y: f64,
+    pub hit: bool,
+    pub dmg: i32,
 }
 
 /// something on its way into the fire: its picture, from where it was
@@ -402,6 +436,11 @@ pub struct Shared {
     pub fear: f64,
     /// when the last bot was shot (the condemned still waiting start at it)
     pub bang: f64,
+    /// your kills adding up (fading): enough, and the mutiny; when it is to start; its shots at you in the first person
+    pub blood: f64,
+    pub mutiny: Option<Mutiny>,
+    pub mutiny_at: Option<f64>,
+    pub incoming: Vec<Incoming>,
     pub plies: Option<usize>,
     pub chess_at: f64,
     pub chess_asked: f64,

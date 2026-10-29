@@ -4,7 +4,7 @@
 
 use crate::burrow::Burrow;
 use crate::kit::{self, col};
-use gpui::{AnyElement, App, Bounds, Context, Corners, IntoElement, ParentElement, Pixels, RenderImage, Styled, Window, canvas, div, px, rgb, prelude::*};
+use gpui::{AnyElement, App, Bounds, Context, Corners, IntoElement, ParentElement, Pixels, RenderImage, Styled, Window, canvas, div, px, rgb};
 use std::sync::Arc;
 
 /// the picture of the painting, and the painting's version (and the scale) it shows

@@ -342,7 +342,7 @@ impl Room {
             let l = self.last.clone();
             let mut t = Tick { inp, out, dice: &mut self.dice, fresh: &mut self.fresh, moving_fire: false, w: self.size.w };
             if let Some(l) = l {
-                think::shoot(&mut self.w, &l, id, &mut t);
+                think::shoot(&mut self.w, &l, id, "you", &mut t);
             }
         }
         ok
@@ -370,10 +370,52 @@ impl Room {
     }
     /// out of the first person: you stand where you went, the gun put away
     pub fn left_fps(&mut self) {
+        let dead = crate::mutiny::dead(&self.w);
         if let Some(f) = self.w.get_mut("you") {
             f.hunt = None;
             end(f);
             f.carry = None;
+            if dead {
+                f.act = crate::world::Act::new("dead"); // (shot in there: you lie there here too)
+                f.lying = true;
+            }
+        }
+    }
+    /// the mutiny's shots at you since the last frame, for the first person to take
+    pub fn take_incoming(&mut self) -> Vec<crate::world::Incoming> {
+        std::mem::take(&mut self.w.s.incoming)
+    }
+    /// the first person says you are dead (of the mutiny's shots, while they close in)
+    pub fn died(&mut self, inp: &Input, out: &mut Output) {
+        if self.w.s.mutiny.as_ref().is_some_and(|m| m.phase == "close") {
+            let mut t = Tick { inp, out, dice: &mut self.dice, fresh: &mut self.fresh, moving_fire: false, w: self.size.w };
+            crate::mutiny::die(&mut self.w, &mut t);
+        }
+    }
+    /// (debug) the mutiny over you: up to three idle bots round you, red-eyed, guns levelled, and you shot
+    pub fn debug_dead(&mut self, inp: &Input, out: &mut Output) {
+        let Some((yx, yy)) = self.w.get("you").map(|f| (f.x, f.y)) else { return };
+        let crew: Vec<String> = self.w.folk.iter().filter(|f| think::idle_bot(f)).take(3).map(|f| f.id.clone()).collect();
+        for (k, id) in crew.iter().enumerate() {
+            let f = self.w.get_mut(id).unwrap();
+            let a = -0.9 + k as f64 * 0.9;
+            (f.x, f.y) = (yx + a.cos() * 40.0, yy + a.sin() * 24.0);
+            f.act = crate::world::Act::new("mutiny");
+            f.carry = Some("gun");
+            f.red = true;
+        }
+        self.w.s.mutiny = Some(crate::world::Mutiny { phase: "close", crew, ..Default::default() });
+        let mut t = Tick { inp, out, dice: &mut self.dice, fresh: &mut self.fresh, moving_fire: false, w: self.size.w };
+        crate::mutiny::die(&mut self.w, &mut t);
+    }
+    /// RESPAWN (the room's, or the first person's after it died there): in by the door, the guns back
+    pub fn respawn(&mut self, inp: &Input) {
+        if self.w.s.mutiny.is_none() {
+            return;
+        }
+        let r = self.dice.next();
+        if let Some(l) = self.last.clone() {
+            crate::mutiny::respawn(&mut self.w, &l, inp.fps, r);
         }
     }
     /// where the first person starts: where you stand (by the closet, the gun just taken), looking into the room

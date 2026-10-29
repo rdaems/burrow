@@ -19,6 +19,12 @@ impl Room {
     pub fn pointer_down(&mut self, x: f64, y: f64, shift: bool) {
         self.pointer = Some((x, y));
         let h = self.hots.iter().rev().find(|h| self.over(h.r[0], h.r[1], h.r[2], h.r[3])).map(|h| h.action.clone());
+        if crate::mutiny::dead(&self.w) {
+            // dead: only RESPAWN
+            let respawn = h.filter(|a| a["kind"] == "respawn");
+            self.press = respawn.map(|a| Press { x, y, action: Some(a), bot: None, piece: None, dog: false, shift: false });
+            return;
+        }
         let dog = self.dog_rect.is_some_and(|r| self.over(r[0], r[1], r[2], r[3])) && self.hovered.is_none();
         let bot = if dog { None } else { self.hovered.as_ref().filter(|hv| !hv.seat).and_then(|hv| self.w.get(&hv.id)).filter(|f| !f.staff).map(|f| f.id.clone()) };
         let piece = if dog { None } else { self.piece_at(self.pointer) };
@@ -117,6 +123,12 @@ impl Room {
     }
 
     pub fn pointer_up(&mut self, inp: &Input, out: &mut Output, client: (f64, f64)) {
+        if crate::mutiny::dead(&self.w) {
+            if self.press.take().and_then(|p| p.action).is_some_and(|a| a["kind"] == "respawn") {
+                self.respawn(inp);
+            }
+            return;
+        }
         // (the dice and the fresh ones lent to the tick, so the room stays free to look at itself)
         let mut dice = std::mem::replace(&mut self.dice, Dice::new(1));
         let mut fresh = std::mem::take(&mut self.fresh);

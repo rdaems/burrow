@@ -180,6 +180,8 @@ pub enum Op {
     Copy,
     /// adds light
     Lighter,
+    /// darkens by the source's colour (canvas's "multiply")
+    Multiply,
 }
 
 #[inline]
@@ -202,6 +204,20 @@ fn comp(op: Op, d: [u8; 4], s: [u8; 4]) -> [u8; 4] {
         Op::DestinationIn => {
             let a = d[3] as u32 * s[3] as u32 / 255;
             [d[0], d[1], d[2], a as u8]
+        }
+        Op::Multiply => {
+            // the W3C blending: co = cs·as·(1 − ad) + cd·ad·(1 − as) + as·ad·cs·cd, then out of premultiplied
+            let (sa, da) = (s[3] as f64 / 255.0, d[3] as f64 / 255.0);
+            let a = sa + da * (1.0 - sa);
+            if a <= 0.0 {
+                return [0; 4];
+            }
+            let ch = |s: u8, d: u8| {
+                let (cs, cd) = (s as f64 / 255.0, d as f64 / 255.0);
+                let co = cs * sa * (1.0 - da) + cd * da * (1.0 - sa) + sa * da * cs * cd;
+                (co / a * 255.0).round().clamp(0.0, 255.0) as u8
+            };
+            [ch(s[0], d[0]), ch(s[1], d[1]), ch(s[2], d[2]), (a * 255.0).round() as u8]
         }
         Op::Lighter => {
             let sa = s[3] as u32;

@@ -319,6 +319,7 @@ mod tests {
             "wreck" => 1.45,
             "thud" => 0.17,
             "win" => 3. * 0.11 + 0.45 + 0.05,
+            "died" => 0.05 + 1.8 + 0.05,
             "lose" => 2. * 0.22 + 0.6 + 0.05,
             _ => unreachable!(),
         }
@@ -326,7 +327,7 @@ mod tests {
 
     #[test]
     fn every_sound_is_made_and_heard() {
-        assert_eq!(SOUNDS.len(), 23);
+        assert_eq!(SOUNDS.len(), 24);
         for (name, _) in SOUNDS {
             let s = synth(name, RATE, Some(2.5), 7).unwrap();
             let want = (ends(name) * RATE as f64).round() as usize;

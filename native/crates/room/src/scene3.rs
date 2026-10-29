@@ -70,7 +70,7 @@ impl Room {
                 let mut fx = im.ctx();
                 fx.set_transform(2., 0., 0., 2., 0., 0.);
                 let shade = Color::rgba(0, 0, 0, 77);
-                let mut blob = |fx: &mut pix::Ctx, cx: f64, cy: f64, rx: f64, ry: f64| {
+                let blob = |fx: &mut pix::Ctx, cx: f64, cy: f64, rx: f64, ry: f64| {
                     let mut p = pix::Path::new();
                     p.ellipse(cx, cy, rx, ry, 0., std::f64::consts::TAU);
                     fx.fill_path(&p, shade);
@@ -174,7 +174,7 @@ impl Room {
                 let f = l.fire.as_ref().unwrap();
                 let fl = th.props.flames((t * 8.0).floor() as u32 % 4, !self.w.s.burning.is_empty() || now - self.w.s.flare < 1500.0);
                 sc.things.push(Thing { x: (f.x0 + 24) as f64, y: (f.y1 - 12) as f64, pic: Some(Face::whole(fl.tex.clone())), ax: fl.ax, ay: fl.ay, res: fl.res, piece: Some(key.clone()), label: Some("fire".into()), ..Default::default() });
-                sc.lights.push(Light { x: (f.x0 + 24) as f64, y: (f.y1 - 12) as f64, z: 9.0, r: 140.0, col: [1.0, 0.8, 0.58], k: 0.9, flicker: true });
+                sc.lights.push(Light { x: (f.x0 + 24) as f64, y: (f.y1 - 12) as f64, z: 9.0, r: 140.0, col: [1.0, 0.8, 0.58], k: 0.9, flicker: true, muzzle: false });
                 sc.solid.push([(f.x0 + 3) as f64, (f.y1 - 20) as f64, (f.x1 - 3) as f64, (f.y1 - 3) as f64]);
                 continue;
             }
@@ -269,7 +269,7 @@ impl Room {
                 continue;
             }
             let b = f.b.as_ref().unwrap();
-            let rob = Robot { seed: f.seed.clone(), color: color_of(f).hex(), femme: f.staff, arms: f.arms.to_string(), legs: f.legs.to_string() };
+            let rob = Robot { seed: f.seed.clone(), color: color_of(f).hex(), femme: f.staff, arms: f.arms.to_string(), legs: f.legs.to_string(), red: f.red };
             let name = Some(b.name.clone());
             let bot = (!f.human).then(|| f.id.clone());
             if f.lying {
@@ -304,7 +304,7 @@ impl Room {
             for (i, p) in r.parts.iter().enumerate() {
                 let mut th_ = Thing { key: Some(format!("{id}/{i}")), rem: (!r.back).then(|| id.clone()), name: Some(r.name.clone()), x: p.x, y: p.y, z: p.z, flip: (p.spin.floor() as i64) % 2 == 1, ..Default::default() };
                 if p.img.is_some() {
-                    let rob = Robot { seed: r.seed.clone(), color: r.color.unwrap_or(Color::rgb(0x8b93ad)).hex(), femme: r.staff, arms: "down".into(), legs: "stand".into() };
+                    let rob = Robot { seed: r.seed.clone(), color: r.color.unwrap_or(Color::rgb(0x8b93ad)).hex(), femme: r.staff, arms: "down".into(), legs: "stand".into(), red: false };
                     let fr = th.props.figure(&Figure::Robot(rob), 0);
                     let s = fr.res;
                     let sx = (fr.ax + (p.sx as f64 - 11.0) * s).round().max(0.0);
@@ -348,6 +348,10 @@ impl Room {
         }
         if let Some(bl) = &self.w.s.ball {
             sc.things.push(Thing { key: Some("ball".into()), x: bl.x, y: bl.y, z: bl.h, pic: Some(Face::whole(ball())), ax: 6.0, ay: 12.0, res: 4.0, ..Default::default() });
+        }
+        for sh in self.w.s.shots.iter().filter(|sh| !sh.hit && !sh.dust && inp.now - sh.t0 < 140.0) {
+            // a mutineer's shot lights up round it
+            sc.lights.push(Light { x: sh.x, y: sh.y + 9.0, z: 12.0, muzzle: true, ..Default::default() });
         }
         sc
     }

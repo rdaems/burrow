@@ -86,6 +86,8 @@ pub struct Input {
     pub still: bool,
     /// in the first person (fps)
     pub fps: bool,
+    /// in the first person and through the mysterious door, in the level (the mutiny waits for you at it)
+    pub fps_level: bool,
 }
 
 impl Input {

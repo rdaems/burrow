@@ -233,3 +233,49 @@ fn the_painting_grows_only_while_a_robot_paints_at_the_easel() {
     }
     assert!(painted > 0, "nobody painted in twelve minutes");
 }
+
+#[test]
+fn shoot_three_and_the_rest_come_for_you_then_respawn_ends_it() {
+    let mut s = demo();
+    s.furniture.push("booth0".into());
+    s.settings.hardcore = true;
+    let mut inp = Input { state: s.clone(), now: 0.0, hour: 14, ..Default::default() };
+    let mut room = Room::new(13, 0.0);
+    room.resize(&inp, 820.0);
+    run(&mut room, &mut inp, 5.0);
+    let idle: Vec<String> = s.bots.iter().filter(|b| !b.busy && !b.waiting).map(|b| b.id.clone()).collect();
+    for id in &idle[..3] {
+        let mut out = Output::default();
+        assert!(room.shoot(&inp, &mut out, id), "{id} can be shot");
+        run(&mut room, &mut inp, 2.0);
+    }
+    let mut seen = std::collections::HashSet::new();
+    for _ in 0..12 * 180 {
+        run(&mut room, &mut inp, 1.0 / 12.0);
+        if let Some(m) = &room.w.s.mutiny {
+            seen.insert(m.phase);
+            if m.phase == "stroll" || m.phase == "close" {
+                for id in &m.crew {
+                    let f = room.w.get(id).unwrap();
+                    assert_eq!(f.red, f.carry == Some("gun"), "{id}: red eyes with the gun, and only then");
+                }
+            }
+        }
+        if burrow_room::mutiny::dead(&room.w) {
+            break;
+        }
+    }
+    for p in ["gather", "talk", "stroll", "close"] {
+        assert!(seen.contains(p), "never {p}: {seen:?}");
+    }
+    assert!(burrow_room::mutiny::dead(&room.w), "they never got you");
+    let you = room.w.get("you").unwrap();
+    assert!(you.lying && you.act.kind == "dead");
+    // RESPAWN: in by the door, the fear gone
+    room.respawn(&inp);
+    assert!(!burrow_room::mutiny::dead(&room.w));
+    assert_eq!(room.w.s.fear, 0.0);
+    run(&mut room, &mut inp, 40.0);
+    assert!(room.w.s.mutiny.is_none(), "the guns went back, it is over");
+    assert!(room.w.folk.iter().all(|f| !f.red && (f.human || f.carry != Some("gun"))), "nobody kept a gun");
+}

@@ -3,7 +3,7 @@
 //! spots are collected while drawing: what is under the pointer and what a click there does.
 
 use crate::avatar::c;
-use crate::figure::{Arms, Legs, SH, SW, body, halo};
+use crate::figure::{Arms, Legs, SH, SW, halo};
 use crate::font::{tiny, tiny_w};
 use crate::io::{Input, Output};
 use crate::layout::{Layout, WALL, jround};
@@ -90,7 +90,6 @@ impl Room {
     }
 
     fn draw_over(&mut self, ctx: &mut Ctx, inp: &Input, out: &mut Output, l: &Layout) {
-        let t = self.w.s.t;
         // a message on its way: a beam in the sender's colour, up from its antenna, across the room over everyone's
         // heads, down into the receiver's antenna; its bright head leads, its tail follows. Its ends: a figure's
         // antenna, or the telephone on a pair table (over its handset)
@@ -141,6 +140,18 @@ impl Room {
         for sh in self.w.s.shots.clone() {
             let k = (now - sh.t0) / 700.0;
             let (x, y) = (sh.x as i32, sh.y as i32);
+            if sh.dust {
+                // one gone wide: dust off the floor, two chips flying
+                let u = jround(k * 5.0);
+                ctx.set_alpha(1.0 - k);
+                ctx.rect(x - 2 - u, y - 2 - u, 5 + 2 * u, 2 + u, Color::rgb(0xb9a48a));
+                ctx.set_alpha(1.0);
+                if k < 0.5 {
+                    ctx.rect(x - 3 - jround(k * 12.0), y - 3 - jround(k * 10.0), 1, 1, Color::rgb(0xe8d6b8));
+                    ctx.rect(x + 3 + jround(k * 10.0), y - 2 - jround(k * 12.0), 1, 1, Color::rgb(0xe8d6b8));
+                }
+                continue;
+            }
             if k < 0.3 {
                 let r = if k < 0.15 { 4 } else { 3 };
                 ctx.rect(x - r, y, 2 * r + 1, 1, Color::rgb(0xfff6c0));
@@ -214,8 +225,10 @@ impl Room {
             };
             self.hots.push(Hot { r: [-1e9, -1e9, 1e9, 1e9], action });
         }
+        let dead = crate::mutiny::dead(&self.w);
         if let Some(tip) = self.tip.clone()
             && self.carrying.is_none()
+            && !dead
         {
             let tw = tiny_w(&tip.text);
             let lx = jround(((self.size.w - tw - 2) as f64).min(tip.x - tw as f64 / 2.0).max(2.0));
@@ -223,6 +236,45 @@ impl Room {
             ctx.rect(lx - 3, ly - 3, tw + 6, 11, c::INK);
             ctx.rect(lx - 2, ly - 2, tw + 4, 9, c::INK2);
             tiny(ctx, &tip.text, lx as f64, ly as f64, c::STEEL4);
+        }
+        // you died (the mutiny): the room goes red, a dark band across it with YOU DIED, and RESPAWN under it
+        if dead {
+            let since = now - self.w.s.mutiny.as_ref().map_or(now, |m| m.dead_at);
+            let (w, h) = (self.size.w, self.size.h);
+            let k = (since / 1200.0).min(1.0);
+            ctx.save();
+            ctx.set_alpha(k);
+            ctx.set_op(Op::Multiply);
+            ctx.rect(0, 0, w, h, Color::rgb(0xe0473a));
+            ctx.restore();
+            ctx.set_alpha(0.3 * k);
+            ctx.rect(0, 0, w, h, Color::rgb(0x4a0004));
+            ctx.set_alpha(1.0);
+            if since > 900.0 {
+                let (s, text) = (4, "YOU DIED");
+                let tw = tiny_w(text) * s;
+                let cy = jround((WALL + h) as f64 / 2.0) - 18;
+                let x0 = jround((w - tw) as f64 / 2.0);
+                ctx.set_alpha(0.72);
+                ctx.rect(0, cy - 9, w, 5 * s + 18, Color::rgb(0x000000));
+                ctx.set_alpha(1.0);
+                for (dx, col) in [(1, Color::rgb(0x3a0306)), (0, Color::rgb(0xc8261f))] {
+                    ctx.save();
+                    ctx.translate((x0 + dx) as f64, (cy + dx) as f64);
+                    ctx.scale(s as f64, s as f64);
+                    tiny(ctx, text, 0.0, 0.0, col);
+                    ctx.restore();
+                }
+                let bt = "RESPAWN";
+                let (bw, bh) = (tiny_w(bt) + 12, 11);
+                let (bx, by) = (jround((w - bw) as f64 / 2.0), cy + 5 * s + 16);
+                let on = self.over((bx - 1) as f64, (by - 1) as f64, (bx + bw + 1) as f64, (by + bh + 1) as f64);
+                crate::draw::box_(ctx, bx, by, bw, bh, c::STEEL3, if on { GOLD } else { c::INK });
+                ctx.rect(bx, by, bw, 1, c::STEEL4);
+                ctx.rect(bx, by + bh - 1, bw, 1, c::STEEL1);
+                tiny(ctx, bt, (bx + 6) as f64, (by + 3) as f64, c::INK);
+                self.hots.push(Hot { r: [(bx - 1) as f64, (by - 1) as f64, (bx + bw + 1) as f64, (by + bh + 1) as f64], action: serde_json::json!({"kind": "respawn"}) });
+            }
         }
         let id = match &self.held {
             Some(h) => Some(h.clone()), // (a bot carried stays lit: its chair, its session)
@@ -259,13 +311,14 @@ impl Room {
         if !f.held {
             ctx.rect(x - 5, y, 10, 1, Color::rgba(0, 0, 0, 102));
         }
-        let im = body(
+        let im = crate::figure::body_red(
             &f.seed,
             color_of(f),
             if f.held { Arms::Up } else { Arms::parse(f.arms) },
             if f.held { Legs::Walk1 } else { Legs::parse(f.legs) },
             f.human,
             f.staff,
+            f.red,
         );
         // its outline: gold while the pointer is on it or on its session, faint while its session is open
         let over_it = self.over((x0 + 4) as f64, y0 as f64, (x0 + 18) as f64, (y + 1) as f64);
@@ -282,7 +335,7 @@ impl Room {
         } else {
             None
         };
-        let fear = if !f.human && !f.staff && !f.held { if f.act.kind == "condemned" && f.act.panic { 1.0 } else { self.w.s.fear } } else { 0.0 };
+        let fear = if !f.human && !f.staff && !f.held { if f.act.kind == "condemned" && f.act.panic { 1.0 } else if f.act.kind == "mutiny" { 0.0 } else { self.w.s.fear } } else { 0.0 };
         let shake = if fear > 0.2 && (t * 15.0 + f.z * 7.0).floor() as i64 % (if fear > 0.6 { 2 } else { 4 }) == 0 {
             if (t * 30.0).floor() as i64 % 2 != 0 { 1.0 } else { -1.0 }
         } else {
