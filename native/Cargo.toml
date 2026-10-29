@@ -3,7 +3,7 @@
 #   app/   the GPUI shell: the window, events, painting the room's buffer, terminals, panels
 [workspace]
 resolver = "3"
-members = ["crates/pix", "crates/model", "crates/room", "crates/core", "crates/fps", "crates/games", "crates/sound", "crates/app"]
+members = ["crates/pix", "crates/model", "crates/room", "crates/core", "crates/fps", "crates/games", "crates/sound", "crates/term", "crates/app"]
 
 [workspace.package]
 version = "0.2.0"

@@ -1,0 +1,10 @@
+[package]
+name = "burrow-term"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "a terminal in a GPUI element: alacritty_terminal's grid, drawn and fed (what xterm.js was in web/)"
+
+[dependencies]
+gpui = { version = "0.2.2", default-features = false, features = ["font-kit", "runtime_shaders"] }
+alacritty_terminal = "0.26.0"
