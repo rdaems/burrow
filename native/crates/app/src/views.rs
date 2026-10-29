@@ -117,10 +117,13 @@ pub fn closed(b: &mut Burrow, kind: ViewKind, window: &mut Window, cx: &mut Cont
 /// keys while the view is open: Esc closes it, the games take theirs
 pub fn key(b: &mut Burrow, e: &KeyDownEvent, window: &mut Window, cx: &mut Context<Burrow>) {
     if e.keystroke.key == "escape" {
-        // the view goes; with none, the focused tile
+        // the view goes; with none, the focused tile, but only while nothing else has the keys (as the page asked
+        // that the body had the focus): Esc in a terminal is Claude Code's, in a field the field's
         if b.view.is_some() {
             b.close_view(window, cx);
-        } else if let Some(t) = b.tiles.focused() {
+        } else if b.focus.is_focused(window)
+            && let Some(t) = b.tiles.focused()
+        {
             b.close_tile(t, window, cx);
         }
         return;

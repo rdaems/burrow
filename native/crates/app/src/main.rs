@@ -18,6 +18,7 @@ use gpui::{App, AppContext, Application, Bounds, TitlebarOptions, WindowBackgrou
 use std::borrow::Cow;
 
 fn main() {
+    fpsview::release_on_panic();
     let args: Vec<String> = std::env::args().collect();
     if let Some(i) = args.iter().position(|a| a == "--icon") {
         // for macos/bundle.sh

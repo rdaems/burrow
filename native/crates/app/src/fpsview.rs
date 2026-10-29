@@ -19,6 +19,31 @@ pub struct FpsRun {
     ctrl: bool,
 }
 
+/// the pointer is let go whatever way the first person ends (left, dropped, the app quitting)
+impl Drop for FpsRun {
+    fn drop(&mut self) {
+        lock(false);
+    }
+}
+
+/// a panic must not leave the mouse held and hidden for the rest of the session: let it go first
+pub fn release_on_panic() {
+    let before = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        if LOCKED.load(std::sync::atomic::Ordering::Relaxed) {
+            lock(false);
+        }
+        before(info);
+    }));
+}
+
+/// let the pointer go, if it is held (the app quitting: no destructors run then)
+pub fn unlock() {
+    lock(false);
+}
+
+static LOCKED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// the melt over the room once you are out
 pub struct Leaving {
     pub melt: Melt,
@@ -34,6 +59,12 @@ unsafe extern "C" {
 fn lock(on: bool) {
     if std::env::var_os("BURROW_SHOT").is_some() {
         return; // a picture of itself: the mouse is someone else's
+    }
+    if !on && !LOCKED.swap(false, std::sync::atomic::Ordering::Relaxed) {
+        return; // let go already
+    }
+    if on {
+        LOCKED.store(true, std::sync::atomic::Ordering::Relaxed);
     }
     unsafe {
         use objc::{class, msg_send, sel, sel_impl};
@@ -102,7 +133,7 @@ impl Burrow {
     /// out of it: the room as it is, the melt over it, you where you went
     pub fn stop_fps(&mut self, cx: &mut Context<Self>) {
         let Some(mut run) = self.fps.take() else { return };
-        lock(false);
+        lock(false); // (its drop would too)
         self.room.left_fps();
         if let Some(melt) = run.fps.take_leave_melt() {
             self.leaving = Some(Leaving { melt, img: Image::new(1, 1), picture: None });

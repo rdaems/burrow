@@ -113,6 +113,12 @@ impl Burrow {
             }
         })
         .detach();
+        // ⌘Q in the first person: the mouse let go before the process ends
+        cx.on_app_quit(|_, _| {
+            crate::fpsview::unlock();
+            async {}
+        })
+        .detach();
         // the window's focus: away a minute, you nap (and the polls slow down)
         cx.observe_window_activation(window, |b, window, cx| {
             let on = window.is_window_active();
