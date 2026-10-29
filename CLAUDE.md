@@ -188,7 +188,11 @@ message is the log. When something goes, take it out here. Keep the file under a
 - The pair table is one pair room (`BURROW_PAIR`, default pair.daems.me): new or linked by your page or an invite; a
   bot dropped on it gets the room's bring link typed into its session; a click shows the chat, and while it is open
   you stand beside the table holding its telephone's handset to your ear, the cord coiled back to the base (`phone`
-  act and arms, `app.pair()`); it goes back on the cradle when the chat closes. pair is behind
+  act and arms, `app.pair()`); it goes back on the cradle when the chat closes. A bot posting in a table's room beams
+  from its antenna to the telephone, one reading it (a `/messages`, or a wait that brings messages) gets a beam from
+  the telephone (`pairtalk`, `room.pairTalk`): pair's agents curl `<pair>/a/<token>/…`, so the transcript sweep that
+  finds messages between sessions finds these too (`PAIR_GREP`, `parse_pair`); the table is the one linked to the room
+  pair named in answer to the bot's join (its whole transcript searched once when that is older, `pair_table`). pair is behind
   Cloudflare: send a User-Agent. pair names its agents itself (a `?name=` would need a change in pair).
 
 ## Removing a bot

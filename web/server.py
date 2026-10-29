@@ -40,8 +40,15 @@ PATH = 'PATH="$HOME/.local/bin:$HOME/.claude/local:/opt/homebrew/bin:/usr/local/
 # a message between sessions shows up in the receiver's transcript as a user turn with
 # "origin":{"kind":"peer","from":"uds:…","verifiedPeerPid":…,"msg_id":"…","name":"<sender>",…};
 # grep the last 4 MB of transcripts written in the last minute (a session can write a few hundred kB
-# right after the message) and print "<receiver session id> <origin…>" per message
-PEERS = r'''find ~/.claude/projects -maxdepth 2 -name '*.jsonl' -mmin -1 2>/dev/null | while IFS= read -r f; do s=${f##*/}; tail -c 4194304 "$f" | grep -o '"origin":{"kind":"peer"[^}]*' | sed "s|^|${s%.jsonl} |"; done'''
+# right after the message) and print "<receiver session id> <origin…>" per message.
+# The same grep finds a bot's traffic with a pair room: pair's agents talk with curl to <pair>/a/<token>/…, so a post
+# (/say) or a read (/messages) is a Bash tool call (its id), a wait that brings messages is pair's answer ending in
+# "last message #N … Next: reply if you have something to say"; and the answer to a join names the room ("Room: X")
+# and, further on, its token: which table it is (the one linked to that room)
+PAIR_GREP = r''' -e '"id":"toolu_[A-Za-z0-9]+","name":"Bash","input":\{"command":"curl[^"]*/a/[A-Za-z0-9_-]+/(say|messages)' -e 'last message #[0-9]+\\nNext: reply if you have something to say \(POST /say\), then keep listening:\\n  curl -s .https?://[^/]+/a/[A-Za-z0-9_-]+/wait' -e 'Room: [^\\"]*\\nYou are: ' -e 'curl -s .https?://[^/]+/a/[A-Za-z0-9_-]+/messages.\\n  Wait for new messages' '''
+PEERS = r'''find ~/.claude/projects -maxdepth 2 -name '*.jsonl' -mmin -1 2>/dev/null | while IFS= read -r f; do s=${f##*/}; tail -c 4194304 "$f" | grep -o -E -e '"origin":\{"kind":"peer"[^}]*' ''' + PAIR_GREP + r'''| sed "s|^|${s%.jsonl} |"; done'''
+# a session's whole transcript, for when it joined its pair room (longer ago than the last minutes): "<session> …"
+PAIR_JOIN = r'''for f in ~/.claude/projects/*/%s.jsonl; do [ -f "$f" ] && grep -o -E''' + PAIR_GREP + r'''"$f" | sed "s|^|%s |"; done'''
 
 # each background session's record (~/.claude/jobs/<id>/state.json): when it was last written (for a session
 # that is over: when it ended) and agent view's one-line summary of it; one grep, a `<path>:"<key>": "<value>"`
@@ -787,6 +794,32 @@ def field(s, key):
     return m.group(1) if m else None
 
 
+PAIR_SAY = re.compile(r'"id":"(toolu_[A-Za-z0-9]+)","name":"Bash","input":\{"command":"curl[^"]*/a/([A-Za-z0-9_-]+)/(say|messages)')
+PAIR_READ = re.compile(r'last message #(\d+)\\nNext: reply.*/a/([A-Za-z0-9_-]+)/wait')
+PAIR_ROOM = re.compile(r'Room: (.*)\\nYou are: ')
+PAIR_TOKEN = re.compile(r'/a/([A-Za-z0-9_-]+)/messages.\\n  Wait for new messages')
+
+
+def parse_pair(out):
+    """a bot's pair room traffic in the peers' grep: [(event id, session, token, "say" | "read")] (a post or read by its
+    tool call's id, a wait that brought messages by the last one's number), and {token: room name} from the joins"""
+    events, rooms, room = [], {}, {}
+    for line in out.splitlines():
+        session, _, t = line.partition(" ")
+        if m := PAIR_SAY.match(t):
+            events.append((m.group(1), session, m.group(2), "say" if m.group(3) == "say" else "read"))
+        elif m := PAIR_READ.match(t):
+            events.append((f"{session}:{m.group(2)}:{m.group(1)}", session, m.group(2), "read"))
+        elif m := PAIR_ROOM.match(t):
+            try:
+                room[session] = json.loads('"' + m.group(1) + '"')
+            except ValueError:
+                room[session] = m.group(1)
+        elif (m := PAIR_TOKEN.search(t)) and session in room:
+            rooms[m.group(1)] = room.pop(session)
+    return events, rooms
+
+
 def parse_peers(out, bots):
     """(msg_id, from, to) by bot id, for the messages between bots that are there now"""
     talks = []
@@ -815,6 +848,8 @@ class Hub:
         self.lock = threading.Lock()
         self.clients = []           # one queue per open page
         self.shells = {}            # (machine id, directory) → Shell: your terminal at that screen
+        self.pair_rooms = {}        # a pair agent's token → its room's name (from its join, `pair_table`)
+        self.pair_asked = {}        # token → when its join was last looked for in its whole transcript
         self.focused = True
         self.pokes = {}
         self.usage = None           # the account's limits, from Claude Code's own /usage here
@@ -1505,6 +1540,24 @@ class Hub:
             d, tree = self.folds.get((mid, b["cwd"]), (b["cwd"], ""))
             b["m"], b["unit"], b["tree"] = mid, unit(mid, d), tree
 
+    def pair_table(self, m, session, token):
+        """the pair table a bot's pair token belongs to: the one linked to its room, by the name pair gave in answer to
+        its join (looked for once in its whole transcript when the last minutes did not have it); with the room unknown,
+        the only table if there is one"""
+        tables = self.room.get("pair") or {}
+        if not tables:
+            return None
+        if token not in self.pair_rooms and time.time() - self.pair_asked.get(token, 0) > 600 and re.fullmatch(r"[0-9a-fA-F-]+", session or ""):
+            self.pair_asked[token] = time.time()
+            try:
+                self.pair_rooms.update(parse_pair(run(m, PAIR_JOIN % (session, session)))[1])
+            except Exception:
+                pass
+        name = self.pair_rooms.get(token)
+        if name is None:
+            return next(iter(tables)) if len(tables) == 1 else None
+        return next((k for k, v in tables.items() if v.get("room") == name), None)
+
     def watch(self, mid, poke):
         heard, first = set(), True
         while True:
@@ -1541,6 +1594,16 @@ class Hub:
                         heard.add(msg)
                         if not first:
                             self.push("talk", {"from": her(a), "to": her(b)})
+                events, rooms = parse_pair(peers)        # a bot talking in a pair room, or reading it: a beam to its table
+                self.pair_rooms.update(rooms)
+                for eid, session, token, kind in events:
+                    if eid in heard:
+                        continue
+                    heard.add(eid)
+                    b = None if first else next((b for b in bots + (list(self.mrows.values()) if not mid else []) if b.get("session") == session), None)
+                    key = b and self.pair_table(m, session, token)
+                    if key:
+                        self.push("pairtalk", {"id": her(b["id"]), "key": key, "dir": kind})
                 first = False
                 with self.lock:                  # what she asked to remove and is gone (or was not taken in ten minutes)
                     ids = {b["id"] for f in self.feeds.values() for b in f.get("bots", [])}

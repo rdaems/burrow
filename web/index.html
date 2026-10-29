@@ -230,6 +230,7 @@ es.addEventListener("state", (e) => {
 });
 es.addEventListener("digest", (e) => { digest = JSON.parse(e.data); for (const t of notesTiles()) { showWho(t); renderNotes(t); } room.draw(); });
 es.addEventListener("talk", (e) => { const t = JSON.parse(e.data); room.talk(t.from, t.to); });
+es.addEventListener("pairtalk", (e) => { const t = JSON.parse(e.data); room.pairTalk(t.id, t.key, t.dir); });   // a bot posting in a pair room, or reading it
 const focus = () => {
   const on = document.hasFocus() && !document.hidden;
   blurAt = on ? 0 : blurAt || performance.now();

@@ -505,8 +505,16 @@ function startRoom(cv, app) {
     if (dx || dy) for (const f of w.folk.values()) if (f.on === key && !f.held) { f.x += dx; f.y += dy; }
   }
 
-  // `from` sent `to` a message: a beam from its antenna to the other's, wherever they are
+  // `from` sent `to` a message: a beam from its antenna to the other's, wherever they are. A bot that posts in a pair
+  // room, or reads it, beams to the telephone on that room's table, or the table to it (`pairTalk`)
   const BEAM = 0.7;                          // seconds for it to cross the room
+  function pairTalk(id, key, dir) {
+    const w = world(), f = w.folk.get(id);
+    if (!f || !lastL || !lastL.pairs.some((p) => p.key === key)) return;
+    if (dir === "say") { stat(w, id).sent++; f.chat = Math.max(f.chat, 1); w.beams.push({ from: id, toTable: key, t: 0 }); }
+    else w.beams.push({ fromTable: key, to: id, t: 0 });
+    sfx("beam", f.x);
+  }
   function talk(from, to) {
     const w = world(), f = w.folk.get(from), g = w.folk.get(to);
     if (!f || !g || f === g) return;
@@ -553,7 +561,8 @@ function startRoom(cv, app) {
     }
     // messages under way: the beam reaches the other, who takes it in
     for (const bm of w.beams) { const was = bm.t; bm.t += dt; if (was < BEAM && bm.t >= BEAM) { const g = folk.get(bm.to); if (g) g.chat = Math.max(g.chat, 1); } }
-    w.beams = w.beams.filter((bm) => bm.t < BEAM + 0.4 && folk.has(bm.from) && folk.has(bm.to));
+    const table = (key) => L.pairs.some((p) => p.key === key);
+    w.beams = w.beams.filter((bm) => bm.t < BEAM + 0.4 && (bm.fromTable ? table(bm.fromTable) : folk.has(bm.from)) && (bm.toTable ? table(bm.toTable) : folk.has(bm.to)));
     // heard: the booth's hum stopping when the bot in it is taken back
     for (const [id, h] of w.hums) {
       const f = folk.get(id);
@@ -1788,10 +1797,14 @@ function startRoom(cv, app) {
     // a message on its way: a beam in the sender's colour, up from its antenna, across the room over
     // everyone's heads, down into the receiver's antenna; its bright head leads, its tail follows
     for (const bm of w.beams) {
-      const f = w.folk.get(bm.from), g = w.folk.get(bm.to);
-      if (!f || !g) continue;
-      const top = (h) => Math.round(h.y) - (h.lying ? 20 : 29), UP = 6;
-      const ax = Math.round(f.x) + (f.dir < 0 ? -1 : 0), ay = top(f), bx = Math.round(g.x) + (g.dir < 0 ? -1 : 0), by = top(g);
+      // its ends: a figure's antenna, or the telephone on a pair table (over its handset)
+      const end = (id, key) => {
+        if (key) { const p = L.pairs.find((q) => q.key === key); return p && [p.x, p.y - 22]; }
+        const h = w.folk.get(id); return h && [Math.round(h.x) + (h.dir < 0 ? -1 : 0), Math.round(h.y) - (h.lying ? 20 : 29)];
+      };
+      const a = end(bm.from, bm.fromTable), z = end(bm.to, bm.toTable), f = w.folk.get(bm.from || bm.to), UP = 6;
+      if (!a || !z || !f) continue;
+      const [ax, ay] = a, [bx, by] = z;
       const pts = [[ax, ay], [ax, ay - UP], [bx, by - UP], [bx, by]];
       const len = [UP, Math.hypot(bx - ax, by - ay), UP], total = len[0] + len[1] + len[2];
       const at = (s) => {                    // the point s dots along the beam
@@ -3397,5 +3410,5 @@ function startRoom(cv, app) {
     const x = c.getContext("2d"); x.imageSmoothingEnabled = false; x.drawImage(im, 0, 0, c.width, c.height);
     return c.toDataURL();
   };
-  return { talk, typed, size, draw, figure, wears, fresh: (id) => fresh.add(id), width, color: projectColor, icon, door: doorPicture, paints: () => ({ wood: WOOD.top, list: PAINT.map((p) => p.top) }), paintOf: paintIdx, paint: paintOf, tiny, tinyW, printer: printerPicture, carry: carryKind, place: placeKind, pend, condemn: (ids) => condemn(ids), playing: playingAt, names: NAMES, at, board, stats, hovered: () => hovered && { id: hovered.b.id, seat: !!hovered.seat } };
+  return { talk, pairTalk, typed, size, draw, figure, wears, fresh: (id) => fresh.add(id), width, color: projectColor, icon, door: doorPicture, paints: () => ({ wood: WOOD.top, list: PAINT.map((p) => p.top) }), paintOf: paintIdx, paint: paintOf, tiny, tinyW, printer: printerPicture, carry: carryKind, place: placeKind, pend, condemn: (ids) => condemn(ids), playing: playingAt, names: NAMES, at, board, stats, hovered: () => hovered && { id: hovered.b.id, seat: !!hovered.seat } };
 }
