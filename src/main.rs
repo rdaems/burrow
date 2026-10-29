@@ -21,8 +21,8 @@ use tao::event_loop::{ControlFlow, EventLoopBuilder};
 use tao::window::{Theme, Window, WindowBuilder};
 use wry::{NewWindowResponse, WebView, WebViewBuilder};
 
-const DARK: (u8, u8, u8, u8) = (13, 11, 20, 255);
-const BLANK: &str = r#"<!doctype html><body style="margin:0;background:#0d0b14;color:#8b93ad;font:13px/1.5 ui-monospace,monospace;display:grid;place-items:center;height:100vh"><p id=m></p></body>"#;
+const DARK: (u8, u8, u8, u8) = (11, 8, 18, 255);   // the page's night (burrow.css --night): the title bar is this too
+const BLANK: &str = r#"<!doctype html><body style="margin:0;background:#0b0812;color:#8b93ad;font:13px/1.5 ui-monospace,monospace;display:grid;place-items:center;height:100vh"><p id=m></p></body>"#;
 
 enum Ev {
     Ready,
@@ -213,6 +213,13 @@ fn main() -> wry::Result<()> {
         .with_background_color(DARK);
     if let Some(s) = saved {
         wb = wb.with_position(LogicalPosition::new(s.0, s.1));
+    }
+    // no title bar to be seen: it takes the window's colour, the page's night, and shows no title; the traffic lights
+    // stay, and dragging it or a double click on it work as on any window
+    #[cfg(target_os = "macos")]
+    {
+        use tao::platform::macos::WindowBuilderExtMacOS;
+        wb = wb.with_titlebar_transparent(true).with_title_hidden(true);
     }
     let window = wb.build(&event_loop).expect("a window");
 

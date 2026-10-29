@@ -42,7 +42,8 @@ message is the log. When something goes, take it out here. Keep the file under a
     games), `look.mjs` (tests).
   - xterm.js 5.5.0 and its addons (fit, clipboard, web-links) from jsdelivr.
 - `src/main.rs`: burrow's window (wry 0.57, tao, muda; his choice over porting, the egui app is in git's history):
-  the system's webview on the same page, plus a dock icon, the keys a browser keeps (no menu takes ⌘W: the page
+  the system's webview on the same page, no title bar to be seen (transparent, in the page's night, no title; like
+  Spotify's), a dock icon, the keys a browser keeps (no menu takes ⌘W: the page
   closes the focused tile), links in the browser, OSC 52 copies via IPC (`clip:`). No server on the port: it starts
   one, detached, from `$SHELL -lc` (log `~/.cache/burrow/server.log`) in the checkout it was built in, `BURROW_WEB`,
   or the bundle's copy; Restart Server in its menu. `macos/bundle.sh` (in the main checkout only: the app keeps the
