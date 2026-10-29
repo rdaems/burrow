@@ -170,11 +170,10 @@ impl Position {
         let (pawn, knight, bishop, rook, queen, king) = (side(b'P'), side(b'N'), side(b'B'), side(b'R'), side(b'Q'), side(b'K'));
         for df in [-1, 1] {
             // a pawn attacks one rank further on, diagonally
-            if let Some(t) = step(s, df, if by_white { -1 } else { 1 }) {
-                if b[t as usize] == pawn {
+            if let Some(t) = step(s, df, if by_white { -1 } else { 1 })
+                && b[t as usize] == pawn {
                     return true;
                 }
-            }
         }
         if T.knight[s as usize].iter().any(|&t| b[t as usize] == knight) || T.king[s as usize].iter().any(|&t| b[t as usize] == king) {
             return true;
@@ -370,11 +369,10 @@ impl Position {
     pub fn key(&self, legal: &[Move]) -> String {
         let fen = self.to_fen();
         let mut k = fen.split(' ').take(3).collect::<Vec<_>>().join(" ");
-        if let Some(ep) = self.ep {
-            if legal.iter().any(|m| m.to == ep && upper(self.board[m.from as usize]) == b'P') {
+        if let Some(ep) = self.ep
+            && legal.iter().any(|m| m.to == ep && upper(self.board[m.from as usize]) == b'P') {
                 k = k + " " + &square(ep);
             }
-        }
         k
     }
 

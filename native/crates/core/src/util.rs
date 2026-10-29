@@ -64,7 +64,7 @@ fn gmtoff(t: i64) -> i64 {
         let tt = t as libc::time_t;
         let mut tm: libc::tm = std::mem::zeroed();
         libc::localtime_r(&tt, &mut tm);
-        tm.tm_gmtoff as i64
+        tm.tm_gmtoff
     }
 }
 
@@ -117,11 +117,10 @@ pub fn hostname() -> String {
 /// the login name (getpass.getuser)
 pub fn login() -> String {
     for k in ["LOGNAME", "USER", "LNAME", "USERNAME"] {
-        if let Ok(v) = std::env::var(k) {
-            if !v.is_empty() {
+        if let Ok(v) = std::env::var(k)
+            && !v.is_empty() {
                 return v;
             }
-        }
     }
     unsafe {
         let pw = libc::getpwuid(libc::getuid());

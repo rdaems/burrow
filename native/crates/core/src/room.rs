@@ -133,11 +133,10 @@ pub fn furnish(mut room: Room) -> Room {
     }
     if v(&room) < 6 {
         // your face's seed in pair's form (name:7 was burrow's own): the same face there
-        if let Some(seed) = room.get("you").and_then(|y| y.get("seed")).and_then(Value::as_str).filter(|s| !s.is_empty()).map(String::from) {
-            if pair_seed(&seed) != seed {
+        if let Some(seed) = room.get("you").and_then(|y| y.get("seed")).and_then(Value::as_str).filter(|s| !s.is_empty()).map(String::from)
+            && pair_seed(&seed) != seed {
                 obj(&mut room, "you").insert("seed".into(), json!(pair_seed(&SEED_RUN.replace_all(&seed, "-"))));
             }
-        }
         room.insert("v".into(), json!(6));
     }
     if v(&room) < 8 {
@@ -230,11 +229,10 @@ pub fn load_room(cfg: &Config) -> Room {
         r.insert("layout".into(), json!({}));
         return furnish(r);
     }
-    if let Some(r) = std::fs::read_to_string(cfg.room()).ok().and_then(|s| serde_json::from_str(&s).ok()).and_then(base) {
-        if r.get("layout").is_some_and(Value::is_object) && r.get("desks").is_some_and(Value::is_array) {
+    if let Some(r) = std::fs::read_to_string(cfg.room()).ok().and_then(|s| serde_json::from_str(&s).ok()).and_then(base)
+        && r.get("layout").is_some_and(Value::is_object) && r.get("desks").is_some_and(Value::is_array) {
             return furnish(r);
         }
-    }
     let mut room = Room::new();
     let (mut ds, mut lay) = (vec![], Map::new());
     let settings: Value = std::fs::read_to_string(&cfg.claude_settings).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or(Value::Null);
@@ -252,11 +250,10 @@ pub fn load_room(cfg: &Config) -> Room {
             let mid = if ssh.is_empty() { Some(String::new()) } else { hosts.iter().find(|(h, _)| *h == ssh).map(|(_, id)| id.clone()) };
             let Some(mid) = mid else { continue };
             ds.extend(strs(r.get("dirs")).into_iter().filter(|d| !d.contains("/.claude/worktrees/")).map(|d| json!(unit(&mid, &d))));
-            if mid.is_empty() {
-                if let Some(Value::Object(l)) = r.get("layout") {
+            if mid.is_empty()
+                && let Some(Value::Object(l)) = r.get("layout") {
                     lay.extend(l.clone());
                 }
-            }
         }
     }
     room.insert("desks".into(), Value::Array(ds));

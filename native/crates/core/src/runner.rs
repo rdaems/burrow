@@ -210,7 +210,7 @@ impl Runner for System {
         // with a user agent of its own: pair.daems.me is behind Cloudflare, whose browser check answers a
         // library's default one with a 403 (error code 1010)
         let mut c = Command::new("curl");
-        c.args(["-sS", "-m", "15", "-H", "Accept: application/json", "-H", "User-Agent: burrow (+https://github.com/rdaems/burrow)", "-w", "\n%{http_code}"]);
+        c.args(["-sSL", "-m", "15", "-H", "Accept: application/json", "-H", "User-Agent: burrow (+https://github.com/rdaems/burrow)", "-w", "\n%{http_code}"]);
         if body.is_some() {
             c.args(["-H", "Content-Type: application/json", "--data-binary", "@-"]);
         }

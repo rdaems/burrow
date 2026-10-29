@@ -561,6 +561,7 @@ name = "burrow-core"
 version = "0.2.0"
 dependencies = [
  "burrow-model",
+ "indexmap",
  "libc",
  "regex",
  "serde",

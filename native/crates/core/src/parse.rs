@@ -145,11 +145,10 @@ pub fn parse_peers(out: &str, bots: &[Bot]) -> Vec<(String, String, String)> {
             .as_ref()
             .and_then(|p| bots.iter().find(|b| &b.pid.to_string() == p))
             .or_else(|| bots.iter().find(|b| Some(&b.name) == name.as_ref()));
-        if let Some(frm) = frm {
-            if frm.id != to.id {
+        if let Some(frm) = frm
+            && frm.id != to.id {
                 talks.push((msg, frm.id.clone(), to.id.clone()));
             }
-        }
     }
     talks
 }

@@ -92,6 +92,18 @@ impl Config {
     pub fn digest(&self) -> PathBuf {
         self.config.join("digest.json")
     }
+    /// the Doom data of the gun closet's view: BURROW_WAD (any WAD, for a try), else id's own (DOOM.WAD,
+    /// DOOM1.WAD or DOOM2.WAD in the config directory, any case) if you have one, its E1M1 the real one;
+    /// None: the Freedoom extract that comes with burrow
+    pub fn doom_wad(&self) -> Option<PathBuf> {
+        if let Some(w) = std::env::var_os("BURROW_WAD").filter(|w| !w.is_empty()) {
+            return Some(PathBuf::from(w));
+        }
+        let mut names: Vec<String> = std::fs::read_dir(&self.config).ok()?.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+        names.sort();
+        names.into_iter().find(|n| ["doom.wad", "doom1.wad", "doom2.wad"].contains(&n.to_lowercase().as_str())).map(|n| self.config.join(n))
+    }
+
     pub fn home_str(&self) -> String {
         self.home.to_string_lossy().into_owned()
     }
