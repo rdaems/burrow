@@ -57,14 +57,26 @@ pub fn load_fonts(cx: &mut App) {
         std::borrow::Cow::Borrowed(&include_bytes!("../../../assets/fonts/BurrowMono-Bold.ttf")[..]),
     ];
     cx.text_system().add_fonts(fonts).expect("the terminal's fonts");
+    // the page's font is a subset without the Nerd Font icons (prompts are full of them): the whole font if it is
+    // installed, the subset otherwise, and the icons from any Nerd Font there is
+    let names = cx.text_system().all_font_names();
+    let _ = INSTALLED.set(["JetBrainsMono Nerd Font Mono", "JetBrainsMono Nerd Font"].into_iter().find(|f| names.iter().any(|n| n == f)).map(String::from));
     cx.set_global(FontsLoaded);
 }
 
+static INSTALLED: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+
 fn font(bold: bool, italic: bool) -> Font {
+    let family = INSTALLED.get().cloned().flatten().unwrap_or_else(|| FAMILY.to_string());
     Font {
-        family: FAMILY.into(),
+        family: family.into(),
         features: FontFeatures::disable_ligatures(),
-        fallbacks: None,
+        fallbacks: Some(gpui::FontFallbacks::from_fonts(vec![
+            "Symbols Nerd Font Mono".into(),
+            "JetBrainsMono Nerd Font Mono".into(),
+            FAMILY.into(),
+            "Menlo".into(),
+        ])),
         weight: if bold { FontWeight::BOLD } else { FontWeight::NORMAL },
         style: if italic { FontStyle::Italic } else { FontStyle::Normal },
     }
