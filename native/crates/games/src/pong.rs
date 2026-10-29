@@ -399,11 +399,8 @@ impl Pong {
 
     /// the paddle goes with ↑ ↓ only (pair's mouse made it too easy); the app sends Esc to `close`
     pub fn key(&mut self, k: Key, down: bool) {
-        if !self.open {
-            return;
-        }
-        if down && !self.playing {
-            return;
+        if down && (!self.open || !self.playing) {
+            return; // a key let go always counts: one held while the table closed is not stuck down
         }
         self.keys[k as usize] = down;
     }
@@ -717,7 +714,10 @@ mod tests {
         assert!(p.my_y() < FH / 2. - 20.);
         run(&mut p, 2.);
         assert_eq!(p.my_y(), HALF);
-        p.key(Key::Up, false);
+        p.close();
+        p.key(Key::Up, false); // let go after the table closed
+        assert_eq!(p.keys, [false; 2]);
+        p.start(None);
         p.left("b");
         assert_eq!(p.card().over.as_deref(), Some("b left the table."));
     }
