@@ -90,7 +90,9 @@ fn bot() -> Image {
 fn icons_are_room_js_drawkind() {
     check("paint-icon", exact, |name| {
         let (s, kind) = if let Some(k) = name.strip_prefix("paint-icon2-") { (2, k) } else { (1, name.strip_prefix("paint-icon-")?) };
-        Some(icon(kind, s, 4, &env()))
+        // a new door is in the paint the next machine gets: the demo has two machines, so PAINT[1]
+        let e = if kind == "door" { KindEnv { door: PAINT[1], ..env() } } else { env() };
+        Some(icon(kind, s, 4, &e))
     });
 }
 
@@ -280,6 +282,11 @@ fn the_fire_is_room_js_drawfire() {
             "burst8" => fire(0.7, false, 0.8, FirePart::All, &[]),
             "pit" => fire(0.4, false, -1., FirePart::Pit, &[]),
             "flames" => fire(0.4, true, 0.5, FirePart::Flames, &[]),
+            _ if n.starts_with("wide-") => {
+                let t: f64 = n.strip_prefix("wide-")?.parse().ok()?;
+                let meet = snapshot(foot("meet", 0., 0., None), 2., |c| draw_kind(c, "meet", 0, 0, 0., &e));
+                on(90, 80, PLANK, |c| draw_fire(c, 21, 30, 0.9, false, -1., &[Burning { img: &meet, x: 1., y: 2., t }], FirePart::All))
+            }
             _ => {
                 let t: f64 = n.strip_prefix("burn-")?.parse().ok()?;
                 let b = [Burning { img: &plant, x: 2., y: 2., t }, Burning { img: &board, x: 44., y: 4., t: t + 0.04 }];

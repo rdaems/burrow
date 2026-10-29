@@ -39,6 +39,7 @@ const add = (name, body) => cases.push({ name: "paint-" + name, js: `(async (I) 
 const KINDS = ["meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "add", "pair", "manager",
   "booth", "neuralyzer", "doghouse", "radio", "fire", "closet", "settings", "clock"];
 for (const k of KINDS) add(`icon-${k}`, `return at(14, 25, 37, () => I.icon("${k}", 1, 4));`);
+add("icon-door", `return I.icon("door", 1, 4);`);   // in the paint the next machine gets: the demo has two, PAINT[1]
 for (const k of ["fire", "booth", "manager", "clock"]) add(`icon2-${k}`, `return at(14, 25, 37, () => I.icon("${k}", 2, 4));`);
 
 // desks
@@ -87,6 +88,13 @@ fire("pit", 0.4, false, -1, "pit");
 fire("flames", 0.4, true, 0.5, "flames");
 for (const t of [0.1, 0.3, 0.6, 1.4])
   fire(`burn-${t}`, 0.9, false, -1, "all", `[{ img: plant, x: 2, y: 2, w: plant.width, h: plant.height, t0: now - ${t * 1000} }, { img: board, x: 44, y: 4, w: board.width, h: board.height, t0: now - ${t * 1000 + 40} }]`);
+
+// wider than the pit: it shrinks to fit as it flies in (a scaled picture, the one place the room draws at a ratio)
+for (const t of [0.2, 0.9]) add(`fire-wide-${t}`, `
+  const [c, x] = cv(90, 80, PLANK);
+  const meet = I.snapshot(I.foot("meet", [0, 0]), (o) => I.drawKind(o, "meet", [0, 0], null, 0));
+  frozen((now) => I.drawFire(x, { x0: 21, y0: 30 }, 0.9, false, -1, [{ img: meet, x: 1, y: 2, w: meet.width, h: meet.height, t0: now - ${t * 1000} }]));
+  return c;`);
 
 // the booth, the gun closet
 const booth = (name, t, flash, armed) => add(`booth-${name}`, `
