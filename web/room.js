@@ -177,6 +177,7 @@ function startRoom(cv, app) {
       case "fwd1": rect(4, 17, 2, 2, c1); rect(4, 19, 2, 1, skin); fwd(19); break;
       case "fwd2": rect(4, 17, 2, 2, c1); rect(4, 19, 2, 1, skin); fwd(20); break;
       case "reach": back(); rect(14, 14, 2, 4, c1); rect(16, 13, 2, 2, c1); rect(18, 12, 2, 2, skin); break;
+      case "phone": back(); rect(14, 13, 2, 5, c1); rect(16, 7, 3, 2, "#595e60"); rect(16, 9, 2, 3, "#595e60"); rect(16, 12, 3, 2, "#595e60"); rect(17, 7, 1, 1, "#b5bfc7"); rect(17, 12, 1, 1, "#b5bfc7"); rect(15, 10, 2, 2, skin); break;   // a handset held to the ear
       case "mug": back(); fwd(19, 2); rect(17, 16, 3, 3, color); rect(19, 17, 1, 1, INK); break;
       case "gun": back(); fwd(19, 1); rect(13, 18, 3, 2, "#7a4a2a"); rect(15, 17, 6, 1, "#a7aebb"); rect(15, 18, 5, 1, "#6c7380"); break;   // a shotgun, levelled
       case "paper": back(); fwd(19, 2); rect(16, 15, 4, 5, C.steel4); rect(17, 16, 2, 1, C.steel2); rect(17, 18, 2, 1, C.steel2); break;
@@ -828,10 +829,11 @@ function startRoom(cv, app) {
     // you: with the bot whose session is open, at the table of the game you play; else about the
     // room like the others
     if (f.human && !sleepy && !fps) {
-      const o = app.open(), g = o && folk.get(o), game = app.chess(), pp = app.pong(), ow = app.outside(), sh = app.shell(), a = f.act;
+      const o = app.open(), g = o && folk.get(o), game = app.chess(), pp = app.pong(), ow = app.outside(), pr = app.pair(), sh = app.shell(), a = f.act;
       if (game) { if (!(a.kind === "chess" && a.you)) { end(f); f.act = { kind: "chess", side: game.white.id === "you" ? 0 : 1, you: true, left: 1e9, there: false }; } }
       else if (pp) { if (!(a.kind === "pong" && a.you)) { end(f); f.act = { kind: "pong", side: 0, you: true, left: 1e9, there: false }; } }
       else if (ow && !ow.watch) { if (!(a.kind === "window" && a.you)) { end(f); f.act = { kind: "window", at: ow.at, side: 0, you: true, left: 1e9 }; } }
+      else if (pr) { if (!(a.kind === "phone" && a.at === pr)) { end(f); f.act = { kind: "phone", at: pr, you: true }; } }   // its pair room open: on its phone
       else if (g) { if (!(a.kind === "with" && a.to === g.id) && !a.chosen) { end(f); f.act = { kind: "with", to: g.id }; } }      // (a seat you clicked yourself keeps you)
       else if (sh) { if (!(a.kind === "screen" && a.m === sh.m && a.dir === sh.dir) && !a.chosen) { end(f); f.act = { kind: "screen", m: sh.m, dir: sh.dir }; } }
       else if (a.kind === "with" || a.kind === "screen" || a.you) end(f);
@@ -1056,6 +1058,14 @@ function startRoom(cv, app) {
           f.arms = shot ? "fwd1" : "down";
           if ((act.left -= dt) <= 0) { const g = partner(); if (g) g.act = rest(); f.act = rest(); }
         }
+        break;
+      }
+      case "phone": {                        // you, in a table's pair room: beside the table, facing it, the handset at your ear
+        const pt = L.pairs.find((p) => p.key === act.at);
+        if (!pt) { f.act = rest(); break; }
+        if (!act.side) act.side = f.x < pt.x ? -1 : 1;   // the side you come from
+        act.there = walk(f, { x: pt.x + act.side * 20, y: pt.y + 1, on: pt.key }, v, dt);
+        if (act.there) { f.dir = -act.side; f.arms = "phone"; }
         break;
       }
       case "chair": {
@@ -1757,7 +1767,9 @@ function startRoom(cv, app) {
       // dropped on it joins the chat. Its light is on once a room is linked
       const info = (s.pair || {})[pr.key], h = hot(pr.x - 13, pr.y - 20, pr.x + 13, pr.y + 1, { kind: "pairOpen", key: pr.key });
       const over_ = !!heldBot && inRect(spot(heldBot), foot("pair", [pr.x, pr.y]));
-      piece(pr, "pair", (c) => drawPair(c, pr, !!info, T, over_));
+      const me = w.folk.get("you"), held = me && me.act.kind === "phone" && me.act.at === pr.key && me.act.there && !me.held;
+      const hand = held ? { x: Math.round(me.x) + (me.dir < 0 ? -8 : 7), y: Math.round(me.y) - 12, side: me.act.side } : null;   // the handset's foot (body() "phone")
+      piece(pr, "pair", (c) => drawPair(c, pr, !!info, T, over_, hand));
       if (h) tip = { text: info ? info.room || "pair" : "pair: open a room", x: pr.x, y: pr.y - 22 };
       else if (over_) tip = { text: info ? held.b.name + " joins " + (info.room || "the room") : "no room linked yet", x: pr.x, y: pr.y - 22 };
     }
@@ -2635,19 +2647,32 @@ function startRoom(cv, app) {
     const ix = fx + INK_AREA.x, iy = fy + INK_AREA.y;
     if (w.ink) for (const [i, j, col] of cells(w)) rect(ctx, ix + i, iy + j, 1, 1, col);
   }
-  // a pair room: a small round table with a speakerphone on it, its light on while a room is linked,
-  // blinking while a bot is held over it (it would join the chat)
-  function drawPair(ctx, p, linked, T, over) {
+  // a pair room: a small round table with a telephone on it, its light on while a room is linked, blinking while a
+  // bot is held over it (it would join the chat). hand: where you hold its handset while its room is open (the
+  // cradle empty, the cord coiling from the base to your hand)
+  function drawPair(ctx, p, linked, T, over, hand) {
     const { x, y } = p, PL = { k: "#3f3740", d: "#595e60", m: "#757b7c", hi: "#b5bfc7" };
     ELL(13, 4, 8).forEach((hw, j) => { rect(ctx, x - hw, y - 20 + j, hw * 2, 1, WOOD.k); if (hw > 1) rect(ctx, x - hw + 1, y - 20 + j, hw * 2 - 2, 1, j < 2 ? WOOD.hi : WOOD.top); });
     for (const [yy, hw] of [[-12, 12], [-11, 11], [-10, 9]]) { rect(ctx, x - hw, y + yy, hw * 2, 1, WOOD.k); rect(ctx, x - hw + 1, y + yy, hw * 2 - 2, 1, WOOD.d); }
     rect(ctx, x - 2, y - 9, 4, 8, WOOD.k); rect(ctx, x - 1, y - 9, 2, 8, WOOD.d);                       // the stem and the foot
     rect(ctx, x - 6, y - 1, 12, 2, WOOD.k); rect(ctx, x - 5, y - 1, 10, 1, WOOD.d); rect(ctx, x - 5, y + 1, 10, 1, SHADOW);
-    // the speakerphone: a dark triangle-ish puck, a light on top
-    rect(ctx, x - 4, y - 18, 8, 4, PL.k); rect(ctx, x - 3, y - 18, 6, 3, PL.d); rect(ctx, x - 3, y - 18, 6, 1, PL.m);
-    rect(ctx, x - 6, y - 16, 2, 2, PL.k); rect(ctx, x + 4, y - 16, 2, 2, PL.k); rect(ctx, x - 1, y - 20, 2, 2, PL.k);
+    // the telephone: its base, three keys and the light along its front, the handset across the cradle on top
+    rect(ctx, x - 5, y - 18, 10, 5, PL.k); rect(ctx, x - 4, y - 18, 8, 2, PL.d); rect(ctx, x - 4, y - 18, 8, 1, PL.m);
+    for (const kx of [-3, -1, 1]) rect(ctx, x + kx, y - 15, 1, 1, PL.hi);
     const on = linked && (!over || Math.floor(T * 6) % 2);
-    rect(ctx, x, y - 17, 1, 1, on ? SP.g : "#2a2f33");
+    rect(ctx, x + 3, y - 15, 1, 1, on ? SP.g : "#2a2f33");
+    if (!hand) {                             // the handset at rest: a bone across the cradle, its two ends bulging
+      rect(ctx, x - 4, y - 20, 8, 2, PL.k); rect(ctx, x - 3, y - 20, 6, 1, PL.d);
+      for (const ex of [x - 7, x + 4]) { rect(ctx, ex, y - 21, 3, 4, PL.k); rect(ctx, ex + 1, y - 20, 1, 2, PL.m); }
+      return;
+    }
+    rect(ctx, x - 5, y - 20, 1, 2, PL.k); rect(ctx, x + 4, y - 20, 1, 2, PL.k);   // the cradle, empty
+    // the cord: from the base's side down in a sag to your hand, coiled (every other dot a dot higher)
+    const x0 = x + hand.side * 5, y0 = y - 15, n = Math.max(2, Math.round(Math.hypot(hand.x - x0, hand.y - y0)));
+    for (let k = 0; k <= n; k++) {
+      const u = k / n, cx = Math.round(x0 + (hand.x - x0) * u), cy = Math.round(y0 + (hand.y - y0) * u + Math.sin(u * Math.PI) * 3);
+      rect(ctx, cx, cy - (k % 2), 1, 1, PL.k);
+    }
   }
   // the empty cabinet that adds a project: a plate with a + on it
   function drawAdd(ctx, a, lit) {

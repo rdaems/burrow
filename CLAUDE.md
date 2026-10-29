@@ -181,7 +181,9 @@ message is the log. When something goes, take it out here. Keep the file under a
 - The dog (a dachshund, `w.dog`, with the dog house): wanders, visits, follows you, chases the ball, sleeps at
   night (23–7); a click pets it, then a click throws a stick; it can be picked up.
 - The pair table is one pair room (`BURROW_PAIR`, default pair.daems.me): new or linked by your page or an invite; a
-  bot dropped on it gets the room's bring link typed into its session; a click shows the chat. pair is behind
+  bot dropped on it gets the room's bring link typed into its session; a click shows the chat, and while it is open
+  you stand beside the table holding its telephone's handset to your ear, the cord coiled back to the base (`phone`
+  act and arms, `app.pair()`); it goes back on the cradle when the chat closes. pair is behind
   Cloudflare: send a User-Agent. pair names its agents itself (a `?name=` would need a change in pair).
 
 ## Removing a bot

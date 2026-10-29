@@ -132,6 +132,7 @@ const room = startRoom($("#room"), {
   opens: () => botTiles().map((t) => asFolk(t.id)),
   chess: () => (viewKind === "chess" && state && state.chess && !state.chess.result ? state.chess : null),
   pong: () => (viewKind === "pong" ? pongUI.playing() : null),
+  pair: () => (viewKind === "pair" ? pairKey : null),   // a table's pair room is open: you are on its phone
   outside: () => (viewKind === "outside" ? outsideUI.playing() : null),
   view: () => viewKind,
   settings: () => (state && state.settings) || {},
