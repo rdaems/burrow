@@ -731,6 +731,60 @@ impl Burrow {
         cx.notify();
     }
 
+    /// files dropped from the Finder: on a bot, into its session; on a desk's screen, into your terminal there; on a
+    /// tile, into its terminal. A path on another machine is copied there first (scp)
+    fn drop_on_room(&mut self, paths: Vec<std::path::PathBuf>, window: &mut Window, cx: &mut Context<Self>) {
+        let Some((x, y)) = self.dots(window.mouse_position()) else { return };
+        let mut out = Output::default();
+        self.room.pointer_move(x, y, (0.0, 0.0), &mut out);
+        self.redraw(window, cx);
+        if let Some(h) = self.room.hovered.clone().filter(|h| !h.id.starts_with("mgr:") && h.id != "you")
+            && let Some(b) = self.state.bots.iter().find(|b| b.id == h.id).cloned()
+        {
+            self.open_bot(&b.m, &b.id, false, None, window, cx);
+            if let Some(t) = self.tile_of_bot(&b.id) {
+                self.hand(t, paths, cx);
+            }
+        } else if let Some((m, dir)) = self.room.screen_hover.clone() {
+            self.open_shell(&m, &dir, false, window, cx);
+            if let Some(t) = self.tiles.focused() {
+                self.hand(t, paths, cx);
+            }
+        }
+    }
+
+    /// files handed to a tile's terminal: their paths pasted (quoted when they need it), copied to its machine first
+    pub fn hand(&mut self, t: u64, paths: Vec<std::path::PathBuf>, cx: &mut Context<Self>) {
+        let Some(tile) = self.tile.get(&t) else { return };
+        let Some(body) = tile.body.clone() else { return };
+        let m = match &tile.kind {
+            TileKind::Bot { m, .. } | TileKind::Shell { m, .. } => m.clone(),
+            TileKind::Notes => return,
+        };
+        let hub = self.hub.clone();
+        let task = cx.background_executor().spawn(async move {
+            let mut out = Vec::new();
+            for p in paths {
+                if m.is_empty() {
+                    out.push(p.to_string_lossy().to_string());
+                } else if let Ok(bytes) = std::fs::read(&p) {
+                    let name = p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                    match hub.upload(&m, &name, &bytes) {
+                        Ok(there) => out.push(there),
+                        Err(e) => eprintln!("burrow: {e}"),
+                    }
+                }
+            }
+            out
+        });
+        cx.spawn(async move |_, cx| {
+            let ps = task.await;
+            let text: String = ps.iter().map(|p| if p.contains([' ', '\'', '"', '\\', '\t', '\n']) { format!("'{}' ", p.replace('\'', "'\\''")) } else { format!("{p} ") }).collect();
+            let _ = body.update(cx, |b, cx| b.hand(text, cx));
+        })
+        .detach();
+    }
+
     fn room_element(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let pic = self.picture.clone();
         let bounds = self.room_bounds.clone();
@@ -774,6 +828,7 @@ impl Burrow {
                     this.pointer_move(e, window, cx);
                 }
             }))
+            .on_drop(cx.listener(|this, paths: &gpui::ExternalPaths, window, cx| this.drop_on_room(paths.paths().to_vec(), window, cx)))
             .on_hover(cx.listener(|this, on: &bool, _, _| {
                 if !*on && this.drag.is_none() {
                     this.room.pointer_leave();
@@ -846,6 +901,7 @@ impl Burrow {
             .when(matches!(self.drag, Some(Drag::Tile { id, on: true, .. }) if id == t), |d| d.opacity(0.6))
             .child(frame_bg(Frame::tile(lit)))
             .child(div().absolute().inset(px(6.)).flex().flex_col().child(band).child(div().flex_1().min_h(px(0.)).bg(rgb(col::BOX)).child(body)))
+            .on_drop(cx.listener(move |this, paths: &gpui::ExternalPaths, _, cx| this.hand(t, paths.paths().to_vec(), cx)))
             .on_hover(cx.listener(move |this, on: &bool, _, cx| {
                 this.hover_tile = if *on { Some(t) } else if this.hover_tile == Some(t) { None } else { this.hover_tile };
                 this.dirty = true;
