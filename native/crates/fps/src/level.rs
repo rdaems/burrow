@@ -1262,6 +1262,11 @@ impl Level {
         let p = &self.player;
         !p.dead && (p.x - x).abs() < p.r + r && (p.y - y).abs() < p.r + r && z < p.z + p.h && z + 8.0 > p.z
     }
+    /// room for a thing of radius r, h high, standing at z, at x, y (not you, not a fireball)
+    pub fn room_for(&mut self, r: f64, h: f64, z: f64, x: f64, y: f64) -> bool {
+        let b = Body { who: Who::Mobj(u32::MAX), r, h, z, missile: false, mon: false, fly: false, owner: None };
+        self.check(&b, x, y).is_some()
+    }
     /// -1 if the box straddles the line
     fn box_side(l: &crate::wad::Line, x: f64, y: f64, r: f64) -> i32 {
         let s = |px: f64, py: f64| l.dx * (py - l.v1.y) - l.dy * (px - l.v1.x) > 0.0;
