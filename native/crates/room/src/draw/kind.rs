@@ -59,6 +59,7 @@ pub fn draw_kind(ctx: &mut Ctx, kind: &str, x: i32, y: i32, t: f64, env: &KindEn
         }
         "neuralyzer" => draw_neuralyzer(ctx, x, y, false),
         "radio" => draw_radio(ctx, x, y, true),
+        "matrix" => draw_console(ctx, x, y, 0.),
         "doghouse" => draw_doghouse(ctx, x, y),
         "door" => draw_door(ctx, x, &env.door, false, false, y), // in the paint the next machine gets
         _ => {}

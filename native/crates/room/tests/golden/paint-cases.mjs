@@ -37,7 +37,7 @@ const add = (name, body) => cases.push({ name: "paint-" + name, js: `(async (I) 
 
 // every kind at rest, as the closet shows it (the door's paint depends on the machines: tested by itself)
 const KINDS = ["meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "add", "pair", "manager",
-  "booth", "neuralyzer", "doghouse", "radio", "fire", "closet", "settings", "clock"];
+  "booth", "neuralyzer", "doghouse", "radio", "matrix", "fire", "closet", "settings", "clock"];
 for (const k of KINDS) add(`icon-${k}`, `return at(14, 25, 37, () => I.icon("${k}", 1, 4));`);
 add("icon-door", `return I.icon("door", 1, 4);`);   // in the paint the next machine gets: the demo has two, PAINT[1]
 for (const k of ["fire", "booth", "manager", "clock"]) add(`icon2-${k}`, `return at(14, 25, 37, () => I.icon("${k}", 2, 4));`);
@@ -139,6 +139,7 @@ for (const [n, linked, T, over] of [["unlinked", false, 0, false], ["linked", tr
 for (const lit of [0, 1]) add(`add-${lit}`, `const [c, x] = cv(34, 20, PLANK); I.drawAdd(x, { x0: 2, y0: 2 }, ${!!lit}); return c;`);
 for (const on of [0, 1]) add(`radio-${on}`, `const [c, x] = cv(18, 26, PLANK); I.drawRadio(x, { x: 9, y: 23 }, ${!!on}); return c;`);
 for (const T of [0.3, 1.7]) add(`notes-${T}`, `const [c, x] = cv(18, 46, PLANK); I.drawRadio(x, { x: 9, y: 43 }, true); I.drawNotes(x, { x: 9, y: 43 }, ${T}); return c;`);
+for (const T of [0, 0.4, 1.7, 12.3]) add(`console-${T}`, `const [c, x] = cv(26, 30, PLANK); I.drawConsole(x, { x: 12, y: 28 }, ${T}); return c;`);
 for (const lit of [0, 1]) add(`neur-${lit}`, `const [c, x] = cv(16, 22, PLANK); I.drawNeuralyzer(x, { x: 8, y: 20 }, ${!!lit}); return c;`);
 add("table", `const [c, x] = cv(36, 34, PLANK); I.drawTable(x, { x: 18, y: 32 }); return c;`);
 add("stool", `const [c, x] = cv(18, 18, PLANK); I.drawStool(x, { x: 9, y: 16 }); return c;`);

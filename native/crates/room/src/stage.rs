@@ -694,6 +694,15 @@ impl Room {
                 set_tip(&mut tip, if sound_on { "sound on".into() } else { "sound off".into() }, ra.x as f64, (ra.y - 22) as f64);
             }
         }
+        // the operator's console: the same burrow as the operator sees it (the app's matrix), every session a lane of
+        // falling code; a click jacks in
+        for oc in l.consoles.clone() {
+            let h = self.hot_r(foot("matrix", [oc.x, oc.y], None), json!({"kind": "matrix"}));
+            piece(&mut items, &oc.key, "matrix", oc.x, oc.y, Box::new(move |c| D::draw_console(c, oc.x, oc.y, t)), 0.5);
+            if h {
+                set_tip(&mut tip, "jack in".into(), oc.x as f64, (oc.y - 26) as f64);
+            }
+        }
         for n in l.neuralyzers.clone() {
             let fl = self.w.s.flash.is_some_and(|f| now - f.2 < 400.0);
             piece(&mut items, &n.key, "neuralyzer", n.x, n.y, Box::new(move |c| D::draw_neuralyzer(c, n.x, n.y, fl)), 0.5);
