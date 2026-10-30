@@ -201,7 +201,7 @@ async function act(a) {
   else if (a.kind === "chessBots") { const r = await api("/api/chess", { bots: [a.a, a.b] }); if (r.error) note(r.error); }   // two bots sat down: a game between them
   else if (a.kind === "chessLeave") await api("/api/chess", { leave: a.id });
   else if (a.kind === "forget") { const r = await api("/api/forget", { unit: a.unit }); if (r.error) note(r.error); }
-  else if (a.kind === "layout") await api("/api/layout", { layout: a.layout });
+  else if (a.kind === "layout") await api("/api/layout", { moved: a.moved, layout: a.layout });   // (`layout` whole for a server from before `moved`)
   else if (a.kind === "stop" && b) stopBot(b.m, b.id, a.rm);
   else if (a.kind === "managerGone") { const r = await api("/api/manager", { gone: a.key }); if (r.error) note(r.error); }   // an office manager shot and swept up: her session goes, her reception stays empty
   else if (a.kind === "close") { for (const t of botTiles()) if (t.id === a.id) closeTile(t); }   // it is to go: its terminal at once
@@ -780,7 +780,11 @@ function carryOut(e, kind, it) {
     if (at && kind === "door") { ask("machine"); machineAt = at; room.pend(at); }   // a door is a machine: which one, then it hangs there
     else if (at && kind === "desk") { deskAt = at; room.pend(at, null, "desk"); ask("dir"); }   // a desk is a folder on a machine: which, then it is one
     else if (at && kind === "manager") askManager(at);                              // the reception: who sits there
-    else if (at) { const r = await api("/api/furniture", { add: kind, at }); if (r.error) note(r.error); }
+    else if (at) {                         // it stands where it was let go until the state brings it; refused, back in the closet
+      room.pend(at, null, kind);
+      const r = await api("/api/furniture", { add: kind, at });
+      if (r.error) { room.pend(null); note(r.error); } else room.pend(at, r.key, kind);
+    }
   };
   it.onpointercancel = () => { done(); room.carry(null); };   // taken away by the browser: no ghost left behind
 }

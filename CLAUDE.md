@@ -192,11 +192,15 @@ message is the log. When something goes, take it out here. Keep the file under a
 ## Furniture
 
 - room.json `furniture` (keys kind + number), placed exactly where it is let go: **overlap is allowed**, decluttering
-  is his job; wall pieces slide along the wall. What is drawn in front takes the pointer.
-- The closet (on the wall) holds the catalogue; drag a piece out into the room. A new kind goes in `CATALOGUE`
-  (index.html) **and** `KINDS` (server.py), `NAMES` and `CLICK` in room.js, `furnish` for older rooms.
+  is his job; wall pieces slide along the wall. What is drawn in front takes the pointer. A drop posts only what
+  moved (`/api/layout {moved}`, merged; `layout`, the page's whole copy, only for a server from before): a whole
+  copy older than a piece just put down took that piece's place away again.
+- The closet (on the wall) holds the catalogue; drag a piece out into the room: it stands where it was let go
+  (`pend`) until the state brings it. A new kind goes in `CATALOGUE` (index.html; the server reads it there, `kinds()`,
+  so no restart), `NAMES` and `CLICK` in room.js, `furnish` for older rooms.
 - Fixed (`FIXED` in room.js and server.py): the fire, the closet, the switchboard, the clock, this computer's door.
-  Everything else burns in the fire (a desk with bots sends its bots to the booth).
+  Everything else burns in the fire (a desk with bots sends its bots to the booth): what the **pointer** holds over
+  the fire (`inFire`; a long desk's middle can't reach a fire by the wall), once it has left the fire in that drag.
 - What a click does: printer = a report on fanfold paper rising out of a wide printer in the pane, funny about the
   room's statistics; pouf = you sit; plant = you water it; window = the duel; easel = the canvas, big; chess and
   ping-pong = play or watch; coffee or cooler = the limits; clock = keep awake; switchboard (one lever) = settings

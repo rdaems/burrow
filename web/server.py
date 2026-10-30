@@ -469,8 +469,12 @@ def doom_wad():
     except OSError:
         pass
     return os.path.join(HERE, "doom", "freedoom.wad")
-KINDS = {"meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "pair", "manager",
-         "booth", "neuralyzer", "doghouse", "radio", "files", "pumpkin", "matrix"}
+def kinds():
+    """the furniture the closet holds: the page's own CATALOGUE (index.html), read when a piece comes out of it, so a
+    new piece needs no restart of this server (a desk and a door are not furniture: they have their own ways in)"""
+    with open(os.path.join(HERE, "index.html"), encoding="utf-8") as f:
+        m = re.search(r"const CATALOGUE = \[([^\]]*)\]", f.read())
+    return set(re.findall(r'"(\w+)"', m.group(1) if m else "")) - {"desk", "door"}
 
 
 # The office manager: whoever sits at the reception booth (the `manager` piece; one at a time). Her style is
@@ -2562,7 +2566,14 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/chess":
             return hub.chess(b)
         if path == "/api/layout":            # where the furniture stands, moved by hand: {key: [x, y]}
-            hub.room["layout"] = {k: [int(v[0]), int(v[1])] for k, v in (b.get("layout") or {}).items()}
+            # only what moved (`moved`), merged: the page's whole copy could be older than what was just put down (a piece
+            # out of the closet, a desk, a reception moved) and would take it away again. A page from before sends `layout`
+            moved = b.get("moved")
+            with hub.lock:
+                if moved is None:
+                    hub.room["layout"] = {k: [int(v[0]), int(v[1])] for k, v in (b.get("layout") or {}).items()}
+                else:
+                    hub.room["layout"].update({k: [int(v[0]), int(v[1])] for k, v in moved.items()})
             save_room(hub.room)
             hub.push("state", hub.state())
             return {}
@@ -2571,7 +2582,7 @@ class Handler(BaseHTTPRequestHandler):
                 fs = hub.room["furniture"]
                 if b.get("add"):
                     kind = b["add"]
-                    if kind not in KINDS:
+                    if kind not in kinds():
                         raise RuntimeError("no such furniture")
                     if kind == "manager":
                         raise RuntimeError("a reception comes with an office manager: pick one")

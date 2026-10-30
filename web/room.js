@@ -1512,12 +1512,12 @@ function startRoom(cv, app) {
     // held at its door is about to be stopped: it is outlined red and washed in red, flashing (tinted)
     const heldBot = held && held.b && !held.b.human && pointer ? held : null, botDrop = heldBot && dropAt(L, heldBot);
     const boothUnder = botDrop === "booth" ? boothAt(L, heldBot) : null;   // a bot held over the booth: let go and it goes in (hardcore: is shot)
-    dangerNow = !!boothUnder || !!(L.fire && moving && inFire(L, moving.key, moving.at, moving.u));
+    dangerNow = !!boothUnder || !!(L.fire && moving && inFire(L, moving.key));
     const danger = (key) => dangerNow && !!moving && moving.key === key, tintOf = (key) => (danger(key) ? flashA(w.T) : 0);
     if (moving) ride(w, L, lastL, moving.key);      // whoever is at what is being dragged comes along, this very frame
     lastL = L;
     spooky = !!app.settings().halloween && L.pumpkins.length > 0;
-    if (Object.keys(L.placed).length) app.act({ kind: "layout", layout: { ...(s.layout || {}), ...L.placed } });
+    if (Object.keys(L.placed).length) app.act({ kind: "layout", layout: { ...(s.layout || {}), ...L.placed }, moved: L.placed });
     s.layout = { ...(s.layout || {}), ...L.placed };
 
     // keep a figure per bot; one that turns up later comes in through its machine's door, one that is
@@ -1576,7 +1576,8 @@ function startRoom(cv, app) {
       onTheWall(dr.key, foot("door", [x0, y0]), h, (c) => drawDoor(c, x0, paintOf(m.id), ajar && !m.error, !!m.error, y0));
       if (h) { for (const b of bots) if ((b.m || "") === m.id) hl.add(b.id); tip = { text: clip(m.error ? m.name + ": " + m.error : m.name, W - 8), x: x0 + 8, y: 20 }; }
     }
-    if (pending && pending.mid != null && ((pending.kind === "desk" ? s.desks.some((d) => d.unit === pending.mid) : s.machines.some((m) => m.id === pending.mid)) || performance.now() - pending.t > 10000)) pending = null;
+    const brought = (p) => p.kind === "desk" ? s.desks.some((d) => d.unit === p.mid) : p.kind === "door" ? s.machines.some((m) => m.id === p.mid) : (s.furniture || []).includes(p.mid);
+    if (pending && pending.mid != null && (brought(pending) || performance.now() - pending.t > 10000)) pending = null;
     if (pending) { if (pending.kind === "desk") drawBlankDesk(ctx, ...pending.at, pending.m); else drawKind(ctx, pending.kind, pending.at, w, T); }
     for (const win of L.windows) {
       const h = hot(win.x0, win.y0, win.x1, win.y1, { kind: "outside", key: win.key });
@@ -1697,7 +1698,7 @@ function startRoom(cv, app) {
       // the fire flares and the fireplace lights up red. A desk with bots can't burn. The pointer
       // on it stirs sparks
       const F = L.fire, r = [F.x0, F.y0, F.x1, F.y1];
-      const feeding = moving && inFire(L, moving.key, moving.at, moving.u);
+      const feeding = moving && inFire(L, moving.key);
       const fd = moving && feeding && L.desks.find((d) => d.key === moving.key);
       const onIt = !moving && !held && over(...r);
       if (onIt && !w.sparkOn) { w.sparkOn = true; w.sparks = performance.now(); } else if (!onIt) w.sparkOn = false;
@@ -2784,13 +2785,11 @@ function startRoom(cv, app) {
   // stones on the floor, embers and logs in it, the flames rising from it. What is dragged into it
   // burns: a desk (its bots must be gone first), a piece of furniture, a bot (stopped, after a
   // countdown). `burst` (0..1) is a shower of sparks: the pointer stirred it, or something burnt
-  // what is carried is over the fire when its middle is: a piece only touching it at an edge (put down
-  // beside the pit, and so picked up again) is not about to burn
-  const inFire = (L, key, at, u) => {
-    if (!L.fire || (!key.startsWith("u:") && fixed(key))) return false;
-    const r = foot(key, at, u), cx = (r[0] + r[2]) / 2, cy = (r[1] + r[3]) / 2;
-    return cx >= L.fire.x0 && cx < L.fire.x1 && cy >= L.fire.y0 && cy < L.fire.y1 + 4;
-  };
+  // what is carried is over the fire when the pointer holding it is: a long desk can't take its middle over a fire that
+  // stands by the wall (it stops at the room's edge), the hand that holds it can. One picked up where it stood over the
+  // pit is not about to burn until the pointer has left the fire once (`moving.out`)
+  const overFire = (L, p) => !!L.fire && !!p && p.x >= L.fire.x0 && p.x < L.fire.x1 && p.y >= L.fire.y0 && p.y < L.fire.y1 + 4;
+  const inFire = (L, key) => !!moving && moving.out && (key.startsWith("u:") || !fixed(key)) && overFire(L, pointer);
   // a held figure hangs 24 dots under the pointer, so what it is dropped on is found by where it
   // stands, not by the pointer: `spot` is its feet, a little up; `dropAt` is where a bot would go if let go:
   // the booth (in hardcore the gun closet)
@@ -3633,12 +3632,13 @@ function startRoom(cv, app) {
       }
     }
     if (moving) {
+      if (!moving.out && lastL && !overFire(lastL, pointer)) moving.out = true;
       const at = [moving.from[0] + pointer.x - press.x, moving.from[1] + pointer.y - press.y], r = foot(moving.key, at, moving.u);
       // on the grid of dots while it moves, as pair: it steps, and lands where it is shown, over whatever is there
       // (keeping the room tidy is yours). What hangs on the wall stays on it, sliding along; only one that can
       // burn comes off it, and only over the fire
       const loose = onWall(moving.key) && !fixed(moving.key) && [Math.round(Math.max(2 - (r[0] - at[0]), Math.min(W - 2 - (r[2] - at[0]), at[0]))), Math.round(Math.max(0, Math.min(H - 1 - (r[3] - at[1]), at[1])))];
-      moving.at = loose && lastL && inFire(lastL, moving.key, loose, moving.u) ? loose : clampAt(moving.key, at, moving.u);
+      moving.at = loose && lastL && inFire(lastL, moving.key) ? loose : clampAt(moving.key, at, moving.u);
     }
     if (dogHeld && world().dog) { const g = world().dog; g.x = Math.max(8, Math.min(W - 8, pointer.x)); g.y = Math.max(WALL, Math.min(H - 2, pointer.y + 7)); }   // it hangs from the pointer
     if (held) {
@@ -3655,7 +3655,7 @@ function startRoom(cv, app) {
     }
     if (moving) {
       const s = app.state(), d = lastL && lastL.desks.find((d) => d.key === moving.key);
-      const burn = lastL && inFire(lastL, moving.key, moving.at, moving.u);
+      const burn = lastL && inFire(lastL, moving.key);
       if (burn) {                            // into the fire: a picture of it goes in, the thing itself goes (a desk's bots walk out)
         const w = world(), r = foot(moving.key, moving.at, moving.u);
         const mid = KIND(moving.key) === "door" ? moving.key.slice(5) : null;      // a door: its machine goes out of the room (and of sshConfigs)
@@ -3672,7 +3672,7 @@ function startRoom(cv, app) {
           }
         }
         s.layout = { ...(s.layout || {}), [moving.key]: at };
-        app.act({ kind: "layout", layout: s.layout });
+        app.act({ kind: "layout", layout: s.layout, moved: { [moving.key]: at } });
       }
       moving = null;
     } else if (held) {
