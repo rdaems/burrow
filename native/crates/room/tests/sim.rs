@@ -397,3 +397,47 @@ fn a_lit_pumpkin_puts_the_office_in_costume() {
     room.step(&inp, &mut out);
     assert!(!room.spooky);
 }
+
+/// a drag with the pointer, in twenty steps, let go at the end
+fn drag(room: &mut Room, inp: &Input, path: &[(f64, f64)]) -> Output {
+    let mut out = Output::default();
+    room.pointer_down(path[0].0, path[0].1, false);
+    for w in path.windows(2) {
+        for k in 1..=20 {
+            let u = k as f64 / 20.0;
+            room.pointer_move(w[0].0 + (w[1].0 - w[0].0) * u, w[0].1 + (w[1].1 - w[0].1) * u, (0.0, 0.0), &mut out);
+        }
+    }
+    room.pointer_up(inp, &mut out, (0.0, 0.0));
+    out
+}
+
+#[test]
+fn what_the_pointer_holds_over_the_fire_burns() {
+    let mut s = demo();
+    s.furniture.push("radio9".into());
+    let mut inp = Input { state: s.clone(), now: 0.0, hour: 14, ..Default::default() };
+    let mut room = Room::new(3, 0.0);
+    room.resize(&inp, 820.0);
+    run(&mut room, &mut inp, 2.0);
+    let fire = room.last.clone().unwrap().fire.unwrap();
+    let mid = ((fire.x0 + fire.x1) as f64 / 2.0, (fire.y1 - 8) as f64);
+    // a radio standing in front of the pit, picked up where the pointer is over the fire: moved about in it, it is put
+    // down there; out of the fire and back, it burns
+    inp.state.layout.insert("radio9".into(), [(fire.x0 + fire.x1) / 2, fire.y1 + 3]);
+    run(&mut room, &mut inp, 0.5);
+    let on = ((fire.x0 + fire.x1) as f64 / 2.0, (fire.y1 + 2) as f64);
+    assert_eq!(room.piece_at(Some(on)).map(|p| p.key), Some("radio9".into()));
+    let out = drag(&mut room, &inp, &[on, (on.0 - 6.0, on.1 - 1.0)]);
+    assert!(room.w.s.burning.is_empty() && !out.acts.iter().any(|a| a["kind"] == "burn"), "it burnt without leaving the fire");
+    assert!(out.acts.iter().any(|a| a["kind"] == "layout"));
+    let at = (on.0 - 6.0, on.1 - 1.0);
+    let out = drag(&mut room, &inp, &[at, (at.0, at.1 + 40.0), mid]);
+    assert!(out.acts.iter().any(|a| a["kind"] == "burn" && a["key"] == "radio9"), "{:?}", out.acts);
+    // a long desk held by its plate: its middle never gets over the fire, the hand holding it does
+    run(&mut room, &mut inp, 0.5);
+    let d = room.last.clone().unwrap().desks.into_iter().max_by_key(|d| d.w).unwrap();
+    let n = room.w.s.burning.len();
+    drag(&mut room, &inp, &[((d.x0 + 4) as f64, (d.y - 6) as f64), mid]);
+    assert_eq!(room.w.s.burning.len(), n + 1, "the desk did not burn");
+}

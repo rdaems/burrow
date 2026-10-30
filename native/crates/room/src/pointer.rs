@@ -4,7 +4,7 @@
 use crate::io::{Input, Output};
 use crate::layout::{self, WALL, fixed, foot, kind_of, on_wall};
 use crate::room::{Press, Room};
-use crate::think::{self, BOOTH, Tick, in_fire, resume, spot_of_fig};
+use crate::think::{self, BOOTH, Tick, in_fire, over_fire, resume, spot_of_fig};
 use crate::world::*;
 use serde_json::{Value, json};
 
@@ -70,7 +70,7 @@ impl Room {
                 f.lying = false;
                 self.held = Some(f.id.clone());
             } else if let Some(pc) = p.piece.clone().filter(|_| !(p.bot.is_some() && f.is_none())) {
-                self.moving = Some(layout::Moving { key: pc.key.clone(), from: pc.at, u: pc.u, at: pc.at });
+                self.moving = Some(layout::Moving { key: pc.key.clone(), from: pc.at, u: pc.u, at: pc.at, out: false });
                 // the fire picked up: whoever warmed their hands at it (or grilled) steps away (they would stand in the
                 // pit as it went)
                 if kind_of(&pc.key) == "fire" {
@@ -82,7 +82,11 @@ impl Room {
                 }
             }
         }
-        if let (Some(m), Some(p)) = (self.moving.clone(), self.press.clone()) {
+        if let (Some(mut m), Some(p)) = (self.moving.clone(), self.press.clone()) {
+            if !m.out && self.last.as_ref().is_some_and(|l| !over_fire(l, self.pointer)) {
+                m.out = true; // off the fire once: back over it, it burns
+                self.moving.as_mut().unwrap().out = true;
+            }
             let at = [m.from[0] + (x - p.x).round() as i32, m.from[1] + (y - p.y).round() as i32];
             let r = foot(&m.key, at, m.u);
             // on the grid of dots while it moves, as pair: it steps, and lands where it is shown, over whatever is
@@ -93,7 +97,7 @@ impl Room {
             });
             let l = self.last.as_ref();
             let new_at = match (loose, l) {
-                (Some(lo), Some(l)) if in_fire(l, &m.key, lo, m.u) => lo,
+                (Some(lo), Some(l)) if in_fire(l, &m, self.pointer) => lo,
                 _ => self.size.clamp_at(&m.key, at, m.u),
             };
             self.moving.as_mut().unwrap().at = new_at;
@@ -160,7 +164,7 @@ impl Room {
         if let Some(m) = self.moving.take() {
             let Some(l) = l else { return };
             let d = l.desks.iter().find(|d| d.key == m.key).cloned();
-            if in_fire(&l, &m.key, m.at, m.u) {
+            if in_fire(&l, &m, ptr) {
                 // into the fire: a picture of it goes in, the thing itself goes (a desk's bots walk out)
                 let r = foot(&m.key, m.at, m.u);
                 let img = self.snapshot_of(&m.key, m.at, m.u, inp);

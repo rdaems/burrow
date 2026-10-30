@@ -53,7 +53,7 @@ impl Room {
         let heldbot = self.held.as_ref().and_then(|id| self.w.get(id)).filter(|f| f.is_bot() && self.pointer.is_some()).map(|f| f.id.clone());
         let booth_under = heldbot.as_ref().and_then(|id| think::booth_at(l, self.w.get(id).unwrap())).cloned();
         let moving = self.moving.clone();
-        self.danger_now = booth_under.is_some() || moving.as_ref().is_some_and(|m| l.fire.is_some() && in_fire(l, &m.key, m.at, m.u));
+        self.danger_now = booth_under.is_some() || moving.as_ref().is_some_and(|m| l.fire.is_some() && in_fire(l, m, self.pointer));
         let danger_now = self.danger_now;
         let danger = |key: &str| danger_now && moving.as_ref().is_some_and(|m| m.key == key);
         let tint_of = |key: &str| if danger(key) { flash_a(t) } else { 0.0 };
@@ -493,7 +493,7 @@ impl Room {
         if let Some(fr) = l.fire.clone() {
             // the fireplace: what is held over it (a desk, a piece of furniture, a bot) is about to burn: the fire flares.
             // A desk with bots can't burn. The pointer on it stirs sparks
-            let feeding = moving.as_ref().is_some_and(|m| in_fire(l, &m.key, m.at, m.u));
+            let feeding = moving.as_ref().is_some_and(|m| in_fire(l, m, self.pointer));
             let fd = if feeding { l.desks.iter().find(|d| Some(&d.key) == moving.as_ref().map(|m| &m.key)).cloned() } else { None };
             let on_it = self.moving.is_none() && self.held.is_none() && self.over(fr.x0 as f64, fr.y0 as f64, fr.x1 as f64, fr.y1 as f64);
             if on_it && !self.w.s.spark_on {

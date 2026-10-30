@@ -2609,13 +2609,17 @@ pub fn booth_at<'a>(l: &'a Layout, f: &Fig) -> Option<&'a layout::Piece> {
     l.booths.iter().find(|bo| in_rect(spot_of_fig(f), foot("booth", [bo.x, bo.y], None)))
 }
 
-/// a piece over the fire: its middle is (not when an edge touches the fire's margin)
-pub fn in_fire(l: &Layout, key: &str, at: [i32; 2], u: Option<i32>) -> bool {
-    let Some(fire) = &l.fire else { return false };
-    if !key.starts_with("u:") && layout::fixed(key) {
-        return false;
+/// the pointer (dots) over the fire
+pub fn over_fire(l: &Layout, p: Option<(f64, f64)>) -> bool {
+    match (&l.fire, p) {
+        (Some(f), Some((x, y))) => x >= f.x0 as f64 && x < f.x1 as f64 && y >= f.y0 as f64 && y < (f.y1 + 4) as f64,
+        _ => false,
     }
-    let r = foot(key, at, u);
-    let (cx, cy) = ((r[0] + r[2]) as f64 / 2.0, (r[1] + r[3]) as f64 / 2.0);
-    cx >= fire.x0 as f64 && cx < fire.x1 as f64 && cy >= fire.y0 as f64 && cy < (fire.y1 + 4) as f64
+}
+
+/// what is carried is over the fire when the pointer holding it is: a long desk can't take its middle over a fire that
+/// stands by the wall (it stops at the room's edge), the hand that holds it can. One picked up where it stood over the
+/// pit is not about to burn until the pointer has left the fire once (`out`)
+pub fn in_fire(l: &Layout, m: &layout::Moving, pointer: Option<(f64, f64)>) -> bool {
+    m.out && (m.key.starts_with("u:") || !layout::fixed(&m.key)) && over_fire(l, pointer)
 }

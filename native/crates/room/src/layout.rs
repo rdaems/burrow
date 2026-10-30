@@ -373,13 +373,15 @@ impl Keep {
     }
 }
 
-/// what is being dragged: its key, where it was, a desk's width, where it is now
+/// what is being dragged: its key, where it was, a desk's width, where it is now; `out`: the pointer has been off the
+/// fire since it was picked up (one picked up over the pit burns only once it has left it and come back)
 #[derive(Clone, Debug)]
 pub struct Moving {
     pub key: String,
     pub from: [i32; 2],
     pub u: Option<i32>,
     pub at: [i32; 2],
+    pub out: bool,
 }
 
 pub fn layout(s: &State, desks: &[Desk], size: &Size, keep: &mut Keep, moving: Option<&Moving>, gone: &dyn Fn(&str) -> bool, now: f64) -> Layout {
