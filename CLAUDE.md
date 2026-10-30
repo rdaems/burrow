@@ -177,7 +177,11 @@ message is the log. When something goes, take it out here. Keep the file under a
   where it was let go (`room.pend(at, null, "desk")`, in the paint of the machine picked) while its form asks the
   machine and the folder: a folder browser as VS Code's Open Folder (a path field over the folder list, where Claude
   Code ran lately first), no prose, no placeholder; ADD posts `/api/dir {m, dir, at}` and the server puts `u:<unit>`
-  there. ✕ or Esc puts it back. (The project cabinet that did this is gone, `furnish` drops it.)
+  there. ✕ or Esc puts it back. (The project cabinet that did this is gone, `furnish` drops it.) Also from a
+  machine's door, its machine picked already: its line in the doors' panel has a desk in its paint to drag out (the
+  hint on hover says the door does it too), and a door pulled down onto the floor gives one (`moving.pull`: the door
+  stays on the wall, a desk follows the pointer; back up it is the door sliding, over the fire the door to burn). A
+  boarded door gives none.
 
 ## You
 

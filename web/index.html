@@ -181,6 +181,7 @@ async function act(a) {
     Sound.play("click", 0, 1);
     const r = await api("/api/settings", { halloween: on }); if (r.error) note(r.error);
   }
+  else if (a.kind === "doorDesk") { deskAt = a.at; room.pend(a.at, null, "desk", a.m); ask("dir", a.m); }   // a desk pulled out of a machine's door: its folder there
   else if (a.kind === "matrix") location.href = "/matrix";   // the operator's console: jack in (its `room` brings you back)
   else if (a.kind === "limits") { openView("limits"); fillLimits(); }
   else if (a.kind === "settings") { openView("settings"); fillSettings(true); }
@@ -313,7 +314,7 @@ view.querySelector(".tx").onclick = () => closeView();
 
 // ---- a project, a machine: Enter adds; the directory completes as you type (the machine's own ls),
 // the host from the Host entries of ~/.ssh/config
-function ask(kind) {
+function ask(kind, m) {                    // (m: the machine picked already, a desk out of its door)
   openView(kind);
   const d = $(PANELS[kind]);
   d.querySelector(".err").textContent = "";
@@ -325,7 +326,7 @@ function ask(kind) {
     row.innerHTML = ms.map((m) => `<button type="button" class="btn" data-id="${m.id}">${m.name}</button>`).join("");
     for (const b of row.children) b.onclick = () => { pickM(b.dataset.id); d.querySelector("input.field").focus(); };
     row.hidden = ms.length < 2;
-    pickM(ms[0] ? ms[0].id : "");
+    pickM(m != null && ms.some((x) => x.id === m) ? m : ms[0] ? ms[0].id : "");
   }
   const inp = d.querySelector("input.field");
   inp.focus();
@@ -664,15 +665,19 @@ function fillDoors() {
   const el = $("#vDoors"), ms = (state && state.machines) || [], { wood, list } = room.paints();
   const armed = doorArmed && Date.now() - doorArmed.t < 3000 ? doorArmed.m : null;
   const key = JSON.stringify([ms.map((m) => [m.id, m.name, m.error]), state.paint, state.bots.map((b) => b.m || ""), armed]);
-  if (el.dataset.key === key) return;
+  if (el.dataset.key === key || closetCarry) return;   // (not while a desk is being carried out of it)
   el.dataset.key = key;
   el.innerHTML = ms.map((m) => {
     const cur = room.paintOf(m.id), n = state.bots.filter((b) => (b.m || "") === m.id).length;
     const how = (m.id ? "over ssh, " + esc(m.ssh || m.id) : "this computer") + " · " + (m.error ? esc(m.error) : n + (n === 1 ? " session" : " sessions"));
     const sw = [-1, ...list.keys()].map((i) => `<button type="button" class="swatch${i === cur ? " on" : ""}" data-m="${esc(m.id)}" data-p="${i}" title="${i < 0 ? "wood" : "paint"}" style="background:${i < 0 ? wood : list[i]}"></button>`).join("");
     const rm = m.id ? `<button type="button" class="btn rm${armed === m.id ? " on" : ""}" data-m="${esc(m.id)}" title="take it out of Claude Code's sshConfigs; the machine and its sessions are left as they are">${armed === m.id ? "sure? remove" : "remove"}</button>` : "";
-    return `<div class="opt"><img class="door" src="${room.door(cur)}" alt=""><div><div class="nm">${esc(m.name)}</div><div class="what">${how}</div><div class="swatches">${sw}</div></div>${rm}</div>`;
+    // a new desk on the machine, to drag into the room (as from the closet, the machine picked); none out of reach
+    const tip = m.error ? "out of reach: no desk from here" : `drag a desk for ${m.name} into the room, or pull one straight out of its door there`;
+    const desk = `<img class="desk${m.error ? " off" : ""}" src="${room.icon("desk", 2, 2, m.id)}" alt="" draggable="false" data-m="${esc(m.id)}" title="${esc(tip)}">`;
+    return `<div class="opt"><img class="door" src="${room.door(cur)}" alt=""><div><div class="nm">${esc(m.name)}</div><div class="what">${how}</div><div class="swatches">${sw}</div></div>${rm}${desk}</div>`;
   }).join("");
+  for (const im of el.querySelectorAll("img.desk:not(.off)")) im.addEventListener("pointerdown", (e) => carryOut(e, "desk", im, im.dataset.m));
   for (const bt of el.querySelectorAll(".swatch")) bt.onclick = () => api("/api/paint", { m: bt.dataset.m, paint: +bt.dataset.p });
   for (const bt of el.querySelectorAll(".rm")) bt.onclick = async () => {
     const m = bt.dataset.m;
@@ -760,25 +765,25 @@ function fillReport() {
   };
   tick();
 }
-function carryOut(e, kind, it) {
+function carryOut(e, kind, it, m = "") {     // (m: a desk for that machine, from its line in the doors' panel)
   if (e.button !== 0) return;
   e.preventDefault();
   try { it.setPointerCapture(e.pointerId); } catch {}
   const x0 = e.clientX, y0 = e.clientY;
   let on = false;
-  closetCarry = true;                       // the closet is not rebuilt meanwhile (fillCloset)
+  closetCarry = true;                       // the closet (or the doors' panel) is not rebuilt meanwhile (fillCloset)
   const done = () => { it.onpointermove = it.onpointerup = it.onpointercancel = null; it.classList.remove("lift"); closetCarry = false; };
   it.onpointermove = (ev) => {
     if (!on && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 4) return;
     on = true; it.classList.add("lift");
-    room.carry(kind, ev.clientX, ev.clientY);
+    room.carry(kind, ev.clientX, ev.clientY, m);
   };
   it.onpointerup = async (ev) => {
     done();
     if (!on) return;
-    const at = room.place(kind, ev.clientX, ev.clientY);
+    const at = room.place(kind, ev.clientX, ev.clientY, m);
     if (at && kind === "door") { ask("machine"); machineAt = at; room.pend(at); }   // a door is a machine: which one, then it hangs there
-    else if (at && kind === "desk") { deskAt = at; room.pend(at, null, "desk"); ask("dir"); }   // a desk is a folder on a machine: which, then it is one
+    else if (at && kind === "desk") { deskAt = at; room.pend(at, null, "desk", m); ask("dir", m || undefined); }   // a desk is a folder on a machine: which, then it is one
     else if (at && kind === "manager") askManager(at);                              // the reception: who sits there
     else if (at) {                         // it stands where it was let go until the state brings it; refused, back in the closet
       room.pend(at, null, kind);

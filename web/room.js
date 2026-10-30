@@ -1578,7 +1578,6 @@ function startRoom(cv, app) {
     }
     const brought = (p) => p.kind === "desk" ? s.desks.some((d) => d.unit === p.mid) : p.kind === "door" ? s.machines.some((m) => m.id === p.mid) : (s.furniture || []).includes(p.mid);
     if (pending && pending.mid != null && (brought(pending) || performance.now() - pending.t > 10000)) pending = null;
-    if (pending) { if (pending.kind === "desk") drawBlankDesk(ctx, ...pending.at, pending.m); else drawKind(ctx, pending.kind, pending.at, w, T); }
     for (const win of L.windows) {
       const h = hot(win.x0, win.y0, win.x1, win.y1, { kind: "outside", key: win.key });
       onTheWall(win.key, [win.x0, win.y0, win.x1, win.y1], h, (c) => drawWindow(c, win));
@@ -1637,6 +1636,10 @@ function startRoom(cv, app) {
     // everything that stands, back to front
     const items = [];
     if (aloft) items.push([1e9, aloft]);
+    if (pending) {                           // what was let go and waits for the state: where it stands, in front of what is behind it
+      const p = pending;
+      items.push([p.at[1] - 0.5, () => (p.kind === "desk" ? drawBlankDesk(ctx, ...p.at, p.m) : drawKind(ctx, p.kind, p.at, w, T))]);
+    }
     for (const f of w.folk.values()) if (!f.lying && !f.held) items.push([f.y, () => drawFigure(ctx, f, f.b, T, hl)]);
     for (const d of L.desks) {
       const sc = screenAt(d);
@@ -1879,7 +1882,7 @@ function startRoom(cv, app) {
     }
     // a bot being carried, over everything; a piece carried in from the closet, where it would stand
     for (const f of w.folk.values()) if (f.held) drawFigure(ctx, f, f.b, T, hl);
-    if (carrying && carrying.at) { ctx.globalAlpha = 0.7; drawKind(ctx, carrying.kind, carrying.at, w, T); ctx.globalAlpha = 1; }
+    if (carrying && carrying.at) { ctx.globalAlpha = 0.7; if (carrying.kind === "desk") drawBlankDesk(ctx, ...carrying.at, carrying.m); else drawKind(ctx, carrying.kind, carrying.at, w, T); ctx.globalAlpha = 1; }
     if (held) hovered = null;
     if (!hovered && seatHover && !held) { const f = w.folk.get(seatHover.id); if (f && f.b) hovered = { b: f.b, x: seatHover.x + 3, y: seatHover.y - 16, seat: true }; }
 
@@ -3134,13 +3137,14 @@ function startRoom(cv, app) {
     put(ctx, sprites.swap("door", { h: p.hi, w: p.top, d: p.d, k: p.k }), 0, 0);
     return c.toDataURL();
   }
-  function icon(kind, S = K, pad = 4) {
+  function icon(kind, S = K, pad = 4, m = "") {   // (m: a desk in that machine's paint, for its line in the doors' panel)
     const r = foot(kind, [0, 0]), c = document.createElement("canvas");
     c.width = (r[2] - r[0] + 2 * pad) * S; c.height = (r[3] - r[1] + 2 * pad) * S;
     const ctx = c.getContext("2d");
     ctx.imageSmoothingEnabled = false;
     ctx.setTransform(S, 0, 0, S, (pad - r[0]) * S, (pad - r[1]) * S);
-    drawKind(ctx, kind, [0, 0], { board: [], folk: new Map(), pong: { t: 0, from: 0 } }, 0);
+    if (kind === "desk") drawBlankDesk(ctx, 0, 0, m);
+    else drawKind(ctx, kind, [0, 0], { board: [], folk: new Map(), pong: { t: 0, from: 0 } }, 0);
     return c.toDataURL();
   }
   // a piece carried in from the closet (client coordinates): its ghost follows the pointer while
@@ -3152,17 +3156,18 @@ function startRoom(cv, app) {
   // its unit then)
   let pending = null;
   const pend = (at, mid, kind = "door", m = "") => { pending = at ? { at, mid, kind, m, t: performance.now() } : null; draw(); };
-  function carryKind(kind, cx, cy) {
+  // (a desk by the middle of its cabinet: its place is its left end; `m` its machine, for its paint)
+  const deskAt = (x, y) => clampAt("desk", [Math.round(x - 13), Math.round(y + 8)]);
+  function carryKind(kind, cx, cy, m = "") {
     if (!kind) { carrying = null; draw(); return null; }
     const b = cv.getBoundingClientRect(), x = (cx - b.left) / K, y = (cy - b.top) / K;
     const inside = x >= 0 && x < W && y >= 0 && y < H;
     pointer = inside ? { x, y } : null;      // the room's pointer follows the carried piece (the canvas gets no events: the closet holds the pointer)
-    const [ox, oy] = kind === "desk" ? [-13, 8] : [0, 0];   // (a desk by the middle of its cabinet: its place is its left end)
-    carrying = { kind, at: inside ? clampAt(kind, [Math.round(x + ox), Math.round(y + oy)]) : null };   // where it will land: there
+    carrying = { kind, m, at: !inside ? null : kind === "desk" ? deskAt(x, y) : clampAt(kind, [Math.round(x), Math.round(y)]) };   // where it will land: there
     draw();
     return carrying.at;
   }
-  function placeKind(kind, cx, cy) { const at = carryKind(kind, cx, cy); carrying = null; draw(); return at; }
+  function placeKind(kind, cx, cy, m) { const at = carryKind(kind, cx, cy, m); carrying = null; draw(); return at; }
   // burrow's own settings: a small steel box on the wall with one big lever, its red knob up; pulled down
   // while the settings' panel is open (a click on it opens them)
   const SB_H = () => 14, SB_W = () => 10;
@@ -3639,6 +3644,12 @@ function startRoom(cv, app) {
       // burn comes off it, and only over the fire
       const loose = onWall(moving.key) && !fixed(moving.key) && [Math.round(Math.max(2 - (r[0] - at[0]), Math.min(W - 2 - (r[2] - at[0]), at[0]))), Math.round(Math.max(0, Math.min(H - 1 - (r[3] - at[1]), at[1])))];
       moving.at = loose && lastL && inFire(lastL, moving.key) ? loose : clampAt(moving.key, at, moving.u);
+      // a door pulled down onto the floor: a new desk on its machine comes out of it, the door staying where it hangs;
+      // back up on the wall it is the door again, over the fire the door to burn. A boarded door gives none
+      const mid = KIND(moving.key) === "door" ? moving.key.slice(5) : null;
+      moving.pull = mid !== null && pointer.y >= WALL + 8 && !(lastL && inFire(lastL, moving.key)) && !cutOff(mid);
+      if (moving.pull) { moving.at = moving.from; carrying = { kind: "desk", m: mid, at: deskAt(pointer.x, pointer.y), pull: true }; }
+      else if (carrying && carrying.pull) carrying = null;
     }
     if (dogHeld && world().dog) { const g = world().dog; g.x = Math.max(8, Math.min(W - 8, pointer.x)); g.y = Math.max(WALL, Math.min(H - 2, pointer.y + 7)); }   // it hangs from the pointer
     if (held) {
@@ -3653,7 +3664,11 @@ function startRoom(cv, app) {
       const you = world().folk.get("you"), a = press && press.action;
       if (you && you.act.kind === "arm" && press && !moving && !held && pointer && Math.hypot(pointer.x - press.x, pointer.y - press.y) <= 1 && !(a && a.kind === "aim")) end(you);
     }
-    if (moving) {
+    if (moving && moving.pull) {             // a desk out of a door, let go: it stands there while its folder is asked
+      const at = carrying && carrying.at, m = moving.key.slice(5);
+      carrying = null; moving = null;
+      if (at) app.act({ kind: "doorDesk", at, m });
+    } else if (moving) {
       const s = app.state(), d = lastL && lastL.desks.find((d) => d.key === moving.key);
       const burn = lastL && inFire(lastL, moving.key);
       if (burn) {                            // into the fire: a picture of it goes in, the thing itself goes (a desk's bots walk out)
