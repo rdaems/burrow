@@ -88,6 +88,8 @@ pub struct Burrow {
     pub leaving: Option<crate::fpsview::Leaving>,
     /// pictures to drop from the GPU at the next paint
     pub stale_pictures: Vec<Arc<RenderImage>>,
+    /// the matrix, over the whole window in the room's place (the operator's console)
+    pub matrix: Option<crate::matrix::Matrix>,
 }
 
 impl Burrow {
@@ -173,6 +175,12 @@ impl Burrow {
                                 let mut out = Output::default();
                                 b.room.debug_dead(&inp, &mut out);
                                 b.after(out, window, cx);
+                            }
+                            // the matrix, and a line typed at its operator's line (matrix:ls, matrix:jack kite), or the
+                            // pointer on a lane (matrix:@kite)
+                            "matrix" => {
+                                b.act(json!({"kind": "matrix"}), window, cx);
+                                b.matrix_debug(v, window, cx);
                             }
                             "view" => {
                                 if let Some(kind) = ViewKind::parse(v) {
@@ -264,6 +272,7 @@ impl Burrow {
             fps: None,
             leaving: None,
             stale_pictures: Vec::new(),
+            matrix: None,
         }
     }
 
@@ -290,6 +299,9 @@ impl Burrow {
                     self.after(out, window, cx);
                 }
                 Event::Talk { from, to } => {
+                    if self.matrix_talk(&from, &to) {
+                        continue; // a streak across the matrix (the room is not drawn while it is up)
+                    }
                     let inp = self.input();
                     let mut out = Output::default();
                     self.room.talk(&inp, &mut out, &from, &to);
@@ -307,9 +319,12 @@ impl Burrow {
         }
         self.tick_games(dt, cx);
         let ticked = self.room.advance(dt);
-        if ticked || self.dirty || news {
+        if (ticked || self.dirty || news) && self.matrix.is_none() {
             self.redraw(window, cx);
             cx.notify();
+        }
+        if self.matrix.is_some() {
+            self.matrix_frame(news, window, cx);
         }
         if self.fps.is_some() {
             self.fps_frame(dt, ticked, window, cx);
@@ -465,6 +480,7 @@ impl Burrow {
             "settings" => self.open_view(ViewKind::Settings, window, cx),
             "doors" => self.open_view(ViewKind::Doors, window, cx),
             "clock" => self.open_view(ViewKind::Clock, window, cx),
+            "matrix" => self.open_matrix(window, cx), // the operator's console: jack in (its `room` brings you back)
             "outside" => {
                 self.views.outside_key = Some(s("key"));
                 self.open_view(ViewKind::Outside, window, cx)
@@ -1256,6 +1272,7 @@ impl Render for Burrow {
         }
         let room = self.room_element(cx);
         let pane = self.pane_element(window, cx);
+        let matrix = self.matrix_element(window, cx);
         let dragging = self.drag.is_some();
         let this = cx.entity();
         div()
@@ -1275,8 +1292,11 @@ impl Render for Burrow {
                 ),
             )
             .child(pane)
+            .when_some(matrix, |d, m| d.child(m))
             .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| {
-                if !this.fps_key(e) {
+                if this.matrix.is_some() {
+                    this.matrix_key(e, window, cx)
+                } else if !this.fps_key(e) {
                     views::key(this, e, window, cx)
                 }
             }))

@@ -3,12 +3,13 @@
 use alacritty_terminal::term::color::Colors;
 use alacritty_terminal::vte::ansi::{Color, NamedColor, Rgb};
 
-/// light or dark after the theme Claude Code is set to on that machine
+/// light or dark after the theme Claude Code is set to on that machine; the operator's green in the matrix
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Theme {
     #[default]
     Dark,
     Light,
+    Matrix,
 }
 
 pub struct Palette {
@@ -42,11 +43,24 @@ pub const LIGHT: Palette = Palette {
     ],
 };
 
+/// the matrix's terminal (matrix.js's MATRIX): phosphor green on black
+pub const MATRIX: Palette = Palette {
+    background: 0x000a02,
+    foreground: 0xb6f7c4,
+    cursor: 0x00ff41,
+    selection: 0x00ff4144,
+    ansi: [
+        0x0a1f0f, 0xff5f56, 0x00ff41, 0xd7ff5f, 0x3fbf8f, 0x8fe3b0, 0x5fffd7, 0xc8f7d0, //
+        0x2f6b3c, 0xff8a80, 0x7dff9e, 0xefffa0, 0x7fe0b8, 0xc0f5d2, 0xa0ffe8, 0xe9ffee,
+    ],
+};
+
 impl Theme {
     pub fn palette(self) -> &'static Palette {
         match self {
             Theme::Dark => &DARK,
             Theme::Light => &LIGHT,
+            Theme::Matrix => &MATRIX,
         }
     }
 }

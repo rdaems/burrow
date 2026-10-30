@@ -124,11 +124,13 @@ pub enum FieldEvent {
     Blur,
 }
 
-/// how it looks: the 16-bit panels' steel field in the terminal's font, or the notes' quiet box
+/// how it looks: the 16-bit panels' steel field in the terminal's font, the notes' quiet box, or the matrix's operator's
+/// line (bare, phosphor on black)
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Look {
     Steel,
     Notes,
+    Operator,
 }
 
 pub struct Field {
@@ -270,6 +272,7 @@ impl Field {
         match self.look {
             Look::Steel => px(20.),
             Look::Notes => px(20.),
+            Look::Operator => px(18.),
         }
     }
 
@@ -443,6 +446,7 @@ impl Element for Text {
         let (family, size_, ink, faint) = match look {
             Look::Steel => (kit::MONO, px(14.), col::INK, col::STEEL1),
             Look::Notes => (kit::SANS, px(14.), col::TEXT, col::FAINT),
+            Look::Operator => (kit::MONO, px(13.), 0xe9ffee, 0x004d12),
         };
         let shown: SharedString = if text.is_empty() { placeholder } else { text.clone().into() };
         let color = kit::hsla(if text.is_empty() { faint } else { ink });
@@ -498,6 +502,7 @@ impl Element for Text {
                 let selc = match look {
                     Look::Steel => rgba(0xffe27aff),
                     Look::Notes => rgba(0xffe27a55),
+                    Look::Operator => rgba(0x00ff4144),
                 };
                 for (line, start, y) in &lines {
                     let (a, z) = (sel.start.max(*start), sel.end.min(start + line.len()));
@@ -529,6 +534,7 @@ impl Element for Text {
                     let c = match look {
                         Look::Steel => col::INK,
                         Look::Notes => col::GOLD2,
+                        Look::Operator => 0x00ff41,
                     };
                     window.paint_quad(fill(Bounds::new(point(o.x + p.x, o.y + p.y + px(2.)), size(px(2.), lh - px(4.))), kit::hsla(c)));
                 }
@@ -563,6 +569,7 @@ impl Render for Field {
                 .border_color(rgb(if focused { col::GOLD2 } else { col::LINE }))
                 .min_h(px(52.))
                 .child(text.px(px(9.)).py(px(7.))),
+            Look::Operator => body.child(text),
         }
     }
 }

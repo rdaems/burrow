@@ -6,6 +6,7 @@ mod field;
 mod fpsview;
 mod icon;
 mod kit;
+mod matrix;
 mod notes;
 mod panels;
 mod shot;
