@@ -487,6 +487,12 @@ impl Burrow {
                 self.sound.play(if on { "tune" } else { "click" }, a["pan"].as_f64().unwrap_or(0.0), 1.0, true, None);
                 hub.settings(&[("sound", on)]);
             }
+            "halloween" => {
+                // the pumpkin: its candle lit (the office in costume) or blown out
+                let on = !self.state.settings.on("halloween");
+                self.sound.play("click", 0.0, 1.0, false, None);
+                hub.settings(&[("halloween", on)]);
+            }
             "kept" => {
                 let _ = hub.office_do(&json!({"kept": s("id")}));
             }

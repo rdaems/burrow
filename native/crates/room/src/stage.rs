@@ -4,7 +4,7 @@
 
 use crate::avatar::c as C;
 use crate::draw::{self as D, Burning as DBurning, FirePart, PongBall, RecScreen, Reception};
-use crate::figure::{Arms, Legs, body};
+use crate::figure::{Arms, Legs, body_dress};
 use crate::font::tiny;
 use crate::io::{Input, Output};
 use crate::layout::{ADD_W, FIRE_H, LAP, Layout, WALL, foot, jround, kind_of, name_of, on_wall};
@@ -175,6 +175,9 @@ impl Room {
                 set_tip(&mut tip, "settings".into(), (b.x0 + 7) as f64, (b.y0 + 4) as f64);
             }
         }
+        if self.spooky {
+            D::draw_cobwebs(ctx, self.size.w, t, inp.still);
+        }
         // a bot and its seat at its project's desk are one thing: the pointer on either lights up both (and its
         // session), and a click on either opens it
         if let Some(id) = &self.hover_id {
@@ -245,7 +248,9 @@ impl Room {
             let p = self.paint_of(inp, &d.d.m);
             let hots = D::desk_hots(d.x0, d.y, d.cab, d.trees.len());
             let on_plate = self.hot_r(hots.plate, json!({"kind": "desk", "unit": d.d.unit}));
-            let on_screen = self.hot_r(hots.screen, json!({"kind": "shell", "m": d.d.m, "dir": d.d.dir}));
+            // out of reach nothing opens there and no bot starts: no click, no +, and the pointer on the screen says why
+            let cut = think::cut_off(s, &d.d.m);
+            let on_screen = !cut && self.hot_r(hots.screen, json!({"kind": "shell", "m": d.d.m, "dir": d.d.dir}));
             let (sx, sy) = D::screen_at(d.x0, d.cab, d.trees.len(), d.y);
             let gw = 22 + d.trees.len() as i32 * LAP;
             let where_ = |dir: &str| {
@@ -259,8 +264,10 @@ impl Room {
                 }
                 set_tip(&mut tip, where_(&d.d.dir), (sx + 11) as f64, (sy - 1) as f64);
                 self.screen_hover = Some((d.d.m.clone(), d.d.dir.clone()));
+            } else if cut && self.moving.is_none() && self.held.is_none() && self.over(sx as f64, sy as f64, (sx + 22) as f64, (sy + 18) as f64) {
+                set_tip(&mut tip, format!("{} - out of reach", where_(&d.d.dir)), (sx + 11) as f64, (sy - 1) as f64);
             }
-            let on_plus = self.hot_r(hots.plus, json!({"kind": "spawn", "m": d.d.m, "dir": d.d.dir}));
+            let on_plus = !cut && self.hot_r(hots.plus, json!({"kind": "spawn", "m": d.d.m, "dir": d.d.dir}));
             if on_plus {
                 set_tip(&mut tip, "new bot".into(), (sx + gw + 4) as f64, (sy - 2) as f64);
             }
@@ -269,7 +276,7 @@ impl Room {
             }
             let mut trees = Vec::new();
             for (k, tr) in d.trees.iter().enumerate() {
-                let on = self.hot_r(hots.laptops[k], json!({"kind": "shell", "m": d.d.m, "dir": tr}));
+                let on = !cut && self.hot_r(hots.laptops[k], json!({"kind": "shell", "m": d.d.m, "dir": tr}));
                 let mine: Vec<&String> = d.seats.iter().filter(|st| st.2 == *tr).map(|st| &st.0).collect();
                 if on {
                     for id in &mine {
@@ -327,6 +334,7 @@ impl Room {
                     on_plus,
                     lit: screen_lit,
                     shell_lit,
+                    cut,
                 };
                 D::outlined(c, r, dg, RED, tn, |c| D::draw_desk(c, &desk, t));
             };
@@ -694,6 +702,16 @@ impl Room {
                 set_tip(&mut tip, if sound_on { "sound on".into() } else { "sound off".into() }, ra.x as f64, (ra.y - 22) as f64);
             }
         }
+        // the pumpkin: Halloween, while one stands here and its candle is lit (the office in costume); a click blows it
+        // out or lights it again
+        let spooky = self.spooky;
+        for pk in l.pumpkins.clone() {
+            let h = self.hot_r(foot("pumpkin", [pk.x, pk.y], None), json!({"kind": "halloween"}));
+            piece(&mut items, &pk.key, "pumpkin", pk.x, pk.y, Box::new(move |c| D::draw_pumpkin(c, pk.x, pk.y, spooky, t)), 0.5);
+            if h {
+                set_tip(&mut tip, if spooky { "halloween".into() } else { "light it".into() }, pk.x as f64, (pk.y - 15) as f64);
+            }
+        }
         for n in l.neuralyzers.clone() {
             let fl = self.w.s.flash.is_some_and(|f| now - f.2 < 400.0);
             piece(&mut items, &n.key, "neuralyzer", n.x, n.y, Box::new(move |c| D::draw_neuralyzer(c, n.x, n.y, fl)), 0.5);
@@ -885,7 +903,7 @@ impl Room {
             return;
         }
         let (x, y) = (jround(f.x), jround(f.y));
-        let im = body(&f.seed, color_of(f), Arms::Down, Legs::Stand, f.human, false);
+        let im = body_dress(&f.seed, color_of(f), Arms::Down, Legs::Stand, f.human, false, false, crate::scene::dress_of(f, self.spooky));
         let hr = D::sleeper_hot(x, y);
         let on = self.over(hr[0] as f64, hr[1] as f64, hr[2] as f64, hr[3] as f64);
         let shot = f.act.kind == "dead";

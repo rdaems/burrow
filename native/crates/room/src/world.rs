@@ -62,6 +62,8 @@ pub struct Act {
     pub went: bool,
     pub water: bool,
     pub t: f64,
+    /// a sausage over the fire: seconds until it is done
+    pub cook: f64,
     pub free: bool,
     pub done: f64,
     pub wave: f64,
@@ -148,6 +150,8 @@ pub struct Fig {
     pub lying: bool,
     /// its eyes red: a mutineer, gun in hand
     pub red: bool,
+    /// its machine out of reach: it stands still as it was last seen until the line is back
+    pub frozen: bool,
     pub gone: bool,
     pub kick: f64,
     pub moved: f64,
@@ -436,7 +440,8 @@ pub struct Shared {
     pub fear: f64,
     /// when the last bot was shot (the condemned still waiting start at it)
     pub bang: f64,
-    /// your kills adding up (fading): enough, and the mutiny; when it is to start; its shots at you in the first person
+    /// the kills adding up (fading; an office manager's are yours): enough, and the mutiny; when it is to start; its
+    /// shots at you in the first person
     pub blood: f64,
     pub mutiny: Option<Mutiny>,
     pub mutiny_at: Option<f64>,

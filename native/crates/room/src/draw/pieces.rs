@@ -412,6 +412,52 @@ pub fn draw_notes(ctx: &mut Ctx, x: i32, y: i32, t: f64) {
     }
 }
 
+/// the pumpkin: carved, a candle in it. Lit (Halloween), its eyes, nose and grin glow and flicker by the room's time
+/// `t`; blown out, they are dark
+pub fn draw_pumpkin(ctx: &mut Ctx, x: i32, y: i32, on: bool, t: f64) {
+    let (hi, top, d) = (Color::rgb(0xf6a03c), Color::rgb(0xe07424), Color::rgb(0xa8481c));
+    let rows = [(-3, 3), (-5, 5), (-6, 6), (-6, 6), (-6, 6), (-6, 6), (-6, 6), (-5, 5), (-4, 4)]; // its rows' ends, top down
+    rect(ctx, x - 6, y, 13, 1, SHADOW);
+    for (j, &(a, b)) in rows.iter().enumerate() {
+        rect(ctx, x + a - 1, y - 9 + j as i32, b - a + 3, 1, INK);
+    }
+    rect(ctx, x - 3, y - 10, 7, 1, INK);
+    rect(ctx, x - 2, y - 1, 5, 1, INK);
+    for (j, &(a, b)) in rows.iter().enumerate() {
+        let ry = y - 9 + j as i32;
+        rect(ctx, x + a, ry, b - a + 1, 1, top);
+        for rx in [-3, 3] {
+            if rx > a && rx < b {
+                rect(ctx, x + rx, ry, 1, 1, d); // its ribs
+            }
+        }
+        rect(ctx, x + b, ry, 1, 1, d);
+    }
+    rect(ctx, x - 4, y - 8, 2, 1, hi);
+    rect(ctx, x - 5, y - 7, 1, 2, hi);
+    rect(ctx, x - 1, y - 12, 2, 3, INK); // the stem
+    rect(ctx, x, y - 12, 1, 3, WOOD.d);
+    rect(ctx, x + 1, y - 12, 1, 1, INK);
+    let k = (t * 9. + (t * 23.).sin()).floor() as i64 % 3;
+    let glow = if !on {
+        C::INK2
+    } else if k != 0 {
+        SP::Y
+    } else {
+        C::GOLD1
+    };
+    let deep = if !on { INK } else { C::GOLD1 };
+    for ex in [-4, 2] {
+        rect(ctx, ex + x, y - 6, 3, 1, glow); // the eyes, triangles
+        rect(ctx, ex + x + 1, y - 7, 1, 1, glow);
+    }
+    rect(ctx, x, y - 5, 1, 1, deep); // the nose
+    rect(ctx, x - 4, y - 3, 9, 1, glow); // the grin, two teeth
+    rect(ctx, x - 3, y - 2, 7, 1, deep);
+    rect(ctx, x - 2, y - 3, 1, 1, top);
+    rect(ctx, x + 2, y - 2, 1, 1, top);
+}
+
 /// the neuralyzer (Men in Black's): a black pedestal, the silver flasher on it; its bulb lit while it flashes
 pub fn draw_neuralyzer(ctx: &mut Ctx, x: i32, y: i32, lit: bool) {
     rect(ctx, x - 5, y, 10, 1, SHADOW);

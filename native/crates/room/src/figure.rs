@@ -19,7 +19,7 @@ pub mod mat {
     pub const K: Color = Color::rgb(0x3f3740);
 }
 
-/// what the arms do: down sw1 sw2 up wave fwd1 fwd2 reach mug gun paper book can roll
+/// what the arms do: down sw1 sw2 up wave fwd1 eat fwd2 reach mug gun paper book can roll
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
 pub enum Arms {
     #[default]
@@ -29,6 +29,8 @@ pub enum Arms {
     Up,
     Wave,
     Fwd1,
+    /// a hand at its mouth (a sausage eaten)
+    Eat,
     Fwd2,
     Reach,
     Paint1,
@@ -60,6 +62,7 @@ impl Arms {
             "up" => Arms::Up,
             "wave" => Arms::Wave,
             "fwd1" => Arms::Fwd1,
+            "eat" => Arms::Eat,
             "fwd2" => Arms::Fwd2,
             "reach" => Arms::Reach,
             "phone" => Arms::Phone,
@@ -86,7 +89,18 @@ impl Legs {
     }
 }
 
-type Key = (String, Color, Arms, Legs, bool, bool, bool);
+/// Halloween's costumes (room.js's DRESS): a witch's hat (the picture HAT dots taller), a vampire's cape, a skeleton's
+/// suit
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Dress {
+    Hat,
+    Cape,
+    Bones,
+}
+/// how much taller a figure in a witch's hat is
+pub const HAT: i32 = 5;
+
+type Key = (String, Color, Arms, Legs, bool, bool, bool, Option<Dress>);
 thread_local! {
     static BODIES: RefCell<HashMap<Key, Rc<Image>>> = RefCell::new(HashMap::new());
 }
@@ -104,16 +118,24 @@ pub fn body(seed: &str, color: Color, arms: Arms, legs: Legs, human: bool, femme
 
 /// the same, `red`: a robot with its eyes red (a mutineer, gun in hand)
 pub fn body_red(seed: &str, color: Color, arms: Arms, legs: Legs, human: bool, femme: bool, red: bool) -> Rc<Image> {
-    let key = (seed.to_string(), color, arms, legs, human, femme, red);
+    body_dress(seed, color, arms, legs, human, femme, red, None)
+}
+
+/// the same in costume (Halloween): in a witch's hat the picture is HAT dots taller, the figure as low in it as ever
+#[allow(clippy::too_many_arguments)]
+pub fn body_dress(seed: &str, color: Color, arms: Arms, legs: Legs, human: bool, femme: bool, red: bool, dress: Option<Dress>) -> Rc<Image> {
+    let key = (seed.to_string(), color, arms, legs, human, femme, red, dress);
     if let Some(im) = BODIES.with(|b| b.borrow().get(&key).cloned()) {
         return im;
     }
     let f = avatar::avatar(seed, !human, Some(color));
-    let mut px: Vec<Option<Color>> = vec![None; (SW * SH) as usize];
-    let mut line = vec![false; (SW * SH) as usize];
-    let idx = |x: i32, y: i32| ((y + 1) * SW + x + 1) as usize;
+    let p = if dress == Some(Dress::Hat) { HAT } else { 0 };
+    let sh = SH + p;
+    let mut px: Vec<Option<Color>> = vec![None; (SW * sh) as usize];
+    let mut line = vec![false; (SW * sh) as usize];
+    let idx = |x: i32, y: i32| ((y + 1 + p) * SW + x + 1) as usize;
     let set = |px: &mut Vec<Option<Color>>, x: i32, y: i32, c: Color| {
-        let i = (y + 1) * SW + x + 1;
+        let i = (y + 1 + p) * SW + x + 1;
         if i >= 0 && (i as usize) < px.len() {
             px[i as usize] = Some(c);
         }
@@ -121,7 +143,7 @@ pub fn body_red(seed: &str, color: Color, arms: Arms, legs: Legs, human: bool, f
     let rect = |px: &mut Vec<Option<Color>>, x: i32, y: i32, w: i32, h: i32, c: Color| {
         for j in 0..h {
             for i in 0..w {
-                let k = (y + j + 1) * SW + x + i + 1;
+                let k = (y + j + 1 + p) * SW + x + i + 1;
                 if k >= 0 && (k as usize) < px.len() {
                     px[k as usize] = Some(c);
                 }
@@ -158,18 +180,55 @@ pub fn body_red(seed: &str, color: Color, arms: Arms, legs: Legs, human: bool, f
         }
     }
     // a person wears what their portrait wears (a coat is white, a suit grey): its shoulders' colours
-    let c0 = if human { at(&f, 6, 19).unwrap_or(color) } else { c::STEEL3 };
-    let c1 = if human { at(&f, 15, 19).filter(|&x| x != c0).unwrap_or(c0.shade(0.62)) } else { c::STEEL1 };
+    let bones = dress == Some(Dress::Bones); // (a skeleton's suit: black, its bones on it)
+    let c0 = if bones {
+        c::INK2
+    } else if human {
+        at(&f, 6, 19).unwrap_or(color)
+    } else {
+        c::STEEL3
+    };
+    let c1 = if bones {
+        c::INK2
+    } else if human {
+        at(&f, 15, 19).filter(|&x| x != c0).unwrap_or(c0.shade(0.62))
+    } else {
+        c::STEEL1
+    };
     let skin = if human { avatar::skin(seed) } else { c::STEEL3 };
-    let leg = if human { c::INK2 } else { c::STEEL1 };
+    let leg = if human || bones { c::INK2 } else { c::STEEL1 };
     let top = cut + 1;
     if human {
         rect(&mut px, 9, top, 2, 1, skin.shade(0.8));
     }
     let t0 = top + if human { 1 } else { 0 };
+    if dress == Some(Dress::Cape) {
+        // to the knees, flaring, red inside; its collar standing up behind the head
+        rect(&mut px, 3, t0, 14, 24 - t0, c::INK2);
+        rect(&mut px, 2, 20, 16, 4, c::INK2);
+        rect(&mut px, 4, t0 + 1, 1, 22 - t0, c::RED0);
+        rect(&mut px, 15, t0 + 1, 1, 22 - t0, c::RED0);
+        rect(&mut px, 3, 23, 14, 1, c::RED0);
+        for y in t0 - 5..t0 {
+            for (x, col) in [(2, c::INK2), (3, c::RED0), (4, c::RED0), (15, c::RED0), (16, c::RED0), (17, c::INK2)] {
+                if (y > t0 - 5 || x == 2 || x == 17) && at(&f, x, y).is_none() {
+                    set(&mut px, x, y, col);
+                }
+            }
+        }
+    }
     rect(&mut px, 6, t0, 8, 22 - t0, c0);
     rect(&mut px, 12, t0, 2, 22 - t0, c1);
-    if !human {
+    if bones {
+        // the spine, the ribs, the hips
+        rect(&mut px, 9, t0, 2, 21 - t0, c::STEEL3);
+        let mut y = t0 + 1;
+        while y < t0 + 6 {
+            rect(&mut px, 7, y, 6, 1, c::STEEL3);
+            y += 2;
+        }
+        rect(&mut px, 7, 20, 6, 1, c::STEEL3);
+    } else if !human {
         set(&mut px, 9, top + 2, color);
         set(&mut px, 10, top + 2, color);
         set(&mut px, 9, top + 3, color.shade(0.62));
@@ -216,6 +275,12 @@ pub fn body_red(seed: &str, color: Color, arms: Arms, legs: Legs, human: bool, f
             rect(&mut px, 4, 17, 2, 2, c1);
             rect(&mut px, 4, 19, 2, 1, skin);
             fwd(&mut px, if arms == Arms::Fwd1 { 19 } else { 20 }, 3);
+        }
+        Arms::Eat => {
+            // a hand at its mouth
+            back(&mut px);
+            rect(&mut px, 14, 15, 2, 3, c1);
+            rect(&mut px, 13, 13, 2, 2, skin);
         }
         Arms::Reach => {
             back(&mut px);
@@ -326,9 +391,36 @@ pub fn body_red(seed: &str, color: Color, arms: Arms, legs: Legs, human: bool, f
             rect(&mut px, 11, 26, 3, 1, c::INK);
         }
     }
-    let mut im = Image::new(SW as u32, SH as u32);
+    if bones && legs != Legs::Sit {
+        set(&mut px, 7, 24, c::STEEL3); // its knees
+        set(&mut px, 12, 24, c::STEEL3);
+    }
+    if dress == Some(Dress::Hat) {
+        // pointed, purple, an orange band, its tip bent over; on the head's top row: the first row as wide as a head
+        // (not an antenna)
+        let mut ht = 0;
+        while ht < cut && (0..20).filter(|&x| at(&f, x, ht).is_some_and(|c| c != c::INK)).count() < 5 {
+            ht += 1;
+        }
+        let (mut x0, mut x1) = (20, 0);
+        for x in 0..20 {
+            if at(&f, x, ht + 1).is_some() {
+                x0 = x0.min(x);
+                x1 = x1.max(x);
+            }
+        }
+        let cl = (x0 + x1).div_euclid(2);
+        let (hi, hp) = (c::PURPLE1, c::PURPLE0);
+        rect(&mut px, cl - 6, ht, 13, 1, hp);
+        rect(&mut px, cl - 3, ht - 1, 8, 1, c::GOLD1);
+        for (dy, a, b) in [(2, -2, 3), (3, -2, 2), (4, -1, 2), (5, 0, 2), (6, 1, 2), (7, 3, 3)] {
+            rect(&mut px, cl + a, ht - dy, b - a + 1, 1, hp);
+            set(&mut px, cl + a, ht - dy, hi);
+        }
+    }
+    let mut im = Image::new(SW as u32, sh as u32);
     let has = |k: i32| k >= 0 && (k as usize) < px.len() && px[k as usize].is_some() && !line[k as usize];
-    for y in 0..SH {
+    for y in 0..sh {
         for i in 0..SW {
             let k = y * SW + i;
             if px[k as usize].is_some() {

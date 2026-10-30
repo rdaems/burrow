@@ -167,6 +167,11 @@ fn spec(name: &str) -> Spec {
 /// shell whose tile is under the pointer
 #[allow(clippy::too_many_arguments)]
 fn desk_case(sp: Spec, t: f64, lit: bool, hl: &[&str], pointer: Option<&str>, shells: &[(&str, bool)], hl_shell: Option<&str>) -> Image {
+    desk_case_cut(sp, t, lit, hl, pointer, shells, hl_shell, false)
+}
+/// the same, `cut`: its machine out of reach (snow on its screens, nothing under the pointer there)
+#[allow(clippy::too_many_arguments)]
+fn desk_case_cut(sp: Spec, t: f64, lit: bool, hl: &[&str], pointer: Option<&str>, shells: &[(&str, bool)], hl_shell: Option<&str>, cut: bool) -> Image {
     let label = sp.label.to_uppercase();
     let cab = (burrow_room::font::tiny_w(&label) + 6).max(22).max(if sp.trees.is_empty() { 0 } else { 26 + sp.trees.len() as i32 * LAP });
     let (x0, y) = (4, 46);
@@ -183,7 +188,7 @@ fn desk_case(sp: Spec, t: f64, lit: bool, hl: &[&str], pointer: Option<&str>, sh
         Some("laptop") => Some((sx + 26, y - 19)),
         _ => None,
     };
-    let inside = |r: [i32; 4]| pt.is_some_and(|(x, y)| x >= r[0] && x < r[2] && y >= r[1] && y < r[3]);
+    let inside = |r: [i32; 4]| !cut && pt.is_some_and(|(x, y)| x >= r[0] && x < r[2] && y >= r[1] && y < r[3]);
     let on_screen = inside(hots.screen);
     let mut hl: Vec<String> = hl.iter().map(|s| s.to_string()).collect();
     if on_screen {
@@ -236,6 +241,7 @@ fn desk_case(sp: Spec, t: f64, lit: bool, hl: &[&str], pointer: Option<&str>, sh
         on_plus: inside(hots.plus),
         lit,
         shell_lit: hl_shell == Some(sp.dir),
+        cut,
     };
     on(130, 50, PLANK, |c| draw_desk(c, &d, t))
 }
@@ -256,6 +262,11 @@ fn desks_are_room_js_drawdesk() {
             "laptop" => desk_case(spec("trees"), 0.6, false, &[], Some("laptop"), &[], None),
             "shell" => desk_case(spec("trees"), 0.6, false, &[], None, &[("/u/burrow", true), ("/u/burrow-wt1", false)], None),
             "shell-idle" => desk_case(spec("empty"), 0.6, false, &[], None, &[("/Users/x/burrow", false)], Some("/Users/x/burrow")),
+            // its machine out of reach
+            "cut" => desk_case_cut(spec("trees"), 0.6, false, &[], None, &[], None, true),
+            "cut-later" => desk_case_cut(spec("idle"), 1.3, false, &[], None, &[], None, true),
+            "cut-screen" => desk_case_cut(spec("idle"), 1.3, false, &[], Some("screen"), &[], None, true),
+            "cut-plus" => desk_case_cut(spec("idle"), 1.3, false, &[], Some("plus"), &[], None, true),
             _ => return None,
         })
     });
@@ -534,5 +545,31 @@ fn paintings_are_paintings_js() {
             c.rect(d.x, d.y, 1, 1, d.c);
         }
         Some(im)
+    });
+}
+
+#[test]
+fn halloween_is_room_js() {
+    // the pumpkin lit (flickering by the time) and blown out; the cobwebs and the spider, across the room's width (the
+    // picture's)
+    check("paint-pumpkin-", exact, |name| {
+        let n = name.strip_prefix("paint-pumpkin-")?;
+        let (lit, t) = if n == "off" { (false, 1.3) } else { (true, n.strip_prefix("on-")?.parse().ok()?) };
+        Some(on(20, 18, PLANK, |c| draw_pumpkin(c, 10, 15, lit, t)))
+    });
+    let w = Image::from_png(&std::fs::read(golden().join("paint-cobwebs-0.png")).unwrap()).unwrap().w;
+    check("paint-cobwebs-", exact, |name| {
+        let t: f64 = name.strip_prefix("paint-cobwebs-")?.parse().ok()?;
+        Some(on(w, 30, WALLC, |c| draw_cobwebs(c, w as i32, t, false)))
+    });
+}
+
+#[test]
+fn the_sausage_is_room_js() {
+    // paint-sausage-<seconds into it>-<facing>: sixteen seconds over the fire, then three bites
+    check("paint-sausage-", exact, |name| {
+        let (a, d) = name.strip_prefix("paint-sausage-")?.split_once('-')?;
+        let (a, d): (f64, f64) = (a.parse().ok()?, if d == "-1" { -1. } else { 1. });
+        Some(on(60, 40, PLANK, |c| draw_sausage(c, if d > 0. { 12 } else { 48 }, 34, d, a, 16., 1.3)))
     });
 }

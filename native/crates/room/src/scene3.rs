@@ -133,7 +133,11 @@ impl Room {
         sc.wkey = wkey;
         // the desks: their cabinet, desktop, screen (and laptops) and chairs, what each screen shows
         for d in &l.desks {
+            let cut = crate::think::cut_off(st, &d.d.m); // (its machine out of reach: snow)
             let screen_of = |tree: &str| -> String {
+                if cut {
+                    return "snow".into();
+                }
                 let seated: Vec<&crate::world::Fig> = d
                     .seats
                     .iter()
@@ -224,6 +228,10 @@ impl Room {
                 }
                 "plant" => p.variant = key.trim_start_matches(|c: char| !c.is_ascii_digit()).parse::<u32>().unwrap_or(0) % 2,
                 "pair" => p.linked = st.pair.contains_key(key),
+                "pumpkin" if self.spooky => {
+                    // its candle
+                    sc.lights.push(Light { x: *x as f64, y: (*y - 5) as f64, z: 5.0, r: 70.0, col: [1.0, 0.78, 0.5], k: 0.5, flicker: true, muzzle: false });
+                }
                 _ => {}
             }
             if let Some(parts) = th.props.build(&p) {
@@ -246,7 +254,10 @@ impl Room {
                 let mut c = im.ctx();
                 c.translate((pad - r[0]) as f64, (pad - r[1]) as f64);
                 let env = D::KindEnv { clock: self.clock(inp), door: D::WOOD };
-                D::draw_kind(&mut c, kind, *x, *y, t, &env);
+                match kind.as_str() {
+                    "pumpkin" => D::draw_pumpkin(&mut c, *x, *y, self.spooky, t), // (as it stands, lit or not)
+                    _ => D::draw_kind(&mut c, kind, *x, *y, t, &env),
+                }
             }
             let cx = (r[0] + r[2]) as f64 / 2.0;
             sc.things.push(Thing {

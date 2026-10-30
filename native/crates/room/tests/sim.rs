@@ -219,14 +219,17 @@ fn the_painting_grows_only_while_a_robot_paints_at_the_easel() {
     room.resize(&inp, 820.0);
     let mut painted = 0;
     let mut n = None;
+    let painting = |room: &Room| room.w.folk.iter().any(|f| f.act.kind == "paint" && f.act.there);
     for _ in 0..12 * 60 * 12 {
+        // (one at it as the tick began: it may have put its brush down in that same tick)
+        let was = painting(&room);
         run(&mut room, &mut inp, 5.0 / 60.0);
         let a = room.w.s.art.as_ref().expect("a painting on the easel from the start");
         if let Some(n0) = n
             && a.n > n0
         {
             painted += 1;
-            assert!(room.w.folk.iter().any(|f| f.act.kind == "paint" && f.act.there), "it grew with nobody painting");
+            assert!(was || painting(&room), "it grew with nobody painting");
             assert!(!a.by.is_empty());
         }
         n = Some(a.n);
@@ -278,4 +281,119 @@ fn shoot_three_and_the_rest_come_for_you_then_respawn_ends_it() {
     run(&mut room, &mut inp, 40.0);
     assert!(room.w.s.mutiny.is_none(), "the guns went back, it is over");
     assert!(room.w.folk.iter().all(|f| !f.red && (f.human || f.carry != Some("gun"))), "nobody kept a gun");
+}
+
+#[test]
+fn an_office_manager_s_kills_count_for_the_mutiny() {
+    // she works for you: a bot she shoots adds up as if you had
+    let mut s = demo();
+    s.furniture.push("booth0".into());
+    s.settings.hardcore = true;
+    let mut inp = Input { state: s.clone(), now: 0.0, hour: 14, ..Default::default() };
+    let mut room = Room::new(5, 0.0);
+    room.resize(&inp, 820.0);
+    run(&mut room, &mut inp, 5.0);
+    let id = s.bots.iter().find(|b| !b.busy && !b.waiting).expect("an idle bot").id.clone();
+    let mut out = Output::default();
+    room.condemn(&inp, &mut out, std::slice::from_ref(&id));
+    for _ in 0..60 * 60 {
+        run(&mut room, &mut inp, 1.0 / 60.0);
+        if room.w.get(&id).is_none() {
+            break;
+        }
+    }
+    assert!(room.w.get(&id).is_none() && room.w.remains(&id).is_some(), "she never shot it");
+    assert!(room.w.s.blood > 0.5, "her kill did not count ({})", room.w.s.blood);
+}
+
+#[test]
+fn a_bot_grills_a_sausage_at_the_fire_and_eats_it() {
+    let s = demo();
+    let mut inp = Input { state: s.clone(), now: 0.0, hour: 14, ..Default::default() };
+    let mut room = Room::new(6, 0.0);
+    room.resize(&inp, 820.0);
+    run(&mut room, &mut inp, 3.0);
+    let fire = room.last.clone().unwrap().fire.unwrap();
+    let id = s.bots.iter().find(|b| !b.busy && !b.waiting).unwrap().id.clone();
+    room.w.get_mut(&id).unwrap().act = burrow_room::world::Act { kind: "grill", side: 1, cook: 4.0, ..Default::default() };
+    let mut arms = Vec::new();
+    for _ in 0..12 * 40 {
+        run(&mut room, &mut inp, 1.0 / 12.0);
+        let f = room.w.get(&id).unwrap();
+        if f.act.kind != "grill" {
+            break;
+        }
+        if f.act.t > 0.0 {
+            assert_eq!((f.x, f.y, f.dir), ((fire.x1 + 3) as f64, (fire.y1 + 2) as f64, -1.0), "beside the fire, facing it");
+            if arms.last() != Some(&f.arms) {
+                arms.push(f.arms);
+            }
+        }
+    }
+    assert_eq!(arms, ["fwd1", "eat", "down"], "over the fire, at its mouth, savoured");
+    assert_ne!(room.w.get(&id).unwrap().act.kind, "grill", "and off it goes");
+}
+
+#[test]
+fn a_machine_out_of_reach_freezes_its_bots_and_snows_on_its_screens() {
+    let mut s = demo();
+    let mut inp = Input { state: s.clone(), now: 0.0, hour: 14, ..Default::default() };
+    let mut room = Room::new(8, 0.0);
+    room.resize(&inp, 820.0);
+    run(&mut room, &mut inp, 20.0);
+    s.machines[1].error = Some("no route to host".into());
+    inp.state = s.clone();
+    let lab: Vec<String> = s.bots.iter().filter(|b| b.m == "lab").map(|b| b.id.clone()).collect();
+    run(&mut room, &mut inp, 1.0);
+    // (where they are and how they hold themselves: what they were at may still be ended by a partner in it, a football
+    // game over, as in the web room)
+    let seen = |room: &Room| -> Vec<(f64, f64, &'static str, f64)> { lab.iter().filter_map(|id| room.w.get(id)).map(|f| (f.x, f.y, f.arms, f.step)).collect() };
+    let before = seen(&room);
+    assert_eq!(before.len(), lab.len());
+    run(&mut room, &mut inp, 60.0);
+    assert_eq!(seen(&room), before, "they stand still as last seen");
+    assert!(lab.iter().all(|id| room.w.get(id).unwrap().frozen));
+    // its desks: nothing opens there, no bot starts
+    let mut out = Output::default();
+    let l = room.step(&inp, &mut out);
+    room.draw(&inp, &mut out, &l);
+    let lab_desks = l.desks.iter().filter(|d| d.d.m == "lab").count();
+    assert!(lab_desks > 0);
+    assert!(!room.hots.iter().any(|h| h.action["m"] == "lab" && (h.action["kind"] == "spawn" || h.action["kind"] == "shell")), "a click there does something");
+    assert!(room.hots.iter().any(|h| h.action["m"] == "" && h.action["kind"] == "spawn"), "here it still does");
+    room.img.save_png(concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/room-cut-off.png")).unwrap();
+    // the line back: they take up where they were
+    s.machines[1].error = None;
+    inp.state = s;
+    run(&mut room, &mut inp, 60.0);
+    assert!(lab.iter().all(|id| !room.w.get(id).unwrap().frozen));
+    assert_ne!(seen(&room), before, "still frozen");
+}
+
+#[test]
+fn a_lit_pumpkin_puts_the_office_in_costume() {
+    let mut s = demo();
+    s.furniture.push("pumpkin0".into());
+    s.settings.other.insert("halloween".into(), serde_json::json!(true));
+    let mut inp = Input { state: s.clone(), now: 0.0, hour: 14, ..Default::default() };
+    let mut room = Room::new(11, 0.0);
+    room.resize(&inp, 820.0);
+    run(&mut room, &mut inp, 30.0);
+    let mut out = Output::default();
+    let l = room.step(&inp, &mut out);
+    assert!(room.spooky);
+    room.draw(&inp, &mut out, &l);
+    assert!(room.hots.iter().any(|h| h.action["kind"] == "halloween"), "a click on the pumpkin blows it out");
+    room.img.save_png(concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/room-halloween.png")).unwrap();
+    let scene = room.scene3(&inp).unwrap();
+    assert!(scene.things.iter().any(|t| t.piece.as_deref() == Some("pumpkin0")), "in the first person as its picture");
+    assert!(scene.lights.iter().any(|lt| lt.r == 70.0), "its candle a light");
+    // blown out: no costumes; no pumpkin: none either
+    inp.state.settings.other.insert("halloween".into(), serde_json::json!(false));
+    room.step(&inp, &mut out);
+    assert!(!room.spooky);
+    inp.state.settings.other.insert("halloween".into(), serde_json::json!(true));
+    inp.state.furniture.retain(|k| k != "pumpkin0");
+    room.step(&inp, &mut out);
+    assert!(!room.spooky);
 }

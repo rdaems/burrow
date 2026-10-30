@@ -71,10 +71,11 @@ impl Room {
                 self.held = Some(f.id.clone());
             } else if let Some(pc) = p.piece.clone().filter(|_| !(p.bot.is_some() && f.is_none())) {
                 self.moving = Some(layout::Moving { key: pc.key.clone(), from: pc.at, u: pc.u, at: pc.at });
-                // the fire picked up: whoever warmed their hands at it steps away (they would stand in the pit as it went)
+                // the fire picked up: whoever warmed their hands at it (or grilled) steps away (they would stand in the
+                // pit as it went)
                 if kind_of(&pc.key) == "fire" {
                     for g in self.w.folk.iter_mut() {
-                        if g.act.kind == "warm" {
+                        if g.act.kind == "warm" || g.act.kind == "grill" {
                             end(g);
                         }
                     }

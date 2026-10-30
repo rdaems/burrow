@@ -40,8 +40,8 @@ pub fn fixed(key: &str) -> bool {
     FIXED.contains(&kind_of(key)) || key == "door:"
 }
 /// a click does something there
-pub const CLICK: [&str; 18] = [
-    "radio", "doghouse", "add", "closet", "chess", "pong", "printer", "pair", "board", "coffee", "cooler", "window", "armchair", "settings",
+pub const CLICK: [&str; 19] = [
+    "radio", "pumpkin", "doghouse", "add", "closet", "chess", "pong", "printer", "pair", "board", "coffee", "cooler", "window", "armchair", "settings",
     "clock", "plant", "manager", "door",
 ];
 pub fn name_of(kind: &str) -> &str {
@@ -52,7 +52,7 @@ pub fn name_of(kind: &str) -> &str {
         "coffee" => "coffee machine",
         "cooler" => "water cooler",
         "armchair" => "pouf",
-        "board" => "whiteboard",
+        "board" => "easel",
         "add" => "project cabinet",
         "pair" => "pair room",
         "settings" => "switchboard",
@@ -133,6 +133,7 @@ pub fn foot(key: &str, at: [i32; 2], u: Option<i32>) -> Rect {
         "neuralyzer" => [x - 7, y - 19, x + 7, y + 2],
         "doghouse" => [x - 12, y - 21, x + 12, y + 2],
         "radio" => [x - 7, y - 21, x + 7, y + 1],
+        "pumpkin" => [x - 8, y - 13, x + 8, y + 1],
         _ => [x - 8, y - 31, x + 8, y + 1], // a plant
     }
 }
@@ -235,6 +236,7 @@ pub struct Layout {
     pub neuralyzers: Vec<Piece>,
     pub doghouses: Vec<Piece>,
     pub radios: Vec<Piece>,
+    pub pumpkins: Vec<Piece>,
     pub cooler: Option<Piece>,
     pub plants: Vec<Piece>,
     pub printer: Option<Piece>,
@@ -583,6 +585,7 @@ pub fn layout(s: &State, desks: &[Desk], size: &Size, keep: &mut Keep, moving: O
         neuralyzers: all("neuralyzer"),
         doghouses: all("doghouse"),
         radios: all("radio"),
+        pumpkins: all("pumpkin"),
         cooler: one("cooler"),
         plants: all("plant"),
         printer: one("printer"),

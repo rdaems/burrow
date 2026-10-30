@@ -3,7 +3,7 @@
 //! spots are collected while drawing: what is under the pointer and what a click there does.
 
 use crate::avatar::c;
-use crate::figure::{Arms, Legs, SH, SW, halo};
+use crate::figure::{Arms, Dress, Legs, SH, SW, halo};
 use crate::font::{tiny, tiny_w};
 use crate::io::{Input, Output};
 use crate::layout::{Layout, WALL, jround};
@@ -311,7 +311,7 @@ impl Room {
         if !f.held {
             ctx.rect(x - 5, y, 10, 1, Color::rgba(0, 0, 0, 102));
         }
-        let im = crate::figure::body_red(
+        let im = crate::figure::body_dress(
             &f.seed,
             color_of(f),
             if f.held { Arms::Up } else { Arms::parse(f.arms) },
@@ -319,7 +319,9 @@ impl Room {
             f.human,
             f.staff,
             f.red,
+            dress_of(f, self.spooky),
         );
+        let up = im.h as i32 - SH; // (a witch's hat: the picture is taller, the figure where it was)
         // its outline: gold while the pointer is on it or on its session, faint while its session is open
         let over_it = self.over((x0 + 4) as f64, y0 as f64, (x0 + 18) as f64, (y + 1) as f64);
         let lit = hl.contains(&f.id) || self.hovered.as_ref().is_some_and(|h| h.id == f.id) || (self.hovered.is_none() && over_it);
@@ -350,15 +352,16 @@ impl Room {
             ctx.scale(-1., 1.);
         }
         let dx = if f.dir < 0.0 { 0 } else { x0 };
+        let iy = (y0 - up) as f64;
         if let Some(col) = ring {
-            ctx.draw_image(&halo(&im, col), dx as f64, y0 as f64);
+            ctx.draw_image(&halo(&im, col), dx as f64, iy);
         }
         if bt > 0.0 {
-            ctx.draw_image(&crate::paint::dissolve(&im, booth_rise(bt)), dx as f64, y0 as f64);
+            ctx.draw_image(&crate::paint::dissolve(&im, booth_rise(bt)), dx as f64, iy);
         } else if f.held && self.danger_now {
-            ctx.draw_image(&crate::paint::tinted(&im, RED, flash_a(t)), dx as f64, y0 as f64);
+            ctx.draw_image(&crate::paint::tinted(&im, RED, flash_a(t)), dx as f64, iy);
         } else {
-            ctx.draw_image(&im, dx as f64, y0 as f64);
+            ctx.draw_image(&im, dx as f64, iy);
         }
         ctx.restore();
         if fear > 0.45 {
@@ -377,6 +380,9 @@ impl Room {
                 ctx.rect(x - 1 + jround(a.cos() * 6.0), y0 + 3 + jround(a.sin() * 2.0), 1, 1, crate::sprites::sp::Y);
             }
         }
+        if f.act.kind == "grill" && f.act.t > 0.0 && !f.held {
+            crate::draw::draw_sausage(ctx, x, y, f.dir, f.act.t, f.act.cook, t);
+        }
         if f.act.kind == "plant" && f.act.water && (t * 6.0).floor() as i64 % 2 != 0 {
             let d = f.dir as i32;
             ctx.rect(x + 10 * d, y0 + 21, 1, 1, c::BLUE3);
@@ -385,7 +391,20 @@ impl Room {
         if !f.leaving && !f.held && over_it {
             self.hovered = Some(Hovered { id: f.id.clone(), x: x as f64, y: y0 as f64, seat: false });
         }
-        let _ = SH;
+    }
+}
+
+/// Halloween (a lit pumpkin in the room, `spooky`): everyone in costume, a bot's by its seed; you the witch's hat, an
+/// office manager the cape (her bow stays)
+pub fn dress_of(f: &Fig, spooky: bool) -> Option<Dress> {
+    if !spooky {
+        None
+    } else if f.human {
+        Some(Dress::Hat)
+    } else if f.staff {
+        Some(Dress::Cape)
+    } else {
+        Some([Dress::Hat, Dress::Cape, Dress::Bones][fnv(&f.seed) as usize % 3])
     }
 }
 

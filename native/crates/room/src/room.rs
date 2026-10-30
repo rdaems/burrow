@@ -91,6 +91,8 @@ pub struct Room {
     pub cursor: &'static str,
     /// what the first person keeps of the room
     pub third: crate::scene3::Third,
+    /// Halloween: a pumpkin stands in the room and is lit (everyone in costume)
+    pub spooky: bool,
 }
 
 impl Room {
@@ -124,6 +126,7 @@ impl Room {
             floor: None,
             cursor: "default",
             third: Default::default(),
+            spooky: false,
         }
     }
 
@@ -202,6 +205,7 @@ impl Room {
         if let Some(m) = self.moving.as_ref().map(|m| m.key.clone()) {
             ride(&mut self.w, &l, self.last.as_ref(), &m); // whoever is at what is being dragged comes along, this very frame
         }
+        self.spooky = s.settings.on("halloween") && !l.pumpkins.is_empty();
         if !l.placed.is_empty() {
             let mut lay = serde_json::Map::new();
             for (k, v) in &s.layout {
@@ -342,7 +346,7 @@ impl Room {
             let l = self.last.clone();
             let mut t = Tick { inp, out, dice: &mut self.dice, fresh: &mut self.fresh, moving_fire: false, w: self.size.w };
             if let Some(l) = l {
-                think::shoot(&mut self.w, &l, id, "you", &mut t);
+                think::shoot(&mut self.w, &l, id, &mut t);
             }
         }
         ok

@@ -232,6 +232,7 @@ pub fn foot(key: &str, x: f64, y: f64, unit_w: Option<f64>) -> [f64; 4] {
         "neuralyzer" => [x - 7., y - 19., x + 7., y + 2.],
         "doghouse" => [x - 12., y - 21., x + 12., y + 2.],
         "radio" => [x - 7., y - 21., x + 7., y + 1.],
+        "pumpkin" => [x - 8., y - 13., x + 8., y + 1.],
         _ => [x - 8., y - 31., x + 8., y + 1.], // a plant
     }
 }
