@@ -10,7 +10,7 @@ use crate::views::ViewKind;
 use burrow_room::draw::{Clock, KindEnv, icon, paint_at};
 use gpui::{AnyElement, Context, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, ParentElement, Styled, Window, div, prelude::*, px, rgb};
 
-pub const CATALOGUE: [&str; 18] = ["desk", "plant", "armchair", "window", "board", "meet", "chess", "pong", "coffee", "cooler", "printer", "pair", "manager", "booth", "neuralyzer", "doghouse", "radio", "door"];
+pub const CATALOGUE: [&str; 19] = ["desk", "plant", "armchair", "window", "board", "meet", "chess", "pong", "coffee", "cooler", "printer", "pair", "manager", "booth", "neuralyzer", "doghouse", "radio", "files", "door"];
 
 /// a piece let go in the room (`at`: where it stands; none: outside the room)
 pub fn put(b: &mut Burrow, kind: &str, at: Option<[i32; 2]>, window: &mut Window, cx: &mut Context<Burrow>) {

@@ -485,7 +485,7 @@ impl Hub {
             "sessions": g.bots().iter().map(|b| json!({"id": b.id, "name": b.name, "m": b.m, "cwd": b.cwd, "desk": split_unit(&b.unit).1,
                 "state": state(b), "process": if b.alive { "running" } else { "off" }, "started": iso(b.started), "ended": iso(b.ended_at),
                 "summary": b.detail, "sessionId": b.session})).collect::<Vec<_>>(),
-            "settings": {"rc": s.rc, "yolo": s.yolo, "hardcore": s.hardcore, "sound": s.sound},
+            "settings": s, // (every switch there is: files too)
             "removing": g.removing.keys().collect::<Vec<_>>(), "kept": g.kept,
         })
     }

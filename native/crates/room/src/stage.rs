@@ -689,6 +689,16 @@ impl Room {
                 set_tip(&mut tip, if sound_on { "sound on".into() } else { "sound off".into() }, ra.x as f64, (ra.y - 22) as f64);
             }
         }
+        // the filing cabinet: FILES on the terminals' bands (their files' tile), while one stands here and it is on; a
+        // click switches them (its top drawer stands open while they are on)
+        let files_on = files_on(s) && !l.cabinets.is_empty();
+        for fc in l.cabinets.clone() {
+            let h = self.hot_r(foot("files", [fc.x, fc.y], None), json!({"kind": "files"}));
+            piece(&mut items, &fc.key, "files", fc.x, fc.y, Box::new(move |c| D::draw_filing(c, fc.x, fc.y, files_on)), 0.5);
+            if h {
+                set_tip(&mut tip, if files_on { "files on".into() } else { "files off".into() }, fc.x as f64, (fc.y - 27) as f64);
+            }
+        }
         for n in l.neuralyzers.clone() {
             let fl = self.w.s.flash.is_some_and(|f| now - f.2 < 400.0);
             piece(&mut items, &n.key, "neuralyzer", n.x, n.y, Box::new(move |c| D::draw_neuralyzer(c, n.x, n.y, fl)), 0.5);
@@ -904,6 +914,12 @@ impl Room {
         let _ = Hot { r: [0.; 4], action: json!(null) };
         let _ = tiny;
     }
+}
+
+/// the filing cabinet's switch (settings `files`, on unless switched off): FILES on the terminals' bands while a
+/// cabinet stands in the room
+pub fn files_on(s: &crate::model::State) -> bool {
+    s.settings.other.get("files").and_then(serde_json::Value::as_bool).unwrap_or(true)
 }
 
 /// the home directory as ~

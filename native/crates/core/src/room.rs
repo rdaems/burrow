@@ -22,7 +22,7 @@ pub const FURNITURE: &[&str] = &[
 pub const FIXED: &[&str] = &["fire", "closet", "settings", "clock"];
 pub const KINDS: &[&str] = &[
     "meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "pair", "manager", "booth", "neuralyzer",
-    "doghouse", "radio",
+    "doghouse", "radio", "files",
 ];
 
 /// Burrow's own settings: the switchboard on the wall, a switch each; kept in room.json `settings`
@@ -30,15 +30,17 @@ pub const KINDS: &[&str] = &[
 ///   yolo      a bot started here gets --dangerously-skip-permissions: it never asks, it just does
 ///   hardcore  the booth is a gun closet: she clears them out with a shotgun, and a click on it gives you a crosshair
 ///   sound     the room makes its sounds while a radio stands in it (no switch: the radio is the switch)
-pub const OPTIONS: &[(&str, bool)] = &[("rc", true), ("yolo", false), ("hardcore", false), ("sound", true)];
+///   files     FILES on the terminals' bands while a filing cabinet stands in the room (the cabinet is the switch)
+pub const OPTIONS: &[(&str, bool)] = &[("rc", true), ("yolo", false), ("hardcore", false), ("sound", true), ("files", true)];
 
-/// the switchboard's settings, the room's over the defaults
+/// the switchboard's settings, the room's over the defaults (the ones the model has no field for in `other`)
 pub fn options(room: &Room) -> burrow_model::Settings {
     let get = |k: &str| {
         let d = OPTIONS.iter().find(|(n, _)| *n == k).unwrap().1;
         room.get("settings").and_then(|s| s.get(k)).map(truthy).unwrap_or(d)
     };
-    burrow_model::Settings { rc: get("rc"), yolo: get("yolo"), hardcore: get("hardcore"), sound: get("sound"), other: Default::default() }
+    let other = OPTIONS.iter().filter(|(k, _)| !["rc", "yolo", "hardcore", "sound"].contains(k)).map(|(k, _)| (k.to_string(), json!(get(k)))).collect();
+    burrow_model::Settings { rc: get("rc"), yolo: get("yolo"), hardcore: get("hardcore"), sound: get("sound"), other }
 }
 
 /// your name and face: room.json's, the login name and a face from it when none is picked
@@ -345,7 +347,8 @@ mod tests {
         let r = room(json!({"settings": {"yolo": 1, "rc": false, "nonsense": true}}));
         let o = options(&r);
         assert!(!o.rc && o.yolo && !o.hardcore && o.sound);
-        assert!(o.other.is_empty());
+        assert_eq!(o.other.keys().collect::<Vec<_>>(), ["files"], "nonsense is not a setting");
+        assert_eq!(o.other["files"], json!(true));
         let o = options(&room(json!({})));
         assert!(o.rc && !o.yolo && o.sound);
     }

@@ -21,6 +21,10 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+// the files' tile in the window: its band, opening, closing, the drop on a terminal
+#[path = "files_tile.rs"]
+mod files_tile;
+
 /// what is in a tile
 pub enum TileKind {
     /// a session: `claude attach`
@@ -29,12 +33,15 @@ pub enum TileKind {
     Shell { m: String, dir: String },
     /// the office manager's notes
     Notes,
+    /// the files of a session or a shell, beside its terminal (files.rs)
+    Files { m: String, root: String },
 }
 
 pub struct Tile {
     pub kind: TileKind,
     pub body: Option<Entity<crate::term::TermTile>>,
     pub notes: Option<Entity<crate::notes::Notes>>,
+    pub files: Option<Entity<crate::files::Files>>,
 }
 
 /// what is being dragged in the pane
@@ -178,6 +185,45 @@ impl Burrow {
                                 if let Some(kind) = ViewKind::parse(v) {
                                     b.open_view(kind, window, cx);
                                 }
+                            }
+                            // the focused terminal's files beside it; a file of them (relative to its root) opened
+                            "files" => {
+                                if let Some(t) = b.tiles.focused() {
+                                    files_tile::open(b, t, false, window, cx);
+                                }
+                            }
+                            "file" => {
+                                if let Some(f) = b.tiles.focused().and_then(|t| b.tile.get(&t)).and_then(|x| x.files.clone()) {
+                                    f.update(cx, |f, cx| f.open_file(v.to_string(), Some(window), cx));
+                                }
+                            }
+                            // typed into that file a moment later (it has loaded by then)
+                            "type" => {
+                                let (text, f) = (v.to_string(), b.tiles.focused().and_then(|t| b.tile.get(&t)).and_then(|x| x.files.clone()));
+                                cx.spawn_in(window, async move |_, cx| {
+                                    cx.background_executor().timer(Duration::from_millis(1500)).await;
+                                    let _ = cx.update(|window, cx| {
+                                        if let Some(ed) = f.and_then(|f| f.read(cx).editor.clone()) {
+                                            ed.update(cx, |e, cx| e.type_in(&text, window, cx));
+                                        }
+                                    });
+                                })
+                                .detach();
+                            }
+                            // ✕ on the focused tile, or ⌘S in its file, a moment later still
+                            "close" | "save" => {
+                                let save = k == "save";
+                                cx.spawn_in(window, async move |this, cx| {
+                                    cx.background_executor().timer(Duration::from_millis(2500)).await;
+                                    let _ = this.update_in(cx, |b, window, cx| {
+                                        let Some(t) = b.tiles.focused() else { return };
+                                        match b.tile.get(&t).and_then(|x| x.files.clone()) {
+                                            Some(f) if save => f.update(cx, |f, cx| f.save(false, cx)),
+                                            _ => b.close_tile(t, window, cx),
+                                        }
+                                    });
+                                })
+                                .detach();
                             }
                             // a piece out of the closet, let go at x/y in dots: put:desk@60/200
                             "put" => {
@@ -338,7 +384,8 @@ impl Burrow {
             _ => None,
         });
         let shell = focused.and_then(|t| match &t.kind {
-            TileKind::Shell { m, dir } => Some(ShellKey { m: m.clone(), dir: dir.clone() }),
+            // (an open file too: you at that desk's screen)
+            TileKind::Shell { m, dir } | TileKind::Files { m, root: dir } => Some(ShellKey { m: m.clone(), dir: dir.clone() }),
             _ => None,
         });
         let hl = self.hover_tile.and_then(|t| self.tile.get(&t)).and_then(|t| match &t.kind {
@@ -492,6 +539,7 @@ impl Burrow {
                 self.sound.play(if on { "tune" } else { "click" }, a["pan"].as_f64().unwrap_or(0.0), 1.0, true, None);
                 hub.settings(&[("sound", on)]);
             }
+            "files" => files_tile::switch(self),
             "kept" => {
                 let _ = hub.office_do(&json!({"kept": s("id")}));
             }
@@ -587,6 +635,7 @@ impl Burrow {
     }
 
     fn on_state(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        files_tile::sync(self, cx);
         // a bot that gets work, or a question for you, leaves the ping-pong table, and the duel at the window
         let idle = |id: &str| self.state.bots.iter().any(|b| b.id == id && !b.busy && !b.waiting);
         if self.view == Some(ViewKind::Pong)
@@ -641,7 +690,7 @@ impl Burrow {
     fn new_tile(&mut self, kind: TileKind) -> u64 {
         let id = self.next;
         self.next += 1;
-        self.tile.insert(id, Tile { kind, body: None, notes: None });
+        self.tile.insert(id, Tile { kind, body: None, notes: None, files: None });
         id
     }
 
@@ -830,6 +879,9 @@ impl Burrow {
         if let Some(body) = self.tile.get(&t).and_then(|x| x.body.clone()) {
             body.update(cx, |b, cx| b.focus(window, cx));
         }
+        if let Some(ed) = self.tile.get(&t).and_then(|x| x.files.as_ref()).and_then(|f| f.read(cx).editor.clone()) {
+            ed.read(cx).focus(window);
+        }
         self.dirty = true;
     }
 
@@ -838,6 +890,11 @@ impl Burrow {
     }
 
     pub fn close_tile(&mut self, t: u64, _window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(f) = self.tile.get(&t).and_then(|x| x.files.clone())
+            && files_tile::refuse_close(&f, cx)
+        {
+            return;
+        }
         self.tiles.remove(t);
         self.tile.remove(&t);
         if self.hover_tile == Some(t) {
@@ -1012,7 +1069,7 @@ impl Burrow {
         let Some(body) = tile.body.clone() else { return };
         let m = match &tile.kind {
             TileKind::Bot { m, .. } | TileKind::Shell { m, .. } => m.clone(),
-            TileKind::Notes => return,
+            TileKind::Notes | TileKind::Files { .. } => return,
         };
         let hub = self.hub.clone();
         let task = cx.background_executor().spawn(async move {
@@ -1128,12 +1185,23 @@ impl Burrow {
                 (dir.trim_end_matches('/').rsplit('/').next().unwrap_or(dir).to_string(), on, String::new())
             }
             TileKind::Notes => ("notes".to_string(), if self.digest.writing.is_some() { "writing…".into() } else if !self.digest.on { "switched off".into() } else { String::new() }, String::new()),
+            TileKind::Files { m, .. } => match &tile.files {
+                Some(f) => {
+                    let f = f.read(cx);
+                    let on = self.state.machine(m).filter(|x| !x.id.is_empty()).map(|x| format!("on {}", x.name)).unwrap_or_default();
+                    (f.name(), if !f.note.is_empty() { f.note.clone() } else if f.dirty { "unsaved".into() } else { on }, String::new())
+                }
+                None => ("files".into(), String::new(), String::new()),
+            },
         };
-        let body: AnyElement = match (&tile.body, &tile.notes) {
-            (Some(b), _) => b.clone().into_any_element(),
-            (_, Some(n)) => n.clone().into_any_element(),
+        let (dirty, warn) = tile.files.as_ref().map(|f| (f.read(cx).dirty, f.read(cx).warn)).unwrap_or_default();
+        let body: AnyElement = match (&tile.body, &tile.notes, &tile.files) {
+            (Some(b), _, _) => b.clone().into_any_element(),
+            (_, Some(n), _) => n.clone().into_any_element(),
+            (_, _, Some(f)) => f.clone().into_any_element(),
             _ => div().into_any_element(),
         };
+        let buttons = files_tile::band_buttons(self, t, cx);
         let ink = if lit { col::INK } else { col::STEEL4 };
         let band = div()
             .id(("band", t))
@@ -1147,7 +1215,14 @@ impl Burrow {
             .cursor(CursorStyle::OpenHand)
             .child(kit::button(("tx", t), "✕", false, true).on_click(cx.listener(move |this, _, window, cx| this.close_tile(t, window, cx))))
             .child(pixel_text(name, ink, !lit).min_w(px(0.)).overflow_hidden())
-            .child(pixel_text(sub, ink, !lit).flex_1().min_w(px(0.)).overflow_hidden().opacity(0.75))
+            .child(if warn {
+                // a file's trouble: in red (burrow.css's .tile.warn .tas)
+                div().flex_none().px(px(6.)).rounded(px(3.)).bg(rgb(0xeb4c3f)).child(pixel_text(sub, col::WHITE, false)).into_any_element()
+            } else {
+                pixel_text(if dirty { format!("● {sub}") } else { sub }, ink, !lit).flex_1().min_w(px(0.)).overflow_hidden().opacity(0.75).into_any_element()
+            })
+            .when(warn, |d| d.child(div().flex_1()))
+            .children(buttons)
             .when(!rc.is_empty(), |d| {
                 let url = format!("https://claude.ai/code/session_{}", rc.trim_start_matches("cse_"));
                 d.child(kit::button(("app", t), "APP", false, true).on_click(move |_, _, cx: &mut App| cx.open_url(&url)))
@@ -1173,6 +1248,7 @@ impl Burrow {
             .child(frame_bg(Frame::tile(lit)))
             .child(div().absolute().inset(px(6.)).flex().flex_col().child(band).child(div().flex_1().min_h(px(0.)).bg(rgb(col::BOX)).child(body)))
             .on_drop(cx.listener(move |this, paths: &gpui::ExternalPaths, _, cx| this.hand(t, paths.paths().to_vec(), cx)))
+            .on_drop(cx.listener(move |this, d: &crate::files::FileDrag, window, cx| files_tile::dropped(this, t, d, window, cx)))
             .on_hover(cx.listener(move |this, on: &bool, _, cx| {
                 this.hover_tile = if *on { Some(t) } else if this.hover_tile == Some(t) { None } else { this.hover_tile };
                 this.dirty = true;

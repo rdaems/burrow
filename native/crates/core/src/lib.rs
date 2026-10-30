@@ -8,6 +8,7 @@ pub mod chess;
 pub mod config;
 mod demo;
 pub mod digest;
+pub mod files;
 pub mod hub;
 pub mod office;
 pub mod pair;

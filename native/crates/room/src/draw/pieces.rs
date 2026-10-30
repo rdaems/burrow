@@ -400,6 +400,40 @@ pub fn draw_radio(ctx: &mut Ctx, x: i32, y: i32, on: bool) {
         rect(ctx, kx, y - 7, 1, 1, SP::C);
     }
 }
+/// the filing cabinet: steel, three drawers, a card and a handle on each; while FILES is on, its top drawer is
+/// pulled out, coloured folders' tabs standing up in it
+pub fn draw_filing(ctx: &mut Ctx, x: i32, y: i32, on: bool) {
+    let (x0, top) = (x - 7, y - 24);
+    rect(ctx, x0 - 1, y, 16, 1, SHADOW);
+    rect(ctx, x0, top, 14, 24, SP::F);
+    rect(ctx, x0 + 1, top + 1, 12, 22, SP::C);
+    rect(ctx, x0 + 1, top + 1, 12, 1, SP::B);
+    rect(ctx, x0 + 1, top + 1, 1, 22, SP::B);
+    rect(ctx, x0 + 12, top + 2, 1, 21, SP::D);
+    let drawer = |ctx: &mut Ctx, dy: i32, dx: i32, w: i32| {
+        rect(ctx, x0 + 2 + dx, dy, w, 6, SP::B);
+        rect(ctx, x0 + 2 + dx, dy, w, 1, SP::A);
+        rect(ctx, x0 + 2 + dx, dy + 5, w, 1, SP::D);
+        let c = x0 + 2 + dx + w / 2;
+        rect(ctx, c - 2, dy + 1, 4, 2, css("#f4ecd8")); // its card
+        rect(ctx, c - 1, dy + 2, 2, 1, SP::D);
+        rect(ctx, c - 2, dy + 4, 4, 1, SP::F); // its handle
+    };
+    drawer(ctx, top + 9, 0, 10);
+    drawer(ctx, top + 16, 0, 10);
+    if !on {
+        drawer(ctx, top + 2, 0, 10);
+        return;
+    }
+    rect(ctx, x0 + 1, top + 1, 12, 8, SP::x); // the open drawer: dark inside, the folders standing in it
+    for (tx, c) in [(x0 + 2, SP::y), (x0 + 6, SP::g), (x0 + 10, SP::v)] {
+        rect(ctx, tx, top + 3, 2, 5, c);
+        rect(ctx, tx, top + 3, 2, 1, SP::A);
+    }
+    rect(ctx, x0, top + 15, 14, 1, SHADOW); // its front pulled out toward you, a little wider, its shadow under it
+    rect(ctx, x0 - 1, top + 8, 16, 8, SP::F);
+    drawer(ctx, top + 9, -2, 14);
+}
 /// two notes drifting up from the radio, fading
 pub fn draw_notes(ctx: &mut Ctx, x: i32, y: i32, t: f64) {
     for k in [0, 1] {

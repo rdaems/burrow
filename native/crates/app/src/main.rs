@@ -2,14 +2,18 @@
 //! painted here), the pane on the right (tiles of terminals, or a panel). GPUI draws it on the GPU.
 
 mod burrow;
+mod editor;
 mod field;
+mod files;
 mod fpsview;
 mod icon;
 mod kit;
+mod markdown;
 mod notes;
 mod panels;
 mod shot;
 mod stars;
+mod syntax;
 mod term;
 mod tiles;
 mod views;

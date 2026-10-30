@@ -961,6 +961,10 @@ impl Hub {
                 // a radio put down: the sound is on
                 room::obj(&mut g.room, "settings").insert("sound".into(), json!(true));
             }
+            if kind == "files" {
+                // a filing cabinet put down: FILES on the bands
+                room::obj(&mut g.room, "settings").insert("files".into(), json!(true));
+            }
             g.save(&self.cfg);
             key
         };
