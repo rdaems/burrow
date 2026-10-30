@@ -9,6 +9,7 @@ pub mod config;
 mod demo;
 pub mod digest;
 pub mod hub;
+pub mod matrix;
 pub mod office;
 pub mod pair;
 pub mod parse;

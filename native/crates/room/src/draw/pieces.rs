@@ -458,6 +458,42 @@ pub fn draw_pumpkin(ctx: &mut Ctx, x: i32, y: i32, on: bool, t: f64) {
     rect(ctx, x + 2, y - 2, 1, 1, top);
 }
 
+/// the operator's console's rain: a drop's bright head, then its tail fading
+const CONSOLE_RAIN: [Color; 4] = [Color::rgb(0xd6ffd0), Color::rgb(0x60c677), Color::rgb(0x2f8a46), Color::rgb(0x164a26)];
+/// the operator's console (the matrix): a terminal on a metal stand, its keyboard in front, the code raining down its
+/// screen, a drop a column, each at its own speed, a bright head and a fading tail; `t` the room's time
+pub fn draw_console(ctx: &mut Ctx, x: i32, y: i32, t: f64) {
+    rect(ctx, x - 11, y, 24, 1, SHADOW);
+    rect(ctx, x - 10, y - 11, 22, 11, SP::F); // the stand: its top, its front, a slot, the power light
+    rect(ctx, x - 9, y - 10, 20, 3, SP::C);
+    rect(ctx, x - 9, y - 10, 20, 1, SP::B);
+    rect(ctx, x - 9, y - 7, 20, 6, SP::E);
+    rect(ctx, x - 9, y - 7, 20, 1, SP::D);
+    rect(ctx, x - 7, y - 4, 8, 1, SP::F);
+    rect(ctx, x + 8, y - 4, 1, 1, SP::g);
+    rect(ctx, x - 3, y - 12, 8, 2, SP::F); // the terminal's neck
+    rect(ctx, x - 9, y - 25, 20, 13, SP::F); // its case, lit from the top left
+    rect(ctx, x - 8, y - 24, 18, 11, SP::D);
+    rect(ctx, x - 8, y - 24, 18, 1, SP::C);
+    rect(ctx, x - 8, y - 24, 1, 11, SP::C);
+    rect(ctx, x + 9, y - 23, 1, 10, SP::E);
+    rect(ctx, x - 7, y - 14, 17, 1, SP::E);
+    rect(ctx, x - 6, y - 22, 14, 8, Color::rgb(0x071208)); // the screen
+    for i in 0..14i64 {
+        let head = (t * (4 + (i * 7) % 5) as f64 + ((i * 37) % 17) as f64).floor() as i64 % 13 - 2;
+        for (k, &c) in CONSOLE_RAIN.iter().enumerate() {
+            let r = head - k as i64;
+            if (0..8).contains(&r) {
+                rect(ctx, x - 6 + i as i32, y - 22 + r as i32, 1, 1, c);
+            }
+        }
+    }
+    rect(ctx, x - 6, y - 9, 13, 2, SP::F); // the keyboard
+    for i in 0..6 {
+        rect(ctx, x - 5 + i * 2, y - 9, 1, 1, SP::D);
+    }
+}
+
 /// the neuralyzer (Men in Black's): a black pedestal, the silver flasher on it; its bulb lit while it flashes
 pub fn draw_neuralyzer(ctx: &mut Ctx, x: i32, y: i32, lit: bool) {
     rect(ctx, x - 5, y, 10, 1, SHADOW);

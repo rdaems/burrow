@@ -22,7 +22,7 @@ pub const FURNITURE: &[&str] = &[
 pub const FIXED: &[&str] = &["fire", "closet", "settings", "clock"];
 pub const KINDS: &[&str] = &[
     "meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "add", "pair", "manager", "booth", "neuralyzer",
-    "doghouse", "radio", "pumpkin",
+    "doghouse", "radio", "pumpkin", "matrix",
 ];
 
 /// Burrow's own settings: the switchboard on the wall, a switch each; kept in room.json `settings`

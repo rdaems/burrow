@@ -145,6 +145,8 @@ pub(crate) struct Inner {
     pub pair_asked: HashMap<String, f64>,
     /// the ones you took out of the booth again (she is told, and leaves them be)
     pub kept: Vec<String>,
+    /// the matrix's rain: what each session said and did, as text
+    pub rain: crate::matrix::Rain,
 }
 
 pub struct Hub {
@@ -259,6 +261,7 @@ impl Hub {
                 pair_rooms: HashMap::new(),
                 pair_asked: HashMap::new(),
                 kept: vec![],
+                rain: Default::default(),
             }),
             caff: Mutex::new(None),
             pokes: Mutex::new(HashMap::new()),

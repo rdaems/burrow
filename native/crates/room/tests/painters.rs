@@ -435,6 +435,10 @@ fn the_floor_is_room_js() {
             draw_notes(c, 9, 43, t);
         }))
     });
+    check("paint-console-", exact, |name| {
+        let t: f64 = name.strip_prefix("paint-console-")?.parse().ok()?;
+        Some(on(26, 30, PLANK, |c| draw_console(c, 12, 28, t)))
+    });
     check("paint-neur-", exact, |name| Some(on(16, 22, PLANK, |c| draw_neuralyzer(c, 8, 20, name.ends_with('1')))));
     check("paint-table", exact, |_| Some(on(36, 34, PLANK, |c| draw_table(c, 18, 32))));
     check("paint-stool", exact, |_| Some(on(18, 18, PLANK, |c| draw_stool(c, 9, 16))));

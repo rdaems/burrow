@@ -209,7 +209,7 @@ static SPACES: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s+").unwrap());
 
 /// the tags Claude Code wraps its own additions in, cut out with what they hold (TAGS in server.py:
 /// `<(system-reminder|command-…|local-command-…|task-notification)>.*?</\1>`)
-fn untag(s: &str) -> String {
+pub(crate) fn untag(s: &str) -> String {
     let (mut out, mut i) = (String::new(), 0);
     while let Some(off) = s[i..].find('<') {
         let at = i + off;
