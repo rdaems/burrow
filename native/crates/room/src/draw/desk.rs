@@ -52,7 +52,26 @@ pub struct Desk<'a> {
     /// the screen lit (drawDesk's `lit`), or its shell's tile under the pointer (`hsAt(d.dir)`)
     pub lit: bool,
     pub shell_lit: bool,
+    /// its machine out of reach: snow on its screens, no + (nothing opens there, no bot starts)
+    pub cut: bool,
 }
+
+/// a dot's noise, 0..1, the same for the same (x, y, frame): a screen's snow (room.js's `noise`)
+pub fn noise(i: i32, j: i32, k: i32) -> f64 {
+    let mut h = (i.wrapping_add(1)).wrapping_mul(374761393).wrapping_add((j.wrapping_add(1)).wrapping_mul(668265263)).wrapping_add((k.wrapping_add(1)).wrapping_mul(1274126177));
+    h = (h ^ ((h as u32) >> 13) as i32).wrapping_mul(1103515245);
+    ((h ^ ((h as u32) >> 16) as i32) as u32) as f64 / 4294967296.
+}
+/// the snow of a set between stations: dark mostly, a few bright
+pub const SNOW: [Color; 7] = [
+    Color::rgb(0x10141f),
+    Color::rgb(0x10141f),
+    Color::rgb(0x3b3a55),
+    Color::rgb(0x3b3a55),
+    Color::rgb(0x5d6280),
+    Color::rgb(0x8b93ad),
+    Color::rgb(0xc2c9d9),
+];
 
 /// a JS string's length (in UTF-16 units): what seeds a screen's rows
 fn js_len(s: &str) -> i32 {
@@ -114,6 +133,16 @@ pub fn draw_desk(ctx: &mut Ctx, d: &Desk, t: f64) {
     // your terminal there: its prompt on the screen's last row, the cursor blinking, a grey line running
     // while output comes
     let paint = |ctx: &mut Ctx, gx: i32, gy: i32, gw: i32, gh: i32, s: &Screen, seed: i32| {
+        if d.cut {
+            // its machine out of reach: no signal, the snow of a set between stations
+            let k = (t * 8.).floor() as i32;
+            for j in 0..gh {
+                for i in 0..gw {
+                    rect(ctx, gx + i, gy + j, 1, 1, SNOW[(noise(i + seed, j, k) * SNOW.len() as f64) as usize]);
+                }
+            }
+            return;
+        }
         let py = gy + gh - 2;
         rect(ctx, gx, gy, gw, gh, if s.seated || s.shell { C::BLUE0 } else { Color::rgb(0x10141f) });
         if !s.seated && !s.shell {
@@ -170,7 +199,7 @@ pub fn draw_desk(ctx: &mut Ctx, d: &Desk, t: f64) {
     // on it the project's screen, and a laptop for each worktree, plugged in. A + beside it starts a bot here
     let gw = 22 + d.trees.len() as i32 * LAP;
     let (sx, sy) = screen_at(x0, cab, d.trees.len(), y);
-    {
+    if !d.cut {
         let px = sx + gw + 2;
         let c = if d.on_plus { d.color } else { C::STEEL2 };
         rect(ctx, px + 2, sy, 1, 5, c); // a 5 x 5 plus

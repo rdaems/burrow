@@ -22,7 +22,7 @@ pub const FURNITURE: &[&str] = &[
 pub const FIXED: &[&str] = &["fire", "closet", "settings", "clock"];
 pub const KINDS: &[&str] = &[
     "meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "add", "pair", "manager", "booth", "neuralyzer",
-    "doghouse", "radio",
+    "doghouse", "radio", "pumpkin",
 ];
 
 /// Burrow's own settings: the switchboard on the wall, a switch each; kept in room.json `settings`
@@ -30,7 +30,8 @@ pub const KINDS: &[&str] = &[
 ///   yolo      a bot started here gets --dangerously-skip-permissions: it never asks, it just does
 ///   hardcore  the booth is a gun closet: she clears them out with a shotgun, and a click on it gives you a crosshair
 ///   sound     the room makes its sounds while a radio stands in it (no switch: the radio is the switch)
-pub const OPTIONS: &[(&str, bool)] = &[("rc", true), ("yolo", false), ("hardcore", false), ("sound", true)];
+///   halloween the office in costume while a lit pumpkin stands in it (the pumpkin is the switch)
+pub const OPTIONS: &[(&str, bool)] = &[("rc", true), ("yolo", false), ("hardcore", false), ("sound", true), ("halloween", true)];
 
 /// the switchboard's settings, the room's over the defaults
 pub fn options(room: &Room) -> burrow_model::Settings {
@@ -38,7 +39,8 @@ pub fn options(room: &Room) -> burrow_model::Settings {
         let d = OPTIONS.iter().find(|(n, _)| *n == k).unwrap().1;
         room.get("settings").and_then(|s| s.get(k)).map(truthy).unwrap_or(d)
     };
-    burrow_model::Settings { rc: get("rc"), yolo: get("yolo"), hardcore: get("hardcore"), sound: get("sound"), other: Default::default() }
+    let other = [("halloween".to_string(), json!(get("halloween")))].into_iter().collect();
+    burrow_model::Settings { rc: get("rc"), yolo: get("yolo"), hardcore: get("hardcore"), sound: get("sound"), other }
 }
 
 /// your name and face: room.json's, the login name and a face from it when none is picked
@@ -342,9 +344,10 @@ mod tests {
         let r = room(json!({"settings": {"yolo": 1, "rc": false, "nonsense": true}}));
         let o = options(&r);
         assert!(!o.rc && o.yolo && !o.hardcore && o.sound);
-        assert!(o.other.is_empty());
+        assert_eq!(o.other.keys().collect::<Vec<_>>(), ["halloween"], "nonsense is left out");
         let o = options(&room(json!({})));
-        assert!(o.rc && !o.yolo && o.sound);
+        assert!(o.rc && !o.yolo && o.sound && o.on("halloween"));
+        assert!(!options(&room(json!({"settings": {"halloween": false}}))).on("halloween"));
     }
 
     #[test]

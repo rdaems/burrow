@@ -21,9 +21,10 @@ fn quarter_left(im: &Image) -> Image {
 /// turned on its side; `ring` its outline (lit, or its session open), `z` its phase for the z's (a
 /// person's: a robot sleeps without them)
 pub fn draw_sleeper(ctx: &mut Ctx, x: i32, y: i32, im: &Image, ring: Option<Color>, human: bool, z: f64) {
-    // translate(x, y - 9), rotate(-PI / 2), drawImage(im, -SW / 2, -14): image pixel (i, j) lands at
-    // (x - 14 + j, y + 1 - i)
-    let (dx, dy) = (x - 14, y + 2 - im.w as i32);
+    // translate(x, y - 9), rotate(-PI / 2), drawImage(im, -SW / 2, -14 - up): image pixel (i, j) lands at
+    // (x - 14 - up + j, y + 1 - i), `up` what a witch's hat adds to its height
+    let up = im.h as i32 - crate::figure::SH;
+    let (dx, dy) = (x - 14 - up, y + 2 - im.w as i32);
     debug_assert_eq!(im.w as i32, SW);
     if let Some(col) = ring {
         put(ctx, &quarter_left(&halo(im, col)), dx, dy, false);
@@ -48,6 +49,46 @@ pub fn zzz(ctx: &mut Ctx, z: f64, x: i32, y: i32) {
     for i in 0..2 {
         let k = (z * 0.4 + i as f64 * 0.5) % 1.;
         zed(ctx, js_round(x as f64 + k * 6.), js_round(y as f64 - k * 10.), C::STEEL3);
+    }
+}
+
+/// a sausage, held by a figure at x, y facing `dir`, `at` seconds into a grill that takes `cook`: on its stick over the
+/// fire, raw pink browning to a crisp (turned now and then: its lit side flips), smoking a little near the end (`t` the
+/// room's time); then at its mouth, shorter with every bite
+pub fn draw_sausage(ctx: &mut Ctx, x: i32, y: i32, dir: f64, at: f64, cook: f64, t: f64) {
+    let d = if dir < 0. { -1 } else { 1 };
+    let k = (at / cook).min(1.);
+    let (col, hi) = if k < 0.35 {
+        (Color::rgb(0xe8968a), Color::rgb(0xf8c4b4))
+    } else if k < 0.75 {
+        (Color::rgb(0xc8643c), Color::rgb(0xe8905c))
+    } else {
+        (Color::rgb(0x8a4426), Color::rgb(0xb8643a))
+    };
+    // outlined, as the room draws things
+    let link = |ctx: &mut Ctx, sx: i32, sy: i32, n: i32| {
+        rect(ctx, sx - 1, sy - 1, n + 2, 4, Color::rgb(0x3a1a10));
+        rect(ctx, sx, sy, n, 2, col);
+    };
+    if at < cook {
+        let (hx, hy) = (x + 8 * d, y - 8);
+        for i in 0..17 {
+            // the stick, up over the flames
+            rect(ctx, hx + i * d, hy - (i as f64 / 2.5).floor() as i32, 1, 1, if i < 3 { Color::rgb(0x7a4a2a) } else { Color::rgb(0xd8b07a) });
+        }
+        let (sx, sy, turn) = ((hx + 13 * d).min(hx + 17 * d), hy - 8, (at / 2.5).floor() as i32 % 2);
+        link(ctx, sx, sy, 5);
+        rect(ctx, sx + 1, sy + turn, 3, 1, hi);
+        if k > 0.55 && (t * 2.).floor() as i64 % 3 != 0 {
+            rect(ctx, sx + 2, sy - 3 - ((t * 4.).floor() as i64 % 3) as i32, 1, 1, Color::rgba(206, 210, 220, 153)); // a wisp
+        }
+        return;
+    }
+    // bites at 1.2, 3.2, 5.2 s
+    let e = at - cook;
+    let left = if e < 1.2 { 5 } else { 5 - 2 * ((e - 1.2) / 2.).ceil() as i32 };
+    if left > 0 {
+        link(ctx, if d > 0 { x + 4 - left } else { x - 4 }, y - 12, left);
     }
 }
 

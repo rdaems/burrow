@@ -6,7 +6,7 @@
 
 use crate::draw as D;
 use crate::io::Input;
-use crate::layout::{ADD_W, Layout, WALL, foot, kind_of, name_of, on_wall};
+use crate::layout::{self, ADD_W, Layout, WALL, foot, kind_of, name_of, on_wall};
 use crate::room::Room;
 use crate::scene::color_of;
 use crate::think::{booth_rise, booth_t, manager_seat};
@@ -133,7 +133,11 @@ impl Room {
         sc.wkey = wkey;
         // the desks: their cabinet, desktop, screen (and laptops) and chairs, what each screen shows
         for d in &l.desks {
+            let cut = crate::think::cut_off(st, &d.d.m); // (its machine out of reach: snow)
             let screen_of = |tree: &str| -> String {
+                if cut {
+                    return "snow".into();
+                }
                 let seated: Vec<&crate::world::Fig> = d
                     .seats
                     .iter()
@@ -165,7 +169,16 @@ impl Room {
                 screen: screen_of(""),
                 laptops: d.trees.iter().map(|tr| screen_of(tr)).collect(),
             };
-            sc.add(th.props.desk(&desk));
+            // whose its blocks are: the desk's (what a shot hits, what the crosshair names); an empty one breaks
+            let mut parts = th.props.desk(&desk);
+            let breaks = inp.hardcore() && d.seats.is_empty();
+            for b in parts.boxes.iter_mut() {
+                (b.desk, b.label, b.breaks) = (Some(d.d.unit.clone()), Some(d.label.clone()), breaks);
+            }
+            for x in parts.things.iter_mut().filter(|x| x.bot.is_none() && x.rem.is_none()) {
+                (x.desk, x.label, x.breaks) = (Some(d.d.unit.clone()), Some(d.label.clone()), breaks);
+            }
+            sc.add(parts);
         }
         // every piece of furniture with what it shows; the fire's flames (a light of their own), its pit on the floor
         let left = |u: Option<&crate::model::Limit>| u.map(|u| (1.0 - u.used as f64 / 100.0).max(0.0)).unwrap_or(0.0);
@@ -224,8 +237,15 @@ impl Room {
                 }
                 "plant" => p.variant = key.trim_start_matches(|c: char| !c.is_ascii_digit()).parse::<u32>().unwrap_or(0) % 2,
                 "pair" => p.linked = st.pair.contains_key(key),
+                "pumpkin" if self.spooky => {
+                    // its candle
+                    sc.lights.push(Light { x: *x as f64, y: (*y - 5) as f64, z: 5.0, r: 70.0, col: [1.0, 0.78, 0.5], k: 0.5, flicker: true, muzzle: false });
+                }
                 _ => {}
             }
+            // whose its blocks and pictures are: the piece's (a shot breaks what the fire would take, not the gun closet
+            // your shells come from)
+            let breaks = inp.hardcore() && !layout::fixed(key) && kind != "booth";
             if let Some(parts) = th.props.build(&p) {
                 let label = if kind == "booth" && inp.hardcore() { "E: reload".to_string() } else { name_of(kind).to_string() };
                 let mut parts = parts;
@@ -233,6 +253,10 @@ impl Room {
                     th_.label.get_or_insert(label.clone());
                     th_.reload = kind == "booth";
                     th_.piece.get_or_insert(key.clone());
+                    th_.breaks = breaks;
+                }
+                for b in parts.boxes.iter_mut() {
+                    (b.piece, b.label, b.reload, b.breaks) = (Some(key.clone()), Some(label.clone()), kind == "booth", breaks);
                 }
                 sc.add(parts);
                 continue;
@@ -246,7 +270,10 @@ impl Room {
                 let mut c = im.ctx();
                 c.translate((pad - r[0]) as f64, (pad - r[1]) as f64);
                 let env = D::KindEnv { clock: self.clock(inp), door: D::WOOD };
-                D::draw_kind(&mut c, kind, *x, *y, t, &env);
+                match kind.as_str() {
+                    "pumpkin" => D::draw_pumpkin(&mut c, *x, *y, self.spooky, t), // (as it stands, lit or not)
+                    _ => D::draw_kind(&mut c, kind, *x, *y, t, &env),
+                }
             }
             let cx = (r[0] + r[2]) as f64 / 2.0;
             sc.things.push(Thing {
@@ -258,6 +285,7 @@ impl Room {
                 ay: (*y + 1 - r[1] + pad) as f64,
                 res: 1.0,
                 label: Some(name_of(kind).to_string()),
+                breaks,
                 ..Default::default()
             });
             sc.solid.push([(r[0] + 2) as f64, r[1].max(*y - 10) as f64, (r[2] - 2) as f64, (*y + 2) as f64]);

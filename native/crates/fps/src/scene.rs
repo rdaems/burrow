@@ -70,6 +70,16 @@ pub struct Block {
     pub west: Option<Face>,
     pub east: Option<Face>,
     pub top: Option<Face>,
+    /// whose it is, what a shot hits and the crosshair names: a piece of furniture's key, or a desk's unit
+    pub piece: Option<String>,
+    pub desk: Option<String>,
+    /// what the HUD says it is, under the crosshair
+    pub label: Option<String>,
+    /// E on it loads the gun (the gun closet)
+    pub reload: bool,
+    /// a shot breaks it: three blasts within twenty seconds and it goes, as into the fire (the room's `hit`: not what the
+    /// fire won't take, a desk with bots at it, nor the gun closet)
+    pub breaks: bool,
 }
 
 /// a robot (a bot, an office manager) in the room's pose
@@ -124,8 +134,11 @@ pub struct Thing {
     pub bot: Option<String>,
     /// the remains of a shot one: its id (E puts it back together)
     pub rem: Option<String>,
-    /// a piece of furniture: its key
+    /// a piece of furniture: its key; a desk's: its unit
     pub piece: Option<String>,
+    pub desk: Option<String>,
+    /// a shot breaks it (as `Block::breaks`)
+    pub breaks: bool,
     pub name: Option<String>,
     pub staff: bool,
     /// what the HUD says it is, under the crosshair (room.js `label`)

@@ -87,9 +87,14 @@ impl Tick<'_> {
     }
 }
 
-/// a figure that may be shot at, or flee: an idle bot, not held, not leaving, not open, not lying, not doomed
+/// a figure that may be shot at, or flee: an idle bot, not held, not frozen, not leaving, not open, not lying, not doomed
 pub fn idle_bot(f: &Fig) -> bool {
-    f.is_bot() && !f.work && !f.held && !f.leaving && !f.open && !f.lying && !doomed(&f.act) && f.act.kind != "escort" && f.act.kind != "mutiny"
+    f.is_bot() && !f.work && !f.held && !f.frozen && !f.leaving && !f.open && !f.lying && !doomed(&f.act) && f.act.kind != "escort" && f.act.kind != "mutiny"
+}
+
+/// a machine out of reach (its door boarded up): its desks' screens lose the signal, its bots freeze as last seen
+pub fn cut_off(s: &crate::model::State, m: &str) -> bool {
+    s.machine(m).is_some_and(|m| m.error.as_deref().is_some_and(|e| !e.is_empty()))
 }
 
 /// `from` sent `to` a message: a beam from its antenna to the other's, wherever they are
@@ -273,6 +278,12 @@ pub fn think(w: &mut World, bots: &[Bot], l: &Layout, dt: f64, t: &mut Tick) {
         let you_chat = w.get("you").map(|y| y.chat);
         let n = fnv(&b.id);
         let f = &mut w.folk[i];
+        // its machine out of reach: what it does there is not known, so it stands still as it was last seen (a call's
+        // picture frozen), until the line is back; one on its way out or held goes on
+        f.frozen = cut_off(&t.inp.state, &b.m) && !f.held && !f.leaving && !doomed(&f.act);
+        if f.frozen {
+            continue;
+        }
         f.chat = (f.chat - dt).max(0.0);
         if b.waiting && f.was_waiting == Some(false) {
             let x = f.x;
@@ -353,6 +364,7 @@ pub fn think(w: &mut World, bots: &[Bot], l: &Layout, dt: f64, t: &mut Tick) {
                 g.is_bot()
                     && !g.work
                     && !g.held
+                    && !g.frozen
                     && !g.lying
                     && !g.open
                     && SWEEPERS.contains(&g.act.kind)
@@ -401,6 +413,7 @@ pub fn think(w: &mut World, bots: &[Bot], l: &Layout, dt: f64, t: &mut Tick) {
     for b in bots {
         if let Some(i) = w.idx(&b.id)
             && !w.folk[i].held
+            && !w.folk[i].frozen
         {
             let home = homes.iter().find(|(id, _)| *id == b.id).map(|(_, s)| s.clone());
             if !crate::mutiny::step(w, i, l, dt, t) {
@@ -1131,6 +1144,31 @@ pub fn think_one(w: &mut World, i: usize, l: &Layout, _now: f64, dt: f64, home: 
                 }
             }
         }
+        "grill" => {
+            // a sausage on a stick over the fire, from its left or right, turned now and then while it browns; done, up
+            // to its mouth and eaten in three bites, a moment to savour it, off it goes
+            let Some(fire) = l.fire.clone() else {
+                w.folk[i].act = rest(rnd_rest);
+                return;
+            };
+            let f = &mut w.folk[i];
+            if walk(f, &Spot::at(if f.act.side != 0 { (fire.x1 + 3) as f64 } else { (fire.x0 - 3) as f64 }, (fire.y1 + 2) as f64), v, dt) {
+                f.legs = "stand";
+                f.dir = if f.act.side != 0 { -1.0 } else { 1.0 };
+                f.act.t += dt;
+                let (at, cook) = (f.act.t, f.act.cook);
+                f.arms = if at < cook {
+                    "fwd1"
+                } else if at < cook + 7.0 {
+                    "eat"
+                } else {
+                    "down"
+                };
+                if at > cook + 8.5 {
+                    f.act = rest(rnd_rest);
+                }
+            }
+        }
         "warm" => {
             // its hands at the fire, from its left or its right side
             let Some(fire) = l.fire.clone() else {
@@ -1601,7 +1639,7 @@ pub fn pick_break(w: &mut World, i: usize, l: &Layout, t: &mut Tick) -> Act {
     }
     let fid = w.folk[i].id.clone();
     let human = w.folk[i].human;
-    let others: Vec<usize> = (0..w.folk.len()).filter(|&j| j != i && !w.folk[j].leaving).collect();
+    let others: Vec<usize> = (0..w.folk.len()).filter(|&j| j != i && !w.folk[j].leaving && !w.folk[j].frozen).collect();
     let mates: Vec<usize> = others.iter().copied().filter(|&j| !w.folk[j].work && (w.folk[j].act.kind == "stand" || w.folk[j].act.kind == "loiter")).collect();
     let mate = t.dice.any(&mates).copied();
     let taken = |w: &World, kind: &str| others.iter().any(|&j| w.folk[j].act.kind == kind);
@@ -1706,10 +1744,11 @@ pub fn pick_break(w: &mut World, i: usize, l: &Layout, t: &mut Tick) -> Act {
         return Act { kind: "visit", to: Some(w.folk[m].id.clone()), left: Some(left), wave: 0.8, ..Default::default() };
     }
     if r < 0.7 && l.fire.is_some() && !t.moving_fire {
-        let side = if others.iter().any(|&j| w.folk[j].act.kind == "warm" && w.folk[j].act.side == 0) { 1 } else { 0 };
-        if !others.iter().any(|&j| w.folk[j].act.kind == "warm" && w.folk[j].act.side == side) {
-            let left = t.rnd(20.0, 40.0);
-            return Act { kind: "warm", side, left: Some(left), ..Default::default() };
+        // the fire: its hands warmed, or a sausage grilled (one a side)
+        let at = |g: &Fig| g.act.kind == "warm" || g.act.kind == "grill";
+        let side = if others.iter().any(|&j| at(&w.folk[j]) && w.folk[j].act.side == 0) { 1 } else { 0 };
+        if !others.iter().any(|&j| at(&w.folk[j]) && w.folk[j].act.side == side) {
+            return fire_break(side, None, t);
         }
     }
     if r < 0.74 {
@@ -2159,9 +2198,8 @@ pub fn hunt_step(w: &mut World, i: usize, l: &Layout, dt: f64, t: &mut Tick) -> 
                 h.phase = "after";
                 h.t = 0.0;
                 let (fx, fy, fd) = (f.x, f.y, f.dir);
-                let by = if f.human { "you".to_string() } else { f.id.clone() };
                 w.s.shots.push(Shot { x: (jround(fx) as f64) + 10.0 * fd, y: (jround(fy) - 9) as f64, t0: t.now(), ..Default::default() });
-                shoot(w, l, &gid, &by, t);
+                shoot(w, l, &gid, t);
             }
             true
         }
@@ -2381,9 +2419,9 @@ fn think_manager(w: &mut World, i: usize, l: &Layout, dt: f64, t: &mut Tick) {
 
 // ---- remains: a shot bot in pieces, its undo until they are cleared away
 
-/// a flash where it hits, and the pieces; the others more afraid, the ones near run. `by`: who ("you": yours add
-/// up, the mutiny)
-pub fn shoot(w: &mut World, l: &Layout, id: &str, by: &str, t: &mut Tick) {
+/// a flash where it hits, and the pieces; the others more afraid, the ones near run. Every kill adds up (the mutiny),
+/// an office manager's too: she works for you
+pub fn shoot(w: &mut World, l: &Layout, id: &str, t: &mut Tick) {
     let Some(i) = w.idx(id) else { return };
     let (x, y) = (w.folk[i].x, w.folk[i].y);
     w.s.shots.push(Shot { x: jround(x) as f64, y: (jround(y) - 14) as f64, t0: t.now(), hit: true, ..Default::default() });
@@ -2398,9 +2436,7 @@ pub fn shoot(w: &mut World, l: &Layout, id: &str, by: &str, t: &mut Tick) {
     if t.hardcore() {
         w.s.fear = (w.s.fear + FEAR_KILL).min(1.0);
         alarm(w, l, x, y, t);
-        if by == "you" {
-            w.s.blood += 1.0;
-        }
+        w.s.blood += 1.0; // (they add up: the mutiny)
     }
 }
 
@@ -2503,6 +2539,18 @@ pub fn gone(w: &mut World, id: &str, t: &mut Tick) {
     }
 }
 
+/// at the fire, from its left (0) or right (1): half the time a sausage grilled, else its hands warmed (`left`: for so
+/// long, else twenty to forty seconds)
+fn fire_break(side: i32, left: Option<f64>, t: &mut Tick) -> Act {
+    if t.rand() < 0.5 {
+        let cook = t.rnd(14.0, 22.0);
+        Act { kind: "grill", side, cook, ..Default::default() }
+    } else {
+        let left = left.unwrap_or_else(|| t.rnd(20.0, 40.0));
+        Act { kind: "warm", side, left: Some(left), ..Default::default() }
+    }
+}
+
 /// where a figure dropped on a piece goes: a figure put down on a piece of furniture uses it
 pub fn use_at(f: &Fig, key: &str, l: &Layout, t: &mut Tick) -> Option<Act> {
     let kind = kind_of(key);
@@ -2511,9 +2559,9 @@ pub fn use_at(f: &Fig, key: &str, l: &Layout, t: &mut Tick) -> Option<Act> {
         "armchair" => Some(Act { kind: "chair", at: Some(key.into()), left: Some(long), ..Default::default() }),
         "neuralyzer" => f.is_bot().then(|| Act { kind: "neuralyze", at: Some(key.into()), ..Default::default() }),
         "fire" => {
-            // its hands at the fire (it burns furniture, never a bot)
+            // its hands at the fire, or a sausage on it (it burns furniture, never a bot)
             let fire = l.fire.as_ref()?;
-            Some(Act { kind: "warm", side: if f.x > (fire.x0 + fire.x1) as f64 / 2.0 { 1 } else { 0 }, left: Some(long / 2.0), ..Default::default() })
+            Some(fire_break(if f.x > (fire.x0 + fire.x1) as f64 / 2.0 { 1 } else { 0 }, Some(long / 2.0), t))
         }
         "window" => {
             if f.human {
@@ -2561,13 +2609,17 @@ pub fn booth_at<'a>(l: &'a Layout, f: &Fig) -> Option<&'a layout::Piece> {
     l.booths.iter().find(|bo| in_rect(spot_of_fig(f), foot("booth", [bo.x, bo.y], None)))
 }
 
-/// a piece over the fire: its middle is (not when an edge touches the fire's margin)
-pub fn in_fire(l: &Layout, key: &str, at: [i32; 2], u: Option<i32>) -> bool {
-    let Some(fire) = &l.fire else { return false };
-    if !key.starts_with("u:") && layout::fixed(key) {
-        return false;
+/// the pointer (dots) over the fire
+pub fn over_fire(l: &Layout, p: Option<(f64, f64)>) -> bool {
+    match (&l.fire, p) {
+        (Some(f), Some((x, y))) => x >= f.x0 as f64 && x < f.x1 as f64 && y >= f.y0 as f64 && y < (f.y1 + 4) as f64,
+        _ => false,
     }
-    let r = foot(key, at, u);
-    let (cx, cy) = ((r[0] + r[2]) as f64 / 2.0, (r[1] + r[3]) as f64 / 2.0);
-    cx >= fire.x0 as f64 && cx < fire.x1 as f64 && cy >= fire.y0 as f64 && cy < (fire.y1 + 4) as f64
+}
+
+/// what is carried is over the fire when the pointer holding it is: a long desk can't take its middle over a fire that
+/// stands by the wall (it stops at the room's edge), the hand that holds it can. One picked up where it stood over the
+/// pit is not about to burn until the pointer has left the fire once (`out`)
+pub fn in_fire(l: &Layout, m: &layout::Moving, pointer: Option<(f64, f64)>) -> bool {
+    m.out && (m.key.starts_with("u:") || !layout::fixed(&m.key)) && over_fire(l, pointer)
 }

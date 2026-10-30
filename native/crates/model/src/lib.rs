@@ -194,6 +194,13 @@ impl Default for Settings {
     }
 }
 
+impl Settings {
+    /// a switch kept among the others (`other`), on: halloween (the pumpkin is its switch)
+    pub fn on(&self, key: &str) -> bool {
+        self.other.get(key).and_then(serde_json::Value::as_bool).unwrap_or(false)
+    }
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct Manager {

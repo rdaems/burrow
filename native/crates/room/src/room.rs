@@ -91,6 +91,8 @@ pub struct Room {
     pub cursor: &'static str,
     /// what the first person keeps of the room
     pub third: crate::scene3::Third,
+    /// Halloween: a pumpkin stands in the room and is lit (everyone in costume)
+    pub spooky: bool,
 }
 
 impl Room {
@@ -124,6 +126,7 @@ impl Room {
             floor: None,
             cursor: "default",
             third: Default::default(),
+            spooky: false,
         }
     }
 
@@ -202,6 +205,7 @@ impl Room {
         if let Some(m) = self.moving.as_ref().map(|m| m.key.clone()) {
             ride(&mut self.w, &l, self.last.as_ref(), &m); // whoever is at what is being dragged comes along, this very frame
         }
+        self.spooky = s.settings.on("halloween") && !l.pumpkins.is_empty();
         if !l.placed.is_empty() {
             let mut lay = serde_json::Map::new();
             for (k, v) in &s.layout {
@@ -342,10 +346,48 @@ impl Room {
             let l = self.last.clone();
             let mut t = Tick { inp, out, dice: &mut self.dice, fresh: &mut self.fresh, moving_fire: false, w: self.size.w };
             if let Some(l) = l {
-                think::shoot(&mut self.w, &l, id, "you", &mut t);
+                think::shoot(&mut self.w, &l, id, &mut t);
             }
         }
         ok
+    }
+    /// a piece of furniture (`piece`, its key) or an empty desk (`desk`, its unit) shot at in the first person: three
+    /// blasts within twenty seconds and it goes, as into the fire, the floor scorched where it stood (a stray pellet
+    /// meant for a bot breaks nothing). What the fire won't take a shot won't either (the fixed ones, a desk with bots at
+    /// it), nor the gun closet your shells come from. Some(false): hit; Some(true): broken; None: nothing to break
+    pub fn hit(&mut self, inp: &Input, out: &mut Output, piece: Option<&str>, desk: Option<&str>) -> Option<bool> {
+        let key = piece.map(String::from).or(desk.map(|u| format!("u:{u}")))?;
+        let l = self.last.as_ref().filter(|_| inp.hardcore())?;
+        if piece.is_some_and(|p| layout::fixed(p) || kind_of(p) == "booth") {
+            return None;
+        }
+        let d = desk.and_then(|u| l.desks.iter().find(|d| d.d.unit == u));
+        if desk.is_some() && d.is_none_or(|d| !d.seats.is_empty()) {
+            return None;
+        }
+        let now = inp.now;
+        let n = match self.w.s.dents.get(&key) {
+            Some(&(n, t)) if now - t < 20000.0 => n + 1,
+            _ => 1,
+        };
+        if n < 3 {
+            self.w.s.dents.insert(key, (n, now));
+            return Some(false);
+        }
+        self.w.s.dents.remove(&key);
+        // shot to bits: gone as into the fire, a scorch on the floor where it stood
+        let p = piece.and_then(|p| l.piece_of(p));
+        let sc = match (d, p) {
+            (Some(d), _) => Some(Scorch { x: d.x0 as f64 + d.w as f64 / 2.0, y: (d.y - 2) as f64, rx: d.w as f64 / 2.0 + 4.0, t0: now }),
+            (None, Some(p)) => Some(Scorch { x: (p.r[0] + p.r[2]) as f64 / 2.0, y: (p.r[3] - 2) as f64, rx: (p.r[2] - p.r[0]) as f64 / 2.0 + 3.0, t0: now }),
+            _ => None, // (gone from the layout meanwhile)
+        };
+        self.w.s.scorch.extend(sc);
+        match d {
+            Some(d) => out.act(json!({"kind": "forget", "unit": d.d.unit})),
+            None => out.act(json!({"kind": "burn", "key": key})),
+        }
+        Some(true)
     }
     /// put back together (E on its remains, in the first person)
     pub fn unshoot(&mut self, now: f64, id: &str) {

@@ -219,14 +219,17 @@ fn the_painting_grows_only_while_a_robot_paints_at_the_easel() {
     room.resize(&inp, 820.0);
     let mut painted = 0;
     let mut n = None;
+    let painting = |room: &Room| room.w.folk.iter().any(|f| f.act.kind == "paint" && f.act.there);
     for _ in 0..12 * 60 * 12 {
+        // (one at it as the tick began: it may have put its brush down in that same tick)
+        let was = painting(&room);
         run(&mut room, &mut inp, 5.0 / 60.0);
         let a = room.w.s.art.as_ref().expect("a painting on the easel from the start");
         if let Some(n0) = n
             && a.n > n0
         {
             painted += 1;
-            assert!(room.w.folk.iter().any(|f| f.act.kind == "paint" && f.act.there), "it grew with nobody painting");
+            assert!(was || painting(&room), "it grew with nobody painting");
             assert!(!a.by.is_empty());
         }
         n = Some(a.n);
@@ -278,4 +281,216 @@ fn shoot_three_and_the_rest_come_for_you_then_respawn_ends_it() {
     run(&mut room, &mut inp, 40.0);
     assert!(room.w.s.mutiny.is_none(), "the guns went back, it is over");
     assert!(room.w.folk.iter().all(|f| !f.red && (f.human || f.carry != Some("gun"))), "nobody kept a gun");
+}
+
+#[test]
+fn an_office_manager_s_kills_count_for_the_mutiny() {
+    // she works for you: a bot she shoots adds up as if you had
+    let mut s = demo();
+    s.furniture.push("booth0".into());
+    s.settings.hardcore = true;
+    let mut inp = Input { state: s.clone(), now: 0.0, hour: 14, ..Default::default() };
+    let mut room = Room::new(5, 0.0);
+    room.resize(&inp, 820.0);
+    run(&mut room, &mut inp, 5.0);
+    let id = s.bots.iter().find(|b| !b.busy && !b.waiting).expect("an idle bot").id.clone();
+    let mut out = Output::default();
+    room.condemn(&inp, &mut out, std::slice::from_ref(&id));
+    for _ in 0..60 * 60 {
+        run(&mut room, &mut inp, 1.0 / 60.0);
+        if room.w.get(&id).is_none() {
+            break;
+        }
+    }
+    assert!(room.w.get(&id).is_none() && room.w.remains(&id).is_some(), "she never shot it");
+    assert!(room.w.s.blood > 0.5, "her kill did not count ({})", room.w.s.blood);
+}
+
+#[test]
+fn a_bot_grills_a_sausage_at_the_fire_and_eats_it() {
+    let s = demo();
+    let mut inp = Input { state: s.clone(), now: 0.0, hour: 14, ..Default::default() };
+    let mut room = Room::new(6, 0.0);
+    room.resize(&inp, 820.0);
+    run(&mut room, &mut inp, 3.0);
+    let fire = room.last.clone().unwrap().fire.unwrap();
+    let id = s.bots.iter().find(|b| !b.busy && !b.waiting).unwrap().id.clone();
+    room.w.get_mut(&id).unwrap().act = burrow_room::world::Act { kind: "grill", side: 1, cook: 4.0, ..Default::default() };
+    let mut arms = Vec::new();
+    for _ in 0..12 * 40 {
+        run(&mut room, &mut inp, 1.0 / 12.0);
+        let f = room.w.get(&id).unwrap();
+        if f.act.kind != "grill" {
+            break;
+        }
+        if f.act.t > 0.0 {
+            assert_eq!((f.x, f.y, f.dir), ((fire.x1 + 3) as f64, (fire.y1 + 2) as f64, -1.0), "beside the fire, facing it");
+            if arms.last() != Some(&f.arms) {
+                arms.push(f.arms);
+            }
+        }
+    }
+    assert_eq!(arms, ["fwd1", "eat", "down"], "over the fire, at its mouth, savoured");
+    assert_ne!(room.w.get(&id).unwrap().act.kind, "grill", "and off it goes");
+}
+
+#[test]
+fn a_machine_out_of_reach_freezes_its_bots_and_snows_on_its_screens() {
+    let mut s = demo();
+    let mut inp = Input { state: s.clone(), now: 0.0, hour: 14, ..Default::default() };
+    let mut room = Room::new(8, 0.0);
+    room.resize(&inp, 820.0);
+    run(&mut room, &mut inp, 20.0);
+    s.machines[1].error = Some("no route to host".into());
+    inp.state = s.clone();
+    let lab: Vec<String> = s.bots.iter().filter(|b| b.m == "lab").map(|b| b.id.clone()).collect();
+    run(&mut room, &mut inp, 1.0);
+    // (where they are and how they hold themselves: what they were at may still be ended by a partner in it, a football
+    // game over, as in the web room)
+    let seen = |room: &Room| -> Vec<(f64, f64, &'static str, f64)> { lab.iter().filter_map(|id| room.w.get(id)).map(|f| (f.x, f.y, f.arms, f.step)).collect() };
+    let before = seen(&room);
+    assert_eq!(before.len(), lab.len());
+    run(&mut room, &mut inp, 60.0);
+    assert_eq!(seen(&room), before, "they stand still as last seen");
+    assert!(lab.iter().all(|id| room.w.get(id).unwrap().frozen));
+    // its desks: nothing opens there, no bot starts
+    let mut out = Output::default();
+    let l = room.step(&inp, &mut out);
+    room.draw(&inp, &mut out, &l);
+    let lab_desks = l.desks.iter().filter(|d| d.d.m == "lab").count();
+    assert!(lab_desks > 0);
+    assert!(!room.hots.iter().any(|h| h.action["m"] == "lab" && (h.action["kind"] == "spawn" || h.action["kind"] == "shell")), "a click there does something");
+    assert!(room.hots.iter().any(|h| h.action["m"] == "" && h.action["kind"] == "spawn"), "here it still does");
+    room.img.save_png(concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/room-cut-off.png")).unwrap();
+    // the line back: they take up where they were
+    s.machines[1].error = None;
+    inp.state = s;
+    run(&mut room, &mut inp, 60.0);
+    assert!(lab.iter().all(|id| !room.w.get(id).unwrap().frozen));
+    assert_ne!(seen(&room), before, "still frozen");
+}
+
+#[test]
+fn a_lit_pumpkin_puts_the_office_in_costume() {
+    let mut s = demo();
+    s.furniture.push("pumpkin0".into());
+    s.settings.other.insert("halloween".into(), serde_json::json!(true));
+    let mut inp = Input { state: s.clone(), now: 0.0, hour: 14, ..Default::default() };
+    let mut room = Room::new(11, 0.0);
+    room.resize(&inp, 820.0);
+    run(&mut room, &mut inp, 30.0);
+    let mut out = Output::default();
+    let l = room.step(&inp, &mut out);
+    assert!(room.spooky);
+    room.draw(&inp, &mut out, &l);
+    assert!(room.hots.iter().any(|h| h.action["kind"] == "halloween"), "a click on the pumpkin blows it out");
+    room.img.save_png(concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/room-halloween.png")).unwrap();
+    let scene = room.scene3(&inp).unwrap();
+    assert!(scene.things.iter().any(|t| t.piece.as_deref() == Some("pumpkin0")), "in the first person as its picture");
+    assert!(scene.lights.iter().any(|lt| lt.r == 70.0), "its candle a light");
+    // blown out: no costumes; no pumpkin: none either
+    inp.state.settings.other.insert("halloween".into(), serde_json::json!(false));
+    room.step(&inp, &mut out);
+    assert!(!room.spooky);
+    inp.state.settings.other.insert("halloween".into(), serde_json::json!(true));
+    inp.state.furniture.retain(|k| k != "pumpkin0");
+    room.step(&inp, &mut out);
+    assert!(!room.spooky);
+}
+
+/// a drag with the pointer, in twenty steps, let go at the end
+fn drag(room: &mut Room, inp: &Input, path: &[(f64, f64)]) -> Output {
+    let mut out = Output::default();
+    room.pointer_down(path[0].0, path[0].1, false);
+    for w in path.windows(2) {
+        for k in 1..=20 {
+            let u = k as f64 / 20.0;
+            room.pointer_move(w[0].0 + (w[1].0 - w[0].0) * u, w[0].1 + (w[1].1 - w[0].1) * u, (0.0, 0.0), &mut out);
+        }
+    }
+    room.pointer_up(inp, &mut out, (0.0, 0.0));
+    out
+}
+
+#[test]
+fn what_the_pointer_holds_over_the_fire_burns() {
+    let mut s = demo();
+    s.furniture.push("radio9".into());
+    let mut inp = Input { state: s.clone(), now: 0.0, hour: 14, ..Default::default() };
+    let mut room = Room::new(3, 0.0);
+    room.resize(&inp, 820.0);
+    run(&mut room, &mut inp, 2.0);
+    let fire = room.last.clone().unwrap().fire.unwrap();
+    let mid = ((fire.x0 + fire.x1) as f64 / 2.0, (fire.y1 - 8) as f64);
+    // a radio standing in front of the pit, picked up where the pointer is over the fire: moved about in it, it is put
+    // down there; out of the fire and back, it burns
+    inp.state.layout.insert("radio9".into(), [(fire.x0 + fire.x1) / 2, fire.y1 + 3]);
+    run(&mut room, &mut inp, 0.5);
+    let on = ((fire.x0 + fire.x1) as f64 / 2.0, (fire.y1 + 2) as f64);
+    assert_eq!(room.piece_at(Some(on)).map(|p| p.key), Some("radio9".into()));
+    let out = drag(&mut room, &inp, &[on, (on.0 - 6.0, on.1 - 1.0)]);
+    assert!(room.w.s.burning.is_empty() && !out.acts.iter().any(|a| a["kind"] == "burn"), "it burnt without leaving the fire");
+    assert!(out.acts.iter().any(|a| a["kind"] == "layout"));
+    let at = (on.0 - 6.0, on.1 - 1.0);
+    let out = drag(&mut room, &inp, &[at, (at.0, at.1 + 40.0), mid]);
+    assert!(out.acts.iter().any(|a| a["kind"] == "burn" && a["key"] == "radio9"), "{:?}", out.acts);
+    // a long desk held by its plate: its middle never gets over the fire, the hand holding it does
+    run(&mut room, &mut inp, 0.5);
+    let d = room.last.clone().unwrap().desks.into_iter().max_by_key(|d| d.w).unwrap();
+    let n = room.w.s.burning.len();
+    drag(&mut room, &inp, &[((d.x0 + 4) as f64, (d.y - 6) as f64), mid]);
+    assert_eq!(room.w.s.burning.len(), n + 1, "the desk did not burn");
+}
+
+#[test]
+fn three_blasts_and_a_piece_goes_as_into_the_fire() {
+    // hardcore, the first person: furniture shot at (the room's `hit`)
+    let mut s = demo();
+    s.furniture.extend(["booth0".to_string(), "radio9".to_string()]);
+    s.settings.hardcore = true;
+    let mut inp = Input { state: s.clone(), now: 0.0, hour: 14, ..Default::default() };
+    let mut room = Room::new(2, 0.0);
+    room.resize(&inp, 820.0);
+    run(&mut room, &mut inp, 2.0);
+    let mut out = Output::default();
+    let mut hit = |room: &mut Room, inp: &mut Input, piece: Option<&str>, desk: Option<&str>, after: f64| {
+        inp.now += after;
+        room.hit(inp, &mut out, piece, desk)
+    };
+    assert_eq!(hit(&mut room, &mut inp, Some("radio9"), None, 1000.0), Some(false));
+    assert_eq!(hit(&mut room, &mut inp, Some("radio9"), None, 1000.0), Some(false));
+    assert_eq!(hit(&mut room, &mut inp, Some("radio9"), None, 1000.0), Some(true), "the third blast");
+    assert_eq!(room.w.s.scorch.len(), 1);
+    // more than twenty seconds between two: it starts over
+    assert_eq!(hit(&mut room, &mut inp, Some("plant0"), None, 0.0), Some(false));
+    assert_eq!(hit(&mut room, &mut inp, Some("plant0"), None, 21000.0), Some(false));
+    assert_eq!(hit(&mut room, &mut inp, Some("plant0"), None, 1000.0), Some(false));
+    assert_eq!(hit(&mut room, &mut inp, Some("plant0"), None, 1000.0), Some(true));
+    // not what the fire won't take, nor the gun closet; a desk only without bots
+    for p in ["fire", "closet", "settings0", "clock", "booth0"] {
+        assert_eq!(hit(&mut room, &mut inp, Some(p), None, 0.0), None, "{p}");
+    }
+    let l = room.last.clone().unwrap();
+    let busy = l.desks.iter().find(|d| !d.seats.is_empty()).unwrap().d.unit.clone();
+    let empty = l.desks.iter().find(|d| d.seats.is_empty()).expect("a kept desk without bots").d.unit.clone();
+    assert_eq!(hit(&mut room, &mut inp, None, Some(&busy), 0.0), None);
+    for _ in 0..3 {
+        hit(&mut room, &mut inp, None, Some(&empty), 500.0);
+    }
+    // not in hardcore: nothing
+    let mut soft = inp.clone();
+    soft.state.settings.hardcore = false;
+    assert_eq!(room.hit(&soft, &mut Output::default(), Some("printer"), None), None);
+    let acts: Vec<(String, String)> = out.acts.iter().map(|a| (a["kind"].as_str().unwrap().into(), a["key"].as_str().or(a["unit"].as_str()).unwrap().into())).collect();
+    assert_eq!(acts, [("burn".into(), "radio9".into()), ("burn".into(), "plant0".into()), ("forget".into(), empty.clone())]);
+    // the floor scorched where they stood (target/room-scorch.png), fading over two minutes
+    inp.state.furniture.retain(|k| k != "radio9" && k != "plant0");
+    inp.state.desks.retain(|d| d.unit != empty);
+    let l = room.step(&inp, &mut out);
+    room.draw(&inp, &mut out, &l);
+    room.img.save_png(concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/room-scorch.png")).unwrap();
+    assert_eq!(room.w.s.scorch.len(), 3);
+    inp.now += 121000.0;
+    room.draw(&inp, &mut out, &l);
+    assert!(room.w.s.scorch.is_empty());
 }

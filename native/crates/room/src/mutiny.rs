@@ -1,16 +1,17 @@
-//! Hardcore, and you shoot one after another (`blood`: yours, not an office manager's; it fades): their fear turns
-//! into cooperation. The idle ones gather somewhere away from you and put their heads together a while, then stroll
-//! over to the gun closet one after another as if nothing were up; each takes a gun and its eyes go red. Then they
-//! close in on you, slowly, from their side, and fire: the first few go wide, then one does not. You lie there, the
-//! room goes red, YOU DIED, and RESPAWN brings you in by the door (they take the guns back). One that gets work, or
-//! whose session you open, drops out. In the first person their shots are Doom's damage (`incoming`), and you can
-//! shoot back: none of them left standing, it is over (room.js's mutinyTick, mutinyStep, fire, die, respawn).
+//! Hardcore, and bots are shot one after another (`blood`: every kill, yours or an office manager's, for she works for
+//! you; it fades): their fear turns into cooperation. The idle ones gather somewhere away from you and put their heads
+//! together a while, then stroll over to the gun closet one after another as if nothing were up; each takes a gun and
+//! its eyes go red. Then they close in on you, slowly, from their side, and fire: the first few go wide, then one does
+//! not. You lie there, the room goes red, YOU DIED, and RESPAWN brings you in by the door (they take the guns back).
+//! One that gets work, or whose session you open, drops out. In the first person their shots are Doom's damage
+//! (`incoming`), and you can shoot back: none of them left standing, it is over (room.js's mutinyTick, mutinyStep,
+//! fire, die, respawn).
 
 use crate::layout::{Layout, WALL};
 use crate::think::{Tick, idle_bot};
 use crate::world::{Act, Fig, Incoming, Mutiny, Shot, Spot, World, end, rest, walk};
 
-/// three of yours within about 45 s; how long a kill rankles; their pace, and closer in
+/// three kills within about 45 s; how long a kill rankles; their pace, and closer in
 const AFTER: f64 = 2.5;
 const FADE: f64 = 90.0;
 const V: f64 = 18.0;

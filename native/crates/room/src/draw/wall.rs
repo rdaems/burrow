@@ -219,6 +219,53 @@ pub fn draw_window(ctx: &mut Ctx, x0: i32, y0: i32, hour: u32) {
     }
 }
 
+/// Halloween: cobwebs in the wall's top corners (a room `w` dots wide), a spider letting itself down from the left one
+/// and climbing back by the room's time `t` (still: it hangs)
+pub fn draw_cobwebs(ctx: &mut Ctx, w: i32, t: f64, still: bool) {
+    ctx.set_alpha(0.45);
+    for (cx, d) in [(0, 1), (w - 2, -1)] {
+        let at = |r: f64, a: f64| (cx + d * js_round(a.cos() * r), js_round(a.sin() * r));
+        // (a dot once, however many threads cross it: it is see-through)
+        let mut dots: Vec<(i32, i32)> = Vec::new();
+        let mut dot = |p: (i32, i32)| {
+            if !dots.contains(&p) {
+                dots.push(p);
+            }
+        };
+        for a in [1., 3., 5.] {
+            for r in 2..=13 {
+                dot(at(r as f64, a * PI / 12.)); // its threads out of the corner
+            }
+        }
+        for r in [5, 10] {
+            for k in 0..4 {
+                // and round, from the ceiling to the wall, sagging
+                for i in 1..r {
+                    let a0 = if k == 0 { 0. } else { (2 * k - 1) as f64 * PI / 12. };
+                    let a1 = if k == 3 { PI / 2. } else { (2 * k + 1) as f64 * PI / 12. };
+                    let (rf, u) = (r as f64, i as f64 / r as f64);
+                    let ((ax, ay), (bx, by)) = (at(rf, a0), at(rf, a1));
+                    let sag = (u * PI).sin() * rf / 8.;
+                    dot((
+                        js_round(ax as f64 + (bx - ax) as f64 * u - d as f64 * sag * 0.7),
+                        js_round(ay as f64 + (by - ay) as f64 * u - sag * 0.7),
+                    ));
+                }
+            }
+        }
+        for (px, py) in dots {
+            rect(ctx, px, py, 1, 1, C::STEEL3);
+        }
+    }
+    ctx.set_alpha(1.);
+    let (sx, sy) = (9, js_round(13. + if still { 0. } else { 5. * (t * 0.6).sin() }));
+    rect(ctx, sx, 7, 1, sy - 7, pix::css("rgba(194,201,217,0.5)")); // its thread
+    rect(ctx, sx - 1, sy, 2, 2, INK); // its body
+    for (lx, ly) in [(-2, -1), (-2, 1), (1, -1), (1, 1)] {
+        rect(ctx, sx + lx, sy + ly, 1, 1, INK); // its legs
+    }
+}
+
 /// the floor and the wall behind everything, `w` x `h` dots: Pixel Agents' planks in rows, their seams
 /// staggered, the navy wall, its baseboard, a soft shadow along its foot
 pub fn floor(w: i32, h: i32) -> Image {

@@ -952,6 +952,10 @@ impl Hub {
                 // a radio put down: the sound is on
                 room::obj(&mut g.room, "settings").insert("sound".into(), json!(true));
             }
+            if kind == "pumpkin" {
+                // a pumpkin put down: it is lit
+                room::obj(&mut g.room, "settings").insert("halloween".into(), json!(true));
+            }
             g.save(&self.cfg);
             key
         };

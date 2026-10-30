@@ -176,6 +176,17 @@ impl Burrow {
                     self.room.shoot(&inp, &mut out, &bot);
                 }
                 FEv::Unshoot { rem } => self.room.unshoot(inp.now, &rem),
+                // a piece of furniture shot at: dented, or at the third blast to bits (Doom's barrel there)
+                FEv::Hit { piece, desk, x, y, z } => match self.room.hit(&inp, &mut out, piece.as_deref(), desk.as_deref()) {
+                    Some(true) => {
+                        if let Some(run) = self.fps.as_mut() {
+                            run.fps.boom(x, y, z);
+                        }
+                    }
+                    _ => {
+                        self.sound.play("clank", 0.0, 0.7, false, None);
+                    }
+                },
                 FEv::Alarm { x, y } => self.room.alarm(&inp, &mut out, x, y),
                 FEv::Sound(FSound::Doom { name, vol, pan, origin }) => {
                     if let Some(lump) = self.fps.as_ref().and_then(|r| r.fps.wad().lump(name)).map(|l| l.to_vec()) {

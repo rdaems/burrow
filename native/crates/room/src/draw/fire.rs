@@ -15,6 +15,26 @@ pub fn ell(rx: i32, ry: i32, rows: i32) -> Vec<i32> {
         .collect()
 }
 
+/// where a piece was shot to bits (hardcore, the first person): the floor scorched round x, y (`rx` its half width),
+/// embers glowing a while, fading over two minutes; `age` seconds since, `t` the room's time
+pub fn draw_scorch(ctx: &mut Ctx, x: f64, y: f64, rx: f64, age: f64, t: f64) {
+    let h = 2.max(js_round(rx * 0.35));
+    ctx.set_alpha(0.55 * (1. - age / 120.));
+    for j in -h..=h {
+        let q = js_round(rx * (1. - (j as f64 / (h as f64 + 0.5)).powi(2)).sqrt() * (0.85 + 0.15 * (j as f64 * 2.3 + rx).sin()));
+        rect(ctx, js_round(x) - q, js_round(y) + j, 2 * q + 1, 1, Color::rgb(0x1a1210));
+    }
+    ctx.set_alpha(1.);
+    if age < 12. {
+        for k in 0..6 {
+            if ((t * 3.).floor() as i64 + k) % 4 != 0 {
+                let (ex, ey) = (js_round(x + (k as f64 * 2.7).sin() * rx * 0.7), js_round(y + (k as f64 * 1.9).cos() * h as f64 * 0.6));
+                rect(ctx, ex, ey, 1, 1, if age < 6. { Color::rgb(0xffb347) } else { Color::rgb(0xc0502a) });
+            }
+        }
+    }
+}
+
 /// something thrown in: its picture, where it was picked up (its top left), seconds since
 pub struct Burning<'a> {
     pub img: &'a Image,

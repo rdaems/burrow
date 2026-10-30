@@ -19,6 +19,8 @@ use std::f64::consts::PI;
 type Rgb = [f64; 3];
 type Px = Option<[f64; 4]>;
 const GL: f64 = GLOW as f64;
+/// a screen's snow, its machine out of reach (the room's SNOW)
+const SNOW: [Rgb; 7] = [[16.0, 20.0, 31.0], [16.0, 20.0, 31.0], [59.0, 58.0, 85.0], [59.0, 58.0, 85.0], [93.0, 98.0, 128.0], [139.0, 147.0, 173.0], [194.0, 201.0, 217.0]];
 
 fn hex(h: &str) -> Rgb {
     let c = pix::css(h).0;
@@ -381,11 +383,11 @@ impl Props {
         let back = Some(o.back.unwrap_or_else(|| self.mat(m, r(w), r(h))));
         let side = Some(o.side.unwrap_or_else(|| self.mat(m, r(d), r(h))));
         let top = Some(o.top.unwrap_or_else(|| self.mat(m, r(w), r(d))));
-        Block { x0, y0, x1, y1, z0, z1, front, back, side, top, west: o.west, east: o.east }
+        Block { x0, y0, x1, y1, z0, z1, front, back, side, top, west: o.west, east: o.east, ..Default::default() }
     }
     /// a block faced with one picture on every side (the pong table's net)
     fn blk_tex(&mut self, x0: f64, y0: f64, x1: f64, y1: f64, z0: f64, z1: f64, f: Face) -> Block {
-        Block { x0, y0, x1, y1, z0, z1, front: Some(f.clone()), back: Some(f.clone()), side: Some(f.clone()), top: Some(f), west: None, east: None }
+        Block { x0, y0, x1, y1, z0, z1, front: Some(f.clone()), back: Some(f.clone()), side: Some(f.clone()), top: Some(f), ..Default::default() }
     }
 
     // ---- the little models, drawn from eight sides into a picture each. A face's colour is its box's, or a
@@ -658,11 +660,13 @@ impl Props {
         Fig { tex, w, h, ax: w / 2.0, ay: h - 1.0, res: TS }
     }
 
-    // ---- the screens: a screen's picture by what it shows (off, on, busy, waits), in the desk's colour
+    // ---- the screens: a screen's picture by what it shows (off, on, busy, waits, snow: its machine out of reach), in
+    // the desk's colour
     fn screen_tex(&mut self, w: f64, h: f64, state: &str, color: &str, t: f64) -> Face {
         let frame = match state {
             "busy" => (t * 5.0).floor() as i64 % 26,
             "waits" => (t * 2.0).floor() as i64 % 2,
+            "snow" => (t * 8.0).floor() as i64 % 6,
             _ => 0,
         };
         let (state, color) = (state.to_string(), color.to_string());
@@ -670,7 +674,7 @@ impl Props {
     }
     fn screen_paint(&mut self, w: f64, h: f64, state: &str, color: &str, frame: i64) -> Image {
         let col = hex(color);
-        let on = state != "off";
+        let on = state != "off" && state != "snow";
         let c = self.pix(
             w * TS,
             h * TS,
@@ -678,6 +682,14 @@ impl Props {
                 let (fi, fj, bz) = (i as f64, j as f64, 1.2 * TS);
                 if fi < bz || fj < bz || fi >= w * TS - bz || fj >= h * TS - bz {
                     return c3([40.0, 42.0, 52.0]);
+                }
+                if state == "snow" {
+                    // a dot of the room's screen a texel block, as the room draws it
+                    let ts = TS as i32;
+                    let mut n = (i / ts + 1).wrapping_mul(374761393).wrapping_add((j / ts + 1).wrapping_mul(668265263)).wrapping_add((frame as i32 + 1).wrapping_mul(1274126177));
+                    n = (n ^ ((n as u32) >> 13) as i32).wrapping_mul(1103515245);
+                    let u = ((n ^ ((n as u32) >> 16) as i32) as u32) as f64 / 4294967296.0;
+                    return g3(SNOW[(u * SNOW.len() as f64) as usize]);
                 }
                 if !on {
                     return c3(if (i - j) % 9 == 0 && fi > w * TS * 0.6 && fj < h * TS * 0.4 { [44.0, 54.0, 78.0] } else { [16.0, 20.0, 31.0] });
@@ -1177,7 +1189,7 @@ impl Props {
         let (w, d, h) = ((x1 - x0).max(0.25), (y1 - y0).max(0.25), (z1 - z0).max(0.25));
         let r = |v: f64| (jround(v * 2.0) / 2.0).max(1.0);
         let (front, back, side, top) = (m(self, r(w), r(h)), m(self, r(w), r(h)), m(self, r(d), r(h)), m(self, r(w), r(d)));
-        Block { x0, y0, x1, y1, z0, z1, front: Some(front), back: Some(back), side: Some(side), top: Some(top), west: None, east: None }
+        Block { x0, y0, x1, y1, z0, z1, front: Some(front), back: Some(back), side: Some(side), top: Some(top), ..Default::default() }
     }
     #[allow(clippy::too_many_arguments)]
     fn tinted_blk_o(&mut self, x0: f64, y0: f64, x1: f64, y1: f64, z0: f64, z1: f64, k: &str, f: &(impl Fn(i32, i32, f64, f64) -> Px + Copy), o: Over) -> Block {
@@ -1187,7 +1199,7 @@ impl Props {
         let back = o.back.unwrap_or_else(|| self.tinted(k, r(w), r(h), *f));
         let side = o.side.unwrap_or_else(|| self.tinted(k, r(d), r(h), *f));
         let top = o.top.unwrap_or_else(|| self.tinted(k, r(w), r(d), *f));
-        Block { x0, y0, x1, y1, z0, z1, front: Some(front), back: Some(back), side: Some(side), top: Some(top), west: None, east: None }
+        Block { x0, y0, x1, y1, z0, z1, front: Some(front), back: Some(back), side: Some(side), top: Some(top), ..Default::default() }
     }
 
     /// a project's desk: its cabinet (the name on its plate), the desktop on legs with a keyboard at each seat and
