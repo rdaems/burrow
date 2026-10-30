@@ -6,7 +6,7 @@
 
 use crate::draw as D;
 use crate::io::Input;
-use crate::layout::{ADD_W, Layout, WALL, foot, kind_of, name_of, on_wall};
+use crate::layout::{self, ADD_W, Layout, WALL, foot, kind_of, name_of, on_wall};
 use crate::room::Room;
 use crate::scene::color_of;
 use crate::think::{booth_rise, booth_t, manager_seat};
@@ -169,7 +169,16 @@ impl Room {
                 screen: screen_of(""),
                 laptops: d.trees.iter().map(|tr| screen_of(tr)).collect(),
             };
-            sc.add(th.props.desk(&desk));
+            // whose its blocks are: the desk's (what a shot hits, what the crosshair names); an empty one breaks
+            let mut parts = th.props.desk(&desk);
+            let breaks = inp.hardcore() && d.seats.is_empty();
+            for b in parts.boxes.iter_mut() {
+                (b.desk, b.label, b.breaks) = (Some(d.d.unit.clone()), Some(d.label.clone()), breaks);
+            }
+            for x in parts.things.iter_mut().filter(|x| x.bot.is_none() && x.rem.is_none()) {
+                (x.desk, x.label, x.breaks) = (Some(d.d.unit.clone()), Some(d.label.clone()), breaks);
+            }
+            sc.add(parts);
         }
         // every piece of furniture with what it shows; the fire's flames (a light of their own), its pit on the floor
         let left = |u: Option<&crate::model::Limit>| u.map(|u| (1.0 - u.used as f64 / 100.0).max(0.0)).unwrap_or(0.0);
@@ -234,6 +243,9 @@ impl Room {
                 }
                 _ => {}
             }
+            // whose its blocks and pictures are: the piece's (a shot breaks what the fire would take, not the gun closet
+            // your shells come from)
+            let breaks = inp.hardcore() && !layout::fixed(key) && kind != "booth";
             if let Some(parts) = th.props.build(&p) {
                 let label = if kind == "booth" && inp.hardcore() { "E: reload".to_string() } else { name_of(kind).to_string() };
                 let mut parts = parts;
@@ -241,6 +253,10 @@ impl Room {
                     th_.label.get_or_insert(label.clone());
                     th_.reload = kind == "booth";
                     th_.piece.get_or_insert(key.clone());
+                    th_.breaks = breaks;
+                }
+                for b in parts.boxes.iter_mut() {
+                    (b.piece, b.label, b.reload, b.breaks) = (Some(key.clone()), Some(label.clone()), kind == "booth", breaks);
                 }
                 sc.add(parts);
                 continue;
@@ -269,6 +285,7 @@ impl Room {
                 ay: (*y + 1 - r[1] + pad) as f64,
                 res: 1.0,
                 label: Some(name_of(kind).to_string()),
+                breaks,
                 ..Default::default()
             });
             sc.solid.push([(r[0] + 2) as f64, r[1].max(*y - 10) as f64, (r[2] - 2) as f64, (*y + 2) as f64]);

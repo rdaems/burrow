@@ -194,6 +194,76 @@ fn shooting_the_bot_in_front_of_you() {
     assert_eq!(f.level().player.ammo[1], shells - 1);
 }
 
+/// the stub room with a coffee machine in front of you (its blocks the room's `piece`, breakable or not), and a frame
+/// drawn of it (what is in the line of fire is read from the last frame)
+fn coffee_ahead(breaks: bool) -> Fps {
+    let (w, dw) = wads();
+    let mut props = Props::new();
+    let mut parts = props.build(&Piece { kind: "coffee".into(), key: "coffee0".into(), x: 120.0, y: 100.0, level: Some(0.5), ..Default::default() }).unwrap();
+    for b in parts.boxes.iter_mut() {
+        (b.piece, b.label, b.breaks) = (Some("coffee0".into()), Some("coffee machine".into()), breaks);
+    }
+    let mut sc = Scene::empty(256.0, 180.0, 26.0);
+    sc.add(parts);
+    let mut f = Fps::new(w, dw, Arc::new(sc), Start { x: 125.0, y: 150.0, a: -PI / 2.0 }, Options { seed: 1, still: true, ..Default::default() }).unwrap();
+    let mut im = Image::new(640, 400);
+    f.tick(30.0);
+    f.draw(&mut im);
+    f.draw(&mut im); // (the crosshair names what the last frame drew under it)
+    save(if breaks { "coffee" } else { "coffee-fixed" }, &im);
+    f.events();
+    f
+}
+
+#[test]
+fn shooting_a_piece_of_furniture_hits_it_and_its_boom() {
+    let mut f = coffee_ahead(true);
+    let (shells, puffs) = (f.level().player.ammo[1], f.puffs());
+    f.click();
+    for _ in 0..10 {
+        f.tick(30.0);
+    }
+    let ev = f.events();
+    let hit = ev.iter().find_map(|e| match e {
+        Event::Hit { piece, desk, x, y, z } => Some((piece.clone(), desk.clone(), *x, *y, *z)),
+        _ => None,
+    });
+    let (piece, desk, x, y, z) = hit.unwrap_or_else(|| panic!("no hit: {ev:?}"));
+    assert_eq!((piece.as_deref(), desk), (Some("coffee0"), None));
+    let u = burrow_fps::fps::U; // (the view's units a dot)
+    assert!((x / u - 130.0).abs() < 6.0 && (y / u - 92.0).abs() < 8.0 && z > 0.0, "its middle: {x}, {y}, {z}");
+    assert!(ev.iter().any(|e| matches!(e, Event::Alarm { .. })));
+    assert_eq!(f.level().player.ammo[1], shells - 1);
+    assert_eq!(f.puffs(), puffs + 1, "a puff where it hit");
+    // the room says it is broken: Doom's barrel going up there
+    f.boom(x, y, z);
+    assert_eq!(f.puffs(), puffs + 2);
+    assert!(f.events().iter().any(|e| matches!(e, Event::Sound(Sound::Doom { name: "DSBAREXP", .. }))));
+    let mut im = Image::new(640, 400);
+    for _ in 0..3 {
+        f.tick(1000.0 / 35.0);
+    }
+    f.draw(&mut im);
+    save("boom", &im);
+    for _ in 0..20 {
+        f.tick(1000.0 / 35.0);
+    }
+    assert_eq!(f.puffs(), 0, "gone after eighteen tics");
+}
+
+#[test]
+fn what_a_shot_won_t_break_is_only_hit_by_its_pellets() {
+    let mut f = coffee_ahead(false);
+    let shells = f.level().player.ammo[1];
+    f.click();
+    for _ in 0..10 {
+        f.tick(30.0);
+    }
+    let ev = f.events();
+    assert!(!ev.iter().any(|e| matches!(e, Event::Hit { .. })), "{ev:?}");
+    assert_eq!(f.level().player.ammo[1], shells - 1);
+}
+
 #[test]
 fn through_the_door_into_the_level_and_back() {
     let mut f = stub(true);

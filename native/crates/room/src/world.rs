@@ -463,6 +463,19 @@ pub struct Shared {
     /// a door ajar: when someone last went through it, by machine
     pub door_at: HashMap<String, f64>,
     pub spark_on: bool,
+    /// furniture shot at in the first person (hardcore), by key (`u:<unit>` a desk): blasts so far, the last one's time
+    pub dents: HashMap<String, (u32, f64)>,
+    /// where a piece was shot to bits: the floor scorched
+    pub scorch: Vec<Scorch>,
+}
+
+/// a scorch on the floor where a piece was shot to bits: its middle, its half width, when (ms)
+#[derive(Clone, Debug)]
+pub struct Scorch {
+    pub x: f64,
+    pub y: f64,
+    pub rx: f64,
+    pub t0: f64,
 }
 
 pub struct World {

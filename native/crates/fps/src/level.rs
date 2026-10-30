@@ -54,6 +54,8 @@ pub enum Origin {
     Pickup,
     /// a mutineer's shot at you from the room (its x, a thousandth of a dot)
     Mutiny(i64),
+    /// a piece of the office shot to bits
+    Boom,
 }
 
 /// a sound in the level this tic: Doom's lump, where, from what
@@ -515,7 +517,7 @@ pub struct Player {
     pub hurt: i32,
 }
 
-/// a shot's puff (or blood), rising
+/// a shot's puff (or blood), rising; or a barrel's explosion where a piece of the office was shot to bits (`boom`)
 #[derive(Clone, Debug)]
 pub struct Puff {
     pub x: f64,
@@ -523,6 +525,7 @@ pub struct Puff {
     pub z: f64,
     pub t: i32,
     pub blood: bool,
+    pub boom: bool,
 }
 
 /// the mysterious door, seen from the level: its middle on the wall, `n` into the level, `t` along it (n turned left)
@@ -2060,10 +2063,10 @@ impl Level {
             self.damage(h, dmg, Some(src));
             let barrel = matches!(h, Who::Mobj(id) if self.find(id).is_some_and(|i| self.mobjs[i].d.barrel));
             if !barrel && !(h == Who::Player && self.away) {
-                self.puffs.push(Puff { x, y, z, t: 0, blood: true });
+                self.puffs.push(Puff { x, y, z, t: 0, blood: true, boom: false });
             }
         } else if wall.line.is_some() {
-            self.puffs.push(Puff { x, y, z, t: 0, blood: false });
+            self.puffs.push(Puff { x, y, z, t: 0, blood: false, boom: false });
         }
     }
     /// a shot's sound (P_NoiseAlert): from the shooter's sector through every opening, past one sound-blocking line

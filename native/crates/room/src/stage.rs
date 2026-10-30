@@ -212,6 +212,11 @@ impl Room {
                 D::draw_mat(ctx, at.x as i32, at.y as i32);
             }
         }
+        // where a piece was shot to bits: the floor scorched, embers a while, fading
+        self.w.s.scorch.retain(|sc| now - sc.t0 < 120000.0);
+        for sc in &self.w.s.scorch {
+            D::draw_scorch(ctx, sc.x, sc.y, sc.rx, (now - sc.t0) / 1000.0, t);
+        }
         if crate::mutiny::dead(&self.w)
             && !inp.fps
             && let Some(f) = self.w.get("you")

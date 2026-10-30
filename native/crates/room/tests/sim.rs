@@ -441,3 +441,56 @@ fn what_the_pointer_holds_over_the_fire_burns() {
     drag(&mut room, &inp, &[((d.x0 + 4) as f64, (d.y - 6) as f64), mid]);
     assert_eq!(room.w.s.burning.len(), n + 1, "the desk did not burn");
 }
+
+#[test]
+fn three_blasts_and_a_piece_goes_as_into_the_fire() {
+    // hardcore, the first person: furniture shot at (the room's `hit`)
+    let mut s = demo();
+    s.furniture.extend(["booth0".to_string(), "radio9".to_string()]);
+    s.settings.hardcore = true;
+    let mut inp = Input { state: s.clone(), now: 0.0, hour: 14, ..Default::default() };
+    let mut room = Room::new(2, 0.0);
+    room.resize(&inp, 820.0);
+    run(&mut room, &mut inp, 2.0);
+    let mut out = Output::default();
+    let mut hit = |room: &mut Room, inp: &mut Input, piece: Option<&str>, desk: Option<&str>, after: f64| {
+        inp.now += after;
+        room.hit(inp, &mut out, piece, desk)
+    };
+    assert_eq!(hit(&mut room, &mut inp, Some("radio9"), None, 1000.0), Some(false));
+    assert_eq!(hit(&mut room, &mut inp, Some("radio9"), None, 1000.0), Some(false));
+    assert_eq!(hit(&mut room, &mut inp, Some("radio9"), None, 1000.0), Some(true), "the third blast");
+    assert_eq!(room.w.s.scorch.len(), 1);
+    // more than twenty seconds between two: it starts over
+    assert_eq!(hit(&mut room, &mut inp, Some("plant0"), None, 0.0), Some(false));
+    assert_eq!(hit(&mut room, &mut inp, Some("plant0"), None, 21000.0), Some(false));
+    assert_eq!(hit(&mut room, &mut inp, Some("plant0"), None, 1000.0), Some(false));
+    assert_eq!(hit(&mut room, &mut inp, Some("plant0"), None, 1000.0), Some(true));
+    // not what the fire won't take, nor the gun closet; a desk only without bots
+    for p in ["fire", "closet", "settings0", "clock", "booth0"] {
+        assert_eq!(hit(&mut room, &mut inp, Some(p), None, 0.0), None, "{p}");
+    }
+    let l = room.last.clone().unwrap();
+    let busy = l.desks.iter().find(|d| !d.seats.is_empty()).unwrap().d.unit.clone();
+    let empty = l.desks.iter().find(|d| d.seats.is_empty()).expect("a kept desk without bots").d.unit.clone();
+    assert_eq!(hit(&mut room, &mut inp, None, Some(&busy), 0.0), None);
+    for _ in 0..3 {
+        hit(&mut room, &mut inp, None, Some(&empty), 500.0);
+    }
+    // not in hardcore: nothing
+    let mut soft = inp.clone();
+    soft.state.settings.hardcore = false;
+    assert_eq!(room.hit(&soft, &mut Output::default(), Some("printer"), None), None);
+    let acts: Vec<(String, String)> = out.acts.iter().map(|a| (a["kind"].as_str().unwrap().into(), a["key"].as_str().or(a["unit"].as_str()).unwrap().into())).collect();
+    assert_eq!(acts, [("burn".into(), "radio9".into()), ("burn".into(), "plant0".into()), ("forget".into(), empty.clone())]);
+    // the floor scorched where they stood (target/room-scorch.png), fading over two minutes
+    inp.state.furniture.retain(|k| k != "radio9" && k != "plant0");
+    inp.state.desks.retain(|d| d.unit != empty);
+    let l = room.step(&inp, &mut out);
+    room.draw(&inp, &mut out, &l);
+    room.img.save_png(concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/room-scorch.png")).unwrap();
+    assert_eq!(room.w.s.scorch.len(), 3);
+    inp.now += 121000.0;
+    room.draw(&inp, &mut out, &l);
+    assert!(room.w.s.scorch.is_empty());
+}

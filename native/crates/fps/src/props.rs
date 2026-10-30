@@ -383,11 +383,11 @@ impl Props {
         let back = Some(o.back.unwrap_or_else(|| self.mat(m, r(w), r(h))));
         let side = Some(o.side.unwrap_or_else(|| self.mat(m, r(d), r(h))));
         let top = Some(o.top.unwrap_or_else(|| self.mat(m, r(w), r(d))));
-        Block { x0, y0, x1, y1, z0, z1, front, back, side, top, west: o.west, east: o.east }
+        Block { x0, y0, x1, y1, z0, z1, front, back, side, top, west: o.west, east: o.east, ..Default::default() }
     }
     /// a block faced with one picture on every side (the pong table's net)
     fn blk_tex(&mut self, x0: f64, y0: f64, x1: f64, y1: f64, z0: f64, z1: f64, f: Face) -> Block {
-        Block { x0, y0, x1, y1, z0, z1, front: Some(f.clone()), back: Some(f.clone()), side: Some(f.clone()), top: Some(f), west: None, east: None }
+        Block { x0, y0, x1, y1, z0, z1, front: Some(f.clone()), back: Some(f.clone()), side: Some(f.clone()), top: Some(f), ..Default::default() }
     }
 
     // ---- the little models, drawn from eight sides into a picture each. A face's colour is its box's, or a
@@ -1189,7 +1189,7 @@ impl Props {
         let (w, d, h) = ((x1 - x0).max(0.25), (y1 - y0).max(0.25), (z1 - z0).max(0.25));
         let r = |v: f64| (jround(v * 2.0) / 2.0).max(1.0);
         let (front, back, side, top) = (m(self, r(w), r(h)), m(self, r(w), r(h)), m(self, r(d), r(h)), m(self, r(w), r(d)));
-        Block { x0, y0, x1, y1, z0, z1, front: Some(front), back: Some(back), side: Some(side), top: Some(top), west: None, east: None }
+        Block { x0, y0, x1, y1, z0, z1, front: Some(front), back: Some(back), side: Some(side), top: Some(top), ..Default::default() }
     }
     #[allow(clippy::too_many_arguments)]
     fn tinted_blk_o(&mut self, x0: f64, y0: f64, x1: f64, y1: f64, z0: f64, z1: f64, k: &str, f: &(impl Fn(i32, i32, f64, f64) -> Px + Copy), o: Over) -> Block {
@@ -1199,7 +1199,7 @@ impl Props {
         let back = o.back.unwrap_or_else(|| self.tinted(k, r(w), r(h), *f));
         let side = o.side.unwrap_or_else(|| self.tinted(k, r(d), r(h), *f));
         let top = o.top.unwrap_or_else(|| self.tinted(k, r(w), r(d), *f));
-        Block { x0, y0, x1, y1, z0, z1, front: Some(front), back: Some(back), side: Some(side), top: Some(top), west: None, east: None }
+        Block { x0, y0, x1, y1, z0, z1, front: Some(front), back: Some(back), side: Some(side), top: Some(top), ..Default::default() }
     }
 
     /// a project's desk: its cabinet (the name on its plate), the desktop on legs with a keyboard at each seat and

@@ -96,6 +96,9 @@ pub enum Event {
     Shot { bot: String },
     /// E on remains: put back together
     Unshoot { rem: String },
+    /// a piece of furniture (its key) or an empty desk (its unit) shot at, no bot in the way: the room's `hit` (three
+    /// blasts and it goes); broken, `boom` there (its middle, in the view's units)
+    Hit { piece: Option<String>, desk: Option<String>, x: f64, y: f64, z: f64 },
     /// a shot fired here (room dots): the idle bots near it run off
     Alarm { x: f64, y: f64 },
     Sound(Sound),
@@ -267,6 +270,14 @@ struct Vis {
     id: i32,
     fuzz: bool,
     bright: bool,
+}
+
+/// what is in the line of fire: it (a block as a thing), how far, on which row of the view, its middle (dots)
+struct InLine {
+    th: Thing,
+    d: f64,
+    y: i32,
+    mid: (f64, f64, f64),
 }
 
 /// who walks: from one scene's place to the next
@@ -855,9 +866,11 @@ impl View {
                 self.win_z(&w2, Some(&wz));
             }
         self.aim_through = win.is_none() && (self.w_top[CXI as usize] as i32) < CYI && CYI < self.w_bot[CXI as usize] as i32;
-        // the blocks (desks and what stands as one): the face a ray meets first, and their tops seen from above
-        for b in &sc.boxes {
-            self.office_box(r, b, px, py, dx, dy, rx, ry, eye, win);
+        // the blocks (desks and what stands as one): the face a ray meets first, and their tops seen from above; whose
+        // one is (a piece's, a desk's) is what a shot hits there: its id the block's place, negative (a thing's is not)
+        for (k, b) in sc.boxes.iter().enumerate() {
+            let id = if win.is_none() && (b.piece.is_some() || b.desk.is_some()) { -(k as i32) - 1 } else { 0 };
+            self.office_box(r, b, px, py, dx, dy, rx, ry, eye, win, id);
         }
         // the pictures and the models; who walks is on the way from one tick's place to the next
         if sc.v != self.sv {
@@ -917,7 +930,7 @@ impl View {
         self.draw_vis_all(cmap, win);
     }
     #[allow(clippy::too_many_arguments)]
-    fn office_box(&mut self, r: &Ctx3, b: &crate::scene::Block, px: f64, py: f64, dx: f64, dy: f64, rx: f64, ry: f64, eye: f64, win: Option<&Win>) {
+    fn office_box(&mut self, r: &Ctx3, b: &crate::scene::Block, px: f64, py: f64, dx: f64, dy: f64, rx: f64, ry: f64, eye: f64, win: Option<&Win>, id: i32) {
         let wad = r.wad;
         let cmap = &wad.cmap[..];
         let (x0, x1, y0, y1, z0, z1) = (b.x0 * U, b.x1 * U, b.y0 * U, b.y1 * U, b.z0 * U, b.z1 * U);
@@ -1023,7 +1036,7 @@ impl View {
                     let c = p.px[k as usize];
                     self.fb[i] = if glow || o == 2 { c } else { cmap[base + c as usize] };
                     self.zb[i] = tn as f32;
-                    self.idb[i] = 0;
+                    self.idb[i] = id;
                 }
             }
             let Some(tp) = ft.as_ref() else { continue };
@@ -1049,7 +1062,7 @@ impl View {
                 let c = tp.px[k as usize];
                 self.fb[i] = if tglow || o == 2 { c } else { cmap[plane_level((self.office_light(wx, wy) >> 4) + extralight, d) as usize * 256 + c as usize] };
                 self.zb[i] = d as f32;
-                self.idb[i] = 0;
+                self.idb[i] = id;
             }
         }
     }
@@ -1114,7 +1127,8 @@ impl View {
             bright: false,
         });
     }
-    // a shot's puff: Doom's PUFF, rising, its four frames in sixteen tics
+    // a shot's puff: Doom's PUFF, rising, its four frames in sixteen tics; a piece shot to bits: Doom's barrel going up
+    // (BEXP's last three frames, fullbright, eighteen tics, where it stood)
     #[allow(clippy::too_many_arguments)]
     fn puff_vis(&mut self, r: &Ctx3, f: &Puff, px: f64, py: f64, dx: f64, dy: f64, rx: f64, ry: f64, eye: f64, ln: i32) {
         let (vx, vy) = (f.x - px, f.y - py);
@@ -1122,21 +1136,27 @@ impl View {
         if z < 8.0 {
             return;
         }
-        let fr = if f.blood { r.wad.sprite_frame("BLUD", (2 - 2.min(f.t >> 2)) as usize, 1) } else { r.wad.sprite_frame("PUFF", 3.min(f.t >> 2) as usize, 1) };
+        let fr = if f.boom {
+            r.wad.sprite_frame("BEXP", (2 + 2.min(f.t / 6)) as usize, 1)
+        } else if f.blood {
+            r.wad.sprite_frame("BLUD", (2 - 2.min(f.t >> 2)) as usize, 1)
+        } else {
+            r.wad.sprite_frame("PUFF", 3.min(f.t >> 2) as usize, 1)
+        };
         let Some(fr) = fr else { return };
         let Some(p) = fr.pic else { return };
         let scale = PROJ / z;
         self.vis.push(Vis {
             lo: p.lo as f64,
             sx: CX + (vx * rx + vy * ry) * scale,
-            sy: CY - (f.z + f.t as f64 * 0.5 + p.to as f64 - eye) * scale,
+            sy: CY - (f.z + if f.boom { 0.0 } else { f.t as f64 * 0.5 } + p.to as f64 - eye) * scale,
             scale,
             z,
             flip: false,
             level: sprite_level(ln, z),
             id: 0,
             fuzz: false,
-            bright: !f.blood && f.t < 4,
+            bright: f.boom || (!f.blood && f.t < 4),
             p,
         });
     }
@@ -2357,7 +2377,7 @@ impl Fps {
         self.gun_tic();
         self.puffs.retain_mut(|f| {
             f.t += 1;
-            f.t < 16
+            f.t < if f.boom { 18 } else { 16 }
         });
     }
     // the mutiny (room.js, hardcore): a shot at you from one of them, from where it stands. Doom's shotgun from there;
@@ -2380,7 +2400,7 @@ impl Fps {
             let x = (sx + dx * k + (self.rng.random() - 0.5) * 30.0).clamp(4.0, w - 4.0);
             let y = (sy + dy * k + (self.rng.random() - 0.5) * 30.0).clamp(wall + 2.0, h - 4.0);
             let z = 14.0 + self.rng.random() * 36.0;
-            self.puffs.push(Puff { x, y, z, t: 0, blood: false });
+            self.puffs.push(Puff { x, y, z, t: 0, blood: false, boom: false });
             return;
         }
         self.lvl.damage(Who::Player, s.dmg, None);
@@ -2481,6 +2501,20 @@ impl Fps {
             self.lvl.noise(); // the door open: the level hears it
         }
         let alarm = Event::Alarm { x: self.me.x / U, y: self.me.y / U };
+        // no bot in the way: the piece of furniture (or the empty desk) in the line of fire takes it, whatever its height
+        // (Doom aims up and down for you); three blasts and it goes, Doom's barrel going up where it stood (the room
+        // says, `Event::Hit`; then `boom`). A stray pellet meant for a bot breaks nothing
+        if best.is_none()
+            && let Some(at) = self.in_line().filter(|at| at.th.breaks)
+        {
+            self.lvl.player.ammo[1] -= 1;
+            let z = 4f64.max(self.office_cam().eye - (at.y as f64 + 0.5 - CY) * at.d / PROJ - 8.0);
+            self.puffs.push(Puff { x: self.me.x + dx * at.d * 0.97, y: (wall + 2.0).max(self.me.y + dy * at.d * 0.97), z, t: 0, blood: false, boom: false });
+            let (bx, by, bz) = at.mid;
+            self.events.push(Event::Hit { piece: at.th.piece, desk: at.th.desk, x: bx * U, y: by * U, z: bz * U });
+            self.events.push(alarm);
+            return;
+        }
         if best.is_none() && has_p && self.view.aim_through {
             self.lvl.fire();
             self.events.push(alarm);
@@ -2498,8 +2532,46 @@ impl Fps {
             return;
         }
         let d = (self.view.zb[(CYI * SW + CXI) as usize] as f64).min(3000.0) * 0.97;
-        self.puffs.push(Puff { x: self.me.x + dx * d, y: (wall + 2.0).max(self.me.y + dy * d), z: 41.0, t: 0, blood: false });
+        self.puffs.push(Puff { x: self.me.x + dx * d, y: (wall + 2.0).max(self.me.y + dy * d), z: 41.0, t: 0, blood: false, boom: false });
         self.events.push(alarm);
+    }
+    /// a piece of the office hit (`Event::Hit`) gone to bits: Doom's barrel going up at x, y, z (the view's units)
+    pub fn boom(&mut self, x: f64, y: f64, z: f64) {
+        self.puffs.push(Puff { x, y, z, t: 0, blood: false, boom: true });
+        self.snd("DSBAREXP", 1.0, 0.0, Origin::Boom);
+    }
+    /// what stands in the line of fire, nearest first, at whatever height: the middle columns of the view, top to
+    /// bottom, as the last frame drew it (bots and remains are the autoaim's)
+    fn in_line(&self) -> Option<InLine> {
+        let mut best: Option<(i32, f32, i32)> = None;
+        for x in CXI - 2 * S..=CXI + 2 * S {
+            for y in 0..VH {
+                let i = (y * SW + x) as usize;
+                let n = self.view.idb[i];
+                if n != 0 && best.is_none_or(|b| self.view.zb[i] < b.1) && !self.autoaim(n) {
+                    best = Some((n, self.view.zb[i], y));
+                }
+            }
+        }
+        let (n, d, y) = best?;
+        let (th, mid) = self.drawn(n)?;
+        Some(InLine { th, d: d as f64, y, mid })
+    }
+    /// a bot or remains (Doom's autoaim's, not the line of fire's)
+    fn autoaim(&self, n: i32) -> bool {
+        n > 0 && self.view.drawn.as_ref().and_then(|sc| sc.things.get(n as usize - 1)).is_some_and(|th| th.bot.is_some() || th.rem.is_some())
+    }
+    /// what the last frame drew with this id: a thing (its place), or a block as one (whose it is; its middle)
+    fn drawn(&self, n: i32) -> Option<(Thing, (f64, f64, f64))> {
+        let sc = self.view.drawn.as_ref().filter(|_| n != 0)?;
+        if n > 0 {
+            let th = sc.things.get(n as usize - 1)?;
+            return Some((th.clone(), (th.x, th.y, 8.0)));
+        }
+        let b = sc.boxes.get((-n) as usize - 1)?;
+        let (x, y) = ((b.x0 + b.x1) / 2.0, (b.y0 + b.y1) / 2.0);
+        let th = Thing { x, y, piece: b.piece.clone(), desk: b.desk.clone(), label: b.label.clone(), reload: b.reload, breaks: b.breaks, ..Default::default() };
+        Some((th, (x, y, (b.z0 + b.z1) / 2.0)))
     }
 
     // ---- through the door, either way: the same place, the same way you look and move, no wipe
@@ -2759,20 +2831,19 @@ impl Fps {
     }
     /// what is under the crosshair (within r pixels at 320 x 200), nearest first, as the last frame drew it
     fn under(&self, r: i32) -> Option<Thing> {
-        let sc = self.view.drawn.as_ref()?;
         let r = r * S;
-        let (mut best, mut bd) = (None, f32::INFINITY);
+        let (mut best, mut bd) = (0, f32::INFINITY);
         for y in CYI - r..=CYI + r {
             for x in CXI - r..=CXI + r {
                 let i = (y * SW + x) as usize;
                 let n = self.view.idb[i];
                 if n != 0 && self.view.zb[i] < bd {
-                    best = sc.things.get(n as usize - 1);
+                    best = n;
                     bd = self.view.zb[i];
                 }
             }
         }
-        best.cloned()
+        self.drawn(best).map(|(th, _)| th) // (a desk's block as one: the crosshair names the desk)
     }
     fn near(&self) -> Option<Thing> {
         if let Some(th) = self.under(4).filter(|t| t.rem.is_some()) {
