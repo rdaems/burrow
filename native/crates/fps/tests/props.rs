@@ -70,7 +70,7 @@ fn figures_are_the_web_s() {
 #[test]
 fn every_kind_builds() {
     let mut p = Props::new();
-    for kind in ["coffee", "cooler", "printer", "manager", "add", "booth", "neuralyzer", "doghouse", "radio", "chess", "meet", "pong", "board", "armchair", "plant", "pair"] {
+    for kind in ["coffee", "cooler", "printer", "manager", "booth", "neuralyzer", "doghouse", "radio", "chess", "meet", "pong", "board", "armchair", "plant", "pair"] {
         let piece = props::Piece { kind: kind.into(), key: format!("{kind}0"), x: 100.0, y: 100.0, ..Default::default() };
         let parts = p.build(&piece).unwrap_or_else(|| panic!("{kind}"));
         assert!(!parts.boxes.is_empty() || !parts.things.is_empty(), "{kind}");

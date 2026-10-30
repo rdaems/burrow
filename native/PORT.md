@@ -21,6 +21,9 @@ One line per web module; status: todo, wip, done (tested), n/a.
 | matrix.html, .js, .css       | crates/app/src/matrix, core matrix.rs | done  |
 | sound.js                     | crates/sound                         | done   |
 | fps.js, props3d.js, doom/    | crates/fps                           | done   |
+| the files' tile (index.html) | crates/app/src/files.rs, files_tile.rs; core files.rs | done |
+| editor.js (CodeMirror 6)     | crates/app/src/editor.rs, syntax.rs (smaller: no search, folding, brackets) | done |
+| marked + DOMPurify           | crates/app/src/markdown.rs (common cases; nothing runs) | done |
 | look.mjs (tests)             | cargo test, PNG snapshots            | done   |
 
 In step with web/ up to origin/main 3f3764b (2026-10-29): the easel and its paintings, the pair telephone and its

@@ -426,8 +426,12 @@ fn the_floor_is_room_js() {
         };
         Some(on(30, 26, PLANK, |c| draw_pair(c, 15, 22, linked, t, over, hand)))
     });
-    check("paint-add-", exact, |name| Some(on(34, 20, PLANK, |c| draw_add(c, 2, 2, name.ends_with('1')))));
+    check("paint-blank-", exact, |name| {
+        let p = if name.ends_with("lab") { PAINT[0] } else { WOOD };
+        Some(on(32, 40, PLANK, |c| draw_blank_desk(c, 2, 37, &p)))
+    });
     check("paint-radio-", exact, |name| Some(on(18, 26, PLANK, |c| draw_radio(c, 9, 23, name.ends_with('1')))));
+    check("paint-filing-", exact, |name| Some(on(20, 30, PLANK, |c| draw_filing(c, 10, 27, name.ends_with('1')))));
     check("paint-notes-", exact, |name| {
         let t: f64 = name.strip_prefix("paint-notes-")?.parse().ok()?;
         Some(on(18, 46, PLANK, |c| {

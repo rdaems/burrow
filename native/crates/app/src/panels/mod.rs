@@ -63,6 +63,8 @@ pub struct State {
     /// where the new door, or the reception, was let go from the closet
     pub machine_at: Option<[i32; 2]>,
     pub manager_at: Option<[i32; 2]>,
+    /// where the new desk was let go from the closet
+    pub desk_at: Option<[i32; 2]>,
     pub styles: Vec<burrow_core::office::StyleView>,
     /// your face: the seed's start, its number, whether the seed had one
     pub you_start: String,
@@ -194,6 +196,12 @@ pub fn closed(b: &mut Burrow, kind: ViewKind, window: &mut Window, cx: &mut Cont
         ViewKind::Manager => {
             if b.views.p.manager_at.take().is_some() {
                 b.room.pend(None, None, "manager", now);
+            }
+        }
+        // the new desk too
+        ViewKind::Dir => {
+            if b.views.p.desk_at.take().is_some() {
+                b.room.pend(None, None, "desk", now);
             }
         }
         ViewKind::Report => b.views.p.report = None,

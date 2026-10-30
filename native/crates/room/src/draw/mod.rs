@@ -77,7 +77,6 @@ pub const PROJECT: [Color; 8] = [
 ];
 pub const WALL: i32 = 26;
 pub const SEAT: i32 = 18;
-pub const ADD_W: i32 = 30;
 pub const ROW: i32 = 46;
 pub const LAP: i32 = 13;
 pub const DOOR: i32 = 20;
@@ -209,9 +208,8 @@ pub fn foot(key: &str, x: f64, y: f64, unit_w: Option<f64>) -> [f64; 4] {
     if let Some(w) = unit_w {
         return [x - 2., y - 35., x + w + 2., y + 2.];
     }
-    let a = ADD_W as f64;
     match kind_of(key) {
-        "add" => [x - 2., y - 16., x + a + 2., y + 2.],
+        "desk" => [x - 2., y - 35., x + 28., y + 2.], // a new one, out of the closet (blank: draw_blank_desk)
         "meet" => [x - 28., y - 20., x + 28., y + 4.],
         "pong" => [x - 38., y - 23., x + 38., y + 8.],
         "chess" => [x - 19., y - 18., x + 19., y + 2.],
@@ -234,6 +232,7 @@ pub fn foot(key: &str, x: f64, y: f64, unit_w: Option<f64>) -> [f64; 4] {
         "radio" => [x - 7., y - 21., x + 7., y + 1.],
         "pumpkin" => [x - 8., y - 13., x + 8., y + 1.],
         "matrix" => [x - 11., y - 25., x + 12., y + 1.],
+        "files" => [x - 8., y - 25., x + 8., y + 1.],
         _ => [x - 8., y - 31., x + 8., y + 1.], // a plant
     }
 }

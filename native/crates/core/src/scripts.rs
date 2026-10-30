@@ -34,7 +34,7 @@ pub fn pair_join(session: &str) -> String {
 /// the worktree it moved into; one grep, a `<path>:"<key>": "<value>"` a line
 pub const JOBS: &str = r#"grep -o -E '"(updatedAt|detail|bridgeSessionId|tempo|resumeSessionId|worktreePath)": *"([^"\\]|\\.)*"' ~/.claude/jobs/*/state.json 2>/dev/null || true"#;
 
-/// where Claude Code ran lately, for the project cabinet's form: its home, then the working directory of the
+/// where Claude Code ran lately, for a new desk's form: its home, then the working directory of the
 /// newest transcript of each of its projects, the latest first
 pub const RECENT: &str = r#"echo "$HOME"; cd ~/.claude/projects 2>/dev/null || exit 0
 for d in $(ls -t | head -100); do

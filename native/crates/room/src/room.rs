@@ -62,8 +62,10 @@ pub struct Room {
     pub held: Option<String>,
     /// a piece carried in from the closet: its kind, where it would land
     pub carrying: Option<(String, Option<[i32; 2]>)>,
-    /// a new machine's door, dropped from the closet, hanging while its form is open
-    pub pending: Option<([i32; 2], Option<String>, String, f64)>,
+    /// a new machine's door, dropped from the closet, hanging while its form is open; a new desk the same, standing
+    /// in its machine's paint: where, the machine (or desk's unit) the state is to bring, the kind, since when, the
+    /// desk's machine
+    pub pending: Option<([i32; 2], Option<String>, String, f64, String)>,
     pub press: Option<Press>,
     /// the pointer, in dots
     pub pointer: Option<(f64, f64)>,
@@ -492,7 +494,8 @@ impl Room {
         };
         let inside = x >= 0.0 && x < self.size.w as f64 && y >= 0.0 && y < self.size.h as f64;
         self.pointer = inside.then_some((x, y));
-        let at = inside.then(|| self.size.clamp_at(kind, [layout::jround(x), layout::jround(y)], None));
+        let (ox, oy) = if kind == "desk" { (-13.0, 8.0) } else { (0.0, 0.0) }; // (a desk by the middle of its cabinet: its place is its left end)
+        let at = inside.then(|| self.size.clamp_at(kind, [layout::jround(x + ox), layout::jround(y + oy)], None));
         self.carrying = Some((kind.to_string(), at));
         at
     }
@@ -505,7 +508,11 @@ impl Room {
     /// a door (or a reception) let go from the closet: it stands there while its panel is open, and until the
     /// state brings the machine `mid`; none takes it back
     pub fn pend(&mut self, at: Option<[i32; 2]>, mid: Option<String>, kind: &str, now: f64) {
-        self.pending = at.map(|at| (at, mid, kind.to_string(), now));
+        self.pend_in(at, mid, kind, "", now);
+    }
+    /// the same for a desk: it stands in the paint of machine `m` until the state brings the desk `mid` (its unit)
+    pub fn pend_in(&mut self, at: Option<[i32; 2]>, mid: Option<String>, kind: &str, m: &str, now: f64) {
+        self.pending = at.map(|at| (at, mid, kind.to_string(), now, m.to_string()));
     }
 
     /// is anything in the room being dragged or carried
@@ -558,5 +565,31 @@ mod tests {
         assert!(r.pending.is_some());
         r.pend(None, None, "door", 6.0);
         assert!(r.pending.is_none());
+        // a desk is carried by the middle of its cabinet: its place is its left end
+        let at = r.carry_kind(Some("desk"), 100.0, 200.0).unwrap();
+        assert_eq!(at, [87, 208]);
+    }
+
+    #[test]
+    fn a_new_desk_stands_until_the_state_brings_it() {
+        let mut inp = Input { now: 1000.0, ..Default::default() };
+        let mut r = Room::new(1, 0.0);
+        r.resize(&inp, 820.0);
+        let at = r.place_kind("desk", 60.0, 200.0);
+        r.pend_in(at, Some("/p/new".into()), "desk", "", inp.now);
+        let draw = |r: &mut Room, inp: &Input| {
+            let mut out = Output::default();
+            let l = r.step(inp, &mut out);
+            r.draw(inp, &mut out, &l);
+        };
+        draw(&mut r, &inp);
+        assert!(r.pending.is_some(), "blank, while the state has no such desk");
+        // (its screen dark, two pixels a dot)
+        let [x, y] = at.unwrap();
+        assert_eq!(r.img.get((x + 5) * 2, (y - 26) * 2)[..3], [0x10, 0x14, 0x1f]);
+        inp.state.desks.push(crate::model::Desk { unit: "/p/new".into(), dir: "/p/new".into(), kept: true, ..Default::default() });
+        inp.now += 100.0;
+        draw(&mut r, &inp);
+        assert!(r.pending.is_none(), "a desk now");
     }
 }

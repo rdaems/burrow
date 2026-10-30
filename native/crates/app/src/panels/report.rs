@@ -39,7 +39,7 @@ fn print(b: &mut Burrow, paper: f32, window: &mut Window) -> Printing {
         let run = TextRun { len: s.len(), font: gpui::font(kit::PIXEL), color: kit::hsla(col::INK), background_color: None, underline: None, strikethrough: None };
         f32::from(ts.shape_line(SharedString::from(s.to_string()), px(16.), &[run], None).width)
     };
-    let art = b.room.w.s.art.as_ref().map(|a| (burrow_room::paintings::list()[a.i].title, a.n as f64 / a.order.len().max(1) as f64));
+    let art = b.room.w.s.art.as_ref().map(|a| a.n as f64 / a.order.len().max(1) as f64);
     let shift = (b.now_ms() - b.room.born) / 60000.;
     let st = Stats { bots: &b.room.w.s.stats, meetings: b.room.w.s.meetings, art, shift };
     let (d, mo, h, mi) = today();

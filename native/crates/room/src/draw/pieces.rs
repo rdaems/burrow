@@ -1,4 +1,4 @@
-//! The furniture on the floor: the easel, the pair table, the project cabinet, the reception, the
+//! The furniture on the floor: the easel, the pair table, a new desk standing blank, the reception, the
 //! rug, a nap's mat, the booth and the gun closet, the radio, the neuralyzer, the meeting table, the
 //! chess table, the stools, the coffee corner, the cooler, the printer, the pouf, the plants, the
 //! ping-pong table, the dog house.
@@ -109,11 +109,14 @@ pub fn draw_pair(ctx: &mut Ctx, x: i32, y: i32, linked: bool, t: f64, over: bool
     }
 }
 
-/// the empty cabinet that adds a project: a plate with a + on it (x0, y0 its top left)
-pub fn draw_add(ctx: &mut Ctx, x0: i32, y0: i32, lit: bool) {
-    slab(ctx, x0, y0, ADD_W, 4, 11, &WOOD);
-    plate(ctx, x0 + 3, y0 + 6, ADD_W - 6, lit, &WOOD);
-    tiny(ctx, "+", js_round(x0 as f64 + ADD_W as f64 / 2. - 1.) as f64, (y0 + 7) as f64, if lit { C::STEEL4 } else { C::STEEL2 });
+/// a desk out of the closet, and standing where it was let go while its folder is picked: the cabinet with a blank
+/// plate, its screen dark, in its machine's paint `p` (draw_desk draws it once it is a desk); x0, y as a desk's
+pub fn draw_blank_desk(ctx: &mut Ctx, x0: i32, y: i32, p: &Paint) {
+    let (cab, sx, sy) = (26, x0 + 2, y - 32);
+    slab(ctx, x0, y - 15, cab, 4, 11, p);
+    plate(ctx, x0 + 2, y - 9, cab - 4, false, p);
+    rect(ctx, sx + 2, sy + 2, 18, 11, css("#10141f"));
+    put_named(ctx, "monitor", sx, sy);
 }
 
 /// what the reception's screen shows, for an office manager who is a session
@@ -396,6 +399,40 @@ pub fn draw_radio(ctx: &mut Ctx, x: i32, y: i32, on: bool) {
         rect(ctx, kx, y - 7, 2, 2, SP::F); // the knobs
         rect(ctx, kx, y - 7, 1, 1, SP::C);
     }
+}
+/// the filing cabinet: steel, three drawers, a card and a handle on each; while FILES is on, its top drawer is
+/// pulled out, coloured folders' tabs standing up in it
+pub fn draw_filing(ctx: &mut Ctx, x: i32, y: i32, on: bool) {
+    let (x0, top) = (x - 7, y - 24);
+    rect(ctx, x0 - 1, y, 16, 1, SHADOW);
+    rect(ctx, x0, top, 14, 24, SP::F);
+    rect(ctx, x0 + 1, top + 1, 12, 22, SP::C);
+    rect(ctx, x0 + 1, top + 1, 12, 1, SP::B);
+    rect(ctx, x0 + 1, top + 1, 1, 22, SP::B);
+    rect(ctx, x0 + 12, top + 2, 1, 21, SP::D);
+    let drawer = |ctx: &mut Ctx, dy: i32, dx: i32, w: i32| {
+        rect(ctx, x0 + 2 + dx, dy, w, 6, SP::B);
+        rect(ctx, x0 + 2 + dx, dy, w, 1, SP::A);
+        rect(ctx, x0 + 2 + dx, dy + 5, w, 1, SP::D);
+        let c = x0 + 2 + dx + w / 2;
+        rect(ctx, c - 2, dy + 1, 4, 2, css("#f4ecd8")); // its card
+        rect(ctx, c - 1, dy + 2, 2, 1, SP::D);
+        rect(ctx, c - 2, dy + 4, 4, 1, SP::F); // its handle
+    };
+    drawer(ctx, top + 9, 0, 10);
+    drawer(ctx, top + 16, 0, 10);
+    if !on {
+        drawer(ctx, top + 2, 0, 10);
+        return;
+    }
+    rect(ctx, x0 + 1, top + 1, 12, 8, SP::x); // the open drawer: dark inside, the folders standing in it
+    for (tx, c) in [(x0 + 2, SP::y), (x0 + 6, SP::g), (x0 + 10, SP::v)] {
+        rect(ctx, tx, top + 3, 2, 5, c);
+        rect(ctx, tx, top + 3, 2, 1, SP::A);
+    }
+    rect(ctx, x0, top + 15, 14, 1, SHADOW); // its front pulled out toward you, a little wider, its shadow under it
+    rect(ctx, x0 - 1, top + 8, 16, 8, SP::F);
+    drawer(ctx, top + 9, -2, 14);
 }
 /// two notes drifting up from the radio, fading
 pub fn draw_notes(ctx: &mut Ctx, x: i32, y: i32, t: f64) {

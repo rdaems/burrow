@@ -1,6 +1,6 @@
-//! PAINTING (#vBoard, `openBoard`): the painting on the easel big (burrow-room's art), seven pixels a dot, in a
-//! gilded frame lit along its top and left, in shadow along the others; what it is after in the band, who has painted
-//! at it under it.
+//! CANVAS (#vBoard, `openBoard`): the canvas on the easel big (burrow-room's art), seven pixels a dot, in a gilded
+//! frame lit along its top and left, in shadow along the others, and who has painted at it under it; never what it
+//! is after.
 
 use crate::burrow::Burrow;
 use crate::kit::{self, col};
@@ -34,17 +34,9 @@ pub fn body(b: &mut Burrow, window: &mut Window, _cx: &mut Context<Burrow>) -> A
             b.views.p.stale.push(old);
         }
     }
-    b.views.sub = format!("{}, after {}", p.title, p.after);
-    let names: Vec<String> = a
-        .by
-        .iter()
-        .map(|id| b.room.w.get(id).and_then(|f| f.b.as_ref()).map(|x| x.name.clone()).filter(|n| !n.is_empty()).unwrap_or_else(|| id.clone()))
-        .collect();
-    let by = [if names.is_empty() { String::new() } else { format!("painted by {}", and(&names)) }, if a.done.is_some() { String::new() } else { "not finished yet".into() }]
-        .into_iter()
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
-        .join(", ");
+    // never what it is after: only who painted at it, by the names they had then
+    let names: Vec<String> = a.by.iter().map(|(_, n)| n.clone()).collect();
+    let by = if names.is_empty() { String::new() } else { format!("By {}.", and(&names)) };
     let pic = b.views.p.board.pic.as_ref().map(|x| x.2.clone());
     let (w, h) = (p.w as f32 * SCALE, p.h as f32 * SCALE);
     let art = div().w(px(w + 4.)).h(px(h + 4.)).border_2().border_color(rgb(0x4a3410)).child(

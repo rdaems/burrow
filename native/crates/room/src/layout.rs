@@ -9,7 +9,6 @@ use std::collections::HashMap;
 
 pub const WALL: i32 = 26;
 pub const SEAT: i32 = 18;
-pub const ADD_W: i32 = 30;
 pub const LAP: i32 = 13;
 pub const DOOR: i32 = 20;
 pub const NAME: usize = 8;
@@ -41,7 +40,7 @@ pub fn fixed(key: &str) -> bool {
 }
 /// a click does something there
 pub const CLICK: [&str; 20] = [
-    "radio", "pumpkin", "matrix", "doghouse", "add", "closet", "chess", "pong", "printer", "pair", "board", "coffee", "cooler", "window", "armchair", "settings",
+    "radio", "files", "pumpkin", "matrix", "doghouse", "closet", "chess", "pong", "printer", "pair", "board", "coffee", "cooler", "window", "armchair", "settings",
     "clock", "plant", "manager", "door",
 ];
 pub fn name_of(kind: &str) -> &str {
@@ -53,11 +52,11 @@ pub fn name_of(kind: &str) -> &str {
         "cooler" => "water cooler",
         "armchair" => "pouf",
         "board" => "easel",
-        "add" => "project cabinet",
         "pair" => "pair room",
         "settings" => "switchboard",
         "manager" => "reception",
         "doghouse" => "dog house",
+        "files" => "filing cabinet",
         k => k,
     }
 }
@@ -112,7 +111,7 @@ pub fn foot(key: &str, at: [i32; 2], u: Option<i32>) -> Rect {
         return [x - 2, y - 35, x + w + 2, y + 2];
     }
     match kind_of(key) {
-        "add" => [x - 2, y - 16, x + ADD_W + 2, y + 2],
+        "desk" => [x - 2, y - 35, x + 28, y + 2], // a new one, out of the closet (blank: draw_blank_desk)
         "meet" => [x - 28, y - 20, x + 28, y + 4],
         "pong" => [x - 38, y - 23, x + 38, y + 8],
         "chess" => [x - 19, y - 18, x + 19, y + 2],
@@ -135,6 +134,7 @@ pub fn foot(key: &str, at: [i32; 2], u: Option<i32>) -> Rect {
         "radio" => [x - 7, y - 21, x + 7, y + 1],
         "pumpkin" => [x - 8, y - 13, x + 8, y + 1],
         "matrix" => [x - 11, y - 25, x + 12, y + 1],
+        "files" => [x - 8, y - 25, x + 8, y + 1],
         _ => [x - 8, y - 31, x + 8, y + 1], // a plant
     }
 }
@@ -220,7 +220,6 @@ pub struct Layout {
     pub w: i32,
     pub h: i32,
     pub desks: Vec<DeskL>,
-    pub add: Option<Box4>,
     pub floor_y: i32,
     pub board: Option<Piece>,
     pub clock: Option<Piece>,
@@ -240,6 +239,8 @@ pub struct Layout {
     pub pumpkins: Vec<Piece>,
     /// the operator's consoles (the matrix)
     pub consoles: Vec<Piece>,
+    /// the filing cabinets (FILES on the terminals' bands)
+    pub cabinets: Vec<Piece>,
     pub cooler: Option<Piece>,
     pub plants: Vec<Piece>,
     pub printer: Option<Piece>,
@@ -573,7 +574,6 @@ pub fn layout(s: &State, desks: &[Desk], size: &Size, keep: &mut Keep, moving: O
     Layout {
         w,
         h,
-        add: one("add").map(|a| Box4 { key: a.key.clone(), x0: a.x, y0: a.y - 15, x1: a.x + ADD_W, y1: a.y }),
         floor_y: size.floor_y(),
         board: one("board"),
         clock: one("clock"),
@@ -592,6 +592,7 @@ pub fn layout(s: &State, desks: &[Desk], size: &Size, keep: &mut Keep, moving: O
         radios: all("radio"),
         pumpkins: all("pumpkin"),
         consoles: all("matrix"),
+        cabinets: all("files"),
         cooler: one("cooler"),
         plants: all("plant"),
         printer: one("printer"),

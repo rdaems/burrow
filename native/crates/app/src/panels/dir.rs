@@ -1,5 +1,7 @@
 //! NEW DESK (#vDir, `ask("dir")` and `browse`): which machine (a steel button each, when there is a choice), the
-//! folder's path, the folders in it under the field as a file dialog lists them, ADD DESK.
+//! folder's path, the folders in it under the field as a file dialog lists them, ADD DESK. Asked for a desk dragged
+//! out of the closet: it stands where it was let go, blank, in the paint of the machine picked; ADD DESK and it is a
+//! desk on that spot, ✕ or Esc puts it back.
 
 use super::suggest::{self, Item, Key};
 use super::{Slot, call, err_line, row};
@@ -12,8 +14,12 @@ pub fn opened(b: &mut Burrow, window: &mut Window, cx: &mut Context<Burrow>) {
     pick(b, first, window, cx);
 }
 
-/// a machine picked: its home and its recent places asked, the field at its home
+/// a machine picked: its home and its recent places asked, the field at its home (the new desk in that machine's paint)
 fn pick(b: &mut Burrow, m: String, window: &mut Window, cx: &mut Context<Burrow>) {
+    if let Some(at) = b.views.p.desk_at {
+        let now = b.now_ms();
+        b.room.pend_in(Some(at), None, "desk", &m, now);
+    }
     let p = &mut b.views.p;
     p.dir_m = m.clone();
     p.home.clear();
@@ -110,13 +116,21 @@ fn add(b: &mut Burrow, window: &mut Window, cx: &mut Context<Burrow>) {
     let m = b.views.p.dir_m.clone();
     b.views.err.clear();
     b.views.p.busy = true;
+    let at = b.views.p.desk_at.map(|a| [a[0] as i64, a[1] as i64]);
     call(
         b,
-        move |hub| hub.dir(&m, &dir),
+        move |hub| hub.dir_at(&m, &dir, at),
         |b, r, window, cx| {
             b.views.p.busy = false;
             match r {
-                Ok(_) => b.close_view(window, cx),
+                Ok(u) => {
+                    // the desk stands there until the state brings it
+                    if let Some(at) = b.views.p.desk_at.take() {
+                        let (m, now) = (b.views.p.dir_m.clone(), b.now_ms());
+                        b.room.pend_in(Some(at), Some(u), "desk", &m, now);
+                    }
+                    b.close_view(window, cx)
+                }
                 Err(e) => b.views.err = e,
             }
         },

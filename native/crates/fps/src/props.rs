@@ -895,21 +895,6 @@ impl Props {
                 b!(x + 40.5, y - 3.0, x + 41.5, y - 2.0, 13.6, 14.6, Mat::Plain("#e6c65a", 0.04));
                 out.solid.push([x, y - 16.5, x + 46.0, y]);
             }
-            "add" => {
-                // the project cabinet: a low cabinet, a + on its front
-                let w = p.w.unwrap_or(30.0);
-                let front = self.face(&format!("b:add{w}"), |s| {
-                    let t = s.wood_tex(w, 9.0, WOODP_TOP, 4.0);
-                    s.over(t, |r| {
-                        r.r(w / 2.0 - 6.0, 2.0, 12.0, 5.0, [46.0, 31.0, 40.0], false);
-                        r.r(w / 2.0 - 0.5, 3.0, 1.0, 3.0, [194.0, 201.0, 217.0], false);
-                        r.r(w / 2.0 - 1.5, 4.0, 3.0, 1.0, [194.0, 201.0, 217.0], false);
-                    })
-                });
-                b!(x, y - 8.0, x + w, y, 0.0, 9.0, wood, Over { front: Some(front), ..Default::default() });
-                b!(x - 0.4, y - 8.4, x + w + 0.4, y + 0.4, 9.0, 10.0, wood_hi);
-                out.solid.push([x, y - 8.0, x + w, y]);
-            }
             "booth" if p.gun => {
                 // hardcore: the gun closet, its glass doors, the shotguns in it (one gone a gun out), a red lamp
                 let out_n = p.out.min(2);

@@ -52,7 +52,7 @@ pub fn draw_kind(ctx: &mut Ctx, kind: &str, x: i32, y: i32, t: f64, env: &KindEn
             draw_reception(ctx, x, y, &o, true);
         }
         "pair" => draw_pair(ctx, x, y, true, t, false, None),
-        "add" => draw_add(ctx, x, y - 15, false),
+        "desk" => draw_blank_desk(ctx, x, y, &WOOD), // (this computer's paint)
         "booth" => {
             draw_booth(ctx, x, y, false, -1., -1., false, t, false);
             draw_booth(ctx, x, y, true, -1., -1., false, t, false);
@@ -61,6 +61,7 @@ pub fn draw_kind(ctx: &mut Ctx, kind: &str, x: i32, y: i32, t: f64, env: &KindEn
         "radio" => draw_radio(ctx, x, y, true),
         "pumpkin" => draw_pumpkin(ctx, x, y, true, 0.),
         "matrix" => draw_console(ctx, x, y, 0.),
+        "files" => draw_filing(ctx, x, y, true),
         "doghouse" => draw_doghouse(ctx, x, y),
         "door" => draw_door(ctx, x, &env.door, false, false, y), // in the paint the next machine gets
         _ => {}

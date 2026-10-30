@@ -178,7 +178,7 @@ impl Inner {
         bs
     }
 
-    /// the desks: the ones you keep (put down from the project cabinet, or kept at a desk's panel), which
+    /// the desks: the ones you keep (a desk out of the closet, or kept at a desk's panel), which
     /// stay, then one for every other directory a session is in, in the order its first one started: it
     /// comes with its sessions and goes with the last of them (`fade`). So the room is as full as
     /// `claude agents --all` is: clearing out sessions is what frees it
@@ -772,7 +772,7 @@ impl Hub {
         Ok(out.lines().filter(|x| !x.is_empty()).map(String::from).collect())
     }
 
-    /// the working directories there without a desk (the cabinet's form): (its home, the directories)
+    /// the working directories there without a desk (a new desk's form): (its home, the directories)
     pub fn recent(&self, mid: &str) -> Res<(String, Vec<String>)> {
         let m = self.machine(mid)?;
         if m.demo() {
@@ -785,7 +785,7 @@ impl Hub {
         Ok((lines.first().cloned().unwrap_or_default(), self.off_floor(mid, &dirs)))
     }
 
-    /// where Claude Code ran lately there that has no desk now, for the project cabinet's form
+    /// where Claude Code ran lately there that has no desk now, for a new desk's form
     fn off_floor(&self, mid: &str, recent: &[String]) -> Vec<String> {
         let desks: HashSet<String> = self.desks().into_iter().map(|d| d.unit).collect();
         let mut seen = HashSet::new();
@@ -795,10 +795,19 @@ impl Hub {
 
     /// a desk for a working directory there, kept: its unit
     pub fn dir(&self, mid: &str, dir: &str) -> Res<String> {
+        self.dir_at(mid, dir, None)
+    }
+
+    /// the same, a desk out of the closet: it stands where it was let go (its place kept before the state that brings
+    /// it goes out, or the room finds it a place of its own)
+    pub fn dir_at(&self, mid: &str, dir: &str, at: Option<[i64; 2]>) -> Res<String> {
         let m = self.machine(mid)?;
         let d = dir.trim();
         let d = if m.demo() { d.replacen('~', &self.cfg.home_str(), 1) } else { run(self.runner(), &m, &format!("cd {} && pwd -P", sq(d)), Duration::from_secs(20))?.trim().to_string() };
         let u = unit(mid, &d);
+        if let Some([x, y]) = at {
+            room::layout(&mut self.lock().room).insert(format!("u:{u}"), json!([x, y]));
+        }
         self.keep(&u, true);
         Ok(u)
     }
@@ -958,6 +967,10 @@ impl Hub {
             if kind == "pumpkin" {
                 // a pumpkin put down: it is lit
                 room::obj(&mut g.room, "settings").insert("halloween".into(), json!(true));
+            }
+            if kind == "files" {
+                // a filing cabinet put down: FILES on the bands
+                room::obj(&mut g.room, "settings").insert("files".into(), json!(true));
             }
             g.save(&self.cfg);
             key

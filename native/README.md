@@ -45,4 +45,5 @@ at whole device pixels. Everything with logic in it is plain Rust without GPUI, 
 
 - GPUI's shaders are compiled at run time (`runtime_shaders`): no Metal toolchain needed to build.
 - The fonts are the page's, as TTF (`assets/fonts`).
-- The office managers' sessions curl `/api/office`: the app serves only that, on `BURROW_PORT` or a free port.
+- The office managers' sessions curl `/api/office`: the app serves only that, on `BURROW_PORT` or a free port, and
+  only by its own name (Host localhost or 127.0.0.1 at its port) to what sends no Origin (a foreign one gets 403).

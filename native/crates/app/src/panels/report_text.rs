@@ -10,8 +10,8 @@ use std::collections::HashMap;
 pub struct Stats<'a> {
     pub bots: &'a HashMap<String, Stat>,
     pub meetings: u32,
-    /// the painting on the easel and how much of it is painted, 0..1
-    pub art: Option<(&'a str, f64)>,
+    /// how much of the canvas on the easel is painted, 0..1 (never which painting it is)
+    pub art: Option<f64>,
     /// minutes since the room opened
     pub shift: f64,
 }
@@ -137,7 +137,8 @@ pub fn lines(state: &State, st: &Stats, at: When, px: &dyn Fn(&str) -> f32, wide
     l.push(format!(
         "EASEL     {}",
         match st.art {
-            Some((title, k)) => format!("{title}, {}", if k >= 1. { "done".to_string() } else { format!("{}% painted", (k * 100.).round()) }),
+            Some(k) if k >= 1. => "a canvas done".to_string(),
+            Some(k) => format!("{}% painted", (k * 100.).round()),
             None => "bare".into(),
         }
     ));
@@ -215,7 +216,7 @@ mod tests {
         b.acts.insert("sleep", 1);
         b.asleep = 50.;
         stats.insert("b".to_string(), b);
-        let st = Stats { bots: &stats, meetings: 0, art: Some(("The Scream", 0.25)), shift: 12. };
+        let st = Stats { bots: &stats, meetings: 0, art: Some(0.25), shift: 12. };
         let px = |s: &str| s.chars().count() as f32 * 8.;
         let l = lines(&state(), &st, (3, 7, 9, 5), &px, 800.);
         assert!(l[0].starts_with("BURROW OFFICE REPORT") && l[0].ends_with("03/07 09:05"), "{}", l[0]);
@@ -228,7 +229,9 @@ mod tests {
         assert!(l.contains(&"  naps: 1, longest bo (50 s)".to_string()));
         assert!(l.contains(&"MESSAGES  3 beamed, most by ada".to_string()));
         assert!(l.contains(&"MEETINGS  none".to_string()));
-        assert!(l.contains(&"EASEL     The Scream, 25% painted".to_string()));
+        assert!(l.contains(&"EASEL     25% painted".to_string()), "never which painting");
+        let done = Stats { bots: &stats, meetings: 0, art: Some(1.), shift: 12. };
+        assert!(lines(&state(), &done, (3, 7, 9, 5), &px, 800.).contains(&"EASEL     a canvas done".to_string()));
         assert!(l.contains(&"EMPLOYEE OF THE SHIFT  ada, 7 min at the keys".to_string()));
         assert!(l.contains(&"LIMITS  5h 63% left, week ? left".to_string()));
     }

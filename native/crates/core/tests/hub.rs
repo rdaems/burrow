@@ -157,11 +157,12 @@ fn a_poll_of_this_computer() {
     assert_eq!(s.desks.iter().map(|d| d.unit.as_str()).collect::<Vec<_>>(), ["/p/one", "/p/two"]);
     assert!(s.desks.iter().all(|d| !d.kept));
     assert_eq!(s.usage.session.unwrap().used, 41);
-    // a desk kept from the cabinet: `pwd -P` there, then for good
+    // a desk out of the closet: `pwd -P` there, then for good, standing where it was let go (in the state that brings it)
     fake.on("pwd -P", Ok("/p/three\n"));
-    assert_eq!(h.dir("", "~/p/three").unwrap(), "/p/three");
+    assert_eq!(h.dir_at("", "~/p/three", Some([40, 120])).unwrap(), "/p/three");
     let s = wait_state(&ev, 2, |s| s.desks.iter().any(|d| d.unit == "/p/three"));
     assert!(s.desks.iter().find(|d| d.unit == "/p/three").unwrap().kept);
+    assert_eq!(s.layout.get("u:/p/three"), Some(&[40, 120]));
     h.rename("/p/three", "Three").unwrap();
     assert_eq!(h.desks().iter().find(|d| d.unit == "/p/three").unwrap().name, "Three");
     assert!(h.rename("/nowhere", "x").is_err());
@@ -416,7 +417,7 @@ fn http(port: u16, req: &str) -> (u16, Value) {
 }
 
 fn post(port: u16, body: &str) -> (u16, Value) {
-    http(port, &format!("POST /api/office HTTP/1.1\r\nHost: x\r\nContent-Length: {}\r\n\r\n{body}", body.len()))
+    http(port, &format!("POST /api/office HTTP/1.1\r\nHost: localhost:{port}\r\nContent-Length: {}\r\n\r\n{body}", body.len()))
 }
 
 #[test]
@@ -427,8 +428,12 @@ fn the_office_over_http() {
     h.start();
     wait_state(&ev, 5, |s| s.bots.iter().any(|b| b.id == "demo0over3"));
     let port = h.serve_office(0).unwrap();
-    let (code, o) = http(port, "GET /api/office HTTP/1.1\r\nHost: x\r\n\r\n");
+    let (code, o) = http(port, &format!("GET /api/office HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n\r\n"));
     assert_eq!(code, 200);
+    // only by its own name, and from no browser page but its own
+    assert_eq!(http(port, "GET /api/office HTTP/1.1\r\nHost: x\r\n\r\n"), (403, json!({"error": "not from here"})));
+    let page = format!("POST /api/office HTTP/1.1\r\nHost: localhost:{port}\r\nOrigin: https://evil.example\r\nContent-Length: 2\r\n\r\n{{}}");
+    assert_eq!(http(port, &page).0, 403);
     assert_eq!(o["room"], format!("http://localhost:{port}"));
     for k in ["you", "room", "machines", "desks", "sessions", "settings", "removing", "kept"] {
         assert!(o.get(k).is_some(), "{k}");
@@ -439,7 +444,7 @@ fn the_office_over_http() {
     assert!(s["ended"].as_str().is_some_and(|t| t.len() == 16) && s["desk"].as_str().unwrap().ends_with("/projects/burrow"));
     assert_eq!(post(port, "{\"do\": \"dance\"}").1["error"], "do what? remove, desk, start or say");
     assert_eq!(post(port, "not json").0, 400);
-    assert_eq!(http(port, "GET /elsewhere HTTP/1.1\r\n\r\n").0, 404);
+    assert_eq!(http(port, &format!("GET /elsewhere HTTP/1.1\r\nHost: localhost:{port}\r\n\r\n")).0, 404);
     // someone has the room open: she walks it to the booth; you take it out again
     let (_, r) = post(port, "{\"do\": \"remove\", \"id\": \"merry-max\"}");
     assert!(r["ok"].as_str().unwrap().starts_with("you walk merry-max to the booth"), "{r}");

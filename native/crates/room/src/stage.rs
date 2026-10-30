@@ -7,7 +7,7 @@ use crate::draw::{self as D, Burning as DBurning, FirePart, PongBall, RecScreen,
 use crate::figure::{Arms, Legs, body_dress};
 use crate::font::tiny;
 use crate::io::{Input, Output};
-use crate::layout::{ADD_W, FIRE_H, LAP, Layout, WALL, foot, jround, kind_of, name_of, on_wall};
+use crate::layout::{FIRE_H, LAP, Layout, WALL, foot, jround, kind_of, name_of, on_wall};
 use crate::room::{Hot, Hovered, Room, Tip};
 use crate::scene::{GOLD, RED, color_of, flash_a};
 use crate::think::{self, booth_t, in_fire};
@@ -98,9 +98,13 @@ impl Room {
                 set_tip(&mut tip, clip(&text, self.size.w - 8), (x0 + 8) as f64, 20.0);
             }
         }
-        if let Some((at, mid, kind, t0)) = self.pending.clone() {
-            if mid.as_ref().is_some_and(|mid| s.machines.iter().any(|m| m.id == *mid)) || now - t0 > 10000.0 {
+        if let Some((at, mid, kind, t0, m)) = self.pending.clone() {
+            // (a door is there once its machine is, a desk once the desk is)
+            let there = |mid: &String| if kind == "desk" { s.desks.iter().any(|d| d.unit == *mid) } else { s.machines.iter().any(|m| m.id == *mid) };
+            if mid.as_ref().is_some_and(there) || now - t0 > 10000.0 {
                 self.pending = None;
+            } else if kind == "desk" {
+                D::draw_blank_desk(ctx, at[0], at[1], &self.paint_of(inp, &m));
             } else {
                 let env = D::KindEnv { clock: self.clock(inp), door: D::paint_at(s.machines.len() as i32 - 1) };
                 D::draw_kind(ctx, &kind, at[0], at[1], t, &env);
@@ -196,15 +200,7 @@ impl Room {
         if let Some((id, _, _)) = &seat_hover {
             hl.insert(id.clone());
         }
-        // flat on the floor: the empty cabinet that adds a project, the mats rolled out for a nap, the ping-pong rug
-        if let Some(a) = l.add.clone() {
-            let h = self.hot((a.x0 - 2) as f64, (a.y0 - 10) as f64, (a.x1 + 2) as f64, (a.y1 + 1) as f64, json!({"kind": "addDir"}));
-            let dg = danger(&a.key);
-            D::outlined(ctx, rf(foot("add", [a.x0, a.y1], None)), h || dg, if dg { RED } else { GOLD }, tint_of(&a.key), |c| D::draw_add(c, a.x0, a.y0, h));
-            if h {
-                set_tip(&mut tip, "project".into(), (a.x0 + ADD_W / 2) as f64, (a.y0 - 2) as f64);
-            }
-        }
+        // flat on the floor: the mats rolled out for a nap, the ping-pong rug
         for f in &self.w.folk {
             if f.act.kind == "sleep" && f.act.there
                 && let Some(at) = &f.act.spot
@@ -485,14 +481,13 @@ impl Room {
             }
         }
         if let Some(b) = l.board.clone() {
-            // the easel: a click shows the painting; the tip says which it is
+            // the easel: a click shows the painting; the tip never says which it is
             let h = self.hot((b.x - 11) as f64, (b.y - 33) as f64, (b.x + 11) as f64, (b.y - 8) as f64, json!({"kind": "board"}));
             let art = self.w.s.art.as_ref().map(|a| a.i);
             let small = crate::art::art_small(&mut self.w).to_vec();
             piece(&mut items, &b.key, "board", b.x, b.y, Box::new(move |c| D::draw_easel(c, b.x, b.y, art.map(|i| (i, &small[..])))), 0.5);
             if h {
-                let title = art.map_or("easel", |i| crate::paintings::list()[i].title);
-                set_tip(&mut tip, title.into(), b.x as f64, (b.y - 36) as f64);
+                set_tip(&mut tip, "easel".into(), b.x as f64, (b.y - 36) as f64);
             }
         }
         if let Some(fr) = l.fire.clone() {
@@ -726,6 +721,16 @@ impl Room {
                 set_tip(&mut tip, "jack in".into(), oc.x as f64, (oc.y - 26) as f64);
             }
         }
+        // the filing cabinet: FILES on the terminals' bands (their files' tile), while one stands here and it is on; a
+        // click switches them (its top drawer stands open while they are on)
+        let files_on = files_on(s) && !l.cabinets.is_empty();
+        for fc in l.cabinets.clone() {
+            let h = self.hot_r(foot("files", [fc.x, fc.y], None), json!({"kind": "files"}));
+            piece(&mut items, &fc.key, "files", fc.x, fc.y, Box::new(move |c| D::draw_filing(c, fc.x, fc.y, files_on)), 0.5);
+            if h {
+                set_tip(&mut tip, if files_on { "files on".into() } else { "files off".into() }, fc.x as f64, (fc.y - 27) as f64);
+            }
+        }
         for n in l.neuralyzers.clone() {
             let fl = self.w.s.flash.is_some_and(|f| now - f.2 < 400.0);
             piece(&mut items, &n.key, "neuralyzer", n.x, n.y, Box::new(move |c| D::draw_neuralyzer(c, n.x, n.y, fl)), 0.5);
@@ -884,7 +889,11 @@ impl Room {
         if let Some((kind, Some(at))) = self.carrying.clone() {
             ctx.set_alpha(0.7);
             let env = D::KindEnv { clock: self.clock(inp), door: D::paint_at(s.machines.len() as i32 - 1) };
-            D::draw_kind(ctx, &kind, at[0], at[1], t, &env);
+            if kind == "desk" {
+                D::draw_blank_desk(ctx, at[0], at[1], &self.paint_of(inp, "")); // (this computer's paint, until one is picked)
+            } else {
+                D::draw_kind(ctx, &kind, at[0], at[1], t, &env);
+            }
             ctx.set_alpha(1.0);
         }
         if self.held.is_some() {
@@ -937,6 +946,12 @@ impl Room {
         let _ = Hot { r: [0.; 4], action: json!(null) };
         let _ = tiny;
     }
+}
+
+/// the filing cabinet's switch (settings `files`, on unless switched off): FILES on the terminals' bands while a
+/// cabinet stands in the room
+pub fn files_on(s: &crate::model::State) -> bool {
+    s.settings.other.get("files").and_then(serde_json::Value::as_bool).unwrap_or(true)
 }
 
 /// the home directory as ~

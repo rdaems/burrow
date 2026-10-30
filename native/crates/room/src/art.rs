@@ -1,7 +1,7 @@
 //! The painting on the easel: the robots paint famous paintings (paintings.rs), every person in them a robot. It
 //! grows only while a robot stands at the easel painting (`paint`, a break of its own, now and then), layer by layer
 //! as a painter would, ART_SPEED dots a second; done, it stays, and once it has hung there ART_REST seconds the next
-//! robot to come starts another on a fresh canvas. The room opens on one well begun. Who painted it is kept
+//! robot to come starts another on a fresh canvas. The room opens on one well begun. Who painted it is kept, by name
 //! (room.js's newArt, paintArt, artStep, artSmall).
 
 use crate::paintings::{self, PRIMER};
@@ -57,7 +57,14 @@ pub fn art_step(w: &mut World, dt: f64, r0: f64, r1: f64, r2: f64) {
             a.done = Some(t - ART_REST / 2.0);
         }
     }
-    let Some(painter) = w.folk.iter().find(|f| f.act.kind == "paint" && f.act.there).map(|f| f.id.clone()) else { return };
+    let Some((painter, name)) = w
+        .folk
+        .iter()
+        .find(|f| f.act.kind == "paint" && f.act.there)
+        .map(|f| (f.id.clone(), f.b.as_ref().map_or_else(|| f.id.clone(), |b| b.name.clone())))
+    else {
+        return;
+    };
     if !art_wanted(w) {
         return;
     }
@@ -67,8 +74,10 @@ pub fn art_step(w: &mut World, dt: f64, r0: f64, r1: f64, r2: f64) {
         new_art(w, next, 0.0);
     }
     let a = w.s.art.as_mut().unwrap();
-    if !a.by.contains(&painter) {
-        a.by.push(painter);
+    // its name kept: a painter may be gone before the canvas is
+    match a.by.iter_mut().find(|(id, _)| *id == painter) {
+        Some(p) => p.1 = name,
+        None => a.by.push((painter, name)),
     }
     a.f += dt * ART_SPEED;
     if a.f >= 1.0 {
@@ -104,4 +113,23 @@ pub fn art_small(w: &mut World) -> &[(i32, i32, Color)] {
         w.s.art_small = Some(out);
     }
     w.s.art_small.as_deref().unwrap()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::Bot;
+    use crate::world::{Act, Fig};
+
+    #[test]
+    fn a_painter_gone_is_still_named() {
+        let mut w = World::new();
+        new_art(&mut w, 0, 0.0);
+        let b = Bot { id: "x1".into(), name: "abc-def".into(), ..Default::default() };
+        w.folk.push(Fig { id: "x1".into(), b: Some(b), act: Act { kind: "paint", there: true, ..Default::default() }, ..Default::default() });
+        art_step(&mut w, 0.5, 0.0, 0.0, 0.0);
+        w.folk.clear();
+        art_step(&mut w, 0.5, 0.0, 0.0, 0.0);
+        assert_eq!(w.s.art.as_ref().unwrap().by, vec![("x1".to_string(), "abc-def".to_string())]);
+    }
 }
