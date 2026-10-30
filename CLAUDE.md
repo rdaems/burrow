@@ -45,7 +45,7 @@ message is the log. When something goes, take it out here. Keep the file under a
     sessions whose record changed, 256 kB of each transcript, condensed; a machine asked at most every ten
     seconds), fast = working, a frozen white page = needs you, a drip = idle; a click on a lane jacks into its
     terminal (the room's terminal to the letter); the operator's line under it (help, ls, jack, load, tell
-    = `/api/tell`, reset, stop, delete, shell, rabbit, limits, nodes, room).
+    = `/api/tell`, reset, stop, delete, shell, rabbit, limits, nodes, room). The room's way in: the operator's console.
   - xterm.js 5.5.0 and its addons (fit, clipboard, web-links) from jsdelivr.
 - `src/main.rs`: burrow's window (wry 0.57, tao, muda; his choice over porting, the egui app is in git's history):
   the system's webview on the same page, no title bar to be seen (transparent, in the page's night, no title; like
@@ -202,7 +202,7 @@ message is the log. When something goes, take it out here. Keep the file under a
   ping-pong = play or watch; coffee or cooler = the limits; clock = keep awake; switchboard (one lever) = settings
   (rc, yolo, hardcore: a slider and a name a line, a help box under them for the line under the pointer, empty
   once the pointer leaves the panel; hardcore stays vague); pair table = its
-  pair room; dog house = the dog; radio = sound; filing cabinet = FILES on the bands; pumpkin = Halloween; door = the doors' panel; reception =
+  pair room; dog house = the dog; radio = sound; filing cabinet = FILES on the bands; pumpkin = Halloween; matrix (the operator's console, a terminal raining green) = the window jacks into `/matrix` (its `room` comes back); door = the doors' panel; reception =
   the office manager. Dropped on: the neuralyzer gives an idle bot `/clear`; the booth deletes.
 - Whoever is at a piece rides along when it is dragged: a spot at a piece carries its key (`on`), `ride()` moves
   them each frame. One rule for every piece: reuse it, don't add a fix per piece.

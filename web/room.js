@@ -321,10 +321,10 @@ function startRoom(cv, app) {
   // This computer's door (`door:`) only slides along the wall
   const KIND = (key) => key.startsWith("door:") ? "door" : key.replace(/\d+$/, "");
   const FIXED = new Set(["fire", "closet", "settings", "clock"]), fixed = (key) => FIXED.has(KIND(key)) || key === "door:";
-  const CLICK = new Set(["radio", "files", "pumpkin", "doghouse", "closet", "chess", "pong", "printer", "pair", "board", "coffee", "cooler", "window", "armchair", "settings", "clock", "plant", "manager", "door"]);   // a click does something there
+  const CLICK = new Set(["radio", "files", "pumpkin", "matrix", "doghouse", "closet", "chess", "pong", "printer", "pair", "board", "coffee", "cooler", "window", "armchair", "settings", "clock", "plant", "manager", "door"]);   // a click does something there
   const NAMES = { meet: "meeting table", pong: "ping-pong table", chess: "chess table", coffee: "coffee machine", cooler: "water cooler",
     printer: "printer", armchair: "pouf", plant: "plant", board: "easel", window: "window", clock: "clock", desk: "desk", pair: "pair room", settings: "switchboard", manager: "reception",
-    booth: "booth", neuralyzer: "neuralyzer", door: "door", doghouse: "dog house", radio: "radio", files: "filing cabinet", pumpkin: "pumpkin" };
+    booth: "booth", neuralyzer: "neuralyzer", door: "door", doghouse: "dog house", radio: "radio", files: "filing cabinet", pumpkin: "pumpkin", matrix: "matrix" };
   // a clear spot on the floor for a figure that has no chair when the page opens (spread by its id, the same each time)
   function freeAt(L, id) {
     let h = fnv(id);
@@ -367,6 +367,7 @@ function startRoom(cv, app) {
       case "radio": return [x - 7, y - 21, x + 7, y + 1];
       case "files": return [x - 8, y - 25, x + 8, y + 1];
       case "pumpkin": return [x - 8, y - 13, x + 8, y + 1];
+      case "matrix": return [x - 11, y - 25, x + 12, y + 1];
       default: return [x - 8, y - 31, x + 8, y + 1];     // a plant
     }
   }
@@ -459,7 +460,7 @@ function startRoom(cv, app) {
       windows: all("window").map((p) => ({ key: p.key, x0: p.x, y0: p.y, x1: p.x + 21, y1: p.y + 18 })),
       fire: f0 && { key: f0.key, x0: f0.x, y0: f0.y - FIRE.h, x1: f0.x + FIRE.w, y1: f0.y }, closet: cl && { key: cl.key, x0: cl.x, y0: cl.y, x1: cl.x + 22, y1: cl.y + 24 },
       settings: sw && { key: sw.key, x0: sw.x, y0: sw.y, x1: sw.x + SB_W(), y1: sw.y + SB_H() },
-      managers: all("manager"), meet: one("meet"), pong: one("pong"), chess: one("chess"), pairs: all("pair"), booths: all("booth"), neuralyzers: all("neuralyzer"), doghouses: all("doghouse"), radios: all("radio"), cabinets: all("files"), pumpkins: all("pumpkin"),
+      managers: all("manager"), meet: one("meet"), pong: one("pong"), chess: one("chess"), pairs: all("pair"), booths: all("booth"), neuralyzers: all("neuralyzer"), doghouses: all("doghouse"), radios: all("radio"), cabinets: all("files"), pumpkins: all("pumpkin"), consoles: all("matrix"),
       cooler: one("cooler"), plants: all("plant"), printer: one("printer"), chairs: all("armchair"),
       coffeeAt: one("coffee"), floor: { x0: 11, y0: WALL + 8, x1: W - 11, y1: H - 2 }, placed,   // (where a figure may stand: right up to the bottom edge, its body inside the side walls)
     };
@@ -1804,6 +1805,12 @@ function startRoom(cv, app) {
       piece(pk, "pumpkin", (c) => drawPumpkin(c, pk, spooky, T));
       if (h) tip = { text: spooky ? "halloween" : "light it", x: pk.x, y: pk.y - 15 };
     }
+    // the operator's console: the same burrow at /matrix, every session a lane of falling code; a click jacks in
+    for (const oc of L.consoles) {
+      const h = hot(...foot("matrix", [oc.x, oc.y]), { kind: "matrix" });
+      piece(oc, "matrix", (c) => drawConsole(c, oc, T));
+      if (h) tip = { text: "jack in", x: oc.x, y: oc.y - 26 };
+    }
     for (const n of L.neuralyzers) {
       const fl = w.flash && performance.now() - w.flash.t0 < 400;
       piece(n, "neuralyzer", (c) => drawNeuralyzer(c, n, fl));
@@ -3100,6 +3107,7 @@ function startRoom(cv, app) {
       case "radio": drawRadio(ctx, pt, true); break;
       case "files": drawFiling(ctx, pt, true); break;
       case "pumpkin": drawPumpkin(ctx, pt, true, 0); break;
+      case "matrix": drawConsole(ctx, pt, 0); break;
       case "doghouse": drawDoghouse(ctx, pt); break;
       case "door": { const ms = (app.state() || {}).machines || []; drawDoor(ctx, x, PAINT[Math.max(0, ms.length - 1) % PAINT.length], false, false, y); break; }   // in the paint the next machine gets
     }
@@ -3383,6 +3391,28 @@ function startRoom(cv, app) {
     for (const [tx, c] of [[x0 + 2, SP.y], [x0 + 6, SP.g], [x0 + 10, SP.v]]) { rect(ctx, tx, top + 3, 2, 5, c); rect(ctx, tx, top + 3, 2, 1, SP.A); }
     rect(ctx, x0, top + 15, 14, 1, SHADOW);                  // its front pulled out toward you, a little wider, its shadow under it
     rect(ctx, x0 - 1, top + 8, 16, 8, SP.F); drawer(top + 9, -2, 14);
+  }
+  // the operator's console: a terminal on a metal stand, its keyboard in front, the code raining down its screen, a
+  // drop a column, each at its own speed, a bright head and a fading tail
+  const RAIN = ["#d6ffd0", "#60c677", "#2f8a46", "#164a26"];
+  function drawConsole(ctx, p, T) {
+    const x = p.x, y = p.y;
+    rect(ctx, x - 11, y, 24, 1, SHADOW);
+    rect(ctx, x - 10, y - 11, 22, 11, SP.F);                         // the stand: its top, its front, a slot, the power light
+    rect(ctx, x - 9, y - 10, 20, 3, SP.C); rect(ctx, x - 9, y - 10, 20, 1, SP.B);
+    rect(ctx, x - 9, y - 7, 20, 6, SP.E); rect(ctx, x - 9, y - 7, 20, 1, SP.D);
+    rect(ctx, x - 7, y - 4, 8, 1, SP.F); rect(ctx, x + 8, y - 4, 1, 1, SP.g);
+    rect(ctx, x - 3, y - 12, 8, 2, SP.F);                            // the terminal's neck
+    rect(ctx, x - 9, y - 25, 20, 13, SP.F);                          // its case, lit from the top left
+    rect(ctx, x - 8, y - 24, 18, 11, SP.D); rect(ctx, x - 8, y - 24, 18, 1, SP.C); rect(ctx, x - 8, y - 24, 1, 11, SP.C);
+    rect(ctx, x + 9, y - 23, 1, 10, SP.E); rect(ctx, x - 7, y - 14, 17, 1, SP.E);
+    rect(ctx, x - 6, y - 22, 14, 8, "#071208");                      // the screen
+    for (let i = 0; i < 14; i++) {
+      const head = Math.floor(T * (4 + ((i * 7) % 5)) + ((i * 37) % 17)) % 13 - 2;
+      for (let k = 0; k < RAIN.length; k++) if (head - k >= 0 && head - k < 8) rect(ctx, x - 6 + i, y - 22 + head - k, 1, 1, RAIN[k]);
+    }
+    rect(ctx, x - 6, y - 9, 13, 2, SP.F);                            // the keyboard
+    for (let i = 0; i < 6; i++) rect(ctx, x - 5 + i * 2, y - 9, 1, 1, SP.D);
   }
   // the pumpkin: carved, a candle in it. Lit (Halloween), its eyes, nose and grin glow and flicker; blown out, they are dark
   const PUMPKIN = { hi: "#f6a03c", top: "#e07424", d: "#a8481c" };

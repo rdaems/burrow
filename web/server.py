@@ -470,7 +470,7 @@ def doom_wad():
         pass
     return os.path.join(HERE, "doom", "freedoom.wad")
 KINDS = {"meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "pair", "manager",
-         "booth", "neuralyzer", "doghouse", "radio", "files", "pumpkin"}
+         "booth", "neuralyzer", "doghouse", "radio", "files", "pumpkin", "matrix"}
 
 
 # The office manager: whoever sits at the reception booth (the `manager` piece; one at a time). Her style is
