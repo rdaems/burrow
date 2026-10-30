@@ -166,7 +166,7 @@ function draw(now) {
     const R = RAIN.ambient;
     if (Math.random() < R.spawn * dt) a.drops.push({ col: 0, y: -1, v: R.speed[0] + Math.random() * (R.speed[1] - R.speed[0]) });
     rain([a.cells], a.drops, R, dt, kana);
-    paint(a.x, a.cells[0], 0, 0);
+    paint(a.x, a.cells, 0, 0);
   }
   const hov = hovered && lanes.get(hovered);
   for (const l of lanes.values()) {
