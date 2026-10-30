@@ -431,7 +431,7 @@ const COMMANDS = {
   shell: { args: "<project|~/folder>[@machine]", say: "your own shell there" },
   limits: { args: "", say: "what is left of the five hours and the week" },
   nodes: { args: "", say: "the machines" },
-  room: { args: "", say: "back to the 16-bit room" },
+  room: { args: "", say: "back to the 16-bit room (or esc on an empty line)" },
   cls: { args: "", say: "clear these lines" },
 };
 const ALIAS = { "?": "help", agents: "ls", j: "jack", in: "jack", open: "jack", new: "load", spawn: "load", out: "exit", q: "exit", rm: "delete", clear: "reset" };
@@ -581,12 +581,13 @@ cmd.addEventListener("keydown", (e) => {
     run(v).catch((err) => print(String(err && err.message || err), "err"));
   } else if (e.key === "ArrowUp") { e.preventDefault(); if (hi > 0) cmd.value = hist[--hi]; }
   else if (e.key === "ArrowDown") { e.preventDefault(); hi = Math.min(hist.length, hi + 1); cmd.value = hist[hi] || ""; }
-  else if (e.key === "Escape") { cmd.value = ""; }
+  else if (e.key === "Escape") { if (cmd.value) cmd.value = ""; else location.href = "/"; }   // an empty line: out, back to the room (burrow's window has no back button)
 });
 cmd.addEventListener("input", () => { hint.textContent = ""; });
 // typing anywhere that is not the terminal goes to the line
 document.addEventListener("keydown", (e) => {
   if (document.activeElement === cmd || (cur && jack.contains(document.activeElement))) return;
+  if (e.key === "Escape" && !cmd.value) { location.href = "/"; return; }   // (in a terminal Esc is Claude Code's)
   if (e.metaKey || e.ctrlKey || e.altKey || e.key.length !== 1) return;
   cmd.focus();
 });
@@ -599,7 +600,7 @@ es.addEventListener("state", (e) => {
   if (!was) measure(); else arrange();
   counts();
   who();
-  if (!was && !hist.length) print("type help, or click a lane to jack in", "echo");
+  if (!was && !hist.length) print("type help, or click a lane to jack in; esc to leave", "echo");
 });
 es.addEventListener("shells", (e) => { if (state) state.shells = JSON.parse(e.data); });
 es.addEventListener("digest", (e) => { digest = JSON.parse(e.data); });
