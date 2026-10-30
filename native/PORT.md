@@ -26,5 +26,9 @@ One line per web module; status: todo, wip, done (tested), n/a.
 | marked + DOMPurify           | crates/app/src/markdown.rs (common cases; nothing runs) | done |
 | look.mjs (tests)             | cargo test, PNG snapshots            | done   |
 
-In step with web/ up to origin/main 3f3764b (2026-10-29): the easel and its paintings, the pair telephone and its
-beams, a carried bot lit, the condemned taken aback, the mutiny, the + in an untrusted folder.
+In step with web/ up to origin/main af5ab39 (2026-10-30): since 3f3764b, furniture shot in the first person, the
+easel's canvas, the desk out of the closet, the filing cabinet and the files tile (a native editor and markdown, not
+CodeMirror and marked), the sausages, Halloween, the mutiny counting her kills, the matrix and the operator's console,
+a machine out of reach (snow, frozen bots), the fire taking what the pointer holds, the office port's Origin check.
+Not ported, web only: the wry window (src/), the closet's kinds read from the page and the layout merge (races between
+page and server that the app, in process, doesn't have).
