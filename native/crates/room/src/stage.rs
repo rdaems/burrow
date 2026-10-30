@@ -472,14 +472,13 @@ impl Room {
             }
         }
         if let Some(b) = l.board.clone() {
-            // the easel: a click shows the painting; the tip says which it is
+            // the easel: a click shows the painting; the tip never says which it is
             let h = self.hot((b.x - 11) as f64, (b.y - 33) as f64, (b.x + 11) as f64, (b.y - 8) as f64, json!({"kind": "board"}));
             let art = self.w.s.art.as_ref().map(|a| a.i);
             let small = crate::art::art_small(&mut self.w).to_vec();
             piece(&mut items, &b.key, "board", b.x, b.y, Box::new(move |c| D::draw_easel(c, b.x, b.y, art.map(|i| (i, &small[..])))), 0.5);
             if h {
-                let title = art.map_or("easel", |i| crate::paintings::list()[i].title);
-                set_tip(&mut tip, title.into(), b.x as f64, (b.y - 36) as f64);
+                set_tip(&mut tip, "easel".into(), b.x as f64, (b.y - 36) as f64);
             }
         }
         if let Some(fr) = l.fire.clone() {

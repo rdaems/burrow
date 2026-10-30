@@ -315,15 +315,15 @@ pub struct Burning {
     pub t0: f64,
 }
 
-/// the painting on the easel: which, the order its dots go on in, how far, when it was done, who has painted at it,
-/// the canvas
+/// the painting on the easel: which, the order its dots go on in, how far, when it was done, who has painted at it
+/// (id and name, in the order they came), the canvas
 #[derive(Clone, Debug)]
 pub struct Art {
     pub i: usize,
     pub order: Vec<crate::paintings::Dot>,
     pub n: usize,
     pub done: Option<f64>,
-    pub by: Vec<String>,
+    pub by: Vec<(String, String)>,
     pub f: f64,
     pub img: Image,
 }
