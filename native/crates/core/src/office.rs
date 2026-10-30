@@ -598,10 +598,20 @@ fn reply(s: &mut TcpStream, code: u16, body: &[u8], ctype: &str) -> std::io::Res
     let why = match code {
         200 => "OK",
         400 => "Bad Request",
+        403 => "Forbidden",
         _ => "Not Found",
     };
     write!(s, "HTTP/1.1 {code} {why}\r\nContent-Type: {ctype}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n", body.len())?;
     s.write_all(body)
+}
+
+/// Who may talk to the office port (server.py's `trusted`): programs with no browser behind them, which send no
+/// Origin (the office managers' curl), and by its own name only (localhost or 127.0.0.1 at its port). Without it any
+/// page open in a browser could post to it (start a bot, type into a session), and a name of the attacker's that
+/// resolves to 127.0.0.1 (DNS rebinding) could read it: it is turned away by its Host
+pub fn trusted(host: Option<&str>, origin: Option<&str>, port: u16) -> bool {
+    let ours = |h: &str| h == format!("localhost:{port}") || h == format!("127.0.0.1:{port}");
+    host.is_some_and(ours) && origin.is_none_or(|o| o.strip_prefix("http://").is_some_and(ours))
 }
 
 fn serve(h: &Arc<Hub>, mut s: TcpStream) -> std::io::Result<()> {
@@ -613,15 +623,25 @@ fn serve(h: &Arc<Hub>, mut s: TcpStream) -> std::io::Result<()> {
     let (method, path) = (parts.next().unwrap_or(""), parts.next().unwrap_or(""));
     let path = path.split('?').next().unwrap_or("");
     let mut n = 0usize;
+    let (mut host, mut origin) = (None, None);
     loop {
         let mut hl = String::new();
         if r.read_line(&mut hl)? == 0 || hl.trim().is_empty() {
             break;
         }
-        if let Some((k, v)) = hl.split_once(':')
-            && k.trim().eq_ignore_ascii_case("content-length") {
-                n = v.trim().parse().unwrap_or(0);
+        if let Some((k, v)) = hl.split_once(':') {
+            let (k, v) = (k.trim(), v.trim().to_string());
+            if k.eq_ignore_ascii_case("content-length") {
+                n = v.parse().unwrap_or(0);
+            } else if k.eq_ignore_ascii_case("host") {
+                host = Some(v);
+            } else if k.eq_ignore_ascii_case("origin") {
+                origin = Some(v);
             }
+        }
+    }
+    if !trusted(host.as_deref(), origin.as_deref(), h.port()) {
+        return reply(&mut s, 403, json!({"error": "not from here"}).to_string().as_bytes(), "application/json");
     }
     let json_reply = |s: &mut TcpStream, v: &Value| reply(s, 200, v.to_string().as_bytes(), "application/json");
     let err = |e: String| json!({"error": e.trim().chars().take(500).collect::<String>()});
@@ -654,5 +674,17 @@ mod tests {
         assert!(m.contains("(http://localhost:7777)") && m.contains("colleagues at the other receptions: Linda (Stijn's notes)."));
         assert!(!m.contains("%("), "{m}");
         assert!(manual(style("ask").unwrap(), "x", 1, "").contains("none: you are the only one"));
+    }
+
+    #[test]
+    fn only_its_own_name_and_no_page() {
+        assert!(trusted(Some("localhost:7790"), None, 7790), "her curl");
+        assert!(trusted(Some("127.0.0.1:7790"), None, 7790));
+        assert!(trusted(Some("localhost:7790"), Some("http://127.0.0.1:7790"), 7790), "a page of its own");
+        assert!(!trusted(Some("localhost:7790"), Some("https://evil.example"), 7790), "another site's page");
+        assert!(!trusted(Some("localhost:7790"), Some("null"), 7790));
+        assert!(!trusted(Some("evil.example:7790"), None, 7790), "a name resolving here (DNS rebinding)");
+        assert!(!trusted(Some("localhost:7777"), None, 7790), "another port");
+        assert!(!trusted(None, None, 7790));
     }
 }
