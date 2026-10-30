@@ -14,14 +14,14 @@ pub type Room = Map<String, Value>;
 /// the first room's pieces have no number). There can be any number of a kind. The closet in the
 /// room adds a piece, the fireplace burns one; the fire, the closet and the switchboard themselves stay.
 pub const FURNITURE: &[&str] = &[
-    "meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant0", "plant1", "board", "window", "clock", "fire", "closet", "add",
+    "meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant0", "plant1", "board", "window", "clock", "fire", "closet",
     "settings0", "manager0", "booth0", "neuralyzer0",
 ];
 // (a new machine is a door taken from the closet and hung on the wall; the doors themselves are no furniture:
 // one a machine in Claude Code's sshConfigs, their places in the layout as door:<machine id>)
 pub const FIXED: &[&str] = &["fire", "closet", "settings", "clock"];
 pub const KINDS: &[&str] = &[
-    "meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "add", "pair", "manager", "booth", "neuralyzer",
+    "meet", "pong", "chess", "coffee", "cooler", "printer", "armchair", "plant", "board", "window", "pair", "manager", "booth", "neuralyzer",
     "doghouse", "radio",
 ];
 
@@ -195,9 +195,11 @@ pub fn furnish(mut room: Room) -> Room {
     obj(&mut room, "managers").retain(|k, _| fs.contains(k));
     let v13 = v(&room).max(13);
     room.insert("v".into(), json!(v13));
-    // the 3d goggles: the first person is the gun closet's only; the bench: every session is at its desk
-    fs.retain(|k| kind_of(k) != "goggles" && kind_of(k) != "bench");
+    // the 3d goggles: the first person is the gun closet's only; the bench: every session is at its desk; the
+    // project cabinet: a desk comes out of the closet
+    fs.retain(|k| kind_of(k) != "goggles" && kind_of(k) != "bench" && kind_of(k) != "add");
     drop_layout(&mut room, "bench");
+    drop_layout(&mut room, "add");
     if !has(&fs, "clock") {
         // the clock is always there (it can't be burnt any more)
         fs.push("clock".into());
@@ -301,13 +303,14 @@ mod tests {
     #[test]
     fn a_first_room() {
         let r = furnish(room(json!({
-            "desks": ["/a"], "layout": {"board": [40, 10], "mats": [1, 2], "mat0": [3, 4], "u:/a": [5, 6]},
+            "desks": ["/a"], "layout": {"board": [40, 10], "mats": [1, 2], "mat0": [3, 4], "u:/a": [5, 6], "add": [7, 8]},
             "furniture": ["meet", "board", "mat0", "plant"], "you": {"seed": "rembert:15"}, "names": {"/a": "A"}
         })));
         let fs = furniture(&r);
-        assert_eq!(fs, ["meet", "board", "plant", "add", "settings0", "manager0", "booth0", "neuralyzer0", "clock"]);
+        // (the project cabinet came at v 2 and went again: a desk comes out of the closet)
+        assert_eq!(fs, ["meet", "board", "plant", "settings0", "manager0", "booth0", "neuralyzer0", "clock"]);
         let lay = r["layout"].as_object().unwrap();
-        assert!(!lay.contains_key("board") && !lay.contains_key("mats") && !lay.contains_key("mat0") && lay.contains_key("u:/a"));
+        assert!(!lay.contains_key("board") && !lay.contains_key("mats") && !lay.contains_key("mat0") && !lay.contains_key("add") && lay.contains_key("u:/a"));
         assert_eq!(r["you"]["seed"], "rembert-15");
         assert_eq!(r["names"]["/a"], "A"); // what it doesn't touch stays
         assert_eq!(r["managers"]["manager0"]["style"], "notes");

@@ -30,7 +30,7 @@ const pending = new Map();
 const send = (method, params = {}) => new Promise((r) => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
 // room.js with its insides exposed: everything named in startRoom's scope that a test may want
 const EXPOSE = `window.__in = { body, face, wears, halo, put, slab, tiny, tinyW, floor, drawDesk, drawKind, drawFigure, drawSleeper,
-  drawChair, drawFire, drawCloset, drawEasel, drawPair, drawAdd, drawSwitchboard, drawReception, drawDoor, drawClock, drawWindow,
+  drawChair, drawFire, drawCloset, drawEasel, drawPair, drawBlankDesk, drawSwitchboard, drawReception, drawDoor, drawClock, drawWindow,
   drawRug, drawMat, drawBooth, drawGunCloset, drawRadio, drawNeuralyzer, drawTable, drawChess, drawStool, drawCoffee, drawCooler,
   drawPrinter, drawArmchair, drawPlant, drawPong, drawDoghouse, dogPic, heart, drawGrave: typeof drawGrave === "undefined" ? null : drawGrave,
   projectColor, shade, mix, fnv, foot, layout, defaults, icon, doorPicture, printerPicture, PAINT, PROJECT, WOOD,

@@ -6,7 +6,7 @@
 
 use crate::draw as D;
 use crate::io::Input;
-use crate::layout::{ADD_W, Layout, WALL, foot, kind_of, name_of, on_wall};
+use crate::layout::{Layout, WALL, foot, kind_of, name_of, on_wall};
 use crate::room::Room;
 use crate::scene::color_of;
 use crate::think::{booth_rise, booth_t, manager_seat};
@@ -202,7 +202,6 @@ impl Room {
                         p.notes = if m.style == "notes" { inp.digest.as_ref().map(|d| d.sessions.iter().filter(|id| live.contains(&id.as_str())).count() as u32).unwrap_or(0) } else { 0 };
                     }
                 }
-                "add" => p.w = Some(ADD_W as f64),
                 "booth" => {
                     let inside = self.w.folk.iter().find(|f| f.act.kind == "doom" && f.act.at.as_ref() == Some(key));
                     p.gun = inp.hardcore();

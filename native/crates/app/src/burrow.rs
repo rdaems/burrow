@@ -179,6 +179,12 @@ impl Burrow {
                                     b.open_view(kind, window, cx);
                                 }
                             }
+                            // a piece out of the closet, let go at x/y in dots: put:desk@60/200
+                            "put" => {
+                                let (kind, at) = v.split_once('@').unwrap_or((v, "60/200"));
+                                let at = at.split_once('/').and_then(|(x, y)| Some([x.parse().ok()?, y.parse().ok()?]));
+                                crate::panels::closet::put(b, kind, at, window, cx);
+                            }
                             _ => {}
                         }
                     }
@@ -456,7 +462,6 @@ impl Burrow {
         let shift = a["shift"].as_bool().unwrap_or(false);
         let hub = self.hub.clone();
         match kind.as_str() {
-            "addDir" => self.open_view(ViewKind::Dir, window, cx),
             "you" => self.open_view(ViewKind::You, window, cx),
             "closet" => self.open_view(ViewKind::Closet, window, cx),
             "report" => self.open_view(ViewKind::Report, window, cx),

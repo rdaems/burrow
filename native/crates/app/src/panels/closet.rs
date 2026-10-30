@@ -1,6 +1,7 @@
 //! THE CLOSET (#vCloset, `fillCloset`, `carryOut`): the furniture there is, drawn as it stands in the room (two
 //! pixels a dot); drag a piece into the room to put it there, as many as you like. A door is a machine (which one,
-//! then it hangs there), a reception comes with an office manager (who); the fireplace takes a piece back out.
+//! then it hangs there), a desk a folder on a machine (which), a reception comes with an office manager (who); the
+//! fireplace takes a piece back out.
 
 use super::{call, note};
 use crate::burrow::Burrow;
@@ -9,7 +10,7 @@ use crate::views::ViewKind;
 use burrow_room::draw::{Clock, KindEnv, icon, paint_at};
 use gpui::{AnyElement, Context, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, ParentElement, Styled, Window, div, prelude::*, px, rgb};
 
-pub const CATALOGUE: [&str; 18] = ["plant", "armchair", "window", "board", "meet", "chess", "pong", "coffee", "cooler", "printer", "add", "pair", "manager", "booth", "neuralyzer", "doghouse", "radio", "door"];
+pub const CATALOGUE: [&str; 18] = ["desk", "plant", "armchair", "window", "board", "meet", "chess", "pong", "coffee", "cooler", "printer", "pair", "manager", "booth", "neuralyzer", "doghouse", "radio", "door"];
 
 /// a piece let go in the room (`at`: where it stands; none: outside the room)
 pub fn put(b: &mut Burrow, kind: &str, at: Option<[i32; 2]>, window: &mut Window, cx: &mut Context<Burrow>) {
@@ -25,6 +26,12 @@ pub fn put(b: &mut Burrow, kind: &str, at: Option<[i32; 2]>, window: &mut Window
             b.views.p.manager_at = Some(at);
             b.room.pend(Some(at), None, "manager", now);
             b.open_view(ViewKind::Manager, window, cx);
+        }
+        // a desk is a folder on a machine: which, then it is one (meanwhile it stands there blank)
+        "desk" => {
+            b.views.p.desk_at = Some(at);
+            b.room.pend(Some(at), None, "desk", now);
+            b.open_view(ViewKind::Dir, window, cx);
         }
         _ => {
             let kind = kind.to_string();

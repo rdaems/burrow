@@ -1946,7 +1946,7 @@ fn hide_spot(w: &World, i: usize, l: &Layout, t: &mut Tick) -> Option<Spot> {
     for p in &l.pieces {
         let k = kind_of(&p.key);
         let r = p.r;
-        if p.u.is_some() || layout::ON_WALL.contains(&k) || ["booth", "fire", "neuralyzer", "add"].contains(&k) || r[3] - r[1] < 16 || r[2] - r[0] < 14 {
+        if p.u.is_some() || layout::ON_WALL.contains(&k) || ["booth", "fire", "neuralyzer"].contains(&k) || r[3] - r[1] < 16 || r[2] - r[0] < 14 {
             continue; // (a desk is too low to hide behind)
         }
         let x = jround((r[0] + r[2]) as f64 / 2.0 + t.rnd(-6.0, 6.0)) as f64;

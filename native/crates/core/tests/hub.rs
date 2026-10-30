@@ -157,11 +157,12 @@ fn a_poll_of_this_computer() {
     assert_eq!(s.desks.iter().map(|d| d.unit.as_str()).collect::<Vec<_>>(), ["/p/one", "/p/two"]);
     assert!(s.desks.iter().all(|d| !d.kept));
     assert_eq!(s.usage.session.unwrap().used, 41);
-    // a desk kept from the cabinet: `pwd -P` there, then for good
+    // a desk out of the closet: `pwd -P` there, then for good, standing where it was let go (in the state that brings it)
     fake.on("pwd -P", Ok("/p/three\n"));
-    assert_eq!(h.dir("", "~/p/three").unwrap(), "/p/three");
+    assert_eq!(h.dir_at("", "~/p/three", Some([40, 120])).unwrap(), "/p/three");
     let s = wait_state(&ev, 2, |s| s.desks.iter().any(|d| d.unit == "/p/three"));
     assert!(s.desks.iter().find(|d| d.unit == "/p/three").unwrap().kept);
+    assert_eq!(s.layout.get("u:/p/three"), Some(&[40, 120]));
     h.rename("/p/three", "Three").unwrap();
     assert_eq!(h.desks().iter().find(|d| d.unit == "/p/three").unwrap().name, "Three");
     assert!(h.rename("/nowhere", "x").is_err());

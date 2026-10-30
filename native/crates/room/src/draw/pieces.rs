@@ -1,4 +1,4 @@
-//! The furniture on the floor: the easel, the pair table, the project cabinet, the reception, the
+//! The furniture on the floor: the easel, the pair table, a new desk standing blank, the reception, the
 //! rug, a nap's mat, the booth and the gun closet, the radio, the neuralyzer, the meeting table, the
 //! chess table, the stools, the coffee corner, the cooler, the printer, the pouf, the plants, the
 //! ping-pong table, the dog house.
@@ -109,11 +109,14 @@ pub fn draw_pair(ctx: &mut Ctx, x: i32, y: i32, linked: bool, t: f64, over: bool
     }
 }
 
-/// the empty cabinet that adds a project: a plate with a + on it (x0, y0 its top left)
-pub fn draw_add(ctx: &mut Ctx, x0: i32, y0: i32, lit: bool) {
-    slab(ctx, x0, y0, ADD_W, 4, 11, &WOOD);
-    plate(ctx, x0 + 3, y0 + 6, ADD_W - 6, lit, &WOOD);
-    tiny(ctx, "+", js_round(x0 as f64 + ADD_W as f64 / 2. - 1.) as f64, (y0 + 7) as f64, if lit { C::STEEL4 } else { C::STEEL2 });
+/// a desk out of the closet, and standing where it was let go while its folder is picked: the cabinet with a blank
+/// plate, its screen dark, in its machine's paint `p` (draw_desk draws it once it is a desk); x0, y as a desk's
+pub fn draw_blank_desk(ctx: &mut Ctx, x0: i32, y: i32, p: &Paint) {
+    let (cab, sx, sy) = (26, x0 + 2, y - 32);
+    slab(ctx, x0, y - 15, cab, 4, 11, p);
+    plate(ctx, x0 + 2, y - 9, cab - 4, false, p);
+    rect(ctx, sx + 2, sy + 2, 18, 11, css("#10141f"));
+    put_named(ctx, "monitor", sx, sy);
 }
 
 /// what the reception's screen shows, for an office manager who is a session
