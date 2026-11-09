@@ -57,8 +57,7 @@ message is the log. When something goes, take it out here. Keep the file under a
   `BURROW_SHOT=<png>`, `BURROW_TEST_JS` (a window opens for a few seconds).
 - burrow's own state, `~/.config/burrow/`: `room.json` (layout, furniture, desks kept, names, width, you,
   settings, paint, pair, roles, managers (Linda's), awake; `v` is its migration number, `furnish` in server.py, now
-  14), `digest.json` (the notes), `office/<name>/` (Susan's and Joan's sessions from before the roles: see Office
-  managers). Uploads in `~/.cache/burrow/drop`.
+  15), `digest.json` (the notes). Uploads in `~/.cache/burrow/drop`.
 
 ## Claude Code, as burrow uses it (all verified on 2.1.30x–2.1.312)
 
@@ -242,8 +241,8 @@ message is the log. When something goes, take it out here. Keep the file under a
 - **The booth**: a bot let go in it stands inside; five seconds of the booth's own animation (the door shuts, a
   light rises, the bot dissolves feet first); a click on the booth or the bot runs it back, carrying it out undoes;
   then `claude stop` + `claude rm`. Never a countdown sign.
-- **Hardcore** (a setting): the booth is a gun closet. A bot dropped on it, a burnt desk's bots, what an office
-  manager is asked to remove: condemned. An office manager, or you, takes a gun and shoots. While she fetches the
+- **Hardcore** (a setting): the booth is a gun closet. A bot dropped on it, a burnt desk's bots: condemned. An
+  office manager (or Linda), or you, takes a gun and shoots. While she fetches the
   gun it is only taken aback (a start, then it stands watching her, and starts at every shot); it panics once the gun
   comes its way (she walks over to it; you in the first person), and freezes when aimed at. The remains (its body in parts, cogs, oil) are the undo: a click puts it back
   together. Idle bots sweep the pieces; the last one gone, the session is deleted (rust after 30 s). Fear grows with
@@ -257,6 +256,8 @@ message is the log. When something goes, take it out here. Keep the file under a
   person their shots are Doom's damage (`room.incoming`, fps.js `takeShot`), you can shoot back, and dead the view
   shows YOU DIED and a click respawns both. All of it is the room's own: no session is touched (except a mutineer you
   shoot, as any bot).
+- A session that goes from `--all` by other hands (`claude rm` in a terminal, a floor manager's): its bot walks into
+  the booth and dissolves there, no undo (it is gone already); in hardcore it leaves by its machine's door.
 - The fire takes furniture and desks, not bots (a bot at the fire warms its hands). A bot that is to go loses its
   tile at once.
 - In the first person a shot that finds no bot hits the furniture in the line of fire, at any height (Doom aims up and
@@ -268,33 +269,31 @@ message is the log. When something goes, take it out here. Keep the file under a
 ## Office managers
 
 - The office manager is a role a desk has, not a figure of its own (his words: "any of the desks could change in
-  your desk and behaviour", not "the 'hardcoded' floor manager"): room.json `roles`, `{unit: {style, brief, told}}`.
-  Given by the reception out of the closet dropped on a desk, or RECEPTION in the desk's panel (taken away there,
-  asked twice). The desk is a counter then (`d.role`: a panel behind on two posts, a bell; in 3d too) and kept; its
-  bots keep their names, looks and history, sit behind it (`f.duty`: no breaks, games or mutiny; they hunt and
-  sweep, one sweeper at a time) and are the office managers. Styles (`STYLES`), each a preset brief the panel edits:
-  ON CALL (acts when asked) and ROUNDS (`/loop 30m` in its session, the rounds in its conversation).
-- Nothing goes into the project folder. A session burrow starts there gets the office manual (`MANUAL`, the brief
-  in it) as `--append-system-prompt`, which Claude Code keeps in the record's `respawnFlags` (told `always`); one
-  running already gets `TOLD` and the manual typed in (`tell_roles`: once a conversation, `told[id]` = its session
-  id, so again after a /clear; only while idle, else after its turn; tried again after two minutes). The role taken
-  away types `UNTOLD`; ROUNDS to ON CALL `STOP_ROUNDS`, the other way the `/loop`. A brief edited later is not
-  typed: the manual says `/api/office` (`receptions`) has it as it is now.
-- `/api/office` (GET the office, POST remove | desk | start | say) is on this Mac's port. A reception on another
-  machine reaches it through a reverse tunnel kept while that machine has one (`tunnel_tick`: `ssh -N -R
-  <PORT>:127.0.0.1:<office port>`, its own connection, a shell watchdog that ends it once the server's pid is gone,
-  log `~/.cache/burrow/tunnel-<id>.log`) onto a second listener (`Office`) that answers `/api/office` and nothing
-  else, never to a page: whatever runs on that machine can reach the tunnel's end.
+  your desk and behaviour", not "the 'hardcoded' floor manager"): room.json `roles`, `{unit: {told}}`. Given by the
+  reception out of the closet dropped on a desk, or RECEPTION in the desk's panel (taken away there, asked twice).
+  There are two kinds of desk: a desk, and a reception, which looks exactly like the old receptions and has nothing
+  more (`d.role`: no cabinet, no +; a panel behind on two posts, the screen, its name on the front, a bell; as wide as
+  its seats; in 3d too, in its machine's paint). It is kept; its bots keep their names, looks and history, sit behind
+  it (`f.duty`: no breaks, games or mutiny; they hunt in hardcore and sweep, one sweeper at a time) and are the office
+  managers. The plate: the desk's panel; the counter: the session behind that stretch of it (`counterSeats`).
+- **Agents never talk to burrow** (his rule, 2026-11-09): burrow only watches Claude Code and animates what it sees.
+  One source of truth: no API for agents, no tunnel, no mailbox (`/api/office` and the reverse tunnel are gone). A
+  floor manager starts a bot with `claude --bg`, removes one with `claude stop` + `claude rm` (the room sees it gone:
+  the booth, see Removing a bot), messages one with SendMessage (a beam), asks you with AskUserQuestion (hand up).
+- Its brief is `BRIEF.md` in its own folder, the one thing of burrow's there: you write it in the desk's panel
+  (`/api/file` over burrow's own ssh, saved as you type, read again on a conflict), it reads it (the manual says so,
+  and again before each errand). ON CALL and ROUNDS (`BRIEFS`, from `/api/role {}`) put one to start from in it. No
+  BRIEF.md: it acts when asked.
+- The office manual (`MANUAL`): a session burrow starts at the desk gets it as `--append-system-prompt`, which Claude
+  Code keeps in the record's `respawnFlags` (told `always`); one running already gets `TOLD` and the manual typed in
+  (`tell_roles`: once a conversation, `told[id]` = its session id, so again after a /clear; only while idle, else
+  after its turn; tried again after two minutes). The role taken away types `UNTOLD`.
 - **Linda**, the notes (Stijn's), is a room feature, not a role: the reception put on the floor (one Linda), no
   session; `claude -p` (`BURROW_DIGEST_MODEL`, default claude-sonnet-5-5) writes notes on each session when it leaves
   busy, starts waiting or goes over. Drawn at her counter, shot like any bot (it stands empty until a click hires her
   again). A click: the notes tile: Needs you, Working, Waiting, Idle; each open decision with Explain and Send
   (`deliver`). A tile at the screen's resolution (system sans), not a 16-bit panel: "the 16 bit room is perfect for
   an overview, notes should help the user really understand in depth what is happening".
-- A removal an office manager is asked for goes through the room: it walks the bot to the booth, or shoots it in
-  hardcore; one you rescue is kept. Nothing is cleared out on its own.
-- v14 made Susan and Joan (receptions with sessions of their own in `office/<name>`, `MANAGERS`, gone) reception
-  desks there, their sessions untouched. Whether those sessions and folders go is his call, not a session's.
 
 ## Tiles, terminals, the view
 

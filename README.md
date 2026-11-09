@@ -58,8 +58,8 @@ terminal, or type at the operator's line (`help`, `ls`, `jack <agent>`, `load <p
 
 Any desk can be the **reception**: drop the reception from the closet on it, or switch it on in the desk's panel.
 It turns into a counter, and the bot behind it, still itself, is the office manager as well: it knows the office,
-you ask it anything and it does it in the room. On call, or on a round every half hour; its brief is yours to
-edit. Put the reception on the floor instead and **Linda** sits there: she keeps notes on every session and what
+you ask it anything and it does it with Claude Code, which the room shows. On call, or on a round every half
+hour: its brief is a BRIEF.md in its folder, yours to write in the desk's panel. Put the reception on the floor instead and **Linda** sits there: she keeps notes on every session and what
 it needs from you, and you answer it right there.
 
 <p><img src="docs/closet.png" width="49%" alt="the closet"> <img src="docs/limits.png" width="49%" alt="the limits"></p>

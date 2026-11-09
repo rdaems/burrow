@@ -400,8 +400,8 @@ function startRoom(cv, app) {
     const units = s.desks.map((d) => {
       const n = sitters(bots, d, gone).length, label = deskLabel(d);
       const trees = [...new Set(sitters(bots, d, gone).map((b) => b.tree).filter(Boolean))];
-      const cab = Math.max(tinyW(label) + 6, 22, trees.length ? 26 + trees.length * LAP : 0), role = (s.roles || {})[d.unit] || null;
-      return { key: "u:" + d.unit, d, label, trees, cab, role, w: role ? cab + 12 + Math.max(n, 1) * SEAT : n ? cab + 4 + n * SEAT : cab };   // a chair a bot; none, and no desktop either, without one. A reception's counter stays, and has a bell at its end
+      const role = (s.roles || {})[d.unit] || null, cab = role ? 0 : Math.max(tinyW(label) + 6, 22, trees.length ? 26 + trees.length * LAP : 0);
+      return { key: "u:" + d.unit, d, label, trees: role ? [] : trees, cab, role, w: role ? 46 + Math.max(0, n - 1) * SEAT : n ? cab + 4 + n * SEAT : cab };   // a chair a bot; none, and no desktop either, without one. A reception is its counter only (drawReception)
     });
     const where = (key, u) => {
       if (moving && moving.key === key) return moving.at;
@@ -449,7 +449,7 @@ function startRoom(cv, app) {
     const one = (kind) => (by[kind] || [])[0] || null, all = (kind) => by[kind] || [];
     const desks = units.map((u) => {
       const [x, y] = u.at, mine = sitters(bots, u.d, gone);
-      const seat = (k) => x + u.cab + 4 + SEAT / 2 + k * SEAT;
+      const seat = (k) => (u.role ? x + 27 : x + u.cab + 4 + SEAT / 2) + k * SEAT;
       return { key: u.key, ...u.d, label: u.label, trees: u.trees, x0: x, w: u.w, cab: u.cab, y, color: projectColor(u.d.unit), role: u.role,
         sy: u.role ? y - 5 : y, seats: mine.map((b, k) => [b.id, seat(k), b.tree]), at: u.at, u };   // (sy: where they sit; at a reception, behind its counter)
     });
@@ -487,7 +487,7 @@ function startRoom(cv, app) {
   // ---- everyone: what each bot is doing
   let everyone = null;
   function world() {
-    if (!everyone) everyone = { condemned: new Map(), razed: new Set(), hunt: null, folk: new Map(), meeting: null, lastMeeting: -60, board: [], pong: { t: 0, from: 0 }, doorAt: {}, stopped: new Map(), flare: 0, sparks: 0, boothFlash: null, flash: null, shots: [], spared: new Set(), clean: null, cleanRest: 0, print: 0, burning: [], stats: new Map(), meetings: 0,
+    if (!everyone) everyone = { condemned: new Map(), razed: new Set(), hunt: null, folk: new Map(), meeting: null, lastMeeting: -60, board: [], pong: { t: 0, from: 0 }, doorAt: {}, stopped: new Map(), flare: 0, sparks: 0, boothFlash: null, flash: null, shots: [], spared: new Set(), print: 0, burning: [], stats: new Map(), meetings: 0,
       remains: new Map(), riseAt: new Map(), sway: new Map(), ball: null, mugs: new Map(),
       beams: [], hums: new Map(), T: 0, born: performance.now() };
     return everyone;
@@ -637,13 +637,13 @@ function startRoom(cv, app) {
       f.wasOpen = f.open;
       const meet = !duty && f.open && !work && !f.sent && app.open() === b.id && !fresh.has(b.id);
       if (meet && f.act.kind !== "meet" && !DOOMED.has(f.act.kind)) { end(f); f.act = { kind: "meet" }; }
-      else if ((f.open || duty) && !work && !meet && f.act.kind !== "desk" && !DOOMED.has(f.act.kind) && !(duty && ["hunt", "clean", "escort", "mutiny"].includes(f.act.kind))) { end(f); f.act = { kind: "desk" }; }
+      else if ((f.open || duty) && !work && !meet && f.act.kind !== "desk" && !DOOMED.has(f.act.kind) && !(duty && ["hunt", "mutiny"].includes(f.act.kind))) { end(f); f.act = { kind: "desk" }; }
       if (!f.open && !work && !duty && ((f.act.kind === "desk" && f.sat) || f.act.kind === "meet")) f.act = { kind: "stand", left: 0.5 };
       if (f.reply && performance.now() > f.reply && you && you.chat < 1.6) { f.reply = 0; if (f.act.kind === "meet") f.chat = Math.max(f.chat, 1.1); }   // its answer while you pause
       if (work !== f.work) {
         f.work = work;
         // to work, whatever it was doing (a bot by the door stays)
-        if (work && !DOOMED.has(f.act.kind) && !(duty && (f.hunt || f.clean))) { end(f); f.act = { kind: "desk" }; }
+        if (work && !DOOMED.has(f.act.kind) && !(duty && f.hunt)) { end(f); f.act = { kind: "desk" }; }
         if (!work && !duty && f.act.kind === "desk") f.act = { kind: "stand", left: 0.5 + (fnv(b.id) % 20) / 10 };
       }
     }
@@ -692,20 +692,10 @@ function startRoom(cv, app) {
   // each the bot it is (`duty`)
   const boothOf = (L, f) => L.managers.find((m) => m.key === (f.b && f.b.booth)) || null;
   const managerSeat = (m) => m ? { x: m.x + 27, y: m.y - 5, on: m.key } : { x: W / 2, y: H / 2 };
-  // on duty at a reception desk: off to the booth with one the office was asked to remove (one at a time across the
-  // receptions: `w.cleaner`), and in hardcore the gun for the condemned (each takes its own); else thinkOne, at its desk
+  // on duty at a reception desk: in hardcore the gun for the condemned (each takes its own); else thinkOne, at its desk
   function dutyStep(w, f, L, dt) {
-    if (DOOMED.has(f.act.kind) || f.act.kind === "escort") return false;   // (itself on the way out)
-    if (huntStep(w, f, L, dt) || cleaning(w, f, L, dt)) return true;
-    if (f.act.kind === "clean") { f.act = { kind: "desk" }; f.arms = "down"; }
-    return false;
-  }
-  function cleaning(w, f, L, dt) {             // (one of them at a time sees them out: whoever got there first)
-    const c = w.cleaner && w.folk.get(w.cleaner);
-    if (c && c !== f && c.clean && !c.leaving && !c.frozen) return false;
-    if (!cleanStep(w, f, L, dt)) return false;
-    w.cleaner = f.id;
-    return true;
+    if (DOOMED.has(f.act.kind)) return false;   // (itself on the way out)
+    return huntStep(w, f, L, dt);
   }
   // a bot let go of from here (its desk burnt, or ✕✕ in the completed list) is not just deleted: it walks to
   // the booth and waits in line, then its five seconds inside as for one put in by hand; in hardcore it stands
@@ -719,11 +709,9 @@ function startRoom(cv, app) {
   const BOOTH = 5;
   const boothT = (f) => (f && f.act.kind === "doom" ? Math.max(0, Math.min(BOOTH, BOOTH - f.act.left)) : -1);
   const boothShut = (t) => Math.min(1, t / 0.4), boothRise = (t) => Math.max(0, Math.min(1, (t - 0.6) / 3.4)), boothGlow = (t) => Math.max(0, Math.min(1, (t - 0.3) / 3.9));
-  // kept from them (taken from her on the way, out of the booth, put back together): they leave it alone, and if
-  // an office manager's session asked for it to go, it is told (the server's `kept`)
+  // kept from them (out of the booth, put back together): they leave it alone
   function spare(w, id) {
     w.spared.add(id);
-    if (((app.state() || {}).removing || []).includes(id)) app.act({ kind: "kept", id });
   }
   // one that is to go lets go of its terminal at once (the booth or the gun take a while; kept, it stays closed).
   // After this frame: closing a tile draws the room, and this may be in the middle of thinking
@@ -801,57 +789,13 @@ function startRoom(cv, app) {
     f.hunt = null; f.carry = null; f.act = rest();
     return false;
   }
-  // clearing out (app.cleanup(): what a reception's session was asked to remove; never one you rescued), one at a
-  // time. The bot at the reception (or Linda) fetches it and walks it to the booth, a step behind, where its five
-  // seconds run as for any bot put in. Hardcore: it is condemned where it stands (hands up) and shot (huntStep).
-  // Taking one from her, or its undo, spares it for good. A pause between them, so it can be watched
-  function cleanStep(w, f, L, dt) {
-    const cu = app.cleanup(), bo = L.booths[0];
-    const next = () => cu.ids.find((id) => { const g = w.folk.get(id); return id !== f.id && g && !w.spared.has(id) && !g.held && !DOOMED.has(g.act.kind) && g.act.kind !== "escort"; });
-    let c = f.clean;
-    const finish = (pause) => {
-      const g = c && w.folk.get(c.id);
-      if (g && g.act.kind === "escort") g.act = rest();
-      f.clean = null; f.cleanRest = pause;
-      return false;
-    };
-    if (!cu.on || !bo || (c && cu.hardcore)) return c ? finish(5) : false;
-    if (!c) {
-      if ((f.cleanRest = (f.cleanRest || 0) - dt) > 0) return false;
-      const id = next();
-      if (!id) return false;
-      if (cu.hardcore) { condemn([id]); f.cleanRest = 6; return false; }   // hands up; the shooting is huntStep's
-      c = f.clean = { id, phase: "fetch", t: 0 };
-      f.carry = null;                        // her notes stay at her desk
-    }
-    const g = w.folk.get(c.id), front = { x: bo.x + 14, y: bo.y, on: bo.key };
-    f.sat = false; f.act = { kind: "clean" };
-    switch (c.phase) {
-      case "fetch":                          // to the bot
-        if (!g || g.held || !cu.ids.includes(c.id)) return finish(3);
-        if (walk(f, { x: g.x + 10, y: g.y }, 26, dt)) { f.dir = -1; g.act = { kind: "escort", by: f.id }; unopen(g.id); c.phase = "walk"; }
-        return true;
-      case "walk":                           // to the booth, the bot behind her
-        if (!g || g.held || g.act.kind !== "escort") { spare(w, c.id); return finish(3); }
-        if (walk(f, front, 22, dt)) { f.dir = -1; f.legs = "stand"; g.act = { kind: "doom", at: bo.key, left: BOOTH }; c.phase = "booth"; }
-        return true;
-      case "booth":                          // beside it while its seconds run
-        if (!walk(f, front, 22, dt)) return true;
-        f.legs = "stand"; f.dir = -1; f.arms = "down";
-        if (!g) return finish(8);
-        if (g.act.kind !== "doom") { spare(w, c.id); return finish(5); }
-        return true;
-    }
-    return finish(5);
-  }
-  // Linda (the notes) walks over to the bot she writes up, and back to her reception; she too walks a bot to the
-  // booth that is to go, and in hardcore takes a gun for the condemned
+  // Linda (the notes) walks over to the bot she writes up, and back to her reception; in hardcore she takes a gun
+  // for the condemned
   function thinkManager(w, f, L, dt) {
     const dg = app.digest(), v = 30, seat = managerSeat(boothOf(L, f));
     f.busy = false; f.waiting = false; f.on = null;
     if (huntStep(w, f, L, dt)) return;
     const wr = dg && dg.on ? dg.writing || dg.explaining : null;   // writing notes, or explaining a decision
-    if ((f.clean || !wr) && cleaning(w, f, L, dt)) return;
     let to = null, look = null;
     if (wr && wr.startsWith("u:")) {
       const d = L.desks.find((x) => x.unit === wr.slice(2));
@@ -932,7 +876,7 @@ function startRoom(cv, app) {
         // on you (the bubble is yours while you type)
         const g = folk.get(act.to), gs = L.seat(act.to);
         if (!g) { f.act = rest(); break; }
-        if (DOOMED.has(g.act.kind) || g.act.kind === "escort") { f.legs = "stand"; f.arms = "down"; f.dir = g.x < f.x ? -1 : 1; break; }   // it is to go (its session still open): you watch, where you are
+        if (DOOMED.has(g.act.kind)) { f.legs = "stand"; f.arms = "down"; f.dir = g.x < f.x ? -1 : 1; break; }   // it is to go (its session still open): you watch, where you are
         const at = gs || g;
         const mb = g.staff && boothOf(L, g), cd = !mb && g.duty && L.counterOf(g.id);
         const met = g.act.kind === "meet" && g.act.side ? g.act : null;   // it comes to meet you: halfway, facing it
@@ -1316,12 +1260,6 @@ function startRoom(cv, app) {
         }
         break;
       }
-      case "escort": {                       // walked to the booth by an office manager, a step behind her
-        const m = folk.get(act.by);
-        if (!m) { f.act = rest(); break; }
-        if (walk(f, { x: m.x - 9 * (m.dir || -1), y: m.y }, 24, dt)) { f.legs = "stand"; f.dir = m.dir || -1; f.arms = "down"; }
-        break;
-      }
       case "neuralyze": {
         // put to the neuralyzer: it steps up, the flash (`/clear` in its session: a new conversation), and
         // it stands there dazed a moment
@@ -1534,15 +1472,20 @@ function startRoom(cv, app) {
     if (Object.keys(L.placed).length) app.act({ kind: "layout", layout: { ...(s.layout || {}), ...L.placed }, moved: L.placed });
     s.layout = { ...(s.layout || {}), ...L.placed };
 
-    // keep a figure per bot; one that turns up later comes in through its machine's door, one that is
-    // gone from the list (deleted elsewhere) walks out of it
+    // keep a figure per bot; one that turns up later comes in through its machine's door. One gone from the list
+    // (`claude rm`: by a floor manager, in agent view, anywhere) walks into the booth and goes as one put there does,
+    // without the undo (it is gone already); with no booth, or the gun closet of hardcore, out by its machine's door
     const ids = new Set(bots.map((b) => b.id)), you ={ id: "you", name: (s.you && s.you.name) || "you", seed: s.you && s.you.seed, color: s.you && s.you.color, human: true, m: "" };
     ids.add("you");
     // Linda at her reception (thinkManager)
     const mgrs = L.managers.map((mb) => (s.managers || []).find((M) => M.key === mb.key)).filter((M) => M && !M.vacant).map((M) => ({ id: "mgr:" + M.key, booth: M.key, name: M.name, seed: M.seed,
       color: M.color, style: "notes", human: false, staff: true, m: "" }));
     for (const g of mgrs) ids.add(g.id);
-    for (const f of w.folk.values()) if (!ids.has(f.id) && !f.leaving) { f.leaving = true; f.held = false; f.lying = false; f.sat = false; f.legs = "stand"; }
+    const bo0 = !hardcore() && L.booths[0];
+    for (const f of w.folk.values()) if (!ids.has(f.id) && !f.leaving) {
+      f.leaving = true; f.held = false; f.lying = false; f.sat = false; f.legs = "stand";
+      if (bo0 && f.b && !f.b.human && !f.b.staff) f.into = f.act.kind === "doom" ? f.act.at : bo0.key;
+    }
     for (const [id, t] of w.stopped) if (!ids.has(id) || performance.now() - t > 30000) w.stopped.delete(id);
     const late = performance.now() - w.born > 3000;
     for (const b of [...bots, you, ...mgrs]) {
@@ -1561,8 +1504,20 @@ function startRoom(cv, app) {
     if (tickDt > 0) {
       w.T += tickDt; think(w, bots, L, tickDt, usage, s.chess);
       for (const f of w.folk.values()) {
-        const m = (f.b && f.b.m) || "";
-        if (f.leaving && walk(f, { x: doorX(m), y: WALL + 1 }, 30, tickDt)) { sfx("door", f.x); w.folk.delete(f.id); w.doorAt[m] = performance.now(); }
+        if (!f.leaving) continue;
+        const m = (f.b && f.b.m) || "", bo = f.into && L.booths.find((p) => p.key === f.into);
+        if (!bo) { if (walk(f, { x: doorX(m), y: WALL + 1 }, 30, tickDt)) { sfx("door", f.x); w.folk.delete(f.id); w.doorAt[m] = performance.now(); } continue; }
+        if (f.act.kind !== "doom") {          // to the booth (waiting in front while another goes), then in
+          const taken = [...w.folk.values()].some((g) => g !== f && g.act.kind === "doom" && g.act.at === bo.key);
+          if (walk(f, { x: bo.x, y: bo.y + 4, on: bo.key }, 30, tickDt) && !taken) {
+            f.act = { kind: "doom", at: bo.key, left: BOOTH };
+            if (!w.hums.has(f.id)) w.hums.set(f.id, sfx("booth", bo.x));
+          }
+          continue;
+        }
+        f.act.gone = true; f.act.back = false;   // inside: the door shuts, the light rises, it is gone
+        f.x = bo.x; f.y = bo.y - 3; f.on = bo.key; f.dir = -1; f.arms = "down"; f.legs = "stand";
+        if ((f.act.left -= tickDt) <= 0) { w.boothFlash = { key: bo.key, t0: performance.now() }; w.hums.delete(f.id); sfx("poof", bo.x); w.folk.delete(f.id); }
       }
       tickDt = 0;
     }
@@ -1625,8 +1580,11 @@ function startRoom(cv, app) {
     // does. The pointer on either lights up both (and its session), and a click on either opens it
     if (hoverId) hl.add(hoverId);
     let seatHover = null;
-    if (!moving && !held) for (const d of L.desks) for (const [id, x] of d.seats) if (over(x - 3, d.y - 16, x + 9, d.y + 1)) seatHover = { id, x, y: d.y };
+    if (!moving && !held) for (const d of L.desks) if (!d.role) for (const [id, x] of d.seats) if (over(x - 3, d.y - 16, x + 9, d.y + 1)) seatHover = { id, x, y: d.y };
     if (seatHover) hl.add(seatHover.id);
+    if (!moving && !held) for (const d of L.desks) if (d.role && !cutOff(d.m) && !over(...plateOf(d))) {   // (a reception's: its stretch of the counter, before they are drawn)
+      for (const [id, , a, z] of counterSeats(d, w)) if (over(a, d.y - 30, z, d.y)) hl.add(id);
+    }
 
     // flat on the floor: the mats rolled out for a nap, the ping-pong rug
     for (const f of w.folk.values()) if (f.act.kind === "sleep" && f.act.there && f.act.at) drawMat(ctx, f.act.at);
@@ -1660,8 +1618,8 @@ function startRoom(cv, app) {
       const gw = 22 + d.trees.length * LAP;     // what of it is solid: its screen (and laptops), the cabinet, the desktop (a reception's counter)
       const gold = !danger(d.key) && !!carrying && carrying.desk === d.unit;   // the reception carried out of the closet: let go, this desk is it
       items.push([danger(d.key) ? 1e9 : d.y - 1, () => outlined(ctx, foot(d.key, d.at, d.u), danger(d.key) || gold, (c) => drawDesk(c, d, w, T, hl), gold ? GOLD : RED, tintOf(d.key)),
-        [[sc.sx, sc.sy, sc.sx + gw, sc.sy + 18], [d.x0, d.y - 15, d.x0 + d.cab, d.y + 1], d.role ? [d.x0 + d.cab - 2, d.y - 16, d.x0 + d.w, d.y] : [d.x0 + d.cab - 2, d.y - 12, d.x0 + d.w, d.y - 3]]]);
-      if (d.role) items.push([d.y - 30, () => drawCounterBack(ctx, d)]);   // behind whoever sits there
+        d.role ? [[d.x0, d.y - 30, d.x0 + d.w, d.y]] : [[sc.sx, sc.sy, sc.sx + gw, sc.sy + 18], [d.x0, d.y - 15, d.x0 + d.cab, d.y + 1], [d.x0 + d.cab - 2, d.y - 12, d.x0 + d.w, d.y - 3]]]);
+      if (d.role) items.push([d.y - 30, () => drawReception(ctx, { x: d.x0, y: d.y }, { w: d.w, p: paintOf(d.m) }, false)]);   // its panel, behind whoever sits there
       else for (const [id, x] of d.seats) items.push([d.y - 0.5, () => drawChair(ctx, x, d.y, hl.has(id))]);
     }
     // every piece: outlined under the pointer, like a desk's chairs; what it does, on top of that. Held over
@@ -1746,7 +1704,7 @@ function startRoom(cv, app) {
       // a bot in it: the whole of its five seconds a click on the booth (or on the bot) takes it back out
       const inside = [...w.folk.values()].find((f) => f.act.kind === "doom" && f.act.at === bo.key && f.b && !f.gone), t = boothT(inside);
       const fl = w.boothFlash && w.boothFlash.key === bo.key ? (performance.now() - w.boothFlash.t0) / 1200 : -1, flagged = !!boothUnder && boothUnder.key === bo.key;
-      const h = !!inside && !inside.act.back && hot(bo.x - 9, bo.y - 32, bo.x + 9, bo.y + 2, { kind: "undo", id: inside.id });
+      const h = !!inside && !inside.act.back && !inside.act.gone && hot(bo.x - 9, bo.y - 32, bo.x + 9, bo.y + 2, { kind: "undo", id: inside.id });
       items.push([bo.y - 3.5, () => outlined(ctx, foot("booth", [bo.x, bo.y]), danger(bo.key) || flagged || h, (c) => drawBooth(c, bo, false, t, fl, flagged), danger(bo.key) || flagged ? RED : GOLD, tintOf(bo.key))]);
       items.push([bo.y - 2.5, () => drawBooth(ctx, bo, true, t, fl, flagged)]);
       pics.push({ key: bo.key, kind: "booth", x: bo.x, y: bo.y, fn: (c) => { drawBooth(c, bo, false, t, fl, false); drawBooth(c, bo, true, t, fl, false); } });
@@ -1967,7 +1925,7 @@ function startRoom(cv, app) {
     if (hovered && !moving) {
       const { b, x, y } = hovered, hf = w.folk.get(b.id), doomed = !!hf && hf.act.kind === "doom";
       const dg = app.digest(), wb = b.staff && dg && dg.on && dg.writing && !dg.writing.startsWith("u:") ? (all.find((x) => x.id === dg.writing) || {}).name : null;
-      const hf2 = (b.staff || b.duty) && w.folk.get(b.id), job = hf2 && (hf2.hunt && hf2.hunt.id ? ["after", hf2.hunt.id] : hf2.clean ? ["seeing out", hf2.clean.id] : null), cl = job && w.folk.get(job[1]);
+      const hf2 = (b.staff || b.duty) && w.folk.get(b.id), job = hf2 && hf2.hunt && hf2.hunt.id ? ["after", hf2.hunt.id] : null, cl = job && w.folk.get(job[1]);
       if (cl && cl.b) tip = { text: b.name + " - " + job[0] + " " + cl.b.name, x, y: y - 2 };
       else if (b.staff) tip = { text: b.name + (wb ? " - notes on " + wb : dg && dg.writing ? " - a project's notes" : " - notes"), x, y: y - 2 };
       else if (!doomed) tip = { text: b.name + (b.waiting ? " - needs input" : b.duty ? " - office manager" : ""), x, y: y - 2 };
@@ -2082,7 +2040,7 @@ function startRoom(cv, app) {
     // whose a block or a picture is: the piece's key, the desk's unit (what a shot in the first person hits)
     const whose = (o, t) => o && { ...o, boxes: o.boxes.map((b) => ({ ...b, ...t })), things: o.things.map((x) => (x.bot || x.rem ? x : { ...x, ...t })) };
     // the desks: their cabinet, desktop, screen (and laptops) and chairs, what each screen shows
-    for (const d of L.desks) add(whose(Props3D.desk({ x0: d.x0, y: d.y, w: d.w, cab: d.cab, label: d.label, paint: paintOf(d.m), color: d.color, T, counter: !!d.role,
+    for (const d of L.desks) add(whose(d.role ? Props3D.build({ kind: "manager", key: d.key, x: d.x0, y: d.y, w: d.w, paint: paintOf(d.m), name: d.label, color: d.color, screen: screenOf(d, w, ""), T }) : Props3D.desk({ x0: d.x0, y: d.y, w: d.w, cab: d.cab, label: d.label, paint: paintOf(d.m), color: d.color, T,
       seats: d.seats.map(([id, x, tree]) => ({ x, tree })), mugs: d.seats.filter(([id]) => w.mugs.get(id) > T && w.folk.get(id)).map(([id, x]) => ({ x, color: colorOf(w.folk.get(id).b) })),
       screen: screenOf(d, w, ""), laptops: d.trees.map((t) => screenOf(d, w, t)) }), { desk: d.unit, deskName: d.label }));
     // every piece of furniture with what it shows; the fire's flames (a light of their own), its pit on the floor
@@ -2171,7 +2129,7 @@ function startRoom(cv, app) {
   // break is spent hiding behind the furniture furthest from the gun closet, peeking out (hide), and the ones
   // at work glance over their shoulder now and then. Nobody likes to come and sweep up then
   const FEAR = { kill: 0.25, fade: 240 };
-  const idleBot = (f) => !!f.b && !f.b.human && !f.b.staff && !f.duty && !f.work && !f.held && !f.frozen && !f.leaving && !f.open && !f.lying && !DOOMED.has(f.act.kind) && f.act.kind !== "escort" && f.act.kind !== "mutiny";
+  const idleBot = (f) => !!f.b && !f.b.human && !f.b.staff && !f.duty && !f.work && !f.held && !f.frozen && !f.leaving && !f.open && !f.lying && !DOOMED.has(f.act.kind) && f.act.kind !== "mutiny";
   function flee(f, L, x, y, k) {
     const d = Math.hypot(f.x - x, f.y - y) || 1;
     end(f);
@@ -2645,7 +2603,8 @@ function startRoom(cv, app) {
     const im = body(seedOf(b), colorOf(b), f.held ? "up" : f.arms, f.held ? "walk1" : f.legs, b.human, b.staff, f.red, dressOf(b)), up = im ? im.height - SH : 0;
     // its outline: terracotta while the pointer is on it or on its session, faint while its session is open;
     // held over the fire or at its door (let go and it stops): a red outline and a red flashing wash
-    const lit = hl.has(f.id) || (hovered && hovered.b.id === f.id) || (!hovered && over(x0 + 4, y0, x0 + 18, y + 1));
+    const counter = f.sat && f.legs === "sit" && lastL && lastL.counterOf(f.id);   // (behind a reception's counter: the counter says whose stretch the pointer is on)
+    const lit = hl.has(f.id) || (!counter && ((hovered && hovered.b.id === f.id) || (!hovered && over(x0 + 4, y0, x0 + 18, y + 1))));
     const doomed = f.held && dangerNow, bt = f.held ? -1 : boothT(f);    // in the booth: the booth lights up for it, not the bot
     const ring = f.leaving || bt >= 0 ? null : doomed ? RED : lit ? GOLD : app.opens().includes(f.id) ? OPEN : null;
     const fear = !b.human && !b.staff && !f.held ? (f.act.kind === "condemned" && f.act.panic ? 1 : f.act.kind === "mutiny" ? 0 : world().fear || 0) : 0;   // (one the gun comes for: all of it; a mutineer: none)
@@ -2708,7 +2667,17 @@ function startRoom(cv, app) {
   }
 
   // a unit: the cabinet with the project's name and screen, the long desktop where its bots sit
-  const screenAt = (d) => ({ sx: Math.round(d.x0 + (d.cab - (22 + d.trees.length * LAP)) / 2), sy: d.y - 32 });   // the project's screen on its cabinet
+  // a reception's counter: who sits behind it, each with its stretch of it (halfway to its neighbours), [id, x, from, to];
+  // its name plate on the front, [x0, y0, x1, y1]
+  function counterSeats(d, w) {
+    const sat = d.seats.filter(([id]) => { const g = w.folk.get(id); return g && g.b; });
+    return sat.map(([id, sx], k) => [id, sx, k ? Math.round((sat[k - 1][1] + sx) / 2) : d.x0, k < sat.length - 1 ? Math.round((sx + sat[k + 1][1]) / 2) : d.x0 + d.w]);
+  }
+  function plateOf(d) {
+    const pw = tinyW(d.label.toUpperCase()) + 6, px = d.x0 + Math.round(d.w / 2) - Math.ceil(pw / 2);
+    return [px, d.y - 10, px + pw, d.y - 3];
+  }
+  const screenAt = (d) => (d.role ? { sx: d.x0 + 2, sy: d.y - 28 } : { sx: Math.round(d.x0 + (d.cab - (22 + d.trees.length * LAP)) / 2), sy: d.y - 32 });   // the project's screen on its cabinet (a reception's on its counter)
   function drawDesk(ctx, d, w, T, hl, lit) {
     const { x0, y, w: dw, cab } = d, p = paintOf(d.m);
     // a screen runs only while a bot sits at it typing; dim while one sits there idle; a blinking
@@ -2720,6 +2689,25 @@ function startRoom(cv, app) {
     const shells = app.shells(), shellAt = (dir) => shells.find((s) => s.m === (d.m || "") && s.dir === dir);
     const hs = app.hlShell(), hsAt = (dir) => !!hs && hs.m === (d.m || "") && hs.dir === dir;   // its tile under the pointer
     const cut = cutOff(d.m);
+    if (d.role) {                            // a reception: the counter, as the office's receptions always had it, and no
+      // more (no cabinet, no +): its name on the front (a click: its panel), the screen showing what its first office
+      // manager does (a click on the counter: the session of the one behind it there), the bell; out of reach, snow
+      // and no click
+      const sat = counterSeats(d, w), b = sat.length ? w.folk.get(sat[0][0]).b : null;
+      const screen = !b || b.alive === false ? "off" : b.busy ? "busy" : b.waiting ? "asks" : "on", nm = d.label.toUpperCase();
+      drawReception(ctx, { x: x0, y }, { name: nm, color: d.color, screen, T, w: dw, p }, true);
+      if (cut) paint({ x: x0 + 3, y: y - 27 }, 12, 9, "", d.dir.length);
+      let onCounter = null;
+      if (!cut) for (const [id, sx, a, z] of sat) if (hot(a, y - 30, z, y, { kind: "open", id })) onCounter = [id, sx];
+      const pl = plateOf(d), onPlate = hot(...pl, { kind: "desk", unit: d.unit });
+      if (onPlate) tiny(ctx, nm, pl[0] + 3, y - 9, GOLD);
+      else if (onCounter) {                  // (lit before it was drawn: the counter's stretches)
+        const g = w.folk.get(onCounter[0]).b;
+        tip = { text: g.name + (g.waiting ? " - needs input" : " - office manager"), x: onCounter[1] + 3, y: y - 34 };
+      }
+      else if (cut && !moving && !held && over(x0, y - 30, x0 + dw, y)) tip = { text: "out of reach", x: x0 + dw / 2, y: y - 31 };
+      return;
+    }
     function paint(g, gw, gh, tree, seed) {
       if (cut) {                             // its machine out of reach: no signal, the snow of a set between stations
         const k = Math.floor(T * 8);
@@ -2741,26 +2729,19 @@ function startRoom(cv, app) {
       else if (Math.floor(T * 2) % 2) rect(ctx, g.x + 4, py, 1, 1, C.steel4);
     }
     // the desktop, lower than the cabinet: a leg between each two chairs, a keyboard at each seat; none until the
-    // first bot comes. A reception has a counter instead, high, in front of whoever sits behind it (who faces the
-    // room), panelled, the bell at its end; there whether anyone sits there or not
-    if (d.role) {
-      slab(ctx, x0 + cab - 2, y - 16, dw - cab + 2, 4, 12, p);
-      for (let x = x0 + cab + 6; x < x0 + dw - 3; x += 9) rect(ctx, x, y - 10, 1, 7, p.k);                                   // its panels
-      const bx = x0 + dw - 7;
-      rect(ctx, bx, y - 18, 5, 1, SP.F); rect(ctx, bx + 1, y - 20, 3, 2, SP.y); rect(ctx, bx + 1, y - 20, 1, 1, SP.Y); rect(ctx, bx + 2, y - 21, 1, 1, SP.F);   // the bell
-    } else if (d.seats.length) {
+    // first bot comes
+    if (d.seats.length) {
       slab(ctx, x0 + cab - 2, y - 12, dw - cab + 2, 5, 4, p);
       for (const x of [x0 + cab + 1, ...d.seats.map(([, x]) => x + 11), x0 + dw - 4]) {
         rect(ctx, x, y - 4, 2, 4, p.k); rect(ctx, x, y - 4, 1, 3, p.d); rect(ctx, x, y, 2, 1, SHADOW);
       }
       for (const [, x] of d.seats) { rect(ctx, x - 9, y - 11, 7, 2, SP.F); rect(ctx, x - 8, y - 11, 5, 1, SP.B); }
     }
-    for (const [id, x] of d.seats) {          // a coffee a colleague brought, by the keyboard (on the counter), for a while
+    for (const [id, x] of d.seats) {          // a coffee a colleague brought, by the keyboard, for a while
       const until = w.mugs.get(id), f = w.folk.get(id);
       if (until === undefined) continue;
       if (until < T || !f) { w.mugs.delete(id); continue; }
-      const my = d.role ? y - 18 : y - 14;
-      rect(ctx, x - 13, my, 3, 3, colorOf(f.b)); rect(ctx, x - 11, my + 1, 1, 1, INK);
+      rect(ctx, x - 13, y - 14, 3, 3, colorOf(f.b)); rect(ctx, x - 11, y - 13, 1, 1, INK);
     }
     // the cabinet, the project's name on a plate; a click on the plate opens the desk's panel (its name)
     slab(ctx, x0, y - 15, cab, 4, 11, p);
@@ -2800,12 +2781,6 @@ function startRoom(cv, app) {
   }
   // behind a reception's counter: a post at each end and a dark panel between, as Linda's reception has, framing
   // the heads of whoever sits there
-  function drawCounterBack(ctx, d) {
-    const x0 = d.x0 + d.cab, x1 = d.x0 + d.w - 2, y = d.y, p = paintOf(d.m);
-    rect(ctx, x0 + 2, y - 30, x1 - x0 - 2, 15, "#2b2433"); rect(ctx, x0 + 2, y - 30, x1 - x0 - 2, 1, "#1f1a26");
-    for (let x = x0 + 11; x < x1 - 4; x += 10) rect(ctx, x, y - 29, 1, 14, "#251f2d");
-    for (const px of [x0, x1 - 2]) { rect(ctx, px, y - 31, 2, 16, p.k); rect(ctx, px, y - 31, 1, 15, p.d); }
-  }
   // a name plate on a cabinet's front: seven dots high, for one line of lettering
   function plate(ctx, x, y, w, lit, p = WOOD) {
     rect(ctx, x, y, w, 7, p.k);
@@ -3221,27 +3196,28 @@ function startRoom(cv, app) {
     rect(ctx, x0 + 3, ky, 4, 4, INK); rect(ctx, x0 + 3, ky, 3, 3, SP.r); rect(ctx, x0 + 3, ky, 1, 1, "#ff9a8a");
     rect(ctx, x0 + 2, y0 + h - 2, 1, 1, SP.F); rect(ctx, x0 + wd - 3, y0 + h - 2, 1, 1, SP.F);       // the screws
   }
-  // the reception: an office manager's booth, 46 dots wide. Behind: two posts and a panel. In front, the counter (a
-  // slab), her name on its front on a plate in her colour; on it a bell at the right end and, for one who is
-  // a session, her screen at the left (it runs while a turn runs, its cursor blinks while she asks you, dark while
-  // her process is off); for Linda a stack of notes as high as there are sessions with notes (six at most) and a pen.
-  // `front` draws the counter, which goes over her
+  // the reception: Linda's, or a desk's that is the reception (o.w wide, 46 for one, in its machine's paint o.p).
+  // Behind: two posts and a panel. In front, the counter (a slab), the name on its front on a plate in its colour;
+  // on it a bell at the right end and, for a session, its screen at the left (it runs while a turn runs, its cursor
+  // blinks while it asks you, dark while its process is off); for Linda a stack of notes as high as there are
+  // sessions with notes (six at most) and a pen. `front` draws the counter, which goes over whoever sits behind it
   function drawReception(ctx, m, o, front) {
-    const x = m.x, y = m.y;
+    const x = m.x, y = m.y, wd = o.w || 46, P = o.p || WOOD;
     if (!front) {
-      for (const px of [x + 2, x + 42]) { rect(ctx, px, y - 30, 2, 16, WOOD.k); rect(ctx, px, y - 30, 1, 15, WOOD.d); }                       // the posts
-      rect(ctx, x + 4, y - 30, 38, 15, "#2b2433"); rect(ctx, x + 4, y - 30, 38, 1, "#1f1a26");                                                // the panel
-      for (const px of [x + 13, x + 23, x + 33]) rect(ctx, px, y - 29, 1, 14, "#251f2d");
+      for (const px of [x + 2, x + wd - 4]) { rect(ctx, px, y - 30, 2, 16, P.k); rect(ctx, px, y - 30, 1, 15, P.d); }                     // the posts
+      rect(ctx, x + 4, y - 30, wd - 8, 15, "#2b2433"); rect(ctx, x + 4, y - 30, wd - 8, 1, "#1f1a26");                                    // the panel
+      for (let px = x + 13; px < x + wd - 8; px += 10) rect(ctx, px, y - 29, 1, 14, "#251f2d");
       return;
     }
-    slab(ctx, x, y - 16, 46, 4, 12, WOOD);                                                                                                  // the counter
+    slab(ctx, x, y - 16, wd, 4, 12, P);                                                                                                    // the counter
     const nm = (o.name || "").toUpperCase();
-    if (nm) {                                                                     // her name on its front: a desk's plate, dark, the letters in her colour
-      const tw = tinyW(nm), px = x + 23 - Math.ceil((tw + 6) / 2);
-      plate(ctx, px, y - 10, tw + 6, false, { k: WOOD.k, plate: shade(o.color, 0.26) });
+    if (nm) {                                                                     // the name on its front: a desk's plate, dark, the letters in its colour
+      const tw = tinyW(nm), px = x + Math.round(wd / 2) - Math.ceil((tw + 6) / 2);
+      plate(ctx, px, y - 10, tw + 6, false, { k: P.k, plate: shade(o.color, 0.26) });
       tiny(ctx, nm, px + 3, y - 9, mix(o.color, "#ffffff", 0.35));
-    } else for (const px of [x + 9, x + 18, x + 27, x + 36]) rect(ctx, px, y - 10, 1, 7, WOOD.k);
-    rect(ctx, x + 39, y - 18, 5, 1, SP.F); rect(ctx, x + 40, y - 20, 3, 2, SP.y); rect(ctx, x + 40, y - 20, 1, 1, SP.Y); rect(ctx, x + 41, y - 21, 1, 1, SP.F);   // the bell
+    } else for (let px = x + 9; px < x + wd - 8; px += 9) rect(ctx, px, y - 10, 1, 7, P.k);
+    const bx = x + wd - 7;
+    rect(ctx, bx, y - 18, 5, 1, SP.F); rect(ctx, bx + 1, y - 20, 3, 2, SP.y); rect(ctx, bx + 1, y - 20, 1, 1, SP.Y); rect(ctx, bx + 2, y - 21, 1, 1, SP.F);   // the bell
     if (o.screen) {
       const gx = x + 3, gy = y - 27;
       rect(ctx, gx - 1, gy - 1, 14, 11, SP.F); rect(ctx, gx + 4, gy + 10, 4, 1, SP.F); rect(ctx, gx + 2, gy + 11, 8, 1, SP.F);              // the screen, its stand
@@ -3759,7 +3735,7 @@ function startRoom(cv, app) {
         const home = dh && inRect(g, foot("doghouse", [dh.x, dh.y + 4]));
         g.act = { kind: "shake", left: 0.6, next: home ? { kind: "home", left: rnd(20, 60) } : null };
       }
-    } else if (press && press.action && press.action.kind === "undo") { const f = world().folk.get(press.action.id); if (f && f.act.kind === "doom") f.act.back = true; }   // the booth runs back, it steps out
+    } else if (press && press.action && press.action.kind === "undo") { const f = world().folk.get(press.action.id); if (f && f.act.kind === "doom" && !f.act.gone) f.act.back = true; }   // the booth runs back, it steps out
     else if (press && press.action && press.action.kind === "unshoot") unshoot(press.action.id);
     else if (press && press.action && press.action.kind === "aim") {      // you walk to the gun closet and take a gun; the first person after
       const you = world().folk.get("you"), sh = app.shell();

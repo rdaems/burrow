@@ -64,7 +64,7 @@
           <p class="where"><code class="path"></code> <span class="on"></span></p>
           <ul class="sessions"></ul>
           <div class="row"><button class="btn">RENAME</button><button type="button" class="btn shell">TERMINAL</button><button type="button" class="btn keep" title="it came with its sessions and goes with the last of them; kept, it stays">KEEP</button><button type="button" class="btn role">RECEPTION</button></div>
-          <div class="reception" hidden><div class="row styles"></div><p class="line"></p><textarea class="field brief" rows="8" spellcheck="false" autocomplete="off"></textarea></div>
+          <div class="reception" hidden><p class="line"></p><textarea class="field brief" rows="8" spellcheck="false" autocomplete="off"></textarea><div class="row styles"></div></div>
           <div class="err"></div>
         </form>
         <div id="vClock" class="awake" hidden><p>Keep this computer awake</p><div class="row"></div></div>
@@ -138,12 +138,6 @@ const room = startRoom($("#room"), {
   view: () => viewKind,
   settings: () => (state && state.settings) || {},
   digest: () => digest,
-  // the office clearing out: the sessions a reception's session was asked to remove (/api/office remove: you asked
-  // it); nothing goes on its own
-  cleanup: () => {
-    const cfg = (state && state.settings) || {}, asked = ((state && state.removing) || []).filter((id) => byId(id));
-    return { on: asked.length > 0, hardcore: !!cfg.hardcore, ids: asked };
-  },
   away: () => (blurAt ? (performance.now() - blurAt) / 1000 : 0),
   hl: () => (hoverTile && hoverTile.kind === "bot" ? hoverTile.id : hoverTile && hoverTile.kind === "notes" ? lindaFolk() : null),
   hover: (id) => { for (const t of botTiles()) t.el.classList.toggle("hl", t.id === id); for (const t of notesTiles()) t.el.classList.toggle("hl", !!id && id === lindaFolk()); },
@@ -189,7 +183,6 @@ async function act(a) {
   else if (a.kind === "notes") openNotes(a.shift);
   else if (a.kind === "manager") openManager(a.key, a.shift);
   else if (a.kind === "desk") openDesk(a.unit);
-  else if (a.kind === "kept") api("/api/office", { kept: a.id });   // one she was seeing out, kept: her session is told
   else if (a.kind === "outside") openOutside(a.key);
   else if (a.kind === "pairOpen") openPair(a.key);
   else if (a.kind === "pair" && b) joinPair(a.key, b);
@@ -454,6 +447,7 @@ function openDesk(unit) {
   const d = state && state.desks.find((x) => x.unit === unit);
   if (!d) return;
   saveBrief();                             // (another desk's, being typed)
+  brief = null;                            // (read again: the floor manager may have changed it)
   deskUnit = unit;
   openView("desk");
   const el = $("#vDesk"), m = machine(d.m), folder = d.dir.replace(/\/+$/, "").split("/").pop() || d.dir;
@@ -478,16 +472,17 @@ function openDesk(unit) {
   fillRole(unit);
   inp.focus(); inp.select();
 }
-// The reception: a desk can have the office manager's role (server.py `roles`). RECEPTION switches it on (the desk is
-// kept, its sessions get the office manual) and, pressed in, off again: asked twice, as it types into them. On, its
-// style (a preset of the brief each: on call, rounds) and its brief, saved as it is typed
-let styles = null, roleArmed = 0, briefTimer = null, briefFor = null;
+// The reception: a desk whose session is the office's floor manager (server.py `roles`). RECEPTION switches it on (the
+// desk is kept, its sessions get the office manual) and, pressed in, off again: asked twice, as it types into them. On,
+// its brief: BRIEF.md in its folder, which the floor manager reads; read and written here over burrow's own ssh
+// (/api/file), saved as it is typed. ON CALL and ROUNDS put a brief to start from in it
+let briefs = null, roleArmed = 0, briefTimer = null, brief = null;   // brief: BRIEF.md as read, {unit, m, path, mtime, text}
 async function fillRole(unit) {
   const el = $("#vDesk"), role = (state.roles || {})[unit], bt = el.querySelector(".role"), box = el.querySelector(".reception");
   const armed = role && Date.now() - roleArmed < 3000;
   bt.classList.toggle("on", !!role && !armed); bt.classList.toggle("arm", !!armed);
   bt.textContent = armed ? "SURE? NOT ANY MORE" : "RECEPTION";
-  bt.title = role ? "its sessions are the office's manager as well; again: a normal desk (its sessions are told)" : "make it the office's reception: its sessions the office manager as well (the manual goes to them)";
+  bt.title = role ? "its session is the office's floor manager; again: a normal desk (its session is told)" : "make it the office's reception: its session the floor manager (the manual goes to it)";
   bt.onclick = async () => {
     if (role && !armed) { roleArmed = Date.now(); fillRole(unit); setTimeout(() => viewKind === "desk" && deskUnit === unit && fillRole(unit), 3100); return; }
     saveBrief();
@@ -495,34 +490,37 @@ async function fillRole(unit) {
     const r = await api("/api/role", { unit, on: !role });
     if (r.error) { el.querySelector(".err").textContent = r.error; return; }
     state.roles = { ...(state.roles || {}) };
-    if (role) delete state.roles[unit]; else state.roles[unit] = r.role || { style: "ask", brief: "" };
+    if (role) delete state.roles[unit]; else state.roles[unit] = r.role || {};
     el.querySelector(".keep").hidden = true;
     fillRole(unit);
   };
   box.hidden = !role;
   if (!role) return;
-  if (!styles) styles = (await api("/api/role", {})).styles || [];
-  const ta = el.querySelector(".brief"), st = styles.find((x) => x.key === role.style) || {};
-  el.querySelector(".styles").innerHTML = styles.map((x) => `<button type="button" class="btn${x.key === role.style ? " on" : ""}" data-k="${x.key}">${esc(x.label)}</button>`).join("");
-  el.querySelector(".line").textContent = st.line || "";
-  for (const b of el.querySelectorAll(".styles .btn")) b.onclick = async () => {
-    if (b.dataset.k === role.style) return;
-    saveBrief();
-    const r = await api("/api/role", { unit, style: b.dataset.k });
-    if (r.error) { el.querySelector(".err").textContent = r.error; return; }
-    state.roles = { ...(state.roles || {}), [unit]: r.role };
-    fillRole(unit);
-  };
-  if (briefFor !== unit || document.activeElement !== ta) ta.value = role.brief;
-  briefFor = unit;
+  const d = state.desks.find((x) => x.unit === unit), ta = el.querySelector(".brief");
+  if (!d) return;
+  if (!briefs) briefs = await api("/api/role", {});
+  const path = d.dir.replace(/\/+$/, "") + "/" + (briefs.file || "BRIEF.md");
+  el.querySelector(".line").innerHTML = `<code>${esc(briefs.file || "BRIEF.md")}</code> in its folder: its brief, which it reads`;
+  el.querySelector(".styles").innerHTML = (briefs.briefs || []).map((x) => `<button type="button" class="btn" data-k="${esc(x.key)}" title="put the ${esc(x.label)} brief in it, to start from">${esc(x.label)}</button>`).join("");
+  for (const b of el.querySelectorAll(".styles .btn")) b.onclick = () => { const x = briefs.briefs.find((y) => y.key === b.dataset.k); if (x) { ta.value = x.brief; saveBrief(); } };
   ta.oninput = () => { clearTimeout(briefTimer); briefTimer = setTimeout(saveBrief, 800); };
+  if (brief && brief.unit === unit) return;
+  const mine = brief = { unit, m: d.m || "", path, mtime: null, text: "" };
+  ta.value = "";
+  const r = await api("/api/file", { m: mine.m, path });
+  if (brief !== mine) return;
+  if (r.error) { el.querySelector(".err").textContent = r.error; brief = null; return; }
+  mine.mtime = r.mtime || null; mine.text = r.text || "";
+  ta.value = mine.text;
 }
-function saveBrief() {                     // the brief as typed, to the server (once it has stopped changing, or the panel closes)
-  clearTimeout(briefTimer); briefTimer = null;
-  const ta = $("#vDesk .brief"), u = briefFor, role = u && state && (state.roles || {})[u];
-  if (!role || $("#vDesk .reception").hidden || ta.value.trim() === (role.brief || "").trim()) return;
-  role.brief = ta.value;
-  api("/api/role", { unit: u, brief: ta.value }).then((r) => { if (r.error) note(r.error); else if (r.role) state.roles[u] = r.role; });
+async function saveBrief() {               // BRIEF.md as typed, written there (once it has stopped changing, or the panel closes);
+  clearTimeout(briefTimer); briefTimer = null;   // changed there meanwhile, it is read again
+  const ta = $("#vDesk .brief"), b = brief;
+  if (!b || $("#vDesk .reception").hidden || ta.value === b.text) return;
+  const text = ta.value, r = await api("/api/file", { m: b.m, path: b.path, op: "write", text, mtime: b.mtime });
+  if (r.error) { note(r.error); return; }
+  if (r.conflict) { if (brief === b) brief = null; if (viewKind === "desk" && deskUnit === b.unit) fillRole(b.unit); return; }
+  b.mtime = r.mtime; b.text = text;
 }
 $("#vDesk").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -832,7 +830,7 @@ function carryOut(e, kind, it, m = "") {     // (m: a desk for that machine, fro
     const at = room.place(kind, ev.clientX, ev.clientY, m), desk = room.placedOn();
     if (at && kind === "door") { ask("machine"); machineAt = at; room.pend(at); }   // a door is a machine: which one, then it hangs there
     else if (at && kind === "desk") { deskAt = at; room.pend(at, null, "desk", m); ask("dir", m || undefined); }   // a desk is a folder on a machine: which, then it is one
-    else if (desk && kind === "manager") { const r = await api("/api/role", { unit: desk, on: true }); if (r.error) note(r.error); else openDesk(desk); }   // on a desk: it is the reception (its panel: the style, the brief)
+    else if (desk && kind === "manager") { const r = await api("/api/role", { unit: desk, on: true }); if (r.error) note(r.error); else openDesk(desk); }   // on a desk: it is the reception (its panel: its brief)
     else if (at && kind === "manager") {   // on the floor: Linda's, the notes (one Linda)
       room.pend(at, null, kind);
       const r = await api("/api/manager", { hire: true, at });

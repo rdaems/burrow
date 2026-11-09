@@ -391,25 +391,26 @@ window.Props3D = (() => {
         solid(x - 7, y - 9, x + 7, y);
         break;
       }
-      case "manager": {                          // her reception: a panel behind her on two posts, the counter with her name, her screen, a bell
-        const col = hex(p.color || "#9a74d6");
-        const panel = once("panel" + p.color, () => face(over(plainTex(38, 22, "#2b2433", 0.05), (r) => { for (const dx of [9, 19, 29]) r(dx, 0, 0.4, 22, [34, 28, 42]); r(0, 0, 38, 1, mul(col, 0.5)); })));
-        B(x + 4, y - 16, x + 42, y - 14, 0, 22, M.plain("#2b2433", 0.05), { front: panel });
-        for (const px of [x + 2, x + 42]) B(px, y - 16.5, px + 2, y - 13.5, 0, 23.5, woodD);
-        const name = (p.name || "").toUpperCase(), front = once("counter" + name + p.color, () => face(over(woodTex(46, 12, WOODP.top), (r, t) => {
+      case "manager": {                          // a reception: a panel behind on two posts, the counter with its name, its screen, a bell
+        const col = hex(p.color || "#9a74d6"), wd = p.w || 46, h = wd / 2;   // (a desk that is the reception: as wide as its seats, in its machine's paint)
+        const P = p.paint || WOODP, wo = p.paint ? M.wood(P.top) : wood, woD = p.paint ? M.wood(P.d) : woodD, woHi = p.paint ? M.wood(P.hi, 6) : woodHi;
+        const panel = once("panel" + p.color + wd, () => face(over(plainTex(wd - 8, 22, "#2b2433", 0.05), (r) => { for (let dx = 9; dx < wd - 8; dx += 10) r(dx, 0, 0.4, 22, [34, 28, 42]); r(0, 0, wd - 8, 1, mul(col, 0.5)); })));
+        B(x + 4, y - 16, x + wd - 4, y - 14, 0, 22, M.plain("#2b2433", 0.05), { front: panel });
+        for (const px of [x + 2, x + wd - 4]) B(px, y - 16.5, px + 2, y - 13.5, 0, 23.5, woD);
+        const name = (p.name || "").toUpperCase(), front = once("counter" + name + p.color + wd + P.top, () => face(over(woodTex(wd, 12, P.top), (r, t) => {
           if (!name) return;
           const tw = font ? font.tinyW(name) : name.length * 4, pw = tw * 0.5 + 2;
-          r(23 - pw / 2, 4, pw, 4.2, [40, 30, 36]); r(23 - pw / 2 + 0.4, 4.4, pw - 0.8, 3.4, mul(col, 0.26));
-          t(name, 23 - pw / 2 + 1, 4.9, mix(col, [255, 255, 255], 0.35), 2);
+          r(h - pw / 2, 4, pw, 4.2, [40, 30, 36]); r(h - pw / 2 + 0.4, 4.4, pw - 0.8, 3.4, mul(col, 0.26));
+          t(name, h - pw / 2 + 1, 4.9, mix(col, [255, 255, 255], 0.35), 2);
         })));
-        B(x, y - 5, x + 46, y, 0, 12, wood, { front });
-        B(x - 1, y - 6, x + 47, y + 0.6, 12, 13, woodHi);
+        B(x, y - 5, x + wd, y, 0, 12, wo, { front });
+        B(x - 1, y - 6, x + wd + 1, y + 0.6, 12, 13, woHi);
         if (p.screen) {
           B(x + 3, y - 4.4, x + 15, y - 3.4, 13.8, 22, darkSteel, { front: screenTex(12, 8.2, p.screen === "asks" ? "waits" : p.screen, p.color || "#9a74d6", p.T || 0) });
           B(x + 8, y - 4.6, x + 10, y - 3.2, 13, 13.8, darkSteel);
         } else if (p.notes) B(x + 5, y - 4.5, x + 13, y - 1, 13, 13 + Math.min(6, p.notes) * 0.7, white);
-        B(x + 39, y - 4, x + 43, y - 1, 13, 13.6, M.plain("#c9a43c", 0.04)); B(x + 40.5, y - 3, x + 41.5, y - 2, 13.6, 14.6, M.plain("#e6c65a", 0.04));
-        solid(x, y - 16.5, x + 46, y);
+        B(x + wd - 7, y - 4, x + wd - 3, y - 1, 13, 13.6, M.plain("#c9a43c", 0.04)); B(x + wd - 5.5, y - 3, x + wd - 4.5, y - 2, 13.6, 14.6, M.plain("#e6c65a", 0.04));
+        solid(x, y - 16.5, x + wd, y);
         break;
       }
       case "booth": {
@@ -550,16 +551,7 @@ window.Props3D = (() => {
     })));
     B(x0, y - 12, x0 + cab, y, 0, 11, wd, { front });
     B(x0 - 0.4, y - 12.4, x0 + cab + 0.4, y + 0.4, 11, 12, M.wood(P.hi, 6));
-    if (d.counter) {                           // a reception: a counter whoever sits there is behind (facing the room), a panel on two posts behind them, a bell
-      const tx = x0 + cab, ex = x0 + w;
-      B(tx + 2, y - 16, ex - 2, y - 14, 0, 22, M.plain("#2b2433", 0.05));
-      for (const px of [tx, ex - 2]) B(px, y - 16.5, px + 2, y - 13.5, 0, 23.5, wdk);
-      B(tx, y - 5, ex, y, 0, 12, wd);
-      B(tx - 0.4, y - 5.6, ex + 0.4, y + 0.6, 12, 13, M.wood(P.hi, 6));
-      for (const m of d.mugs || []) B(m.x - 13, y - 4, m.x - 11, y - 2, 13, 15, M.plain(m.color, 0.04));
-      B(ex - 7, y - 4, ex - 3, y - 1, 13, 13.6, M.plain("#c9a43c", 0.04)); B(ex - 5.5, y - 3, ex - 4.5, y - 2, 13.6, 14.6, M.plain("#e6c65a", 0.04));
-      out.solid.push([tx, y - 16.5, ex, y]);
-    } else if (d.seats.length) {
+    if (d.seats.length) {
       const tx = x0 + cab, dw = x0 + w - tx, top = once("desktop" + P.top + dw + d.seats.map((s) => s.x - tx).join() + (d.mugs || []).map((m) => m.x - tx + m.color).join(), () => face(over(woodTex(dw, 7, P.top, 7), (r) => {
         for (const s of d.seats) { r(s.x - 9 - tx, 1.6, 7, 2.2, [63, 55, 64]); for (let k = 0; k < 6; k++) r(s.x - 8.6 - tx + k * 1.1, 2, 0.6, 0.5, [181, 191, 199]); }
         for (const m of d.mugs || []) r(m.x - 13 - tx, 0.6, 2, 2, hex(m.color));

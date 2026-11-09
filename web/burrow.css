@@ -163,7 +163,7 @@ button, input, select { font:inherit; color:inherit; }
 .vform.desk .sessions small { color:var(--steel3); }
 #view .btn.arm { background:#c9473a; color:var(--white); }   /* armed: a second click does it (the role taken away) */
 .vform.desk .reception { margin-top:4px; }
-.vform.desk .reception .line { margin:8px 0 0; color:var(--steel3); }
+.vform.desk .reception .line { margin:8px 0 4px; color:var(--steel3); }
 #view .field.brief { resize:vertical; min-height:120px; white-space:pre-wrap; }
 /* the outside, as big as the pane lets it be (four pixels a dot at most), the duel's line over it, its keys under it */
 #view[data-kind="outside"] { width:min(1068px, calc(100% - 48px)); }
