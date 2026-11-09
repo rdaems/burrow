@@ -161,6 +161,10 @@ button, input, select { font:inherit; color:inherit; }
 .vform.desk .sessions li { padding:3px 0; cursor:pointer; }
 .vform.desk .sessions li:hover b { text-decoration:underline; }
 .vform.desk .sessions small { color:var(--steel3); }
+#view .btn.arm { background:#c9473a; color:var(--white); }   /* armed: a second click does it (the role taken away) */
+.vform.desk .reception { margin-top:4px; }
+.vform.desk .reception .line { margin:8px 0 0; color:var(--steel3); }
+#view .field.brief { resize:vertical; min-height:120px; white-space:pre-wrap; }
 /* the outside, as big as the pane lets it be (four pixels a dot at most), the duel's line over it, its keys under it */
 #view[data-kind="outside"] { width:min(1068px, calc(100% - 48px)); }
 .outside { display:block; margin:0 auto; width:min(100%, calc((100vh - 210px) * 16 / 9)); aspect-ratio:256/144; border:2px solid var(--ink); image-rendering:pixelated; }
@@ -239,20 +243,6 @@ button, input, select { font:inherit; color:inherit; }
 .doors .desk.off { opacity:.35; cursor:default; }   /* out of reach: no desk from there */
 #view .doors .rm.on { background:#c9473a; color:var(--white); }   /* armed: a second click takes the door out */
 .tbar .tapp { margin-left:auto; }
-/* the office managers: a card each in her own colour (--c): a pastel card with a bevel, her figure (three pixels a
-   dot) on a swatch of her colour, her name in it with an ink shadow, what she does in ink */
-.managers p { margin:0 0 10px; }
-.managers .styles { display:flex; flex-direction:column; gap:10px; }
-#view .managers .style { display:flex; gap:16px; align-items:center; text-align:left; padding:10px 14px; color:var(--ink); cursor:pointer; text-shadow:none;
-  background:color-mix(in srgb, var(--c) 28%, #fff6e2); border:2px solid var(--ink);
-  box-shadow:inset 3px 3px 0 color-mix(in srgb, var(--c) 8%, #ffffff), inset -3px -3px 0 color-mix(in srgb, var(--c) 75%, #1a1626); }
-#view .managers .style:hover, #view .managers .style:focus-visible { background:color-mix(in srgb, var(--c) 45%, #fff6e2); outline:none; }
-#view .managers .style:active { box-shadow:inset 3px 3px 0 color-mix(in srgb, var(--c) 75%, #1a1626), inset -3px -3px 0 color-mix(in srgb, var(--c) 8%, #ffffff); }
-.managers .style img { flex:none; width:66px; height:87px; padding:4px 8px; image-rendering:pixelated; border:2px solid var(--ink); background:color-mix(in srgb, var(--c) 65%, #ffffff); }
-#view .managers .style:disabled { cursor:default; filter:saturate(0.35); opacity:0.75; }
-.managers .who { display:flex; flex-direction:column; gap:3px; }
-.managers .who b { color:var(--c); font-size:22px; text-shadow:2px 2px 0 var(--ink); letter-spacing:1px; }
-.managers .who small { color:color-mix(in srgb, var(--c) 55%, #2a2230); font-size:13px; }
 /* the closet: every kind of furniture as it stands in the room (two pixels a dot, as the room), to drag in */
 .closet { display:flex; flex-wrap:wrap; gap:14px 18px; align-items:flex-end; }
 /* the completed list: a row a session, as agent view's Completed group */

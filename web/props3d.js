@@ -550,7 +550,16 @@ window.Props3D = (() => {
     })));
     B(x0, y - 12, x0 + cab, y, 0, 11, wd, { front });
     B(x0 - 0.4, y - 12.4, x0 + cab + 0.4, y + 0.4, 11, 12, M.wood(P.hi, 6));
-    if (d.seats.length) {
+    if (d.counter) {                           // a reception: a counter whoever sits there is behind (facing the room), a panel on two posts behind them, a bell
+      const tx = x0 + cab, ex = x0 + w;
+      B(tx + 2, y - 16, ex - 2, y - 14, 0, 22, M.plain("#2b2433", 0.05));
+      for (const px of [tx, ex - 2]) B(px, y - 16.5, px + 2, y - 13.5, 0, 23.5, wdk);
+      B(tx, y - 5, ex, y, 0, 12, wd);
+      B(tx - 0.4, y - 5.6, ex + 0.4, y + 0.6, 12, 13, M.wood(P.hi, 6));
+      for (const m of d.mugs || []) B(m.x - 13, y - 4, m.x - 11, y - 2, 13, 15, M.plain(m.color, 0.04));
+      B(ex - 7, y - 4, ex - 3, y - 1, 13, 13.6, M.plain("#c9a43c", 0.04)); B(ex - 5.5, y - 3, ex - 4.5, y - 2, 13.6, 14.6, M.plain("#e6c65a", 0.04));
+      out.solid.push([tx, y - 16.5, ex, y]);
+    } else if (d.seats.length) {
       const tx = x0 + cab, dw = x0 + w - tx, top = once("desktop" + P.top + dw + d.seats.map((s) => s.x - tx).join() + (d.mugs || []).map((m) => m.x - tx + m.color).join(), () => face(over(woodTex(dw, 7, P.top, 7), (r) => {
         for (const s of d.seats) { r(s.x - 9 - tx, 1.6, 7, 2.2, [63, 55, 64]); for (let k = 0; k < 6; k++) r(s.x - 8.6 - tx + k * 1.1, 2, 0.6, 0.5, [181, 191, 199]); }
         for (const m of d.mugs || []) r(m.x - 13 - tx, 0.6, 2, 2, hex(m.color));

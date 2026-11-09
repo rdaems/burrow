@@ -56,8 +56,9 @@ message is the log. When something goes, take it out here. Keep the file under a
   path it was built in) builds and installs /Applications/burrow.app, nothing left in target/. Test with `BURROW_PORT`,
   `BURROW_SHOT=<png>`, `BURROW_TEST_JS` (a window opens for a few seconds).
 - burrow's own state, `~/.config/burrow/`: `room.json` (layout, furniture, desks kept, names, width, you,
-  settings, paint, pair, managers, awake; `v` is its migration number, `furnish` in server.py, now 13),
-  `digest.json` (the notes), `office/<name>/` (the office managers' sessions). Uploads in `~/.cache/burrow/drop`.
+  settings, paint, pair, roles, managers (Linda's), awake; `v` is its migration number, `furnish` in server.py, now
+  14), `digest.json` (the notes), `office/<name>/` (Susan's and Joan's sessions from before the roles: see Office
+  managers). Uploads in `~/.cache/burrow/drop`.
 
 ## Claude Code, as burrow uses it (all verified on 2.1.30x–2.1.312)
 
@@ -154,7 +155,7 @@ message is the log. When something goes, take it out here. Keep the file under a
   noise, no keys, no crackle. Synthesised in the browser; Doom's own in the first person.
 - Halloween while a pumpkin (`pumpkin` kind, from the closet) stands in the room and is lit (settings `halloween`; the
   pumpkin is the switch, like the radio): everyone in costume (`dressOf`: a bot's by its seed, a witch's hat, a vampire's
-  cape or a skeleton's suit; you the hat, the office managers the cape; `body()`'s `dress`, the hat makes the picture
+  cape or a skeleton's suit; you the hat, Linda the cape; `body()`'s `dress`, the hat makes the picture
   `HAT` dots taller), cobwebs in the wall's top corners with a spider going up and down. Not in the 3d models yet.
 
 ## Desks
@@ -211,7 +212,8 @@ message is the log. When something goes, take it out here. Keep the file under a
   (rc, yolo, hardcore: a slider and a name a line, a help box under them for the line under the pointer, empty
   once the pointer leaves the panel; hardcore stays vague); pair table = its
   pair room; dog house = the dog; radio = sound; filing cabinet = FILES on the bands; pumpkin = Halloween; matrix (the operator's console, a terminal raining green) = the window jacks into `/matrix` (its `room` comes back); door = the doors' panel; reception =
-  the office manager. Dropped on: the neuralyzer gives an idle bot `/clear`; the booth deletes.
+  Linda's notes. Dropped on: the neuralyzer gives an idle bot `/clear`; the booth deletes; the reception (out of the
+  closet) makes a desk the reception.
 - Whoever is at a piece rides along when it is dragged: a spot at a piece carries its key (`on`), `ride()` moves
   them each frame. One rule for every piece: reuse it, don't add a fix per piece.
 - The easel (kind `board`, the whiteboard it replaced) holds the robots' painting: famous paintings with every
@@ -264,18 +266,34 @@ message is the log. When something goes, take it out here. Keep the file under a
 
 ## Office managers
 
-- The reception (`manager` kind), several, one of each style (`MANAGERS` in server.py): **Susan**, her own
-  `claude --bg` session in `office/Susan`, whose CLAUDE.md burrow writes (the office, `/api/office`: GET the room,
-  POST remove | desk | start | say); **Joan**, the same with `/loop 30m` rounds logged in `rounds.md`; **Linda**,
-  the notes (Stijn's): no session, `claude -p` (`BURROW_DIGEST_MODEL`, default claude-sonnet-5-5) writes notes on
-  each session when it leaves busy, starts waiting or goes over.
-- Her session is not in the room as a bot but she is one: typing at her counter, hand up when her session asks,
-  shot like any bot (then the reception stands empty until a click hires her again). A click opens her terminal,
-  or Linda's notes tile: Needs you, Working, Waiting, Idle; each open decision with Explain and Send (`deliver`).
-  The notes are a tile at the screen's resolution (system sans), not a 16-bit panel: "the 16 bit room is perfect for
+- The office manager is a role a desk has, not a figure of its own (his words: "any of the desks could change in
+  your desk and behaviour", not "the 'hardcoded' floor manager"): room.json `roles`, `{unit: {style, brief, told}}`.
+  Given by the reception out of the closet dropped on a desk, or RECEPTION in the desk's panel (taken away there,
+  asked twice). The desk is a counter then (`d.role`: a panel behind on two posts, a bell; in 3d too) and kept; its
+  bots keep their names, looks and history, sit behind it (`f.duty`: no breaks, games or mutiny; they hunt and
+  sweep, one sweeper at a time) and are the office managers. Styles (`STYLES`), each a preset brief the panel edits:
+  ON CALL (acts when asked) and ROUNDS (`/loop 30m` in its session, the rounds in its conversation).
+- Nothing goes into the project folder. A session burrow starts there gets the office manual (`MANUAL`, the brief
+  in it) as `--append-system-prompt`, which Claude Code keeps in the record's `respawnFlags` (told `always`); one
+  running already gets `TOLD` and the manual typed in (`tell_roles`: once a conversation, `told[id]` = its session
+  id, so again after a /clear; only while idle, else after its turn; tried again after two minutes). The role taken
+  away types `UNTOLD`; ROUNDS to ON CALL `STOP_ROUNDS`, the other way the `/loop`. A brief edited later is not
+  typed: the manual says `/api/office` (`receptions`) has it as it is now.
+- `/api/office` (GET the office, POST remove | desk | start | say) is on this Mac's port. A reception on another
+  machine reaches it through a reverse tunnel kept while that machine has one (`tunnel_tick`: `ssh -N -R
+  <PORT>:127.0.0.1:<office port>`, its own connection, a shell watchdog that ends it once the server's pid is gone,
+  log `~/.cache/burrow/tunnel-<id>.log`) onto a second listener (`Office`) that answers `/api/office` and nothing
+  else, never to a page: whatever runs on that machine can reach the tunnel's end.
+- **Linda**, the notes (Stijn's), is a room feature, not a role: the reception put on the floor (one Linda), no
+  session; `claude -p` (`BURROW_DIGEST_MODEL`, default claude-sonnet-5-5) writes notes on each session when it leaves
+  busy, starts waiting or goes over. Drawn at her counter, shot like any bot (it stands empty until a click hires her
+  again). A click: the notes tile: Needs you, Working, Waiting, Idle; each open decision with Explain and Send
+  (`deliver`). A tile at the screen's resolution (system sans), not a 16-bit panel: "the 16 bit room is perfect for
   an overview, notes should help the user really understand in depth what is happening".
-- A removal she is asked for goes through the room: she walks the bot to the booth, or shoots it in hardcore;
-  one you rescue is kept. Nothing is cleared out on its own.
+- A removal an office manager is asked for goes through the room: it walks the bot to the booth, or shoots it in
+  hardcore; one you rescue is kept. Nothing is cleared out on its own.
+- v14 made Susan and Joan (receptions with sessions of their own in `office/<name>`, `MANAGERS`, gone) reception
+  desks there, their sessions untouched. Whether those sessions and folders go is his call, not a session's.
 
 ## Tiles, terminals, the view
 
@@ -326,8 +344,7 @@ message is the log. When something goes, take it out here. Keep the file under a
 
 - The demo: `BURROW_DEMO=1 BURROW_PORT=<port> python3 server.py` from `web/` (made-up bots and machine "lab";
   nothing saved). `BURROW_DEMO_ROOM=<a copy of room.json>` starts it from his room, `BURROW_DEMO_REAL=demo0005=<id>`
-  puts a real local session behind a demo bot, `BURROW_OFFICE=<dir>` lets it hire a real office manager,
-  `BURROW_WAD=<path>` any WAD. Pick a free port: not 7781, not 7783 (his Chrome keeps a tab there that posts its
+  puts a real local session behind a demo bot, `BURROW_WAD=<path>` any WAD. Pick a free port: not 7781, not 7783 (his Chrome keeps a tab there that posts its
   own layout); check `lsof -nP -iTCP:<port>`.
 - `node web/look.mjs URL W H steps.json`: headless Chrome over CDP. Steps: `wait`, `js`, `click`/`clickTo`,
   `move`/`moveTo`, `drag`/`dragTo` (`hold`, `alt`), `release`/`releaseTo`, `key`, `press`, `cdp` + `params` (e.g.

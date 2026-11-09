@@ -56,11 +56,11 @@ code made of what it is saying and doing, frozen and white when it needs you; cl
 terminal, or type at the operator's line (`help`, `ls`, `jack <agent>`, `load <project>`, `tell <agent> …`,
 `rabbit` for the next one that needs you).
 
-An **office manager** sits at a reception. Pick one when you put it down:
-
-- **Susan** is a Claude Code session that knows the office: ask her anything, she does it in the room.
-- **Joan** is Susan on a round every half hour.
-- **Linda** keeps notes on every session and what it needs from you, and you answer it right there.
+Any desk can be the **reception**: drop the reception from the closet on it, or switch it on in the desk's panel.
+It turns into a counter, and the bot behind it, still itself, is the office manager as well: it knows the office,
+you ask it anything and it does it in the room. On call, or on a round every half hour; its brief is yours to
+edit. Put the reception on the floor instead and **Linda** sits there: she keeps notes on every session and what
+it needs from you, and you answer it right there.
 
 <p><img src="docs/closet.png" width="49%" alt="the closet"> <img src="docs/limits.png" width="49%" alt="the limits"></p>
 

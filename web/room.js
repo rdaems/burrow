@@ -400,8 +400,8 @@ function startRoom(cv, app) {
     const units = s.desks.map((d) => {
       const n = sitters(bots, d, gone).length, label = deskLabel(d);
       const trees = [...new Set(sitters(bots, d, gone).map((b) => b.tree).filter(Boolean))];
-      const cab = Math.max(tinyW(label) + 6, 22, trees.length ? 26 + trees.length * LAP : 0);
-      return { key: "u:" + d.unit, d, label, trees, cab, w: n ? cab + 4 + n * SEAT : cab };   // a chair a bot; none, and no desktop either, without one
+      const cab = Math.max(tinyW(label) + 6, 22, trees.length ? 26 + trees.length * LAP : 0), role = (s.roles || {})[d.unit] || null;
+      return { key: "u:" + d.unit, d, label, trees, cab, role, w: role ? cab + 12 + Math.max(n, 1) * SEAT : n ? cab + 4 + n * SEAT : cab };   // a chair a bot; none, and no desktop either, without one. A reception's counter stays, and has a bell at its end
     });
     const where = (key, u) => {
       if (moving && moving.key === key) return moving.at;
@@ -450,8 +450,8 @@ function startRoom(cv, app) {
     const desks = units.map((u) => {
       const [x, y] = u.at, mine = sitters(bots, u.d, gone);
       const seat = (k) => x + u.cab + 4 + SEAT / 2 + k * SEAT;
-      return { key: u.key, ...u.d, label: u.label, trees: u.trees, x0: x, w: u.w, cab: u.cab, y, color: projectColor(u.d.unit),
-        seats: mine.map((b, k) => [b.id, seat(k), b.tree]), at: u.at, u };
+      return { key: u.key, ...u.d, label: u.label, trees: u.trees, x0: x, w: u.w, cab: u.cab, y, color: projectColor(u.d.unit), role: u.role,
+        sy: u.role ? y - 5 : y, seats: mine.map((b, k) => [b.id, seat(k), b.tree]), at: u.at, u };   // (sy: where they sit; at a reception, behind its counter)
     });
     const b0 = one("board"), c0 = one("clock"), f0 = one("fire"), cl = one("closet"), sw = one("settings");
     const L = {
@@ -478,7 +478,8 @@ function startRoom(cv, app) {
     L.pongSpot = (side) => L.pong && { x: L.pong.x + (side ? 22 : -22), y: L.pong.y + 1, on: L.pong.key };
     L.chessSeat = (side) => L.chess && { x: L.chess.x + (side ? 13 : -13), y: L.chess.y, on: L.chess.key };
     L.meetSeat = (i) => { const s = L.meet && [[-23, 0, 1], [23, 0, -1], [-8, -5, 1], [8, -5, -1]][i]; return s && { x: L.meet.x + s[0], y: L.meet.y + s[1], dir: s[2], on: L.meet.key }; };
-    L.seat = (id) => { for (const d of desks) for (const [i, x] of d.seats) if (i === id) return { x, y: d.y, on: d.key }; return null; };
+    L.seat = (id) => { for (const d of desks) for (const [i, x] of d.seats) if (i === id) return { x, y: d.sy, on: d.key }; return null; };
+    L.counterOf = (id) => desks.find((d) => d.role && d.seats.some(([i]) => i === id)) || null;   // the reception desk it sits at
     L.free = (x, y) => !L.pieces.some((p) => !onWall(p.key) && x >= p.r[0] - 6 && x <= p.r[2] + 6 && y >= p.r[1] && y <= p.r[3] + 4);
     return L;
   }
@@ -622,6 +623,9 @@ function startRoom(cv, app) {
       f.chat = Math.max(0, f.chat - dt);
       if (b.waiting && f.waiting === false) sfx("ask", f.x);   // a hand goes up
       f.busy = b.busy; f.waiting = b.waiting;
+      // at a reception it is on duty: behind its counter, idle or not (you come to it there), away only to see one
+      // out to the booth or, in hardcore, for the gun (dutyStep); no breaks
+      const duty = f.duty = !!b.duty;
       // a bot whose session is open sits at its desk for you, whatever it was doing; when the
       // session closes it gets up again
       f.open = opens.includes(b.id);
@@ -631,16 +635,16 @@ function startRoom(cv, app) {
       // straight to its desk, and you with it, for its first message (until it has had one, or its tile closes)
       if (fresh.has(b.id) && (work || (f.wasOpen && !f.open))) fresh.delete(b.id);
       f.wasOpen = f.open;
-      const meet = f.open && !work && !f.sent && app.open() === b.id && !fresh.has(b.id);
+      const meet = !duty && f.open && !work && !f.sent && app.open() === b.id && !fresh.has(b.id);
       if (meet && f.act.kind !== "meet" && !DOOMED.has(f.act.kind)) { end(f); f.act = { kind: "meet" }; }
-      else if (f.open && !work && !meet && f.act.kind !== "desk" && !DOOMED.has(f.act.kind)) { end(f); f.act = { kind: "desk" }; }
-      if (!f.open && !work && ((f.act.kind === "desk" && f.sat) || f.act.kind === "meet")) f.act = { kind: "stand", left: 0.5 };
+      else if ((f.open || duty) && !work && !meet && f.act.kind !== "desk" && !DOOMED.has(f.act.kind) && !(duty && ["hunt", "clean", "escort", "mutiny"].includes(f.act.kind))) { end(f); f.act = { kind: "desk" }; }
+      if (!f.open && !work && !duty && ((f.act.kind === "desk" && f.sat) || f.act.kind === "meet")) f.act = { kind: "stand", left: 0.5 };
       if (f.reply && performance.now() > f.reply && you && you.chat < 1.6) { f.reply = 0; if (f.act.kind === "meet") f.chat = Math.max(f.chat, 1.1); }   // its answer while you pause
       if (work !== f.work) {
         f.work = work;
         // to work, whatever it was doing (a bot by the door stays)
-        if (work && !DOOMED.has(f.act.kind)) { end(f); f.act = { kind: "desk" }; }
-        if (!work && f.act.kind === "desk") f.act = { kind: "stand", left: 0.5 + (fnv(b.id) % 20) / 10 };
+        if (work && !DOOMED.has(f.act.kind) && !(duty && (f.hunt || f.clean))) { end(f); f.act = { kind: "desk" }; }
+        if (!work && !duty && f.act.kind === "desk") f.act = { kind: "stand", left: 0.5 + (fnv(b.id) % 20) / 10 };
       }
     }
     // remains on the floor: idle bots come over and clear them away, two to a heap, once the pieces have
@@ -672,7 +676,7 @@ function startRoom(cv, app) {
       const first = d.seats.find(([id]) => { const f = folk.get(id); return f && !f.work && f.act.kind === "stand"; });
       if (first) homes.set(first[0], { x: Math.min(W - 8, d.x0 + d.w + 8), y: d.y + 1, on: d.key });
     }
-    for (const b of bots) { const f = folk.get(b.id); if (f && !f.held && !f.frozen && !mutinyStep(w, f, L, dt)) thinkOne(w, f, L, now, dt, homes.get(b.id), usage); }
+    for (const b of bots) { const f = folk.get(b.id); if (f && !f.held && !f.frozen && !mutinyStep(w, f, L, dt) && !(f.duty && dutyStep(w, f, L, dt))) thinkOne(w, f, L, now, dt, homes.get(b.id), usage); }
     if (you && !you.held && !dead(w) && (fps || you.act.kind === "arm" || !huntStep(w, you, L, dt))) thinkOne(w, you, L, now, dt, null, usage);   // (in the first person the shooting is yours)
     for (const f of folk.values()) if (f.staff && !f.leaving && f.b) thinkManager(w, f, L, dt);
     thinkDog(w, L, dt);
@@ -682,11 +686,27 @@ function startRoom(cv, app) {
       const d = a.x <= b.x ? -1 : 1; a.x += d * 8 * dt; b.x -= d * 8 * dt;
     }
   }
-  // The office managers, one at each reception (server.py MANAGERS: Susan, Joan, Linda; the state's `managers`, one
-  // a booth): a robot with a bow on her head and a skirt in her colour (body's femme), seated at her booth, her head
-  // and shoulders over its counter. In the room she is "mgr:<booth's key>"
+  // Linda (the notes; the state's `managers`, one a reception piece): a robot with a bow on her head and a skirt in her
+  // colour (body's femme), seated at her reception, her head and shoulders over its counter. In the room she is
+  // "mgr:<its key>". The office's managers that are sessions are the bots at a reception desk (server.py `roles`),
+  // each the bot it is (`duty`)
   const boothOf = (L, f) => L.managers.find((m) => m.key === (f.b && f.b.booth)) || null;
   const managerSeat = (m) => m ? { x: m.x + 27, y: m.y - 5, on: m.key } : { x: W / 2, y: H / 2 };
+  // on duty at a reception desk: off to the booth with one the office was asked to remove (one at a time across the
+  // receptions: `w.cleaner`), and in hardcore the gun for the condemned (each takes its own); else thinkOne, at its desk
+  function dutyStep(w, f, L, dt) {
+    if (DOOMED.has(f.act.kind) || f.act.kind === "escort") return false;   // (itself on the way out)
+    if (huntStep(w, f, L, dt) || cleaning(w, f, L, dt)) return true;
+    if (f.act.kind === "clean") { f.act = { kind: "desk" }; f.arms = "down"; }
+    return false;
+  }
+  function cleaning(w, f, L, dt) {             // (one of them at a time sees them out: whoever got there first)
+    const c = w.cleaner && w.folk.get(w.cleaner);
+    if (c && c !== f && c.clean && !c.leaving && !c.frozen) return false;
+    if (!cleanStep(w, f, L, dt)) return false;
+    w.cleaner = f.id;
+    return true;
+  }
   // a bot let go of from here (its desk burnt, or ✕✕ in the completed list) is not just deleted: it walks to
   // the booth and waits in line, then its five seconds inside as for one put in by hand; in hardcore it stands
   // with its hands up and you fetch a gun from the gun closet and shoot it (its remains are the undo, until
@@ -745,7 +765,7 @@ function startRoom(cv, app) {
     const nearest = () => targets().sort((a, b) => Math.hypot(a.x - f.x, a.y - f.y) - Math.hypot(b.x - f.x, b.y - f.y))[0];
     let h = f.hunt;
     if (!h) {                                // one each: claimed at once, so the others leave it to her
-      const staff = [...w.folk.values()].some((g) => g.staff && !g.leaving), g = hard && !(f.human && staff) && nearest();
+      const staff = [...w.folk.values()].some((g) => (g.staff || (g.duty && !g.frozen && !DOOMED.has(g.act.kind))) && !g.leaving), g = hard && !(f.human && staff) && nearest();
       if (!g) return false;
       h = f.hunt = { phase: "arm", id: g.id, t: 0 }; end(f);
     }
@@ -781,14 +801,13 @@ function startRoom(cv, app) {
     f.hunt = null; f.carry = null; f.act = rest();
     return false;
   }
-  // clearing out (app.cleanup(): what an office manager's session was asked to remove; never one you rescued), one
-  // at a time each. She
-  // fetches it and walks it to the booth, a step behind her, where its five seconds run as for any bot put in.
-  // Hardcore: it is condemned where it stands (hands up) and shot (huntStep). Taking one from her, or its undo,
-  // spares it for good. A pause between them, so it can be watched
+  // clearing out (app.cleanup(): what a reception's session was asked to remove; never one you rescued), one at a
+  // time. The bot at the reception (or Linda) fetches it and walks it to the booth, a step behind, where its five
+  // seconds run as for any bot put in. Hardcore: it is condemned where it stands (hands up) and shot (huntStep).
+  // Taking one from her, or its undo, spares it for good. A pause between them, so it can be watched
   function cleanStep(w, f, L, dt) {
     const cu = app.cleanup(), bo = L.booths[0];
-    const next = () => cu.ids.find((id) => { const g = w.folk.get(id); return g && !w.spared.has(id) && !g.held && !DOOMED.has(g.act.kind) && g.act.kind !== "escort"; });
+    const next = () => cu.ids.find((id) => { const g = w.folk.get(id); return id !== f.id && g && !w.spared.has(id) && !g.held && !DOOMED.has(g.act.kind) && g.act.kind !== "escort"; });
     let c = f.clean;
     const finish = (pause) => {
       const g = c && w.folk.get(c.id);
@@ -825,15 +844,14 @@ function startRoom(cv, app) {
     }
     return finish(5);
   }
-  // Linda (the notes) walks over to the bot she writes up; the others are a session of their own and stay at their
-  // booth: typing while a turn runs in it (her screen runs), her hand up and a ? while she asks you something, dozing
-  // while her process is off (an hour idle; a click wakes her). Any of them walks a bot to the booth that is to go
+  // Linda (the notes) walks over to the bot she writes up, and back to her reception; she too walks a bot to the
+  // booth that is to go, and in hardcore takes a gun for the condemned
   function thinkManager(w, f, L, dt) {
-    const mg = f.b, notes = mg.style === "notes", dg = app.digest(), v = 30, seat = managerSeat(boothOf(L, f));
-    f.busy = !notes && !!mg.busy; f.waiting = !notes && !!mg.waiting; f.on = null;
+    const dg = app.digest(), v = 30, seat = managerSeat(boothOf(L, f));
+    f.busy = false; f.waiting = false; f.on = null;
     if (huntStep(w, f, L, dt)) return;
-    const wr = notes && dg && dg.on ? dg.writing || dg.explaining : null;   // writing notes, or explaining a decision
-    if ((f.clean || !wr) && cleanStep(w, f, L, dt)) return;
+    const wr = dg && dg.on ? dg.writing || dg.explaining : null;   // writing notes, or explaining a decision
+    if ((f.clean || !wr) && cleaning(w, f, L, dt)) return;
     let to = null, look = null;
     if (wr && wr.startsWith("u:")) {
       const d = L.desks.find((x) => x.unit === wr.slice(2));
@@ -857,12 +875,6 @@ function startRoom(cv, app) {
     f.carry = null;
     if (!sitAt(f, seat, v, dt)) { f.act = { kind: "file" }; return; }
     f.dir = -1; f.legs = "sit";
-    if (!notes) {
-      const off = !mg.alive && !mg.busy;
-      f.act = { kind: off ? "doze" : "file", there: true };
-      f.arms = f.waiting ? "wave" : off ? "down" : f.busy ? (Math.floor(w.T * 6) % 2 ? "fwd2" : "fwd1") : Math.floor(w.T / 4) % 5 === 0 ? "paper" : "down";
-      return;
-    }
     const off = !!dg && !dg.on;
     f.act = { kind: off ? "doze" : "file", there: true };
     f.arms = off ? "down" : wr ? (Math.floor(w.T * 3) % 2 ? "fwd1" : "fwd2") : Math.floor(w.T / 4) % 5 === 0 ? (Math.floor(w.T * 2) % 2 ? "fwd1" : "fwd2") : "down";
@@ -922,12 +934,13 @@ function startRoom(cv, app) {
         if (!g) { f.act = rest(); break; }
         if (DOOMED.has(g.act.kind) || g.act.kind === "escort") { f.legs = "stand"; f.arms = "down"; f.dir = g.x < f.x ? -1 : 1; break; }   // it is to go (its session still open): you watch, where you are
         const at = gs || g;
-        const mb = g.staff && boothOf(L, g);
+        const mb = g.staff && boothOf(L, g), cd = !mb && g.duty && L.counterOf(g.id);
         const met = g.act.kind === "meet" && g.act.side ? g.act : null;   // it comes to meet you: halfway, facing it
         const spot = met ? { x: met.x + 14 * met.side, y: met.y } : mb ? { x: mb.x + 54 <= L.floor.x1 ? mb.x + 54 : mb.x - 8, y: mb.y + 1, on: mb.key }   // at her reception: by the counter
+          : cd && g.sat ? { x: cd.x0 + cd.w + 8 <= L.floor.x1 ? cd.x0 + cd.w + 8 : cd.x0 - 8, y: cd.y + 1, on: cd.key }        // at a reception desk: by the end of its counter
           : g.lying ? { x: g.x + 20, y: g.y + 1 } : { x: at.x + 5, y: Math.max(L.floor.y0, at.y - 12), on: at.on };
         act.there = walk(f, spot, 36, dt);
-        if (act.there) { f.dir = met ? -met.side : g.staff && spot.x < g.x ? 1 : -1; f.arms = "down"; }
+        if (act.there) { f.dir = met ? -met.side : (g.staff || cd) && spot.x < g.x ? 1 : -1; f.arms = "down"; }
         break;
       }
       case "screen": {
@@ -943,7 +956,7 @@ function startRoom(cv, app) {
       case "desk":
         if (seat && sitAt(f, seat, v, dt)) {
           f.dir = w.fear > 0.6 && Math.floor(w.T * 0.8 + f.z * 3) % 6 === 0 ? 1 : -1; f.legs = "sit"; f.carry = null;   // (afraid: a glance over its shoulder now and then)
-          f.arms = f.waiting ? "wave" : f.busy ? (Math.floor(w.T * 6) % 2 ? "fwd2" : "fwd1") : "down";
+          f.arms = f.waiting ? "wave" : f.busy ? (Math.floor(w.T * 6) % 2 ? "fwd2" : "fwd1") : f.duty && Math.floor(w.T / 4 + f.z) % 5 === 0 ? "paper" : "down";   // (on duty and idle: a look at its papers now and then)
         }
         break;
       case "stand": {
@@ -1498,7 +1511,8 @@ function startRoom(cv, app) {
     // Code's supervisor stops an idle one after an hour; opening it starts it again). Many finished sessions make a
     // long desk: a full room is a full room, the booth clears it
     const bots = all;
-    const gone = new Set([...w.remains.keys(), ...w.stopped.keys(), ...[...w.folk.values()].filter((f) => f.act.kind === "doom").map((f) => f.id)]);   // killed: no chair
+    for (const b of all) b.duty = !!(s.roles || {})[b.unit];   // at a reception: the office's manager as well (onDuty)
+    const gone =new Set([...w.remains.keys(), ...w.stopped.keys(), ...[...w.folk.values()].filter((f) => f.act.kind === "doom").map((f) => f.id)]);   // killed: no chair
     // a burnt desk whose bots are on their way out is not drawn; nor one that came with its sessions once the
     // last of them is deleted from here (the feed still lists it a moment)
     const shown = s.desks.filter((d) => !w.razed.has(d.unit) && (d.kept || all.some((b) => b.unit === d.unit && !w.stopped.has(b.id))));
@@ -1524,9 +1538,9 @@ function startRoom(cv, app) {
     // gone from the list (deleted elsewhere) walks out of it
     const ids = new Set(bots.map((b) => b.id)), you ={ id: "you", name: (s.you && s.you.name) || "you", seed: s.you && s.you.seed, color: s.you && s.you.color, human: true, m: "" };
     ids.add("you");
-    // the office managers, one at each reception (thinkManager)
+    // Linda at her reception (thinkManager)
     const mgrs = L.managers.map((mb) => (s.managers || []).find((M) => M.key === mb.key)).filter((M) => M && !M.vacant).map((M) => ({ id: "mgr:" + M.key, booth: M.key, name: M.name, seed: M.seed,
-      color: M.color, style: M.style, session: M.session, busy: M.busy, waiting: M.waiting, alive: M.alive, rc: M.rc, human: false, staff: true, m: "" }));
+      color: M.color, style: "notes", human: false, staff: true, m: "" }));
     for (const g of mgrs) ids.add(g.id);
     for (const f of w.folk.values()) if (!ids.has(f.id) && !f.leaving) { f.leaving = true; f.held = false; f.lying = false; f.sat = false; f.legs = "stand"; }
     for (const [id, t] of w.stopped) if (!ids.has(id) || performance.now() - t > 30000) w.stopped.delete(id);
@@ -1643,10 +1657,12 @@ function startRoom(cv, app) {
     for (const f of w.folk.values()) if (!f.lying && !f.held) items.push([f.y, () => drawFigure(ctx, f, f.b, T, hl)]);
     for (const d of L.desks) {
       const sc = screenAt(d);
-      const gw = 22 + d.trees.length * LAP;     // what of it is solid: its screen (and laptops), the cabinet, the desktop
-      items.push([danger(d.key) ? 1e9 : d.y - 1, () => outlined(ctx, foot(d.key, d.at, d.u), danger(d.key), (c) => drawDesk(c, d, w, T, hl), RED, tintOf(d.key)),
-        [[sc.sx, sc.sy, sc.sx + gw, sc.sy + 18], [d.x0, d.y - 15, d.x0 + d.cab, d.y + 1], [d.x0 + d.cab - 2, d.y - 12, d.x0 + d.w, d.y - 3]]]);
-      for (const [id, x] of d.seats) items.push([d.y - 0.5, () => drawChair(ctx, x, d.y, hl.has(id))]);
+      const gw = 22 + d.trees.length * LAP;     // what of it is solid: its screen (and laptops), the cabinet, the desktop (a reception's counter)
+      const gold = !danger(d.key) && !!carrying && carrying.desk === d.unit;   // the reception carried out of the closet: let go, this desk is it
+      items.push([danger(d.key) ? 1e9 : d.y - 1, () => outlined(ctx, foot(d.key, d.at, d.u), danger(d.key) || gold, (c) => drawDesk(c, d, w, T, hl), gold ? GOLD : RED, tintOf(d.key)),
+        [[sc.sx, sc.sy, sc.sx + gw, sc.sy + 18], [d.x0, d.y - 15, d.x0 + d.cab, d.y + 1], d.role ? [d.x0 + d.cab - 2, d.y - 16, d.x0 + d.w, d.y] : [d.x0 + d.cab - 2, d.y - 12, d.x0 + d.w, d.y - 3]]]);
+      if (d.role) items.push([d.y - 30, () => drawCounterBack(ctx, d)]);   // behind whoever sits there
+      else for (const [id, x] of d.seats) items.push([d.y - 0.5, () => drawChair(ctx, x, d.y, hl.has(id))]);
     }
     // every piece: outlined under the pointer, like a desk's chairs; what it does, on top of that. Held over
     // the fire it is drawn over everything (the flames would hide it), washed red
@@ -1675,16 +1691,15 @@ function startRoom(cv, app) {
       if (h) tip = { text: "report", x: pr.x, y: pr.y - 16 };
     }
     for (const mg of L.managers) {
-      // a reception, an office manager's booth: a click (on it or on her) is hers: her terminal, or the notes
-      // (Linda). Two layers, she sits between them: the back wall, then the counter with her name on it
+      // Linda's reception: a click (on it or on her) is the notes. Two layers, she sits between them: the back wall,
+      // then the counter with her name on it
       const M = (s.managers || []).find((x) => x.key === mg.key) || {}, dg = app.digest(), live = new Set(all.map((b) => b.id)), r = foot("manager", [mg.x, mg.y]);
-      const o = M.vacant ? { name: "", color: M.color || SP.r, n: 0, screen: M.session ? "off" : null, T } : { name: M.name || "", color: M.color || SP.r, n: M.style === "notes" && dg ? Object.keys(dg.sessions || {}).filter((id) => live.has(id)).length : 0,
-        screen: M.session ? (M.busy ? "busy" : M.waiting ? "asks" : M.alive ? "on" : "off") : null, T };
+      const o = M.vacant ? { name: "", color: M.color || SP.r, n: 0, screen: null, T } : { name: M.name || "", color: M.color || SP.r, n: dg ? Object.keys(dg.sessions || {}).filter((id) => live.has(id)).length : 0, screen: null, T };
       const h = hot(...r, { kind: "manager", key: mg.key }), both = (c) => { drawReception(c, mg, o, false); drawReception(c, mg, o, true); };
       pics.push({ key: mg.key, kind: "manager", x: mg.x, y: mg.y, fn: both });
       items.push([danger(mg.key) ? 1e9 : mg.y - 20, () => outlined(ctx, r, h || hl.has("mgr:" + mg.key) || danger(mg.key), both, danger(mg.key) ? RED : GOLD, tintOf(mg.key)), [[mg.x + 2, mg.y - 30, mg.x + 44, mg.y - 14]]]);
       if (!danger(mg.key)) items.push([mg.y - 0.5, () => drawReception(ctx, mg, o, true), [[mg.x, mg.y - 16, mg.x + 46, mg.y + 1]]]);
-      if (h) tip = { text: M.vacant ? "empty - a click hires " + (M.name || "her") + " again" : (M.name || "office manager") + (M.error ? " - " + M.error : M.style === "notes" ? " - notes" : M.session && !M.id ? " - on her way" : " - office manager"), x: mg.x + 23, y: mg.y - 30 };
+      if (h) tip = { text: M.vacant ? "empty - a click hires " + (M.name || "her") + " again" : (M.name || "Linda") + " - notes", x: mg.x + 23, y: mg.y - 30 };
     }
     for (const ch of L.chairs) {              // a click on one: you go and sit in it (a bot in it gets up)
       const h = hot(...foot("armchair", [ch.x, ch.y]), { kind: "sit", key: ch.key });
@@ -1950,14 +1965,17 @@ function startRoom(cv, app) {
     if (hovered && !moving) {
       const { b, x, y } = hovered, hf = w.folk.get(b.id), doomed = !!hf && hf.act.kind === "doom";
       const dg = app.digest(), wb = b.staff && dg && dg.on && dg.writing && !dg.writing.startsWith("u:") ? (all.find((x) => x.id === dg.writing) || {}).name : null;
-      const hf2 = b.staff && w.folk.get(b.id), job = hf2 && (hf2.hunt && hf2.hunt.id ? ["after", hf2.hunt.id] : hf2.clean ? ["seeing out", hf2.clean.id] : null), cl = job && w.folk.get(job[1]);
+      const hf2 = (b.staff || b.duty) && w.folk.get(b.id), job = hf2 && (hf2.hunt && hf2.hunt.id ? ["after", hf2.hunt.id] : hf2.clean ? ["seeing out", hf2.clean.id] : null), cl = job && w.folk.get(job[1]);
       if (cl && cl.b) tip = { text: b.name + " - " + job[0] + " " + cl.b.name, x, y: y - 2 };
-      else if (b.staff) tip = { text: b.name + (b.style !== "notes" ? (b.waiting ? " - asks you" : b.busy ? " - at work" : !b.alive ? " - dozing" : " - office manager") : wb ? " - notes on " + wb : dg && dg.writing ? " - a project's notes" : " - notes"), x, y: y - 2 };
-      else if (!doomed) tip = { text: b.name + (b.waiting ? " - needs input" : ""), x, y: y - 2 };
+      else if (b.staff) tip = { text: b.name + (wb ? " - notes on " + wb : dg && dg.writing ? " - a project's notes" : " - notes"), x, y: y - 2 };
+      else if (!doomed) tip = { text: b.name + (b.waiting ? " - needs input" : b.duty ? " - office manager" : ""), x, y: y - 2 };
       hots.push({ x0: -1e9, y0: -1e9, x1: 1e9, y1: 1e9, action: b.staff ? { kind: "manager", key: b.booth } : b.human ? { kind: "you" } : doomed ? { kind: "undo", id: b.id } : { kind: "open", id: b.id } });
     }
-    // (while something is dragged, the only tips are the fire's, the door's and the pair table's: what the drop does)
-    if (tip && !carrying && !dead(w)) {      // no tips under a piece carried in from the closet (nor over your death)
+    // (while something is dragged, the only tips are the fire's, the door's and the pair table's: what the drop does;
+    // and the desk a reception from the closet would make the reception)
+    const rd = carrying && carrying.desk && L.desks.find((d) => d.unit === carrying.desk);
+    if (rd) tip = { text: rd.role ? "the reception already" : "make it the reception", x: rd.x0 + rd.w / 2, y: rd.y - 34 };
+    if (tip && (!carrying || rd) && !dead(w)) {      // no tips under a piece carried in from the closet (nor over your death)
       const t = tip.text, tw = tinyW(t), lx = Math.round(Math.max(2, Math.min(W - tw - 2, tip.x - tw / 2))), ly = Math.round(Math.max(WALL + 2, tip.y - 8));
       box(ctx, lx - 2, ly - 2, tw + 4, 9, INK2);
       tiny(ctx, t, lx, ly, C.steel4);
@@ -2062,7 +2080,7 @@ function startRoom(cv, app) {
     // whose a block or a picture is: the piece's key, the desk's unit (what a shot in the first person hits)
     const whose = (o, t) => o && { ...o, boxes: o.boxes.map((b) => ({ ...b, ...t })), things: o.things.map((x) => (x.bot || x.rem ? x : { ...x, ...t })) };
     // the desks: their cabinet, desktop, screen (and laptops) and chairs, what each screen shows
-    for (const d of L.desks) add(whose(Props3D.desk({ x0: d.x0, y: d.y, w: d.w, cab: d.cab, label: d.label, paint: paintOf(d.m), color: d.color, T,
+    for (const d of L.desks) add(whose(Props3D.desk({ x0: d.x0, y: d.y, w: d.w, cab: d.cab, label: d.label, paint: paintOf(d.m), color: d.color, T, counter: !!d.role,
       seats: d.seats.map(([id, x, tree]) => ({ x, tree })), mugs: d.seats.filter(([id]) => w.mugs.get(id) > T && w.folk.get(id)).map(([id, x]) => ({ x, color: colorOf(w.folk.get(id).b) })),
       screen: screenOf(d, w, ""), laptops: d.trees.map((t) => screenOf(d, w, t)) }), { desk: d.unit, deskName: d.label }));
     // every piece of furniture with what it shows; the fire's flames (a light of their own), its pit on the floor
@@ -2082,7 +2100,7 @@ function startRoom(cv, app) {
       if (p.kind === "printer") { const job = [...w.folk.values()].find((f) => f.act.kind === "print" && f.act.stage === 1), since = (performance.now() - w.print) / 1000; st.printing = job ? job.act.wait : since < 3 ? since : undefined; }
       if (p.kind === "manager") {
         const M = (s.managers || []).find((x) => x.key === p.key) || {}, dg = app.digest(), live = new Set((s.bots || []).map((b) => b.id));
-        Object.assign(st, M.vacant ? { name: "", color: M.color, screen: M.session ? "off" : null, notes: 0 } : { name: M.name, color: M.color, screen: M.session ? (M.busy ? "busy" : M.waiting ? "asks" : M.alive ? "on" : "off") : null, notes: M.style === "notes" && dg ? Object.keys(dg.sessions || {}).filter((id) => live.has(id)).length : 0 });
+        Object.assign(st, M.vacant ? { name: "", color: M.color, screen: null, notes: 0 } : { name: M.name, color: M.color, screen: null, notes: dg ? Object.keys(dg.sessions || {}).filter((id) => live.has(id)).length : 0 });
       }
       if (p.kind === "booth") {
         const inside = [...w.folk.values()].find((f) => f.act.kind === "doom" && f.act.at === p.key);
@@ -2113,7 +2131,7 @@ function startRoom(cv, app) {
       const who = { key: f.id, bot: b.human ? null : b.id, staff: !!b.staff, booth: b.booth, name: b.name };
       if (f.lying) { const l = Props3D.lying(fig); things.push({ ...who, x: f.x, y: f.y - 9, z: 0, c: l.c, sx: 0, sy: 0, sw: l.w, sh: l.h, ax: l.ax, ay: l.ay, res: l.res }); continue; }
       const bt = boothT(f);
-      const atDesk = b.staff && f.sat && Math.hypot(f.x - managerSeat(boothOf(L, f)).x, f.y - managerSeat(boothOf(L, f)).y) < 2;   // an office manager at her counter faces the room
+      const atDesk = f.sat && (b.staff ? Math.hypot(f.x - managerSeat(boothOf(L, f)).x, f.y - managerSeat(boothOf(L, f)).y) < 2 : b.duty && f.act.kind === "desk");   // at a counter: facing the room
       things.push({ ...who, x: f.x, y: f.y, z: 0, fig, face: f.dir < 0 ? -1 : 1, facing: atDesk ? Math.PI / 2 : undefined, seated: f.legs === "sit", dissolve: bt > 0 ? boothRise(bt) : 0 });
       if (f.waiting && f.act.kind !== "doom") {
         const q = small("?3", 27, 30, (x) => { x.scale(3, 3); rect(x, 0, 0, 9, 9, "#2b2433"); rect(x, 1, 1, 7, 7, "#f4f6fb"); rect(x, 1, 8, 1, 1, "#f4f6fb"); rect(x, 0, 9, 3, 1, "#2b2433"); tiny(x, "?", 3, 2, "#2b2433"); });
@@ -2151,7 +2169,7 @@ function startRoom(cv, app) {
   // break is spent hiding behind the furniture furthest from the gun closet, peeking out (hide), and the ones
   // at work glance over their shoulder now and then. Nobody likes to come and sweep up then
   const FEAR = { kill: 0.25, fade: 240 };
-  const idleBot = (f) => !!f.b && !f.b.human && !f.b.staff && !f.work && !f.held && !f.frozen && !f.leaving && !f.open && !f.lying && !DOOMED.has(f.act.kind) && f.act.kind !== "escort" && f.act.kind !== "mutiny";
+  const idleBot = (f) => !!f.b && !f.b.human && !f.b.staff && !f.duty && !f.work && !f.held && !f.frozen && !f.leaving && !f.open && !f.lying && !DOOMED.has(f.act.kind) && f.act.kind !== "escort" && f.act.kind !== "mutiny";
   function flee(f, L, x, y, k) {
     const d = Math.hypot(f.x - x, f.y - y) || 1;
     end(f);
@@ -2721,19 +2739,26 @@ function startRoom(cv, app) {
       else if (Math.floor(T * 2) % 2) rect(ctx, g.x + 4, py, 1, 1, C.steel4);
     }
     // the desktop, lower than the cabinet: a leg between each two chairs, a keyboard at each seat; none until the
-    // first bot comes
-    if (d.seats.length) {
+    // first bot comes. A reception has a counter instead, high, in front of whoever sits behind it (who faces the
+    // room), panelled, the bell at its end; there whether anyone sits there or not
+    if (d.role) {
+      slab(ctx, x0 + cab - 2, y - 16, dw - cab + 2, 4, 12, p);
+      for (let x = x0 + cab + 6; x < x0 + dw - 3; x += 9) rect(ctx, x, y - 10, 1, 7, p.k);                                   // its panels
+      const bx = x0 + dw - 7;
+      rect(ctx, bx, y - 18, 5, 1, SP.F); rect(ctx, bx + 1, y - 20, 3, 2, SP.y); rect(ctx, bx + 1, y - 20, 1, 1, SP.Y); rect(ctx, bx + 2, y - 21, 1, 1, SP.F);   // the bell
+    } else if (d.seats.length) {
       slab(ctx, x0 + cab - 2, y - 12, dw - cab + 2, 5, 4, p);
       for (const x of [x0 + cab + 1, ...d.seats.map(([, x]) => x + 11), x0 + dw - 4]) {
         rect(ctx, x, y - 4, 2, 4, p.k); rect(ctx, x, y - 4, 1, 3, p.d); rect(ctx, x, y, 2, 1, SHADOW);
       }
       for (const [, x] of d.seats) { rect(ctx, x - 9, y - 11, 7, 2, SP.F); rect(ctx, x - 8, y - 11, 5, 1, SP.B); }
     }
-    for (const [id, x] of d.seats) {          // a coffee a colleague brought, by the keyboard, for a while
+    for (const [id, x] of d.seats) {          // a coffee a colleague brought, by the keyboard (on the counter), for a while
       const until = w.mugs.get(id), f = w.folk.get(id);
       if (until === undefined) continue;
       if (until < T || !f) { w.mugs.delete(id); continue; }
-      rect(ctx, x - 13, y - 14, 3, 3, colorOf(f.b)); rect(ctx, x - 11, y - 13, 1, 1, INK);
+      const my = d.role ? y - 18 : y - 14;
+      rect(ctx, x - 13, my, 3, 3, colorOf(f.b)); rect(ctx, x - 11, my + 1, 1, 1, INK);
     }
     // the cabinet, the project's name on a plate; a click on the plate opens the desk's panel (its name)
     slab(ctx, x0, y - 15, cab, 4, 11, p);
@@ -2770,6 +2795,14 @@ function startRoom(cv, app) {
       if (on || hsAt(tree) || mine.some(([id]) => hl.has(id))) put(ctx, halo(lap, on ? C.steel3 : GOLD), px, py);
       put(ctx, lap, px, py);
     });
+  }
+  // behind a reception's counter: a post at each end and a dark panel between, as Linda's reception has, framing
+  // the heads of whoever sits there
+  function drawCounterBack(ctx, d) {
+    const x0 = d.x0 + d.cab, x1 = d.x0 + d.w - 2, y = d.y, p = paintOf(d.m);
+    rect(ctx, x0 + 2, y - 30, x1 - x0 - 2, 15, "#2b2433"); rect(ctx, x0 + 2, y - 30, x1 - x0 - 2, 1, "#1f1a26");
+    for (let x = x0 + 11; x < x1 - 4; x += 10) rect(ctx, x, y - 29, 1, 14, "#251f2d");
+    for (const px of [x0, x1 - 2]) { rect(ctx, px, y - 31, 2, 16, p.k); rect(ctx, px, y - 31, 1, 15, p.d); }
   }
   // a name plate on a cabinet's front: seven dots high, for one line of lettering
   function plate(ctx, x, y, w, lit, p = WOOD) {
@@ -3163,11 +3196,15 @@ function startRoom(cv, app) {
     const b = cv.getBoundingClientRect(), x = (cx - b.left) / K, y = (cy - b.top) / K;
     const inside = x >= 0 && x < W && y >= 0 && y < H;
     pointer = inside ? { x, y } : null;      // the room's pointer follows the carried piece (the canvas gets no events: the closet holds the pointer)
-    carrying = { kind, m, at: !inside ? null : kind === "desk" ? deskAt(x, y) : clampAt(kind, [Math.round(x), Math.round(y)]) };   // where it will land: there
+    // the reception over a desk: that desk is lit, and let go there it is the reception (the role is the desk's, the
+    // piece goes back in the closet); elsewhere on the floor it is Linda's
+    const onDesk = inside && kind === "manager" && lastL ? lastL.desks.find((d) => { const r = foot(d.key, d.at, d.u); return x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3]; }) : null;
+    carrying = { kind, m, desk: onDesk ? onDesk.unit : null, at: !inside || onDesk ? null : kind === "desk" ? deskAt(x, y) : clampAt(kind, [Math.round(x), Math.round(y)]) };   // where it will land: there
     draw();
     return carrying.at;
   }
-  function placeKind(kind, cx, cy, m) { const at = carryKind(kind, cx, cy, m); carrying = null; draw(); return at; }
+  let placedOn = null;                       // the desk the last piece out of the closet was let go on (a reception)
+  function placeKind(kind, cx, cy, m) { const at = carryKind(kind, cx, cy, m); placedOn = carrying && carrying.desk; carrying = null; draw(); return at; }
   // burrow's own settings: a small steel box on the wall with one big lever, its red knob up; pulled down
   // while the settings' panel is open (a click on it opens them)
   const SB_H = () => 14, SB_W = () => 10;
@@ -3820,5 +3857,5 @@ function startRoom(cv, app) {
     const x = c.getContext("2d"); x.imageSmoothingEnabled = false; x.drawImage(im, 0, 0, c.width, c.height);
     return c.toDataURL();
   };
-  return { talk, pairTalk, typed, size, draw, figure, wears, fresh: (id) => fresh.add(id), width, color: projectColor, icon, door: doorPicture, paints: () => ({ wood: WOOD.top, list: PAINT.map((p) => p.top) }), paintOf: paintIdx, paint: paintOf, tiny, tinyW, printer: printerPicture, carry: carryKind, place: placeKind, pend, condemn: (ids) => condemn(ids), playing: playingAt, names: NAMES, at, board, stats, hovered: () => hovered && { id: hovered.b.id, seat: !!hovered.seat } };
+  return { talk, pairTalk, typed, size, draw, figure, wears, fresh: (id) => fresh.add(id), width, color: projectColor, icon, door: doorPicture, paints: () => ({ wood: WOOD.top, list: PAINT.map((p) => p.top) }), paintOf: paintIdx, paint: paintOf, tiny, tinyW, printer: printerPicture, carry: carryKind, place: placeKind, placedOn: () => placedOn, pend, condemn: (ids) => condemn(ids), playing: playingAt, names: NAMES, at, board, stats, hovered: () => hovered && { id: hovered.b.id, seat: !!hovered.seat } };
 }
