@@ -145,7 +145,8 @@ message is the log. When something goes, take it out here. Keep the file under a
     the pouf, a nap on a mat it rolls out itself, coffee, the cooler, the printer, watering plants, the window,
     chess, ping-pong, football, the fire (hands warmed, or a sausage grilled and eaten), a visit, watching a game, a stretch, coffee for a busy colleague,
     painting at the easel, a meeting by it. No idle chatter: a bubble is a real message or you typing.
-  - **a message to another session**: a beam from the sender's antenna into the receiver's.
+  - **a message to another session**: a beam shot from the sender's antenna into the receiver's; the whole line then
+    stands three seconds, pulses running along it to the receiver, and drains into it.
 - Elsewhere in the room: the coffee pot = the five-hour limit, the cooler's bottle = the week (a click: a bar per
   `/usage` line); the clock tells the real time and keeps the Mac awake (Amphetamine: off, while local bots work,
   1/3/8 h; `caffeinate -i -s -w <server pid>`, one at a time under `caff_lock`), shown as yellow wedges on its face,

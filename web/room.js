@@ -547,7 +547,7 @@ function startRoom(cv, app) {
 
   // `from` sent `to` a message: a beam from its antenna to the other's, wherever they are. A bot that posts in a pair
   // room, or reads it, beams to the telephone on that room's table, or the table to it (`pairTalk`)
-  const BEAM = 0.7;                          // seconds for it to cross the room
+  const BEAM = 0.7, HOLD = 3, DRAIN = 0.4;   // seconds for it to cross the room, to stand there beaming, to drain into the receiver
   function pairTalk(id, key, dir) {
     const w = world(), f = w.folk.get(id);
     if (!f || !lastL || !lastL.pairs.some((p) => p.key === key)) return;
@@ -603,7 +603,7 @@ function startRoom(cv, app) {
     // messages under way: the beam reaches the other, who takes it in
     for (const bm of w.beams) { const was = bm.t; bm.t += dt; if (was < BEAM && bm.t >= BEAM) { const g = folk.get(bm.to); if (g) g.chat = Math.max(g.chat, 1); } }
     const table = (key) => L.pairs.some((p) => p.key === key);
-    w.beams = w.beams.filter((bm) => bm.t < BEAM + 0.4 && (bm.fromTable ? table(bm.fromTable) : folk.has(bm.from)) && (bm.toTable ? table(bm.toTable) : folk.has(bm.to)));
+    w.beams = w.beams.filter((bm) => bm.t < BEAM + HOLD + DRAIN &&(bm.fromTable ? table(bm.fromTable) : folk.has(bm.from)) && (bm.toTable ? table(bm.toTable) : folk.has(bm.to)));
     // heard: the booth's hum stopping when the bot in it is taken back
     for (const [id, h] of w.hums) {
       const f = folk.get(id);
@@ -1902,7 +1902,8 @@ function startRoom(cv, app) {
     if (!hovered && seatHover && !held) { const f = w.folk.get(seatHover.id); if (f && f.b) hovered = { b: f.b, x: seatHover.x + 3, y: seatHover.y - 16, seat: true }; }
 
     // a message on its way: a beam in the sender's colour, up from its antenna, across the room over
-    // everyone's heads, down into the receiver's antenna; its bright head leads, its tail follows
+    // everyone's heads, down into the receiver's antenna; its bright head leads, the line stays behind it. Arrived,
+    // the whole line stands a few seconds, bright pulses running along it to the receiver, then drains into it
     for (const bm of w.beams) {
       // its ends: a figure's antenna, or the telephone on a pair table (over its handset)
       const end = (id, key) => {
@@ -1919,8 +1920,9 @@ function startRoom(cv, app) {
         const [x0, y0] = pts[k], [x1, y1] = pts[k + 1], u = len[k] ? s / len[k] : 0;
         return [Math.round(x0 + (x1 - x0) * u), Math.round(y0 + (y1 - y0) * u)];
       };
-      const head = Math.min(1, bm.t / BEAM) * total, tail = Math.max(0, (bm.t - 0.25) / BEAM) * total, col = colorOf(f.b);
-      for (let s = Math.ceil(tail); s <= head; s++) { const [x, y] = at(s); rect(ctx, x, y + 1, 1, 1, INK); rect(ctx, x, y, 1, 1, col); }
+      const head = Math.min(1, bm.t / BEAM) * total, tail = Math.max(0, (bm.t - BEAM - HOLD) / DRAIN) * total, col = colorOf(f.b);
+      const run = still ? -1 : Math.floor(bm.t * 40);   // the pulses: every 7th dot lit, moving 40 dots a second
+      for (let s = Math.ceil(tail); s <= head; s++) { const [x, y] = at(s); rect(ctx, x, y + 1, 1, 1, INK); rect(ctx, x, y, 1, 1, run >= 0 && (run - s) % 7 === 0 ? C.steel4 : col); }
       if (head < total) { const [x, y] = at(head); rect(ctx, x - 1, y - 1, 3, 3, INK); rect(ctx, x - 1, y - 1, 2, 2, C.steel4); }
     }
     // shots (hardcore): a flash where it hit (or at the barrel), a puff of smoke after
