@@ -1999,12 +1999,14 @@ def clear_session(m, bot):
         os.close(fd)
 
 
-def terminal(sock, m, bot):
-    """`claude attach <id>` in a pty, both ways over the websocket; closing it only ends the attach"""
+def terminal(sock, m, bot, cwd=""):
+    """a session's terminal, a real one: in its folder `claude attach <id>`, and once that ends (agent view left, Ctrl+Z)
+    your login shell there, as in any terminal you typed it in. Both ways over the websocket; closing it ends both (the
+    session goes on)"""
     pid, fd = pty.fork()
     if pid == 0:
         os.environ.update(TERM="xterm-256color", COLORTERM="truecolor")
-        a = argv(m, f"exec claude attach {sq(bot)}", True)
+        a = argv(m, (f"cd {sq(cwd)} 2>/dev/null; " if cwd else "") + f'claude attach {sq(bot)}; exec "${{SHELL:-/bin/sh}}" -l', True)
         try:
             os.execvp(a[0], a)
         finally:
@@ -2387,7 +2389,7 @@ class Handler(BaseHTTPRequestHandler):
         if shell:
             shell_ws(self.connection, hub.shell(m, q["dir"]))
         else:
-            terminal(self.connection, m, q["id"])
+            terminal(self.connection, m, q["id"], q.get("dir", ""))
         self.close_connection = True
 
     def do_POST(self):

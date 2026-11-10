@@ -889,7 +889,7 @@ const DARK = { background: "#1a1626", foreground: "#e6e1ef", cursor: "#e6e1ef", 
 const LIGHT = { background: "#fbf8f1", foreground: "#140f1e", cursor: "#140f1e", selectionBackground: "#d9775755",
   black: "#140f1e", red: "#b8321f", green: "#2d8a3a", yellow: "#a8650f", blue: "#2c4580", magenta: "#5a3f94", cyan: "#1b6660", white: "#8b93ad",
   brightBlack: "#5d6280", brightRed: "#e8402a", brightGreen: "#3f9e2f", brightYellow: "#b86a1e", brightBlue: "#4a76b8", brightMagenta: "#9a74d6", brightCyan: "#2fa087", brightWhite: "#3b3a55" };
-const enc = new TextEncoder(), dec = new TextDecoder();
+const enc = new TextEncoder();
 
 function showWho(t) {
   if (t.kind === "file") return showFile(t);
@@ -921,20 +921,20 @@ function openBot(mid, id, retain, at) {
 }
 // your terminal at a project's screen (or a worktree's laptop): one login shell per directory, kept
 // by the server while it runs (closing the tile only detaches, `exit` ends it). Ad hoc: the bots do
-// the work, this is for a quick look or a command. `at`: a tile's place to take (tiles.slot)
-function openShell(mid, dir, retain, at) {
+// the work, this is for a quick look or a command
+function openShell(mid, dir, retain) {
   closeView();
   const have = shellOf(mid, dir);
   if (have) { tiles.focus(have); have.term.focus(); return have; }
-  if (!at) makeRoom(retain);
+  makeRoom(retain);
   const t = makeTile("shell", mid + ":" + dir);
   t.m = mid; t.dir = dir;
   t.fresh = !((state && state.shells) || []).some((s) => s.m === mid && s.dir === dir);   // started by this click: if it ends at once, what it said stays
-  return openTerminal(t, at || null);
+  return openTerminal(t, null);
 }
 // the terminal in a tile (xterm.js), wired to its websocket
 function openTerminal(t, at) {
-  t.ws = null; t.typed = []; t.tail = ""; t.active = 0;
+  t.ws = null; t.typed = []; t.active = 0;
   // links open in a new tab on a click (Cmd+click too, as in other terminals): the ones a program marks
   // (OSC 8, as Claude Code prints them; xterm.js would ask with a confirm() first) and plain URLs in the text
   const openLink = (_, uri) => { if (/^https?:\/\//i.test(uri)) window.open(uri, "_blank", "noopener"); };
@@ -956,7 +956,7 @@ function openTerminal(t, at) {
   // reports, which Claude Code asks for: focus in and out (a press in the room blurs the terminal), the mouse
   // over it (SGR or X10), a colour or size answer
   const REPORT = /^(?:\x1b\[[IO]|\x1b\[<[\d;]*[Mm]|\x1b\[M[\s\S]{3}|\x1b\][\d;]*[^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[\d;?]*[Rcn])+$/;
-  term.onData((d) => { if (t.ws && t.ws.readyState === 1) { t.ws.send(enc.encode(d)); if (!REPORT.test(d)) { room.typed(t.kind === "bot" ? t.id : null, d.includes("\r")); quitting(t, d); } } });
+  term.onData((d) => { if (t.ws && t.ws.readyState === 1) { t.ws.send(enc.encode(d)); if (!REPORT.test(d)) room.typed(t.kind === "bot" ? t.id : null, d.includes("\r")); } });
   const CMD_KEYS = { ArrowLeft: "\x01", ArrowRight: "\x05", Backspace: "\x15" };
   // shift+enter is a new line, as in the Rust pane: ESC CR, which claude reads as meta+enter (xterm.js sends a bare CR).
   // ⌘← ⌘→ ⌘⌫ as Ghostty sends them: Ctrl+A, Ctrl+E, Ctrl+U (the line's start, its end, delete to its start), which
@@ -984,34 +984,14 @@ function openTerminal(t, at) {
   requestAnimationFrame(() => { fit.fit(); connect(t, term); term.focus(); });
   return t;
 }
-// leaving a session: `claude attach` then shows Claude Code's agent view (its prompt reads "describe a task
-// for a new session"). After `exit` (/exit, Ctrl+C twice, Ctrl+D: the last key Enter, Ctrl+C or Ctrl+D) you are
-// done with it: as in any terminal you are back in your shell, there in its folder, in the tile's place, and the bot
-// goes as one let go in the booth does (in hardcore it is shot), the booth's undo and all. After ← on an empty
-// prompt (Claude Code's way back) the tile only closes: back in the room, the session goes on. Ctrl+Z ends the
-// attach itself, and the tile closes with it
-const agentView = (t, b) => {
-  t.tail = (t.tail + dec.decode(b, { stream: true })).replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "").slice(-300);
-  return /describe a task for a new session|enter to return · space to reply/.test(t.tail);
-};
-const quitting = (t, d) => {
-  if (t.kind !== "bot") return;
-  if (/^\x1b(\[|O)D$/.test(d)) t.quitAt = 0;                       // ←
-  else if (/[\r\x03\x04]/.test(d)) t.quitAt = performance.now();  // Enter, Ctrl+C, Ctrl+D
-};
-function leftBot(t) {
-  const b = byId(t.id);
-  if (!b || !b.cwd || !(performance.now() - (t.quitAt || -1e9) < 4000)) return closeTile(t);
-  if (t.ws) { const s = t.ws; t.ws = null; s.close(); }
-  const sh = shellOf(b.m || "", b.cwd);
-  if (sh) { closeTile(t); tiles.focus(sh); sh.term.focus(); }
-  else openShell(b.m || "", b.cwd, false, tiles.slot(t));
-  room.condemn([b.id]);
-}
+// a session's terminal is a real one (server.py `terminal`): `claude attach` in its folder, and once that ends your
+// shell there. Nothing in it is read or acted on: `exit` shows Claude Code's agent view as it would anywhere, leaving
+// that (or Ctrl+Z) the shell; `claude update`, `claude respawn <id>`, `claude attach <id>` again are yours to type
 function connect(t, term) {
   const shell = t.kind === "shell";
+  const b = !shell && byId(t.id), cwd = (b && b.cwd) || "";
   const s = new WebSocket(shell ? `ws://${location.host}/shell?m=${encodeURIComponent(t.m)}&dir=${encodeURIComponent(t.dir)}`
-    : `ws://${location.host}/term?m=${encodeURIComponent(t.m)}&id=${encodeURIComponent(t.id)}`);
+    : `ws://${location.host}/term?m=${encodeURIComponent(t.m)}&id=${encodeURIComponent(t.id)}&dir=${encodeURIComponent(cwd)}`);
   s.binaryType = "arraybuffer";
   const since = performance.now();
   // what was handed to it before it was there (a dropped file, a pair link) goes once the program in it is up,
@@ -1022,10 +1002,9 @@ function connect(t, term) {
     for (const x of t.typed.splice(0)) if (x.paste) term.paste(x.paste); else s.send(enc.encode(x));
   };
   s.onopen = () => { s.send(JSON.stringify({ size: [term.cols, term.rows] })); setTimeout(flush, 1000, 0); };
-  s.onmessage = (e) => { if (t.ws !== s) return; const b = new Uint8Array(e.data); t.active = performance.now(); if (!shell && agentView(t, b)) leftBot(t); else term.write(b); };
-  // the attach ended: `exit` in the session, or the session stopped (a shell: `exit` ended it). The
-  // tile goes with it (the session keeps running if it does). One that ends at once failed to
-  // attach: it stays, with what was said, until you close it
+  s.onmessage = (e) => { if (t.ws !== s) return; t.active = performance.now(); term.write(new Uint8Array(e.data)); };
+  // the terminal ended: `exit` in its shell (a session's: after the attach). The tile goes with it (the session keeps
+  // running). One that ends at once failed to start: it stays, with what was said, until you close it
   s.onclose = () => { if (t.ws === s) { t.ws = null; if ((shell && !t.fresh) || performance.now() - since > 3000) closeTile(t); } };
   t.ws = s;
 }

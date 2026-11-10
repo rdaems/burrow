@@ -85,11 +85,12 @@ message is the log. When something goes, take it out here. Keep the file under a
 - Started from the room: `claude --bg -n <pair-style name>`, plus `--remote-control` (setting rc, on: also in the
   Claude app; the record's `bridgeSessionId` cse_… gives `https://claude.ai/code/session_<id without cse_>`, the
   tile's APP button) and `--dangerously-skip-permissions` (setting yolo, off).
-- `exit` in an attached session does not end `claude attach`: it drops into agent view in the same pty (no title;
-  recognised by "describe a task for a new session"). After `exit` (the last key Enter, Ctrl+C or Ctrl+D: `leftBot`)
-  you are done with it: the tile turns into your shell in its folder, in its place (no magic, his words: "simply go
-  to a terminal"), and the bot goes as one let go in the booth (hardcore: shot). After ← (Claude Code's way back) only
-  the tile closes; the session goes on.
+- A session's tile is a real terminal (`terminal` in server.py): in its folder `claude attach <id>`, then your login
+  shell once the attach ends. Nothing in it is read or acted on (he: "show the real terminal"; a tile closed on
+  agent view, then a shell swapped in with the bot to the booth, were both "emulating"). `exit` drops into Claude
+  Code's agent view there, Ctrl+C twice (or Ctrl+Z) leaves it for the shell; the session goes on. Updating Claude
+  Code: `claude update`, then `claude respawn <id>` (or `--all`) restarts a session on the new binary (the record's
+  `cliVersion` says which it runs).
 - An attached session is fullscreen and captures the mouse: Claude Code copies a drag itself (pbcopy here, OSC 52
   from another machine: the clipboard addon, write-only, a read gets ""). Option+drag selects in xterm
   (`macOptionClickForcesSelection`). Links (OSC 8 and plain URLs) open on a click (`linkHandler`, web-links).
