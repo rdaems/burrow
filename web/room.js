@@ -677,6 +677,7 @@ function startRoom(cv, app) {
       if (first) homes.set(first[0], { x: Math.min(W - 8, d.x0 + d.w + 8), y: d.y + 1, on: d.key });
     }
     for (const b of bots) { const f = folk.get(b.id); if (f && !f.held && !f.frozen && !mutinyStep(w, f, L, dt) && !(f.duty && dutyStep(w, f, L, dt))) thinkOne(w, f, L, now, dt, homes.get(b.id), usage); }
+    for (const f of folk.values()) if (f.vanished && !f.leaving && !f.held) thinkOne(w, f, L, now, dt, null, usage);   // gone from the list, the office manager's gun to come
     if (you && !you.held && !dead(w) && (fps || you.act.kind === "arm" || !huntStep(w, you, L, dt))) thinkOne(w, you, L, now, dt, null, usage);   // (in the first person the shooting is yours)
     for (const f of folk.values()) if (f.staff && !f.leaving && f.b) thinkManager(w, f, L, dt);
     thinkDog(w, L, dt);
@@ -738,7 +739,7 @@ function startRoom(cv, app) {
     const line = [...w.condemned.keys()].map((id) => folk.get(id)).filter((f) => f && !f.held && ["queue", "condemned"].includes(f.act.kind));
     if (hard) { for (const f of line) if (f.act.kind !== "condemned") f.act = { kind: "condemned" }; return; }
     if (!bo) {                               // no booth: deleted, and out through its door
-      for (const f of line) { app.act({ kind: "stop", id: f.id, rm: true }); w.stopped.set(f.id, performance.now()); w.condemned.delete(f.id); }
+      for (const f of line) { if (!f.vanished) app.act({ kind: "stop", id: f.id, rm: true }); w.stopped.set(f.id, performance.now()); w.condemned.delete(f.id); }
       return;
     }
     line.forEach((f, n) => { if (f.act.kind !== "queue") f.act = { kind: "queue", n }; else f.act.n = n; });
@@ -1188,7 +1189,7 @@ function startRoom(cv, app) {
         if (!act.back && !w.hums.has(f.id)) w.hums.set(f.id, sfx("booth", bo.x));   // the light rising, heard
         if (act.back) { if ((act.left += dt * 6) >= BOOTH) f.act = resume(f); break; }
         if ((act.left -= dt) <= 0 && !f.gone) {
-          app.act({ kind: "stop", id: f.id, rm: true });
+          if (!f.vanished) app.act({ kind: "stop", id: f.id, rm: true });
           w.stopped.set(f.id, performance.now()); w.boothFlash = { key: bo.key, t0: performance.now() };
           w.hums.delete(f.id); sfx("poof", bo.x);
           folk.delete(f.id);
@@ -1474,7 +1475,9 @@ function startRoom(cv, app) {
 
     // keep a figure per bot; one that turns up later comes in through its machine's door. One gone from the list
     // (`claude rm`: by a floor manager, in agent view, anywhere) walks into the booth and goes as one put there does,
-    // without the undo (it is gone already); with no booth, or the gun closet of hardcore, out by its machine's door
+    // without the undo (it is gone already); with no booth, out by its machine's door. In hardcore, while an office
+    // manager is at her counter, she shoots it (`vanished`: condemned as one let go of here, its remains no undo);
+    // else out by its door
     const ids = new Set(bots.map((b) => b.id)), you ={ id: "you", name: (s.you && s.you.name) || "you", seed: s.you && s.you.seed, color: s.you && s.you.color, human: true, m: "" };
     ids.add("you");
     // Linda at her reception (thinkManager)
@@ -1482,7 +1485,13 @@ function startRoom(cv, app) {
       color: M.color, style: "notes", human: false, staff: true, m: "" }));
     for (const g of mgrs) ids.add(g.id);
     const bo0 = !hardcore() && L.booths[0];
+    const shooter = hardcore() && !!L.booths[0] && [...w.folk.values()].some((g) => g.duty && ids.has(g.id) && !g.frozen && !g.leaving && !DOOMED.has(g.act.kind));
     for (const f of w.folk.values()) if (!ids.has(f.id) && !f.leaving) {
+      if (f.vanished && (f.held || DOOMED.has(f.act.kind))) continue;   // waiting for her gun (or carried off: let go, it leaves)
+      if (!f.vanished && shooter && f.b && !f.b.human && !f.b.staff && !f.held && !DOOMED.has(f.act.kind)) {
+        f.vanished = true; f.b = { ...f.b, busy: false, waiting: false };
+        if (condemn([f.id]).length) continue;
+      }
       f.leaving = true; f.held = false; f.lying = false; f.sat = false; f.legs = "stand";
       if (bo0 && f.b && !f.b.human && !f.b.staff) f.into = f.act.kind === "doom" ? f.act.at : bo0.key;
     }
@@ -1828,7 +1837,7 @@ function startRoom(cv, app) {
         ctx.globalAlpha = 1;
       }]);
       for (const p of r.parts) items.push([p.y, () => drawPart(ctx, p, fade)]);
-      if (!r.parts.length || r.back) continue;
+      if (!r.parts.length || r.back || r.vanished) continue;
       const xs = r.parts.map((p) => p.x), ys = r.parts.map((p) => p.y);
       const h = hot(Math.min(...xs) - 4, Math.min(...ys) - 10, Math.max(...xs) + 4, Math.max(...ys) + 3, { kind: "unshoot", id });
       if (h) tip = { text: r.b.name + " - put back together", x: r.x, y: Math.min(...ys) - 12 };
@@ -2985,7 +2994,7 @@ function startRoom(cv, app) {
     const drops = charred ? [] : [...Array(60)].map(() => drop(Math.random() ** 0.6 * 22, Math.random() < 0.35 ? 2 : 1))
       .concat([...Array(5)].flatMap(() => { const a = Math.random() * 6.28; return [...Array(6)].map((_, k) => ({ x: Math.round(x + Math.cos(a) * (10 + k * 3)), y: Math.round(y + Math.sin(a) * (10 + k * 3) * 0.5), s: k < 3 ? 2 : 1 })); }));
     if (still) for (const p of parts) { p.x += p.vx * 0.4; p.y += p.vy * 0.4; p.z = p.vx = p.vy = p.vz = 0; }
-    w.remains.set(f.id, { b: f.b, x, y, t0: performance.now(), parts, drops, puddle: charred ? 0 : 7 + Math.round(Math.random() * 3), total: parts.length, back: 0 });
+    w.remains.set(f.id, { b: f.b, x, y, t0: performance.now(), parts, drops, puddle: charred ? 0 : 7 + Math.round(Math.random() * 3), total: parts.length, back: 0, vanished: !!f.vanished });
     w.folk.delete(f.id);
   }
   function shoot(f) {                        // a flash where it hits, and the pieces; the others more afraid, the ones near run
@@ -3006,7 +3015,7 @@ function startRoom(cv, app) {
   }
   function unshoot(id) {                      // put back together: the pieces fly in, and it stands up there
     const r = world().remains.get(id);
-    if (!r || r.back) return;
+    if (!r || r.back || r.vanished) return;   // (its session gone already: nothing to put back together)
     r.back = performance.now();
     for (const p of r.parts) { p.bx = p.x; p.by = p.y; p.bz = p.z; }
   }
@@ -3037,8 +3046,9 @@ function startRoom(cv, app) {
     }
   }
   function gone(w, id) {                      // the last piece cleared away (or rusted): out of the list for good
+    const r = w.remains.get(id);
     w.remains.delete(id); w.stopped.set(id, performance.now());
-    app.act(id.startsWith("mgr:") ? { kind: "managerGone", key: id.slice(4) } : { kind: "stop", id, rm: true });   // an office manager: her session, her reception left empty
+    if (!(r && r.vanished)) app.act(id.startsWith("mgr:") ? { kind: "managerGone", key: id.slice(4) } : { kind: "stop", id, rm: true });   // an office manager: her session, her reception left empty
   }
   function drawPart(ctx, p, fade) {
     const x = Math.round(p.x), y = Math.round(p.y), z = Math.round(p.z);

@@ -242,5 +242,6 @@ function startTiles(el) {
 
   new ResizeObserver(relayout).observe(el);
   relayout();
-  return { add, remove, focus, focused: () => focusedTile, all: () => leaves(root).map((n) => n.leaf), relayout, preview, hide, addAt, forget: drop_ };
+  const slot = (tile) => { const n = nodeOf(tile); return n ? { n, side: "swap" } : null; };   // a tile's place, for addAt to give another
+  return { add, remove, focus, focused: () => focusedTile, all: () => leaves(root).map((n) => n.leaf), relayout, preview, hide, addAt, slot, forget: drop_ };
 }

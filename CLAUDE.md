@@ -86,7 +86,10 @@ message is the log. When something goes, take it out here. Keep the file under a
   Claude app; the record's `bridgeSessionId` cse_… gives `https://claude.ai/code/session_<id without cse_>`, the
   tile's APP button) and `--dangerously-skip-permissions` (setting yolo, off).
 - `exit` in an attached session does not end `claude attach`: it drops into agent view in the same pty (no title;
-  recognised by "describe a task for a new session"). The tile closes there; the session goes on.
+  recognised by "describe a task for a new session"). After `exit` (the last key Enter, Ctrl+C or Ctrl+D: `leftBot`)
+  you are done with it: the tile turns into your shell in its folder, in its place (no magic, his words: "simply go
+  to a terminal"), and the bot goes as one let go in the booth (hardcore: shot). After ← (Claude Code's way back) only
+  the tile closes; the session goes on.
 - An attached session is fullscreen and captures the mouse: Claude Code copies a drag itself (pbcopy here, OSC 52
   from another machine: the clipboard addon, write-only, a read gets ""). Option+drag selects in xterm
   (`macOptionClickForcesSelection`). Links (OSC 8 and plain URLs) open on a click (`linkHandler`, web-links).
@@ -257,7 +260,8 @@ message is the log. When something goes, take it out here. Keep the file under a
   shows YOU DIED and a click respawns both. All of it is the room's own: no session is touched (except a mutineer you
   shoot, as any bot).
 - A session that goes from `--all` by other hands (`claude rm` in a terminal, a floor manager's): its bot walks into
-  the booth and dissolves there, no undo (it is gone already); in hardcore it leaves by its machine's door.
+  the booth and dissolves there, no undo (it is gone already). In hardcore, while an office manager is at her counter,
+  she shoots it (`vanished`: condemned as any, its remains no undo and nothing to delete); else out by its door.
 - The fire takes furniture and desks, not bots (a bot at the fire warms its hands). A bot that is to go loses its
   tile at once.
 - In the first person a shot that finds no bot hits the furniture in the line of fire, at any height (Doom aims up and
